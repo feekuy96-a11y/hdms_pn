@@ -1,5 +1,3 @@
-"use server";
-
 import {
   INITIAL_SYSTEM_DATA,
   SystemDataPayload,
@@ -26,7 +24,9 @@ import {
   deleteOfficeSupabase,
   updateSystemSettingsSupabase,
 } from "@/db/supabase-server";
-import { revalidatePath } from "next/cache";
+
+// Static Export friendly cache & revalidation
+const revalidatePath = (_path: string) => {};
 
 // Persistent in-memory cache for development resilience, fast rendering and offline fallback
 let runtimeState: SystemDataPayload = JSON.parse(JSON.stringify(INITIAL_SYSTEM_DATA));
