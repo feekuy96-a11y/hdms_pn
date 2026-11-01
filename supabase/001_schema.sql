@@ -1,5 +1,5 @@
 -- =====================================================================
--- ระบบรายงานสถานการณ์น้ำท่วม แขวงทางหลวงปัตตานี  —  Schema v2 (hardened)
+-- ระบบรายงานสถานการณ์น้ำท่วม แขวงทางหลวงปัตตานี  —  Schema v3 (hardened + map style + offices)
 -- วางทั้งไฟล์ใน Supabase > SQL Editor แล้วกด Run  (รันซ้ำได้ / อัปเกรดจาก v1 ได้)
 --
 -- หลักการ: ไม่มี Login แต่ "anon ห้ามเขียนตารางตรงๆ"
@@ -39,6 +39,7 @@ drop view if exists public.v_map_active_floods cascade;
 drop view if exists public.v_incidents_full     cascade;
 drop view if exists public.v_map_routes         cascade;
 drop view if exists public.v_admin_routes       cascade;
+drop view if exists public.v_routes_version     cascade;
 
 -- ---------------------------------------------------------------------
 -- 1) ฟังก์ชันพื้นฐาน
@@ -171,6 +172,25 @@ create table if not exists public.admin_secret (
   pass_hash text
 );
 
+alter table public.system_settings add column if not exists map_style jsonb not null default '{}'::jsonb;
+
+-- หมุดสำนักงาน/จุดบริการ (แสดงบนแผนที่ประชาชน)
+create table if not exists public.offices (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null check (char_length(name) between 1 and 200),
+  address    text,
+  phone      text,
+  lng        double precision not null check (lng between 97 and 106),
+  lat        double precision not null check (lat between 5 and 21),
+  is_active  boolean not null default true,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+drop trigger if exists trg_offices_upd on public.offices;
+create trigger trg_offices_upd before update on public.offices
+  for each row execute function public.fn_set_updated_at();
+
 -- ---------------------------------------------------------------------
 -- 3) VIEWS (อ่านอย่างเดียว)
 -- ---------------------------------------------------------------------
@@ -225,6 +245,11 @@ select id, route_code, route_name, route_type, color, is_active, source,
        st_npoints(geom) as points, updated_at
 from public.highway_routes
 order by route_code;
+
+-- เวอร์ชันของเส้นทาง: client เทียบค่านี้ก่อนใช้แคช (นำเข้า/แก้เส้นทางแล้วทุกคนเห็นทันที ไม่ค้างแคชเก่า)
+create view public.v_routes_version with (security_invoker = true) as
+select count(*)::int as n, coalesce(max(updated_at), 'epoch'::timestamptz) as v
+from public.highway_routes where is_active;
 
 -- ---------------------------------------------------------------------
 -- 4) ฟังก์ชันช่วย (ภายใน)
@@ -387,17 +412,19 @@ end $$;
 
 -- นำเข้าเส้นทาง (จาก SHP/GeoJSON ที่แปลงในเบราว์เซอร์แล้ว) — upsert ตาม route_code
 create or replace function public.rpc_import_routes(p_pass text, p_rows jsonb)
-returns integer language plpgsql security definer set search_path = public, extensions as $$
-declare r jsonb; g geometry; n integer := 0; v_type text; v_code text;
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare r jsonb; g geometry; n integer := 0; sk integer := 0; v_type text; v_code text;
 begin
   perform public.fn_assert_admin(p_pass);
   if jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) > 500 then raise exception 'INVALID_ROWS'; end if;
   for r in select * from jsonb_array_elements(p_rows) loop
     v_code := left(btrim(coalesce(r->>'route_code', '')), 60);
-    continue when v_code = '';
+    if v_code = '' then sk := sk + 1; continue; end if;
     v_type := case when r->>'route_type' = 'secondary' then 'secondary' else 'primary' end;
-    g := st_collectionextract(st_makevalid(st_force2d(st_setsrid(st_geomfromgeojson((r->'geometry')::text), 4326))), 2);
-    continue when g is null or st_isempty(g);
+    begin
+      g := st_collectionextract(st_makevalid(st_force2d(st_setsrid(st_geomfromgeojson((r->'geometry')::text), 4326))), 2);
+    exception when others then g := null; end;
+    if g is null or st_isempty(g) then sk := sk + 1; continue; end if;
     insert into public.highway_routes (route_code, route_name, route_type, color, source, props, geom)
     values (v_code, left(coalesce(nullif(btrim(r->>'route_name'), ''), 'ทล.' || v_code), 200), v_type,
             case when v_type = 'primary' then '#1B5E20' else '#81C784' end,
@@ -407,8 +434,8 @@ begin
           source = excluded.source, props = excluded.props, geom = excluded.geom, is_active = true;
     n := n + 1;
   end loop;
-  perform public.fn_audit('import_routes', jsonb_build_object('count', n));
-  return n;
+  perform public.fn_audit('import_routes', jsonb_build_object('imported', n, 'skipped', sk));
+  return jsonb_build_object('imported', n, 'skipped', sk);
 end $$;
 
 create or replace function public.rpc_update_route(p_pass text, p_id uuid, p_name text, p_type text, p_active boolean)
@@ -431,6 +458,40 @@ begin
   perform public.fn_audit('delete_route', jsonb_build_object('id', p_id));
 end $$;
 
+create or replace function public.rpc_save_map_style(p_pass text, p_style jsonb)
+returns void language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform public.fn_assert_admin(p_pass);
+  if jsonb_typeof(p_style) <> 'object' or length(p_style::text) > 20000 then raise exception 'INVALID_STYLE'; end if;
+  update public.system_settings set map_style = p_style where id = 1;
+  perform public.fn_audit('save_map_style', jsonb_build_object('bytes', length(p_style::text)));
+end $$;
+
+create or replace function public.rpc_save_office(
+  p_pass text, p_id uuid, p_name text, p_address text, p_phone text,
+  p_lng double precision, p_lat double precision, p_active boolean)
+returns uuid language plpgsql security definer set search_path = public, extensions as $$
+declare v_id uuid := coalesce(p_id, gen_random_uuid());
+begin
+  perform public.fn_assert_admin(p_pass);
+  if coalesce(btrim(p_name), '') = '' then raise exception 'INVALID_NAME'; end if;
+  insert into public.offices (id, name, address, phone, lng, lat, is_active)
+  values (v_id, btrim(p_name), p_address, p_phone, p_lng, p_lat, coalesce(p_active, true))
+  on conflict (id) do update
+    set name = excluded.name, address = excluded.address, phone = excluded.phone,
+        lng = excluded.lng, lat = excluded.lat, is_active = excluded.is_active;
+  perform public.fn_audit('save_office', jsonb_build_object('id', v_id, 'name', p_name));
+  return v_id;
+end $$;
+
+create or replace function public.rpc_delete_office(p_pass text, p_id uuid)
+returns void language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform public.fn_assert_admin(p_pass);
+  delete from public.offices where id = p_id;
+  perform public.fn_audit('delete_office', jsonb_build_object('id', p_id));
+end $$;
+
 -- ---------------------------------------------------------------------
 -- 7) RLS + สิทธิ์: anon อ่านอย่างเดียว
 -- ---------------------------------------------------------------------
@@ -440,18 +501,20 @@ alter table public.flood_incidents enable row level security;
 alter table public.flood_updates   enable row level security;
 alter table public.audit_log       enable row level security;
 alter table public.admin_secret    enable row level security;
+alter table public.offices         enable row level security;
 
 create policy fm_select_settings  on public.system_settings for select to anon, authenticated using (true);
 create policy fm_select_routes    on public.highway_routes  for select to anon, authenticated using (true);
 create policy fm_select_incidents on public.flood_incidents for select to anon, authenticated using (true);
 create policy fm_select_updates   on public.flood_updates   for select to anon, authenticated using (true);
+create policy fm_select_offices   on public.offices          for select to anon, authenticated using (true);
 -- audit_log / admin_secret: ไม่มี policy = anon เข้าถึงไม่ได้ (ดูผ่าน SQL Editor)
 
 revoke all on all tables    in schema public from anon, authenticated;
 revoke all on all functions in schema public from public, anon, authenticated;
 grant usage on schema public to anon, authenticated;
-grant select on public.system_settings, public.highway_routes, public.flood_incidents, public.flood_updates to anon, authenticated;
-grant select on public.v_incidents_full, public.v_map_active_floods, public.v_map_routes, public.v_admin_routes to anon, authenticated;
+grant select on public.system_settings, public.highway_routes, public.flood_incidents, public.flood_updates, public.offices to anon, authenticated;
+grant select on public.v_routes_version, public.v_incidents_full, public.v_map_active_floods, public.v_map_routes, public.v_admin_routes to anon, authenticated;
 
 do $$
 declare r record;
@@ -483,14 +546,14 @@ do $$
 declare t text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    foreach t in array array['flood_incidents', 'flood_updates', 'system_settings'] loop
+    foreach t in array array['flood_incidents', 'flood_updates', 'system_settings', 'offices'] loop
       begin execute format('alter publication supabase_realtime add table public.%I', t);
       exception when duplicate_object then null; end;
     end loop;
   end if;
 end $$;
 
-select 'Schema v2 พร้อมใช้งาน ✓' as result;
+select 'Schema v3 พร้อมใช้งาน ✓' as result;
 
 -- =====================================================================
 -- (ทางเลือก) ตั้งรหัสผ่านแอดมิน — หน้า /admin ยังเข้าได้โดยไม่ Login

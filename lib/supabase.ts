@@ -70,6 +70,17 @@ export interface Settings {
   description: string | null;
   logo_url: string | null;
   contact_phone: string | null;
+  map_style: any;
+}
+
+export interface Office {
+  id: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  lng: number;
+  lat: number;
+  is_active: boolean;
 }
 
 export interface HistoryPoint {

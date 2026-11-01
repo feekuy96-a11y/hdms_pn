@@ -3,8 +3,8 @@
  *  อ่าน  : ตาราง/วิวผ่าน anon key (RLS select)
  *  เขียน : ผ่าน rpc_* เท่านั้น (ตรวจข้อมูล + audit + รหัสผ่านแอดมินถ้าเปิดใช้)
  */
-import { supabase, type AdminRoute, type HistoryPoint, type Incident, type RouteRow, type Settings, type Traffic } from "./supabase";
-import { SUPABASE_URL } from "./config";
+import { supabase, type AdminRoute, type HistoryPoint, type Incident, type Office, type RouteRow, type Settings, type Traffic } from "./supabase";
+import { LONGDO_KEY, SUPABASE_URL } from "./config";
 import { cleanLine, simplify } from "./geo";
 import type { LngLat } from "./longdo";
 
@@ -45,7 +45,7 @@ export const passcodeRequired = async () => !!(await rpc<boolean>("rpc_passcode_
 
 /* ───────────── อ่านข้อมูล ───────────── */
 export async function fetchSettings(): Promise<Settings | null> {
-  const { data } = await supabase.from("system_settings").select("system_name,organization,description,logo_url,contact_phone").eq("id", 1).maybeSingle();
+  const { data } = await supabase.from("system_settings").select("system_name,organization,description,logo_url,contact_phone,map_style").eq("id", 1).maybeSingle();
   return (data as Settings) ?? null;
 }
 
@@ -68,13 +68,21 @@ export async function fetchHistory(incidentId: string): Promise<HistoryPoint[]> 
   return (data ?? []) as HistoryPoint[];
 }
 
-/** เส้นทาง: โหลดครั้งเดียวแล้วเก็บแคช 6 ชม. (ประหยัด egress ของ Supabase) */
+/**
+ * เส้นทาง: เทียบ "เวอร์ชัน" (จำนวน+เวลาแก้ไขล่าสุด) ก่อนใช้แคชใน localStorage
+ *  → นำเข้า/แก้เส้นทางแล้วทุกคนเห็นทันที ไม่ค้างแคชเก่า แต่ยังประหยัด egress (ดึงเต็มเฉพาะตอนมีการเปลี่ยน)
+ */
 export async function fetchRoutes(force = false): Promise<RouteRow[]> {
-  const KEY = "fm_routes_v2";
-  if (!force) {
+  const KEY = "fm_routes_v3";
+  let ver: string | null = null;
+  try {
+    const { data } = await supabase.from("v_routes_version").select("n,v").maybeSingle();
+    if (data) ver = `${(data as any).n}|${(data as any).v}`;
+  } catch { /* ยังไม่ได้รัน SQL v3 → ไม่ใช้แคช */ }
+  if (!force && ver) {
     try {
-      const c = JSON.parse(sessionStorage.getItem(KEY) || "null");
-      if (c && Date.now() - c.t < 6 * 3600e3) return c.d;
+      const c = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (c && c.k === ver) return c.d;
     } catch { /* ignore */ }
   }
   const out: RouteRow[] = [];
@@ -84,8 +92,13 @@ export async function fetchRoutes(force = false): Promise<RouteRow[]> {
     out.push(...((data ?? []) as RouteRow[]));
     if (!data || data.length < 1000) break;
   }
-  try { sessionStorage.setItem(KEY, JSON.stringify({ t: Date.now(), d: out })); } catch { /* เกินโควตา ข้ามได้ */ }
+  if (ver) { try { localStorage.setItem(KEY, JSON.stringify({ k: ver, d: out })); } catch { /* เกินโควตา ข้ามได้ */ } }
   return out;
+}
+
+export async function fetchOffices(): Promise<Office[]> {
+  const { data } = await supabase.from("offices").select("id,name,address,phone,lng,lat,is_active").order("sort_order").order("name");
+  return (data ?? []) as Office[];
 }
 
 export async function fetchAdminRoutes(): Promise<AdminRoute[]> {
@@ -158,22 +171,54 @@ export interface RouteResult { coords: LngLat[]; via: "db" | "osrm" | "line"; la
  *  2) osrm — ถนนอื่นที่ไม่อยู่ในข้อมูลนำเข้า (เซิร์ฟเวอร์สาธิตของ OSRM ใช้เป็นตัวเสริมเท่านั้น)
  *  3) line — เส้นตรง (Admin ดัดเองได้)
  */
-export async function autoRoute(a: LngLat, b: LngLat): Promise<RouteResult> {
-  try {
-    const r = await rpc<any>("rpc_snap_line", { p_a_lng: a[0], p_a_lat: a[1], p_b_lng: b[0], p_b_lat: b[1], p_max_m: 200 }, false);
-    if (r?.found) return { coords: r.geojson.coordinates, via: "db", label: r.route_code };
-  } catch { /* ไปขั้นถัดไป */ }
-  try {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 7000);
-    const res = await fetch(
-      `https://router.project-osrm.org/route/v1/driving/${a[0]},${a[1]};${b[0]},${b[1]}?overview=full&geometries=geojson`,
-      { signal: ctl.signal });
-    clearTimeout(t);
-    const j = await res.json();
-    if (j.code === "Ok" && j.routes?.[0]) return { coords: j.routes[0].geometry.coordinates, via: "osrm" };
-  } catch { /* ไปขั้นถัดไป */ }
+export async function autoRoute(a: LngLat, b: LngLat, prefer: "db" | "osrm" = "db"): Promise<RouteResult> {
+  const viaDb = async (): Promise<RouteResult | null> => {
+    try {
+      const r = await rpc<any>("rpc_snap_line", { p_a_lng: a[0], p_a_lat: a[1], p_b_lng: b[0], p_b_lat: b[1], p_max_m: 200 }, false);
+      if (r?.found) return { coords: r.geojson.coordinates, via: "db", label: r.route_code };
+    } catch { /* ไปขั้นถัดไป */ }
+    return null;
+  };
+  const viaOsrm = async (): Promise<RouteResult | null> => {
+    try {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 8000);
+      const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${a[0]},${a[1]};${b[0]},${b[1]}?overview=full&geometries=geojson`, { signal: ctl.signal });
+      clearTimeout(t);
+      const j = await res.json();
+      if (j.code === "Ok" && j.routes?.[0]) return { coords: j.routes[0].geometry.coordinates, via: "osrm" };
+    } catch { /* ไปขั้นถัดไป */ }
+    return null;
+  };
+  // เส้นน้ำท่วมควรอยู่บนแนวทางหลวงที่นำเข้า (db ก่อน) · ทางเลี่ยงมักผ่านถนนหลายสาย (OSRM ก่อน)
+  const order = prefer === "db" ? [viaDb, viaOsrm] : [viaOsrm, viaDb];
+  for (const f of order) { const r = await f(); if (r) return r; }
   return { coords: [a, b], via: "line" };
+}
+
+/** ดึง ตำบล/อำเภอ/จังหวัด จากพิกัด (Longdo ก่อน แล้วสำรองด้วย OpenStreetMap) */
+export async function reverseGeocode(lng: number, lat: number): Promise<{ subdistrict: string; district: string; province: string } | null> {
+  const strip = (v?: string) => (v ?? "").replace(/^(ตำบล|แขวง|อำเภอ|เขต|จังหวัด|ต\.|อ\.|จ\.)\s*/, "").trim();
+  try {
+    const r = await fetch(`https://api.longdo.com/map/services/address?lon=${lng}&lat=${lat}&key=${encodeURIComponent(LONGDO_KEY)}`);
+    if (r.ok) {
+      const j = await r.json();
+      const o = { subdistrict: strip(j.subdistrict), district: strip(j.district), province: strip(j.province) };
+      if (o.subdistrict || o.district) return o;
+    }
+  } catch { /* ลองตัวสำรอง */ }
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=th&zoom=14`);
+    if (r.ok) {
+      const a = (await r.json()).address ?? {};
+      return {
+        subdistrict: strip(a.suburb || a.village || a.neighbourhood || a.hamlet),
+        district: strip(a.county || a.city_district || a.district || a.town || a.city),
+        province: strip(a.state || a.province),
+      };
+    }
+  } catch { /* ไม่ได้ก็ปล่อยให้กรอกเอง */ }
+  return null;
 }
 
 /* ───────────── เขียนข้อมูล (ผ่าน RPC) ───────────── */
@@ -229,11 +274,12 @@ export interface RouteImportRow {
 }
 
 /** นำเข้าเส้นทาง: ลดจุดเล็กน้อย (~1 ม.) แล้วแบ่งส่งเป็นชุดละ ~600KB */
-export async function importRoutes(rows: RouteImportRow[], onProgress?: (done: number, total: number) => void): Promise<number> {
-  let total = 0, batch: any[] = [], size = 0, done = 0;
+export async function importRoutes(rows: RouteImportRow[], onProgress?: (done: number, total: number) => void): Promise<{ imported: number; skipped: number }> {
+  let total = 0, skipped = 0, batch: any[] = [], size = 0, done = 0;
   const flush = async () => {
     if (!batch.length) return;
-    total += await rpc<number>("rpc_import_routes", { p_rows: batch });
+    const r = await rpc<{ imported: number; skipped: number }>("rpc_import_routes", { p_rows: batch });
+    total += r?.imported ?? 0; skipped += r?.skipped ?? 0;
     done += batch.length; onProgress?.(done, rows.length);
     batch = []; size = 0;
   };
@@ -250,11 +296,18 @@ export async function importRoutes(rows: RouteImportRow[], onProgress?: (done: n
     batch.push(item); size += s;
   }
   await flush();
-  return total;
+  return { imported: total, skipped };
 }
 
 const slimProps = (p: Record<string, any>) =>
   Object.fromEntries(Object.entries(p ?? {}).slice(0, 30).map(([k, v]) => [k, typeof v === "string" ? v.slice(0, 200) : v]));
+
+export const saveMapStyle = (style: unknown) => rpc("rpc_save_map_style", { p_style: style });
+
+export interface OfficeInput { id?: string; name: string; address?: string; phone?: string; lng: number; lat: number; active: boolean }
+export const saveOffice = (o: OfficeInput) =>
+  rpc("rpc_save_office", { p_id: o.id ?? null, p_name: o.name, p_address: o.address || null, p_phone: o.phone || null, p_lng: o.lng, p_lat: o.lat, p_active: o.active });
+export const deleteOffice = (id: string) => rpc("rpc_delete_office", { p_id: id });
 
 export const updateRoute = (id: string, name: string, type: "primary" | "secondary", active: boolean) =>
   rpc("rpc_update_route", { p_id: id, p_name: name, p_type: type, p_active: active });

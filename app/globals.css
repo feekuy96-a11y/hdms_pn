@@ -34,3 +34,55 @@ body {
 .fm-pend { width: 26px; height: 26px; border-radius: 50%; background: #16a34a; color: #fff; border: 3px solid #fff; display: grid; place-items: center; font: 800 12px/1 sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
 
 .sheet-scroll { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+/* ───────── หมุดน้ำท่วม (ไอคอนคลื่นน้ำสีขาวบนพื้นแดง + ป้ายระดับน้ำ) ───────── */
+.fm-fp { width: 64px; display: flex; flex-direction: column; align-items: center; cursor: pointer; transform-origin: 50% 100%; transition: transform .15s; filter: drop-shadow(0 3px 6px rgba(0,0,0,.35)); }
+.fm-fp.sel { transform: scale(1.22); z-index: 9; }
+.fm-fp .pill { display: flex; align-items: baseline; gap: 2px; padding: 2px 7px 3px; border-radius: 999px; background: #fff; border: 2px solid #D32F2F; color: #B71C1C; font: 700 12px/1.1 'IBM Plex Sans Thai', sans-serif; white-space: nowrap; margin-bottom: 3px; }
+.fm-fp .pill b { font-size: 14px; font-weight: 800; }
+.fm-fp .pill small { font-size: 9px; font-weight: 600; opacity: .85; }
+.fm-fp .pill em { font-style: normal; font-size: 9px; margin-left: 1px; }
+.fm-fp .pill em.rising { color: #D32F2F; } .fm-fp .pill em.falling { color: #16A34A; }
+.fm-fp .ic { position: relative; width: 40px; height: 40px; }
+.fm-fp .ring { position: absolute; inset: 0; border-radius: 50%; background: #D32F2F; opacity: 0; pointer-events: none; }
+.fm-fp.pulse .ring { animation: fm-ring 1.8s ease-out infinite; }
+.fm-fp .badge { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #EF5350, #C62828); border: 3px solid #fff; display: grid; place-items: center; }
+.fm-fp .badge svg { width: 22px; height: 22px; }
+.fm-fp .ic u { position: absolute; right: -3px; top: -3px; width: 13px; height: 13px; border-radius: 50%; border: 2.5px solid #fff; }
+.fm-fp .tip { width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid #fff; margin-top: -2px; }
+@keyframes fm-ring { 0% { transform: scale(.9); opacity: .55; } 100% { transform: scale(2.3); opacity: 0; } }
+
+/* ── หมุดสำนักงาน ── */
+.fm-op { width: 34px; height: 34px; border-radius: 10px; background: #0B2A5B; border: 2.5px solid #FBC02D; display: grid; place-items: center; box-shadow: 0 3px 10px rgba(0,0,0,.4); cursor: pointer; }
+.fm-op svg { width: 18px; height: 18px; }
+
+/* ── เอฟเฟกต์เคลื่อนไหวของเส้น (pointer-events: none = ไม่บังการลาก/แตะแผนที่) ── */
+.fm-fx { width: var(--s); height: var(--s); pointer-events: none; }
+.fm-fx i { display: block; width: 100%; height: 100%; }
+.fm-fx.chaser i { border-radius: 50%; background: var(--c); box-shadow: 0 0 8px 2px var(--c); animation: fm-chase var(--dur) linear infinite; animation-delay: var(--dl); opacity: .25; }
+.fm-fx.pulse i { border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); animation: fm-breath var(--dur) ease-in-out infinite; }
+.fm-fx.blink i { border-radius: 50%; background: var(--c); animation: fm-blink var(--dur) steps(2, jump-none) infinite; }
+.fm-fx.arrows i { width: 0; height: 0; background: none; border-left: calc(var(--s) * .55) solid transparent; border-right: calc(var(--s) * .55) solid transparent; border-bottom: var(--s) solid var(--c); transform: rotate(var(--rot)); animation: fm-arrow var(--dur) linear infinite; animation-delay: var(--dl); opacity: .3; }
+@keyframes fm-chase { 0% { transform: scale(.5); opacity: .25; } 10% { transform: scale(1.5); opacity: 1; } 28% { transform: scale(.9); opacity: .55; } 100% { transform: scale(.5); opacity: .25; } }
+@keyframes fm-arrow { 0% { opacity: .25; } 12% { opacity: 1; } 35% { opacity: .35; } 100% { opacity: .25; } }
+@keyframes fm-breath { 0%, 100% { transform: scale(.6); opacity: .35; } 50% { transform: scale(1.3); opacity: 1; } }
+@keyframes fm-blink { 0%, 100% { opacity: 1; } 50% { opacity: .1; } }
+@media (prefers-reduced-motion: reduce) {
+  .fm-fx i, .fm-fp .ring, .live-dot::after { animation: none !important; }
+  .fm-fx.chaser i, .fm-fx.arrows i { opacity: .9; }
+}
+
+/* ── จุด LIVE ── */
+.live-dot { position: relative; width: 8px; height: 8px; border-radius: 50%; background: #fff; display: inline-block; }
+.live-dot::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; background: rgba(255,255,255,.55); animation: fm-ring 1.6s ease-out infinite; }
+
+/* ── ภาพเคลื่อนไหว "สำเร็จ" (บันทึก/ลบ/อัปเดต/แก้ไข) ── */
+@keyframes fm-pop { 0% { transform: scale(.4); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes fm-draw { to { stroke-dashoffset: 0; } }
+@keyframes fm-spark { 0% { transform: translate(0,0) scale(.4); opacity: 1; } 100% { transform: translate(var(--x), var(--y)) scale(1); opacity: 0; } }
+@keyframes fm-fade { from { opacity: 0; } to { opacity: 1; } }
+.fm-succ-card { animation: fm-pop .45s cubic-bezier(.2,.9,.3,1.2) both; }
+.fm-succ-circle { stroke-dasharray: 190; stroke-dashoffset: 190; animation: fm-draw .55s .1s ease-out forwards; }
+.fm-succ-mark { stroke-dasharray: 60; stroke-dashoffset: 60; animation: fm-draw .4s .55s ease-out forwards; }
+.fm-spark { position: absolute; left: 50%; top: 44px; width: 7px; height: 7px; border-radius: 50%; animation: fm-spark .9s .45s ease-out forwards; opacity: 0; }
+.fm-fade { animation: fm-fade .2s ease both; }
