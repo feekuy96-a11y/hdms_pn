@@ -370,27 +370,36 @@ export function LongdoGisMap({
             polyline.on("click", () => onSelectFlood(flood.id));
           }
 
-          // Flood Location Marker (Pulsing Pin with DOH Highway Emblem)
+          // Flood Location Marker (Capsule Badge with Icon and Level as shown in reference)
           const midLat = flood.lat_start || (coords[0] ? coords[0][1] : APP_CONFIG.DEFAULT_CENTER.lat);
           const midLon = flood.lon_start || (coords[0] ? coords[0][0] : APP_CONFIG.DEFAULT_CENTER.lon);
 
-          const statusColor = flood.traffic_status === "CLOSED" ? "bg-red-700" : "bg-amber-600";
+          let capsuleClass = "doh-capsule-tag doh-capsule-amber";
+          let statusIcon = "⚠️";
+          let levelText = `${flood.water_level_cm} ซม.`;
+
+          if (flood.traffic_status === "CLOSED" || flood.water_level_cm >= 40) {
+            capsuleClass = "doh-capsule-tag doh-capsule-red";
+            statusIcon = "⛔";
+          } else if (flood.water_level_cm === 0 || flood.traffic_status === "PASSABLE") {
+            capsuleClass = "doh-capsule-tag doh-capsule-green";
+            statusIcon = "✅";
+            levelText = "ปกติ";
+          }
+
           const iconHtml = `
-            <div class="relative cursor-pointer" style="transform: translate(-50%, -50%);">
-              <div class="w-8 h-8 rounded-full ${statusColor} flood-pin-pulse flex items-center justify-center border-2 border-white shadow-xl" style="background-color: ${fColor}">
-                <span class="text-white text-[10px] font-extrabold font-heading">${flood.route_no}</span>
-              </div>
-              <div class="absolute -top-5 left-1/2 -translate-x-1/2 bg-slate-950/95 border border-amber-400 text-amber-300 text-[10px] font-bold px-1.5 py-0.2 rounded shadow whitespace-nowrap font-heading">
-                ${flood.water_level_cm} ซม.
-              </div>
+            <div class="${capsuleClass}">
+              <span class="text-xs">${statusIcon}</span>
+              <span>ทล.${flood.route_no}</span>
+              <span class="opacity-90">(${levelText})</span>
             </div>
           `;
 
           const pinIcon = L.divIcon({
             html: iconHtml,
-            className: "doh-flood-marker",
-            iconSize: [32, 32],
-            iconAnchor: [16, 16],
+            className: "doh-map-capsule-pin",
+            iconSize: [120, 28],
+            iconAnchor: [60, 14],
           });
 
           const marker = L.marker([midLat, midLon], { icon: pinIcon }).addTo(group);

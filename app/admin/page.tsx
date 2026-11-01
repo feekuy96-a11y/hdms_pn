@@ -9,10 +9,12 @@ import { AdminConsole } from "@/components/admin/AdminConsole";
 import { OfflineSyncStatus } from "@/components/offline/OfflineSyncStatus";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
 import Link from "next/link";
-import { ArrowLeft, RotateCw, LogOut } from "lucide-react";
+import { ArrowLeft, RotateCw, LogOut, FileText } from "lucide-react";
+import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 
 export default function AdminPage() {
   const [selectedFloodId, setSelectedFloodId] = useState<string>("F-001");
+  const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
   const [adminPickMode, setAdminPickMode] = useState<string | null>(null);
   const [draftCoordinates, setDraftCoordinates] = useState<[number, number][]>([]);
   const [draftWaypoints, setDraftWaypoints] = useState<[number, number][]>([]);
@@ -81,6 +83,15 @@ export default function AdminPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsDispatchModalOpen(true)}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition"
+            title="ออกรายงานสถานการณ์เสนอผู้ว่าราชการจังหวัด (ด่วนที่สุด)"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">รายงานผู้ว่าฯ (ด่วนที่สุด)</span>
+          </button>
           <OfflineSyncStatus onSyncComplete={() => refetch()} />
           <button
             type="button"
@@ -104,9 +115,29 @@ export default function AdminPage() {
         </div>
       </header>
 
-      {/* Main Split Layout */}
+      {/* Main Split Layout: Admin Console on Left, GIS Map on Right */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        {/* Left: Interactive GIS Map */}
+        {/* Left: Full Government Administrative Console (ฝั่งซ้ายมือ) */}
+        <div className="w-full lg:w-[680px] xl:w-[720px] flex flex-col overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0">
+          <AdminConsole
+            systemData={systemData}
+            onDataRefresh={(newData) => {
+              refetch();
+            }}
+            adminPickMode={adminPickMode}
+            setAdminPickMode={setAdminPickMode}
+            draftCoordinates={draftCoordinates}
+            setDraftCoordinates={setDraftCoordinates}
+            draftWaypoints={draftWaypoints}
+            setDraftWaypoints={setDraftWaypoints}
+            pickedCoordinate={pickedCoordinate}
+            onFocusCoordinates={(coords) => setFocusCoordinates(coords)}
+            onToast={showToast}
+            setIncomingGisLines={setIncomingGisLines}
+          />
+        </div>
+
+        {/* Right: Interactive GIS Map */}
         <div className="h-[48vh] lg:h-[calc(100vh-64px)] lg:flex-1 relative">
           <LongdoGisMap
             systemData={systemData}
@@ -156,27 +187,14 @@ export default function AdminPage() {
             </div>
           )}
         </div>
-
-        {/* Right: Full Government Administrative Console */}
-        <div className="w-full lg:w-[680px] xl:w-[720px] flex flex-col overflow-hidden">
-          <AdminConsole
-            systemData={systemData}
-            onDataRefresh={(newData) => {
-              refetch();
-            }}
-            adminPickMode={adminPickMode}
-            setAdminPickMode={setAdminPickMode}
-            draftCoordinates={draftCoordinates}
-            setDraftCoordinates={setDraftCoordinates}
-            draftWaypoints={draftWaypoints}
-            setDraftWaypoints={setDraftWaypoints}
-            pickedCoordinate={pickedCoordinate}
-            onFocusCoordinates={(coords) => setFocusCoordinates(coords)}
-            onToast={showToast}
-            setIncomingGisLines={setIncomingGisLines}
-          />
-        </div>
       </div>
+
+      {/* Official Governor Dispatch Modal */}
+      <OfficialReportDispatchModal
+        isOpen={isDispatchModalOpen}
+        onClose={() => setIsDispatchModalOpen(false)}
+        systemData={systemData}
+      />
 
       {toastMessage && (
         <div className="fixed bottom-4 right-4 z-[9999] bg-slate-950 border-2 border-amber-400 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-heading flex items-center gap-2.5 max-w-sm">

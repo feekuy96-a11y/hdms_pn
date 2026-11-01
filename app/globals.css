@@ -181,6 +181,90 @@
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
 }
 
+/* Thai Highway GIS Alert & Badge Pulse Animations */
+@keyframes alertPulseGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.75);
+    transform: scale(1);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    transform: scale(1);
+  }
+}
+
+@keyframes warningPulseGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.75);
+    transform: scale(1);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(245, 158, 11, 0);
+    transform: scale(1.04);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+    transform: scale(1);
+  }
+}
+
+.alert-badge-pulse {
+  animation: alertPulseGlow 1.8s infinite;
+}
+
+.warning-badge-pulse {
+  animation: warningPulseGlow 2s infinite;
+}
+
+/* Map Capsule Pin Styling */
+.doh-map-capsule-pin {
+  background: transparent !important;
+  border: none !important;
+}
+
+.doh-capsule-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.doh-capsule-tag:hover {
+  transform: translateY(-2px) scale(1.08);
+}
+
+.doh-capsule-red {
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+  color: #ffffff;
+  border: 1.5px solid #fca5a5;
+  animation: alertPulseGlow 1.8s infinite;
+}
+
+.doh-capsule-amber {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #ffffff;
+  border: 1.5px solid #fde68a;
+  animation: warningPulseGlow 2s infinite;
+}
+
+.doh-capsule-green {
+  background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+  color: #ffffff;
+  border: 1.5px solid #a7f3d0;
+}
+
 /* Accessibility: Respect prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   .doh-line-chaser,
