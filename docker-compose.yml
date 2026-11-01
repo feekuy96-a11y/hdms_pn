@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 16 with PostGIS extension for GIS calculations
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: doh_pattani_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: doh_admin
+      POSTGRES_PASSWORD: doh_secure_pass
+      POSTGRES_DB: doh_pattani_flood
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doh_admin -d doh_pattani_flood"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: doh_pattani_app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://doh_admin:doh_secure_pass@postgres:5432/doh_pattani_flood
+      - NEXT_PUBLIC_LONGDO_MAP_KEY=${NEXT_PUBLIC_LONGDO_MAP_KEY:-demokey}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-doh_pattani_flood_dev_secret_key_892348719234}
+      - BETTER_AUTH_URL=http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

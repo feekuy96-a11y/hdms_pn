@@ -1,0 +1,195 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100 font-body antialiased;
+    overflow-x: hidden;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading tracking-tight;
+  }
+}
+
+/* Department of Highways Colors & Gradients */
+.doh-header {
+  background: linear-gradient(135deg, #091326 0%, #1e3a8a 55%, #0f172a 100%);
+}
+
+.gold-gradient {
+  background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+}
+
+/* Map Markers and Pulses */
+@keyframes pulseRed {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8);
+  }
+  70% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 14px rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+.flood-pin-pulse {
+  animation: pulseRed 1.8s infinite;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Leaflet & Map Popups */
+.leaflet-popup-content-wrapper {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+  border: 1px solid #f59e0b !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-popup-tip {
+  background: #0f172a !important;
+}
+
+/* Print Styles for Official Thai Government Dispatch */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 15mm 15mm 15mm 15mm;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 14pt !important;
+  }
+  header, footer, nav, .print\:hidden {
+    display: none !important;
+  }
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+  th, td {
+    border: 1px solid #334155 !important;
+    color: black !important;
+  }
+}
+
+/* Animations for Line Styling Studio & Modals */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleUp {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+.animate-scale-up {
+  animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Chaser Animation: Moving lights from Point A to Point B */
+@keyframes lineChaser {
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+.doh-line-chaser {
+  stroke-dasharray: 12, 10;
+  animation: lineChaser 1.2s linear infinite;
+}
+
+/* Pulse Breath Glow Animation */
+@keyframes pulseBreath {
+  0%, 100% {
+    opacity: 0.95;
+    filter: drop-shadow(0 0 8px rgba(211, 47, 47, 0.9));
+  }
+  50% {
+    opacity: 0.45;
+    filter: drop-shadow(0 0 2px rgba(211, 47, 47, 0.3));
+  }
+}
+
+.doh-line-pulse {
+  animation: pulseBreath 2s ease-in-out infinite;
+}
+
+/* Blink Animation */
+@keyframes lineBlink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.15; }
+}
+
+.doh-line-blink {
+  animation: lineBlink 1s infinite;
+}
+
+/* Direction Arrows Effect */
+.doh-line-arrows {
+  stroke-dasharray: 16, 8;
+  animation: lineChaser 1.8s linear infinite;
+}
+
+/* Speed Modifiers */
+.doh-anim-slow {
+  animation-duration: 3.5s !important;
+}
+.doh-anim-normal {
+  animation-duration: 2.0s !important;
+}
+.doh-anim-fast {
+  animation-duration: 1.0s !important;
+}
+
+/* Map Tooltips & Popups */
+.doh-map-tooltip {
+  background: rgba(15, 23, 42, 0.95) !important;
+  border: 1px solid rgba(251, 191, 36, 0.6) !important;
+  color: #f8fafc !important;
+  font-family: inherit !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  border-radius: 8px !important;
+  padding: 4px 8px !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Accessibility: Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .doh-line-chaser,
+  .doh-line-pulse,
+  .doh-line-blink,
+  .doh-line-arrows,
+  .flood-pin-pulse,
+  .animate-bounce,
+  .animate-pulse {
+    animation: none !important;
+  }
+}
