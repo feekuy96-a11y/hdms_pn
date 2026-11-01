@@ -75,7 +75,7 @@ export function OfficialReportDispatchModal({
             <div className="text-sm font-semibold text-slate-700">
               แขวงทางหลวงปัตตานี สำนักงานทางหลวงที่ ๑๘ กรมทางหลวง กระทรวงคมนาคม
             </div>
-            <div className="text-xs text-slate-600">
+            <div className="text-xs text-slate-600" suppressHydrationWarning>
               ประจำวันที่ {todayStr} (ข้อมูล ณ เวลา {new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.)
             </div>
           </div>

@@ -33,10 +33,23 @@ interface WaterTimelineChartProps {
 }
 
 export function WaterTimelineChart({ timelineUpdates, floodId }: WaterTimelineChartProps) {
+  const [isMounted, setIsMounted] = React.useState(false);
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Filter updates for this specific flood location, sorted chronologically
   const filtered = timelineUpdates
     .filter((t) => t.flood_id_ref === floodId)
     .sort((a, b) => new Date(a.reported_at).getTime() - new Date(b.reported_at).getTime());
+
+  if (!isMounted) {
+    return (
+      <div className="h-full flex items-center justify-center text-xs text-slate-400">
+        กำลังโหลดกราฟระดับน้ำ...
+      </div>
+    );
+  }
 
   if (filtered.length === 0) {
     return (

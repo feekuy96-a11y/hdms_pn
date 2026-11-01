@@ -106,7 +106,7 @@ export interface SystemDataPayload {
 }
 
 export const INITIAL_SYSTEM_DATA: SystemDataPayload = {
-  updatedAt: new Date().toISOString(),
+  updatedAt: "2026-11-02T03:00:00.000Z",
   offices: DEFAULT_DOH_OFFICES,
   mapStyles: DEFAULT_MAP_STYLES,
   systemSettings: {
@@ -136,7 +136,7 @@ export const INITIAL_SYSTEM_DATA: SystemDataPayload = {
       traffic_status: "CLOSED",
       latest_photo_url: "https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=900&q=80",
       is_active: true,
-      updated_at: new Date().toISOString(),
+      updated_at: "2026-11-02T03:00:00.000Z",
     },
     {
       id: "F-002",
@@ -158,7 +158,7 @@ export const INITIAL_SYSTEM_DATA: SystemDataPayload = {
       traffic_status: "WARNING",
       latest_photo_url: "https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?auto=format&fit=crop&w=900&q=80",
       is_active: true,
-      updated_at: new Date().toISOString(),
+      updated_at: "2026-11-02T03:00:00.000Z",
     },
     {
       id: "F-003",
@@ -179,7 +179,7 @@ export const INITIAL_SYSTEM_DATA: SystemDataPayload = {
       traffic_status: "WARNING",
       latest_photo_url: "https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=900&q=80",
       is_active: true,
-      updated_at: new Date().toISOString(),
+      updated_at: "2026-11-02T03:00:00.000Z",
     },
   ],
   detourRoutes: [
@@ -199,7 +199,7 @@ export const INITIAL_SYSTEM_DATA: SystemDataPayload = {
       ],
       description: "เลี้ยวซ้ายแยกดอนยาง เข้าสู่ตัวเมืองปัตตานีผ่านสาย 42 เดิม รถทุกชนิดผ่านได้สะดวก",
       is_active: true,
-      updated_at: new Date().toISOString(),
+      updated_at: "2026-11-02T03:00:00.000Z",
     },
     {
       id: "D-002",
@@ -217,14 +217,14 @@ export const INITIAL_SYSTEM_DATA: SystemDataPayload = {
       ],
       description: "รถเล็กแนะนำใช้ ทล.42 ผ่านหน้า ม.อ.ปัตตานี มุ่งหน้าแยกคลองขุด",
       is_active: true,
-      updated_at: new Date().toISOString(),
+      updated_at: "2026-11-02T03:00:00.000Z",
     },
   ],
   timelineUpdates: [
     {
       id: "TL-101",
       flood_id_ref: "F-001",
-      reported_at: new Date(Date.now() - 3600000 * 6).toISOString(),
+      reported_at: "2026-11-01T21:00:00.000Z",
       water_level_cm: 28,
       traffic_status: "WARNING",
       latitude: 6.7825,
@@ -236,7 +236,7 @@ export const INITIAL_SYSTEM_DATA: SystemDataPayload = {
     {
       id: "TL-102",
       flood_id_ref: "F-001",
-      reported_at: new Date(Date.now() - 3600000 * 3).toISOString(),
+      reported_at: "2026-11-02T00:00:00.000Z",
       water_level_cm: 38,
       traffic_status: "WARNING",
       latitude: 6.7825,
@@ -248,7 +248,7 @@ export const INITIAL_SYSTEM_DATA: SystemDataPayload = {
     {
       id: "TL-103",
       flood_id_ref: "F-001",
-      reported_at: new Date(Date.now() - 3600000 * 1).toISOString(),
+      reported_at: "2026-11-02T02:00:00.000Z",
       water_level_cm: 48,
       traffic_status: "CLOSED",
       latitude: 6.7825,
@@ -260,7 +260,7 @@ export const INITIAL_SYSTEM_DATA: SystemDataPayload = {
     {
       id: "TL-104",
       flood_id_ref: "F-002",
-      reported_at: new Date(Date.now() - 3600000 * 4).toISOString(),
+      reported_at: "2026-11-01T23:00:00.000Z",
       water_level_cm: 18,
       traffic_status: "PASSABLE",
       latitude: 6.8442,
@@ -272,7 +272,7 @@ export const INITIAL_SYSTEM_DATA: SystemDataPayload = {
     {
       id: "TL-105",
       flood_id_ref: "F-002",
-      reported_at: new Date(Date.now() - 3600000 * 1).toISOString(),
+      reported_at: "2026-11-02T02:00:00.000Z",
       water_level_cm: 25,
       traffic_status: "WARNING",
       latitude: 6.8442,

@@ -211,7 +211,7 @@ export default function HomePage() {
                   <h2 className="font-heading font-bold text-sm sm:text-base text-white flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-400" /> ตรวจสอบเส้นทางน้ำท่วม & ทางเลี่ยง
                   </h2>
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-slate-400" suppressHydrationWarning>
                     อัปเดต: {formatThaiBuddhistDate(systemData.updatedAt)}
                   </span>
                 </div>

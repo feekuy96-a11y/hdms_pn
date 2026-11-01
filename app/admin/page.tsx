@@ -93,16 +93,14 @@ export default function AdminPage() {
           >
             <RotateCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
           </button>
-          <form action="/auth/signout" method="post">
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 text-xs text-red-300 hover:text-white bg-red-950/40 hover:bg-red-900/60 px-2.5 py-1.5 rounded-lg border border-red-800/60 transition font-heading font-medium"
-              title="ออกจากระบบ"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">ออกจากระบบ</span>
-            </button>
-          </form>
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white bg-slate-900/60 hover:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-700 transition font-heading font-medium"
+            title="กลับหน้าแผนที่หลัก"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">กลับหน้าหลัก</span>
+          </Link>
         </div>
       </header>
 
