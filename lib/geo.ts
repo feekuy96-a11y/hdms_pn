@@ -150,3 +150,15 @@ export function parseCoord(text: string): LngLat | null {
   return null;
 }
 export const fmtCoord = (c: LngLat) => `${c[1].toFixed(6)}, ${c[0].toFixed(6)}`;
+
+/**
+ * สเกลไอคอนตามระดับซูม — แก้บั๊ก "ซูมออกแล้วไอคอนใหญ่บังแผนที่"
+ * ไอคอน HTML (marker) มีขนาดคงที่เป็นพิกเซลเสมอไม่ว่าจะซูมแค่ไหน (พฤติกรรมปกติของแผนที่เว็บ)
+ * ปัญหาคือตอนซูมออก ระยะทางจริงต่อพิกเซลเพิ่มขึ้น จุดหลายจุดจึงถูกไอคอนขนาดเดิมบังจนดูรก
+ * ฟังก์ชันนี้คืนตัวคูณ 0.5–1 ให้ย่อไอคอนลงอัตโนมัติเมื่อซูมออก โดยยังแตะ/มองเห็นได้อยู่ (ไม่เล็กกว่า 0.5)
+ */
+export function zoomIconScale(zoom: number, zMin = 9, zMax = 15, floor = 0.5): number {
+  if (!isFinite(zoom)) return 1;
+  const t = Math.min(1, Math.max(0, (zoom - zMin) / (zMax - zMin)));
+  return floor + (1 - floor) * t;
+}

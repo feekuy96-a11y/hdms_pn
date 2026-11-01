@@ -55,7 +55,6 @@ export default function MapEditor({ editing, onDone }: { editing: Incident | nul
   const firstGeo = useRef(true);
 
   const [mapReady, setMapReady] = useState(false);
-  const [tick, setTick] = useState(0);
   const [mode, setMode] = useState<Mode>("flood");
   const [tool, setTool] = useState<"auto" | "manual">("auto");
   const initLines: Lines = {
@@ -192,22 +191,23 @@ export default function MapEditor({ editing, onDone }: { editing: Incident | nul
 
   useEffect(() => { if (mapReady && editing && lines.flood.length) fitTo(mapRef.current, lines.flood, 0.01); /* eslint-disable-next-line */ }, [mapReady]);
 
-  /* ───── พื้นหลัง: เส้นทางหลวงอ้างอิง ───── */
+  /**
+   * วาดพื้นหลัง (เส้นทางหลวงอ้างอิง) + ชั้นแก้ไข (เส้น/จุดจับ/A-B) "รวมในเอฟเฟกต์เดียว"
+   * เดิมแยกเป็น 2 เอฟเฟกต์คนละ dependency — พอ `routes` เปลี่ยนแล้ว effect พื้นหลังรันใหม่ทีหลัง
+   * overlay ของพื้นหลังจะถูกเพิ่มต่อท้าย (Longdo ไม่มี z-index) ดันจุดแก้ไขที่วาดไว้ก่อนหน้าให้จมลงไป
+   * คลิก/ลากจุดไม่ได้ทั้งที่มองเห็น → รวมเป็นเอฟเฟกต์เดียว ล้างทั้งคู่แล้ววาดพื้นหลังก่อนเสมอ
+   * ตามด้วยชั้นแก้ไขเป็นลำดับสุดท้าย รับประกันว่าจุดจับอยู่บนสุดเสมอไม่ว่า dependency ไหนเปลี่ยน
+   */
   useEffect(() => {
     const L = LRef.current, m = mapRef.current;
     if (!mapReady || !m) return;
     bgOv.current.forEach((o) => m.Overlays.remove(o)); bgOv.current = [];
+    ov.current.forEach((o) => m.Overlays.remove(o)); ov.current = []; vtx.current = [];
+
     for (const r of routes) for (const part of toLines(r.geojson)) {
       for (const o of [polyline(L, part, { color: "rgba(255,255,255,.9)", width: 8 }), polyline(L, part, { color: "rgba(27,94,32,.7)", width: 4 })]) { m.Overlays.add(o); bgOv.current.push(o); }
     }
-    setTick((t) => t + 1);
-  }, [mapReady, routes]);
 
-  /* ───── ชั้นแก้ไข: เส้นตามสไตล์ + จุดจับ + จุด A/B ───── */
-  useEffect(() => {
-    const L = LRef.current, m = mapRef.current;
-    if (!mapReady || !m) return;
-    ov.current.forEach((o) => m.Overlays.remove(o)); ov.current = []; vtx.current = [];
     const add = (o: any) => { m.Overlays.add(o); ov.current.push(o); };
     drawLine(L, m, lines.detour, style.detour, ov.current);
     drawLine(L, m, lines.flood, style.flood, ov.current);
@@ -225,7 +225,7 @@ export default function MapEditor({ editing, onDone }: { editing: Incident | nul
       if (e.a) add(marker(L, e.a, '<div class="fm-pend">A</div>', { x: 13, y: 13 }));
       if (e.b) add(marker(L, e.b, '<div class="fm-pend" style="background:#D32F2F">B</div>', { x: 13, y: 13 }));
     }
-  }, [mapReady, lines, ends, mode, selV, style, tick]);
+  }, [mapReady, routes, lines, ends, mode, selV, style]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ───── ตำบล/อำเภอจากพิกัด (ไม่เขียนทับสิ่งที่แอดมินแก้เอง) ───── */
   const fillPlace = useCallback(async (force = false) => {

@@ -13,7 +13,7 @@ import { supabase, type HistoryPoint, type Incident, type Office, type RouteRow,
 import { fetchFloods, fetchHistory, fetchOffices, fetchRoutes, fetchSettings, imageUrl } from "@/lib/api";
 import { COLORS } from "@/lib/config";
 import { createMap, esc, fitTo, loadLongdo, marker, type LngLat } from "@/lib/longdo";
-import { toLines } from "@/lib/geo";
+import { toLines, zoomIconScale } from "@/lib/geo";
 import { MapLayers } from "@/lib/mapLayers";
 import { DEFAULT_STYLE, mergeStyle } from "@/lib/mapStyle";
 import { LevelChart, TRAFFIC, TrendBadge, fmtTime } from "@/components/common";
@@ -74,6 +74,8 @@ export default function PublicPage() {
   const [netErr, setNetErr] = useState(false);
   const [mapErr, setMapErr] = useState("");
   const [mapReady, setMapReady] = useState(false);
+  const [zoomLvl, setZoomLvl] = useState(10);          // ใช้ย่อไอคอนอัตโนมัติตอนซูมออก กัน "ไอคอนใหญ่บังแผนที่"
+  const zoomTimer = useRef<any>(null);
   const [lastFetch, setLastFetch] = useState<number | null>(null);
   const [, setTick] = useState(0);
   const [sel, setSel] = useState<Sel>(null);
@@ -144,9 +146,23 @@ export default function PublicPage() {
       mapRef.current = createMap(L, box);
       lyRef.current = new MapLayers(L, mapRef.current, styleRef.current);
       box.addEventListener("click", onClick, true);
+      // ย่อไอคอนอัตโนมัติตามระดับซูม (ดีบาวซ์ 150ms กันคำนวณรัวตอนลาก/scroll ซูม) — แก้บั๊ก "ซูมออกแล้วไอคอนบังแผนที่"
+      const z0 = Number(mapRef.current.zoom()) || 10;
+      setZoomLvl(z0);
+      box.style.setProperty("--zs", String(zoomIconScale(z0)));
+      try {
+        mapRef.current.Event.bind("zoom", () => {
+          clearTimeout(zoomTimer.current);
+          zoomTimer.current = setTimeout(() => {
+            const z = Number(mapRef.current?.zoom()) || z0;
+            setZoomLvl(z);
+            box.style.setProperty("--zs", String(zoomIconScale(z)));
+          }, 150);
+        });
+      } catch { /* ignore */ }
       setMapReady(true);
     }).catch((e) => !dead && setMapErr(e.message));
-    return () => { dead = true; box?.removeEventListener("click", onClick, true); };
+    return () => { dead = true; clearTimeout(zoomTimer.current); box?.removeEventListener("click", onClick, true); };
   }, []);
 
   useEffect(() => { if (!tip) return; const t = setTimeout(() => setTip(""), 4000); return () => clearTimeout(t); }, [tip]);
@@ -163,10 +179,11 @@ export default function PublicPage() {
     pinOv.current.forEach((o) => { try { m.Overlays.remove(o); } catch { /* ignore */ } });
     pinOv.current = [];
     const add = (mk: any) => { m.Overlays.add(mk); pinOv.current.push(mk); };
-    if (layers.shields) for (const r of routes) if (layers[r.route_type]) add(marker(L, [r.pin_lng, r.pin_lat], shieldPin(r), { x: 11, y: 11 }));
+    // ไอคอนทางหลวงมีจำนวนมากและเป็นข้อมูลรองลงมา — ซ่อนอัตโนมัติเมื่อซูมออกเกิน แม้ผู้ใช้เปิดเลเยอร์ไว้ กันบังแผนที่
+    if (layers.shields && zoomLvl >= 12) for (const r of routes) if (layers[r.route_type]) add(marker(L, [r.pin_lng, r.pin_lat], shieldPin(r), { x: 11, y: 11 }));
     if (layers.offices) for (const o of offices) if (o.is_active) add(marker(L, [o.lng, o.lat], officePin(o), { x: 17, y: 17 }));
     for (const f of floods) add(marker(L, [f.pin_lng, f.pin_lat], floodPin(f, sel?.kind === "flood" && sel.id === f.incident_id, style.pinPulse), { x: 32, y: 74 }));
-  }, [mapReady, floods, routes, offices, sel, style.pinPulse, layers.shields, layers.offices, layers.primary, layers.secondary]);
+  }, [mapReady, floods, routes, offices, sel, style.pinPulse, layers.shields, layers.offices, layers.primary, layers.secondary, zoomLvl]);
 
   /* ───────── เลือก / โฟกัส ───────── */
   const focus = useCallback((lng: number, lat: number) => {
@@ -298,6 +315,7 @@ export default function PublicPage() {
               <span className="h-1.5 w-5 shrink-0 rounded-full" style={{ background: c }} />{l}
             </label>
           ))}
+          {layers.shields && zoomLvl < 12 && <p className="px-1 text-[11px] text-slate-400">ไอคอนทางหลวงถูกซ่อนชั่วคราวเพราะซูมออกมาก — ซูมเข้าเพื่อแสดง</p>}
           <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-2 text-xs text-slate-500">
             <div className="flex items-center gap-2"><span className="h-1.5 w-5 rounded-full" style={{ background: style.flood.color, boxShadow: `0 0 8px 2px ${style.flood.color}88` }} />ช่วงน้ำท่วม</div>
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ background: "radial-gradient(circle at 35% 30%,#EF5350,#C62828)", border: "2px solid #fff", boxShadow: "0 0 0 1px #C62828" }} />หมุดน้ำท่วม + ระดับน้ำ (ซม.)</div>
