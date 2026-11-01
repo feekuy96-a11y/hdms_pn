@@ -42,6 +42,7 @@ export function LongdoGisMap({
   const currentBaseKeyRef = useRef<string>("road");
 
   const [activeBaseMap, setActiveBaseMap] = useState<"road" | "sat" | "longdo">("road");
+  const [mapReady, setMapReady] = useState(false);
   const [showFloodLayer, setShowFloodLayer] = useState(true);
   const [showDetourLayer, setShowDetourLayer] = useState(true);
   const [showMainHwy, setShowMainHwy] = useState(true);
@@ -117,6 +118,16 @@ export function LongdoGisMap({
       const overlayGroup = L.layerGroup().addTo(map);
       overlayGroupRef.current = overlayGroup;
 
+      setMapReady(true);
+
+      // Invalidate size multiple times to ensure full canvas coverage
+      setTimeout(() => {
+        if (map) map.invalidateSize();
+      }, 200);
+      setTimeout(() => {
+        if (map) map.invalidateSize();
+      }, 600);
+
       // Handle map clicks for coordinate picking
       map.on("click", (e: any) => {
         if (!adminPickModeRef.current) return;
@@ -130,12 +141,25 @@ export function LongdoGisMap({
 
     return () => {
       isMounted = false;
+      setMapReady(false);
       if (leafletMapRef.current) {
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
       }
     };
   }, []);
+
+  // Responsive Container Resize Observer: Auto Invalidate Size
+  useEffect(() => {
+    if (!mapContainerRef.current || !leafletMapRef.current) return;
+    const ro = new ResizeObserver(() => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.invalidateSize();
+      }
+    });
+    ro.observe(mapContainerRef.current);
+    return () => ro.disconnect();
+  }, [mapReady]);
 
   // 2. FlyTo focus when coordinates change
   useEffect(() => {
@@ -367,7 +391,10 @@ export function LongdoGisMap({
               className: `${fAnim} ${fSpeed}`.trim(),
             }).addTo(group);
 
-            polyline.on("click", () => onSelectFlood(flood.id));
+            polyline.on("click", (e: any) => {
+              L.DomEvent.stopPropagation(e);
+              onSelectFlood(flood.id);
+            });
           }
 
           // Flood Location Marker (Capsule Badge with Icon and Level as shown in reference)
@@ -403,26 +430,10 @@ export function LongdoGisMap({
           });
 
           const marker = L.marker([midLat, midLon], { icon: pinIcon }).addTo(group);
-          marker.on("click", () => onSelectFlood(flood.id));
-
-          marker.bindPopup(`
-            <div class="text-xs p-1.5 min-w-[220px] font-body bg-slate-950 text-white rounded-xl border" style="border-color: ${fColor}">
-              <div class="flex items-center justify-between mb-1 gap-2">
-                <span class="text-white text-[10px] font-bold px-2 py-0.5 rounded font-heading shadow" style="background-color: ${fColor}">
-                  ทล.${flood.route_no}
-                </span>
-                <span class="text-[10px] font-bold font-heading ${flood.traffic_status === "CLOSED" ? "text-red-400" : "text-amber-400"}">
-                  ${flood.traffic_status === "CLOSED" ? "ปิดการจราจรเด็ดขาด" : "เฝ้าระวัง / ๑ ช่องทาง"}
-                </span>
-              </div>
-              <h4 class="font-bold text-white text-sm font-heading mt-1">${flood.section_name}</h4>
-              <div class="text-slate-300 text-[11px] mt-1">ช่วง กม. ${flood.km_start} - ${flood.km_end}</div>
-              <div class="mt-2 text-amber-300 font-bold flex items-center justify-between border-t border-slate-700 pt-1.5 font-heading">
-                <span>ระดับน้ำท่วมขัง:</span>
-                <span class="text-sm font-mono">${flood.water_level_cm} ซม.</span>
-              </div>
-            </div>
-          `);
+          marker.on("click", (e: any) => {
+            L.DomEvent.stopPropagation(e);
+            onSelectFlood(flood.id);
+          });
         });
       }
 
@@ -504,6 +515,7 @@ export function LongdoGisMap({
 
     renderOverlays();
   }, [
+    mapReady,
     systemData,
     selectedFloodId,
     showFloodLayer,

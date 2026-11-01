@@ -17,6 +17,19 @@
   background: linear-gradient(135deg, #091326 0%, #1e3a8a 55%, #0f172a 100%);
 }
 
+/* Leaflet Map Container Global Enforcement */
+.leaflet-container {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  background-color: #0b1426 !important;
+  z-index: 1;
+}
+
+.leaflet-tile-pane {
+  opacity: 1 !important;
+}
+
 .gold-gradient {
   background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
 }
