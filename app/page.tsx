@@ -53,22 +53,39 @@ export default function HomePage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [citizenDetourDirection, setCitizenDetourDirection] = useState<"FORWARD" | "REVERSE">("FORWARD");
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
+  const [isSummaryCardVisible, setIsSummaryCardVisible] = useState<boolean>(true);
 
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
+  const previousDataFingerprint = useRef<string>("");
 
-  // TanStack Query for Data Fetching & Sync
-  const { data: systemData = INITIAL_SYSTEM_DATA, refetch, isFetching, isError } = useQuery<SystemDataPayload>({
+  // TanStack Query for Data Fetching & Sync with automatic background refetch (Issue #6)
+  const { data: systemData = INITIAL_SYSTEM_DATA, isFetching, isError } = useQuery<SystemDataPayload>({
     queryKey: ["dohSystemData"],
     queryFn: async () => {
       return await getSystemDataAction();
     },
     initialData: INITIAL_SYSTEM_DATA,
+    refetchInterval: 10000, // Poll every 10 seconds in background
+    refetchIntervalInBackground: true,
   });
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3800);
   };
+
+  // Background Auto-Notification when new/updated data arrives (Issue #6)
+  useEffect(() => {
+    if (!systemData) return;
+    const currentFingerprint = `${systemData.updatedAt || ""}_${systemData.floodRoutes?.length || 0}_${(systemData.floodRoutes || [])
+      .map((r) => `${r.id}:${r.water_level_cm}:${r.traffic_status}:${r.updated_at}`)
+      .join("|")}`;
+
+    if (previousDataFingerprint.current && previousDataFingerprint.current !== currentFingerprint) {
+      showToast("🔔 มีข้อมูลสถานการณ์อัปเดตล่าสุดจากศูนย์ปฏิบัติการ");
+    }
+    previousDataFingerprint.current = currentFingerprint;
+  }, [systemData]);
 
   useEffect(() => {
     if (!showDossier) return;
@@ -87,13 +104,38 @@ export default function HomePage() {
   const selectedFlood =
     systemData.floodRoutes.find((r) => r.id === selectedFloodId) || systemData.floodRoutes[0];
 
-  // Quick route chips list
-  const routeChips = [
-    { id: "ALL", label: "ทั้งหมด" },
-    { id: "43", label: "ทล.43 (หาดใหญ่-ปัตตานี)" },
-    { id: "42", label: "ทล.42 (คลองแงะ-สายบุรี)" },
-    { id: "418", label: "ทล.418 (ปัตตานี-ยะลา)" },
-  ];
+  // Dynamic route chips strictly from database & imported files (Issue #7)
+  const routeChips = React.useMemo(() => {
+    const routeMap = new Map<string, string>();
+    (systemData.floodRoutes || []).forEach((r) => {
+      if (r.route_no) {
+        const cleanNo = r.route_no.replace(/^ทล\.?/i, "").trim();
+        const key = cleanNo || r.route_no;
+        if (!routeMap.has(key)) {
+          routeMap.set(key, `ทล.${key}`);
+        }
+      }
+    });
+
+    (systemData.highwayLayers || []).forEach((layer) => {
+      if (layer.geojson_data && Array.isArray(layer.geojson_data.features)) {
+        layer.geojson_data.features.forEach((f: any) => {
+          const props = f.properties || {};
+          const no = props.route_no || props.route_code || props.ROAD_NO || props.route || props.code;
+          if (no) {
+            const cleanNo = String(no).replace(/^ทล\.?/i, "").trim();
+            const key = cleanNo || String(no);
+            if (!routeMap.has(key)) {
+              routeMap.set(key, `ทล.${key}`);
+            }
+          }
+        });
+      }
+    });
+
+    const dynamicList = Array.from(routeMap.entries()).map(([id, label]) => ({ id, label }));
+    return [{ id: "ALL", label: "ทั้งหมด" }, ...dynamicList];
+  }, [systemData.floodRoutes, systemData.highwayLayers]);
 
   // Filtered flood routes for citizens/users
   const filteredFloods = (systemData.floodRoutes || []).filter((r) => {
@@ -104,7 +146,8 @@ export default function HomePage() {
       (r.subdistrict && r.subdistrict.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (r.district && r.district.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchChip = selectedRouteFilter === "ALL" || r.route_no === selectedRouteFilter;
+    const cleanNo = r.route_no.replace(/^ทล\.?/i, "").trim();
+    const matchChip = selectedRouteFilter === "ALL" || cleanNo === selectedRouteFilter || r.route_no === selectedRouteFilter;
 
     return matchSearch && matchChip;
   });
@@ -113,59 +156,46 @@ export default function HomePage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-body">
       {/* =================================================================== */}
-      {/* 1. TOP NAVBAR (Official DOH Brand + Status + Hotline + Admin)       */}
+      {/* 1. TOP NAVBAR (Official DOH Brand + Status + Hotline)               */}
       {/* =================================================================== */}
       <header className="doh-header border-b-2 border-amber-500 sticky top-0 z-50 h-16 px-3 sm:px-6 flex items-center justify-between shadow-xl bg-[#091122]">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl gold-gradient flex items-center justify-center shadow-md shrink-0">
-            <AlertTriangle className="w-5 h-5 text-slate-950 font-bold" />
-          </div>
+          {systemData.systemSettings?.logoUrl ? (
+            <img
+              src={systemData.systemSettings.logoUrl}
+              alt="Logo"
+              className="w-10 h-10 rounded-xl object-contain shadow-md shrink-0 bg-slate-900 border border-slate-700 p-0.5"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-xl gold-gradient flex items-center justify-center shadow-md shrink-0">
+              <AlertTriangle className="w-5 h-5 text-slate-950 font-bold" />
+            </div>
+          )}
           <div className="truncate">
             <div className="flex items-center gap-2">
               <span className="font-heading font-black text-amber-400 text-xs sm:text-sm tracking-wide">
-                แขวงทางหลวงปัตตานี กรมทางหลวง
+                {systemData.systemSettings?.org || "แขวงทางหลวงปัตตานี กรมทางหลวง"}
               </span>
               <span className="bg-amber-400 text-slate-950 text-[10px] font-heading font-extrabold px-1.5 py-0.2 rounded uppercase">
                 ศูนย์ปฏิบัติการฉุกเฉิน 24 ชม.
               </span>
               <span className="text-[10px] bg-emerald-950/80 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-bold hidden md:inline-flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ออนไลน์ (DB พร้อม)
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ออนไลน์ (ข้อมูลล่าสุด)
               </span>
             </div>
             <h1 className="font-heading text-xs sm:text-sm font-semibold text-slate-300 truncate">
-              ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย (HDMS Real-Time GIS)
+              {systemData.systemSettings?.name || "ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย (HDMS Real-Time GIS)"}
             </h1>
           </div>
         </div>
 
-        {/* Right Actions: Admin Link + Refresh + Hotline 1586 */}
+        {/* Right Actions: Hotline (Admin and manual refresh buttons removed for citizens) */}
         <div className="flex items-center gap-2 shrink-0">
-          <Link
-            href="/admin"
-            className="flex min-h-11 px-3 py-1.5 rounded-xl text-xs font-heading font-bold transition items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 hover:border-amber-400 shadow-md"
-            title="ระบบแอดมินสำหรับเจ้าหน้าที่"
-          >
-            <Settings className="w-3.5 h-3.5" /> <span>ระบบแอดมิน</span>
-          </Link>
-
-          <button
-            type="button"
-            onClick={async () => {
-              const result = await refetch();
-              showToast(result.isError ? "ตรวจสอบข้อมูลล่าสุดไม่สำเร็จ โปรดลองอีกครั้ง" : "ตรวจสอบข้อมูลล่าสุดแล้ว");
-            }}
-            title="รีเฟรชข้อมูล"
-            aria-label="ตรวจสอบข้อมูลล่าสุด"
-            className="min-h-11 min-w-11 p-2 text-slate-300 hover:text-amber-400 rounded-xl bg-slate-900 border border-slate-700 hover:bg-slate-800 transition"
-          >
-            <RotateCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
-          </button>
-
           <a
-            href="tel:1586"
-            className="min-h-11 flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white font-heading font-bold text-xs px-3 py-1.5 rounded-xl shadow-lg transition"
+            href={`tel:${systemData.systemSettings?.phone || "1586"}`}
+            className="min-h-11 flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white font-heading font-bold text-xs px-3.5 py-1.5 rounded-xl shadow-lg transition"
           >
-            <Phone className="w-3.5 h-3.5" /> สายด่วน 1586
+            <Phone className="w-3.5 h-3.5" /> สายด่วน {systemData.systemSettings?.phone || "1586"}
           </a>
         </div>
       </header>
@@ -564,14 +594,68 @@ export default function HomePage() {
           )}
 
           {/* =============================================================== */}
-          {/* D. FLOATING DETAIL DOSSIER CARD (MATCHING REFERENCE IMAGE 3)   */}
+          {/* D. FLOATING DETAIL DOSSIER CARD (COLLAPSIBLE / DISMISSIBLE)     */}
           {/* =============================================================== */}
-          {selectedFlood && !showDossier && (
-            <div className="hidden lg:block absolute bottom-3 left-3 right-3 z-[500] rounded-xl bg-[#0c162c] p-3 shadow-xl lg:right-auto lg:w-[420px]">
-              <p className="text-xs text-amber-300">ทล.{selectedFlood.route_no} · กม.{selectedFlood.km_start}–{selectedFlood.km_end}</p>
-              <h2 className="font-heading text-sm font-bold">{selectedFlood.traffic_status === "CLOSED" ? "ปิดการจราจร" : selectedFlood.traffic_status === "WARNING" ? "รถเล็กห้ามผ่าน" : "ผ่านได้ปกติ"} · {selectedFlood.section_name}</h2>
-              <div className="mt-2 flex items-center justify-between gap-2"><span className="text-xs text-slate-300">น้ำ {selectedFlood.water_level_cm} ซม. · {selectedFlood.updated_at ? new Date(selectedFlood.updated_at).toLocaleString("th-TH") : "ยังไม่มีเวลายืนยันล่าสุด"}</span><button type="button" onClick={() => setShowDossier(true)} className="min-h-11 shrink-0 rounded-lg bg-amber-400 px-3 text-xs font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">ดูรายละเอียด</button></div>
+          {selectedFlood && !showDossier && isSummaryCardVisible && (
+            <div className="hidden lg:block absolute bottom-3 left-3 right-3 z-[500] rounded-2xl bg-[#0c162c]/95 border border-slate-700/80 p-3.5 shadow-2xl lg:right-auto lg:w-[430px] backdrop-blur-md animate-fade-in">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="bg-amber-400 text-slate-950 text-[10px] font-heading font-black px-1.5 py-0.2 rounded">
+                      ทล.{selectedFlood.route_no}
+                    </span>
+                    <span className="text-xs text-amber-300 font-medium">
+                      กม.{selectedFlood.km_start}–{selectedFlood.km_end}
+                    </span>
+                  </div>
+                  <h2 className="font-heading text-sm font-bold text-white truncate">
+                    {selectedFlood.traffic_status === "CLOSED"
+                      ? "⛔ ปิดการจราจร"
+                      : selectedFlood.traffic_status === "WARNING"
+                      ? "⚠️ รถเล็กห้ามผ่าน"
+                      : "✅ ผ่านได้ปกติ"}{" "}
+                    · {selectedFlood.section_name}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSummaryCardVisible(false)}
+                  className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+                  title="ย่อแถบรายงานข้อมูล"
+                  aria-label="ย่อแถบรายงานข้อมูล"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-slate-800/80 pt-2">
+                <span className="text-xs text-slate-300">
+                  ระดับน้ำ{" "}
+                  <strong className="text-red-400 font-mono font-bold">
+                    {selectedFlood.water_level_cm} ซม.
+                  </strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowDossier(true)}
+                  className="min-h-9 shrink-0 rounded-xl bg-amber-400 hover:bg-amber-300 px-3 py-1 text-xs font-bold text-slate-950 transition shadow"
+                >
+                  ดูรายละเอียด & ไทม์ไลน์
+                </button>
+              </div>
             </div>
+          )}
+
+          {/* Floating Pill to Restore Summary Card if Dismissed */}
+          {selectedFlood && !showDossier && !isSummaryCardVisible && (
+            <button
+              type="button"
+              onClick={() => setIsSummaryCardVisible(true)}
+              className="hidden lg:flex absolute bottom-3 left-3 z-[500] bg-[#0c162c]/95 hover:bg-[#0f1d3a] text-amber-300 border border-amber-400/50 px-3 py-2 rounded-xl shadow-xl items-center gap-2 text-xs font-heading font-bold transition backdrop-blur-md"
+              title="เปิดแถบรายงานข้อมูล"
+            >
+              <span>📊 แสดงแถบรายงานข้อมูล ทล.{selectedFlood.route_no}</span>
+            </button>
           )}
           {selectedFlood && showDossier && (
             <div role="dialog" aria-modal="false" aria-label={`รายละเอียดจุดน้ำท่วม ${selectedFlood.section_name}`} className="fixed inset-x-2 bottom-2 z-[700] max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700/80 bg-[#0c162c] text-slate-100 shadow-2xl lg:absolute lg:bottom-4 lg:left-4 lg:right-auto lg:w-[500px] lg:max-h-[80vh]">

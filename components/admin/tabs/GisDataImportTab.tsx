@@ -12,6 +12,12 @@ import {
   CheckCircle2,
   Trash2,
   Save,
+  Eye,
+  EyeOff,
+  Sliders,
+  Settings,
+  X,
+  Check,
 } from "lucide-react";
 import {
   updateHighwayLayerAction,
@@ -70,6 +76,146 @@ export function GisDataImportTab({
   const [layerRemarks, setLayerRemarks] = useState("");
   const [simplifyTolerance, setSimplifyTolerance] = useState(0.00008);
   const [isCommitting, setIsCommitting] = useState(false);
+
+  // Individual Highway Specifications Modal State (Issue #13)
+  const [editingRouteSpecs, setEditingRouteSpecs] = useState<{
+    layerId: string;
+    featureIdx: number;
+    routeNo: string;
+    sectionName: string;
+    kmStart: string;
+    kmEnd: string;
+    lengthKm: string | number;
+    responsibleOffice: string;
+    highwayType: "MAIN_HIGHWAY" | "SECOND_HIGHWAY";
+    lanes: string;
+    surface: string;
+    remarks: string;
+    isVisible: boolean;
+  } | null>(null);
+
+  // Toggle Eye visibility for a single feature inside a highway layer
+  const handleToggleFeatureVisibility = async (layerId: string, featureIdx: number) => {
+    const layer = (systemData.highwayLayers || []).find((l) => l.layer_id === layerId);
+    if (!layer || !layer.geojson_data?.features?.[featureIdx]) return;
+
+    try {
+      const updatedGeojson = JSON.parse(JSON.stringify(layer.geojson_data));
+      const targetFeature = updatedGeojson.features[featureIdx];
+      const currentVis = targetFeature.properties?.is_visible !== false;
+      targetFeature.properties.is_visible = !currentVis;
+
+      const res = await updateHighwayLayerAction({
+        layerId,
+        geojsonData: updatedGeojson,
+      });
+
+      if (res.success) {
+        onDataRefresh(res.systemData);
+        onToast(
+          `สลับการแสดงผล [${targetFeature.properties?.route_no || targetFeature.properties?.section_name || "สายทาง"}] เป็น ${
+            !currentVis ? "แสดงบนแผนที่" : "ซ่อนจากแผนที่"
+          }`
+        );
+      }
+    } catch (e: any) {
+      onToast("เกิดข้อผิดพลาดในการเปลี่ยนการแสดงผล: " + e.message);
+    }
+  };
+
+  // Save updated specifications for a single feature
+  const handleSaveRouteSpecsModal = async () => {
+    if (!editingRouteSpecs) return;
+    const { layerId, featureIdx, ...specs } = editingRouteSpecs;
+    const layer = (systemData.highwayLayers || []).find((l) => l.layer_id === layerId);
+    if (!layer || !layer.geojson_data?.features?.[featureIdx]) return;
+
+    try {
+      const updatedGeojson = JSON.parse(JSON.stringify(layer.geojson_data));
+      const targetFeature = updatedGeojson.features[featureIdx];
+      targetFeature.properties = {
+        ...(targetFeature.properties || {}),
+        route_no: specs.routeNo.trim(),
+        route_code: specs.routeNo.trim(),
+        section_name: specs.sectionName.trim(),
+        route_name: specs.sectionName.trim(),
+        km_start: specs.kmStart.trim(),
+        km_end: specs.kmEnd.trim(),
+        length_km: Number(specs.lengthKm) || targetFeature.properties?.length_km || 0,
+        responsible_office: specs.responsibleOffice,
+        highway_type: specs.highwayType,
+        lanes: specs.lanes,
+        surface: specs.surface,
+        remarks: specs.remarks.trim(),
+        is_visible: specs.isVisible,
+      };
+
+      const res = await updateHighwayLayerAction({
+        layerId,
+        geojsonData: updatedGeojson,
+      });
+
+      if (res.success) {
+        onDataRefresh(res.systemData);
+        setEditingRouteSpecs(null);
+        showSuccessModal(
+          "บันทึกคุณสมบัติทางหลวงสำเร็จ",
+          `บันทึกข้อมูล ทล.${specs.routeNo} ${specs.sectionName} ช่องจราจร [${specs.lanes}] เรียบร้อยแล้ว (ขนาดเส้นบนแผนที่ถูกปรับเปลี่ยนทันที)`
+        );
+      }
+    } catch (e: any) {
+      onToast("เกิดข้อผิดพลาด: " + e.message);
+    }
+  };
+
+  // Flattened highway features list for specifications table (Issue #13)
+  const allHighwayFeatures = React.useMemo(() => {
+    const list: Array<{
+      layerId: string;
+      layerName: string;
+      featureIdx: number;
+      routeNo: string;
+      sectionName: string;
+      kmStart: string;
+      kmEnd: string;
+      lengthKm: number | string;
+      responsibleOffice: string;
+      highwayType: "MAIN_HIGHWAY" | "SECOND_HIGHWAY";
+      lanes: string;
+      surface: string;
+      remarks: string;
+      isVisible: boolean;
+      pointsCount: number;
+    }> = [];
+
+    (systemData.highwayLayers || []).forEach((layer) => {
+      const isSec = layer.layer_id === "SECOND_HIGHWAY";
+      if (layer.geojson_data && Array.isArray(layer.geojson_data.features)) {
+        layer.geojson_data.features.forEach((feature: any, idx: number) => {
+          const props = feature.properties || {};
+          list.push({
+            layerId: layer.layer_id,
+            layerName: layer.layer_name,
+            featureIdx: idx,
+            routeNo: props.route_no || props.route_code || props.ROAD_NO || props.route || props.code || `${idx + 1}`,
+            sectionName: props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || layer.layer_name,
+            kmStart: props.km_start || "-",
+            kmEnd: props.km_end || "-",
+            lengthKm: props.length_km || "-",
+            responsibleOffice: props.responsible_office || layer.metadata?.responsibleOffice || "หมวดทางหลวงปัตตานี",
+            highwayType: isSec ? "SECOND_HIGHWAY" : "MAIN_HIGHWAY",
+            lanes: props.lanes || layer.metadata?.lanes || "๔ ช่องจราจร (มีเกาะกลาง/มาตรฐานชั้น ๑)",
+            surface: props.surface || layer.metadata?.surface || "ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)",
+            remarks: props.remarks || layer.metadata?.remarks || "-",
+            isVisible: props.is_visible !== false,
+            pointsCount: feature.geometry?.coordinates?.length || 0,
+          });
+        });
+      }
+    });
+
+    return list;
+  }, [systemData.highwayLayers]);
 
   // Handle GIS File Upload (KML, KMZ, Shapefile .zip, GeoJSON, GPX)
   const handleGisUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -621,32 +767,8 @@ export function GisDataImportTab({
                   <div>
                     <strong className="text-white block">{layer.layer_name}</strong>
                     <span className="text-slate-400 text-[11px]">
-                      รหัส: {layer.layer_id} • สี: {layerColor}
+                      รหัส: {layer.layer_id} • สี: {layerColor} • จำนวน {layer.geojson_data?.features?.length || 0} สายทาง
                     </span>
-                    {layer.metadata && (
-                      <div className="flex flex-wrap gap-1.5 mt-1">
-                        {layer.metadata.lanes && (
-                          <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-sky-300">
-                            {layer.metadata.lanes}
-                          </span>
-                        )}
-                        {layer.metadata.surface && (
-                          <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-amber-300">
-                            {layer.metadata.surface}
-                          </span>
-                        )}
-                        {layer.metadata.responsibleOffice && (
-                          <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-emerald-300">
-                            {layer.metadata.responsibleOffice}
-                          </span>
-                        )}
-                        {layer.metadata.speedLimit && (
-                          <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-slate-300">
-                            {layer.metadata.speedLimit}
-                          </span>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -667,6 +789,324 @@ export function GisDataImportTab({
           })}
         </div>
       </div>
+
+      {/* Individual Highway Specifications Table (Issue #13) */}
+      <div className="space-y-3 pt-3 border-t border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+          <div>
+            <h3 className="font-heading font-bold text-sm text-white flex items-center gap-2">
+              <Building className="w-4 h-4 text-amber-400" /> ตารางรายการทางหลวงและคุณสมบัติทางวิศวกรรม (Highway Specifications)
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              คลิกไอคอนรูปดวงตาเพื่อ เปิด/ปิด การแสดงผลเส้นทาง หรือคลิก &quot;ตั้งค่า&quot; เพื่อปรับแต่งช่องจราจร (มีผลต่อความหนาเส้นบนแผนที่) ผิวจราจร และข้อมูลเฉพาะสายทาง
+            </p>
+          </div>
+          <span className="text-[11px] bg-slate-900 border border-slate-700 px-2.5 py-1 rounded-xl text-amber-300 font-mono self-start sm:self-auto">
+            {allHighwayFeatures.length} เส้นทางในระบบ
+          </span>
+        </div>
+
+        {allHighwayFeatures.length === 0 ? (
+          <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center text-xs text-slate-400">
+            ยังไม่มีรายการเส้นทางในระบบ กรุณาอัปโหลดไฟล์ KML, KMZ หรือ Shapefile ด้านบน
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950">
+            <table className="w-full text-left text-xs text-slate-300">
+              <thead className="bg-[#091122] text-slate-400 font-heading border-b border-slate-800">
+                <tr>
+                  <th className="p-3 w-10 text-center">#</th>
+                  <th className="p-3 w-16 text-center">แสดงผล</th>
+                  <th className="p-3">หมายเลขทางหลวง</th>
+                  <th className="p-3">ชื่อสายทาง / ตอนควบคุม</th>
+                  <th className="p-3">ช่วง กม.</th>
+                  <th className="p-3">ระยะทาง</th>
+                  <th className="p-3">ช่องจราจร (แผนที่)</th>
+                  <th className="p-3">ชนิดผิวจราจร</th>
+                  <th className="p-3">หน่วยงานรับผิดชอบ</th>
+                  <th className="p-3">หมายเหตุ</th>
+                  <th className="p-3 text-right">การจัดการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/80 font-body">
+                {allHighwayFeatures.map((item, idx) => {
+                  return (
+                    <tr
+                      key={`${item.layerId}-${item.featureIdx}`}
+                      className={`hover:bg-slate-900/60 transition ${!item.isVisible ? "opacity-50 bg-slate-950/40" : ""}`}
+                    >
+                      <td className="p-3 text-center font-mono text-slate-400">{idx + 1}</td>
+                      <td className="p-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFeatureVisibility(item.layerId, item.featureIdx)}
+                          className={`p-1.5 rounded-lg border transition ${
+                            item.isVisible
+                              ? "bg-emerald-950/80 text-emerald-300 border-emerald-600 hover:bg-emerald-900"
+                              : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"
+                          }`}
+                          title={item.isVisible ? "คลิกเพื่อซ่อนเส้นทางนี้บนแผนที่" : "คลิกเพื่อแสดงเส้นทางนี้บนแผนที่"}
+                        >
+                          {item.isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+                      </td>
+                      <td className="p-3">
+                        <span className="font-heading font-black text-xs px-2 py-0.5 rounded bg-amber-400 text-slate-950 shadow-sm inline-block">
+                          ทล.{item.routeNo}
+                        </span>
+                      </td>
+                      <td className="p-3 font-medium text-white max-w-[200px] truncate" title={item.sectionName}>
+                        {item.sectionName}
+                      </td>
+                      <td className="p-3 font-mono text-[11px] text-amber-300 whitespace-nowrap">
+                        {item.kmStart} - {item.kmEnd}
+                      </td>
+                      <td className="p-3 font-mono text-emerald-400 whitespace-nowrap">
+                        {item.lengthKm ? `${item.lengthKm} กม.` : "-"}
+                      </td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-sky-950 text-sky-300 border border-sky-700 whitespace-nowrap">
+                          {item.lanes}
+                        </span>
+                      </td>
+                      <td className="p-3 text-[11px] text-slate-300 max-w-[140px] truncate" title={item.surface}>
+                        {item.surface}
+                      </td>
+                      <td className="p-3 text-[11px] text-slate-300 whitespace-nowrap">
+                        {item.responsibleOffice}
+                      </td>
+                      <td className="p-3 text-[11px] text-slate-400 max-w-[120px] truncate" title={item.remarks}>
+                        {item.remarks || "-"}
+                      </td>
+                      <td className="p-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingRouteSpecs({
+                              layerId: item.layerId,
+                              featureIdx: item.featureIdx,
+                              routeNo: item.routeNo,
+                              sectionName: item.sectionName,
+                              kmStart: item.kmStart !== "-" ? item.kmStart : "",
+                              kmEnd: item.kmEnd !== "-" ? item.kmEnd : "",
+                              lengthKm: item.lengthKm !== "-" ? item.lengthKm : "",
+                              responsibleOffice: item.responsibleOffice,
+                              highwayType: item.highwayType,
+                              lanes: item.lanes,
+                              surface: item.surface,
+                              remarks: item.remarks !== "-" ? item.remarks : "",
+                              isVisible: item.isVisible,
+                            })
+                          }
+                          className="bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 hover:border-amber-400 px-2.5 py-1.5 rounded-xl font-heading text-xs font-bold transition inline-flex items-center gap-1 shadow-sm"
+                        >
+                          <Sliders className="w-3.5 h-3.5 text-amber-400" /> ตั้งค่า
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Modal: Highway Specifications Editor (Issue #13) */}
+      {editingRouteSpecs && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#0c162c] border border-amber-500/60 rounded-3xl p-5 max-w-xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h4 className="font-heading font-black text-base text-white flex items-center gap-2">
+                  <Sliders className="w-5 h-5 text-amber-400" />
+                  <span>ตั้งค่าคุณสมบัติทางวิศวกรรม (Highway Specifications)</span>
+                </h4>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  ทล.{editingRouteSpecs.routeNo} {editingRouteSpecs.sectionName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingRouteSpecs(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              {/* Row 1: Route No & Section Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-slate-300 block mb-1">หมายเลขทางหลวง *</label>
+                  <input
+                    type="text"
+                    value={editingRouteSpecs.routeNo}
+                    onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, routeNo: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-heading font-bold"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-slate-300 block mb-1">ชื่อสายทาง / ตอนควบคุม *</label>
+                  <input
+                    type="text"
+                    value={editingRouteSpecs.sectionName}
+                    onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, sectionName: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: KM Range & Distance */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-slate-300 block mb-1">ช่วง กม. เริ่มต้น</label>
+                  <input
+                    type="text"
+                    value={editingRouteSpecs.kmStart}
+                    onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, kmStart: e.target.value })}
+                    placeholder="เช่น 12+500"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 block mb-1">ช่วง กม. สิ้นสุด</label>
+                  <input
+                    type="text"
+                    value={editingRouteSpecs.kmEnd}
+                    onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, kmEnd: e.target.value })}
+                    placeholder="เช่น 18+200"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 block mb-1">ระยะทาง (กม.)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={editingRouteSpecs.lengthKm}
+                    onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, lengthKm: e.target.value })}
+                    placeholder="เช่น 5.7"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-emerald-400 font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: Lanes (Affects Map line width) & Surface */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 block mb-1">
+                    จำนวนช่องจราจร (มีผลต่อความหนาเส้นบนแผนที่) *
+                  </label>
+                  <select
+                    value={editingRouteSpecs.lanes}
+                    onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, lanes: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sky-300 font-heading font-medium"
+                  >
+                    <option value="๒ ช่องจราจร (สวนทาง)">๒ ช่องจราจร (สวนทาง) - ความหนา 3.5px</option>
+                    <option value="๔ ช่องจราจร (มีเกาะกลาง/มาตรฐานชั้น ๑)">๔ ช่องจราจร (มาตรฐานชั้น ๑) - ความหนา 5.5px</option>
+                    <option value="๖ ช่องจราจร (สายหลักหนาแน่น)">๖ ช่องจราจร (สายหลัก) - ความหนา 7.5px</option>
+                    <option value="๘ ช่องจราจร ขึ้นไป">๘ ช่องจราจร ขึ้นไป - ความหนา 9.0px</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-300 block mb-1">ชนิดผิวจราจร (Pavement Surface)</label>
+                  <select
+                    value={editingRouteSpecs.surface}
+                    onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, surface: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-amber-300"
+                  >
+                    <option value="ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)">ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)</option>
+                    <option value="คอนกรีตเสริมเหล็ก (Rigid Concrete)">คอนกรีตเสริมเหล็ก (Rigid Concrete)</option>
+                    <option value="ผิวทางลาดยาง (Surface Treatment)">ผิวทางลาดยาง (Surface Treatment)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 4: Responsible Office & Classification */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 block mb-1">หน่วยงานที่รับผิดชอบ *</label>
+                  <select
+                    value={editingRouteSpecs.responsibleOffice}
+                    onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, responsibleOffice: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  >
+                    <option value="หมวดทางหลวงปัตตานี">หมวดทางหลวงปัตตานี</option>
+                    <option value="หมวดทางหลวงหนองจิก">หมวดทางหลวงหนองจิก</option>
+                    <option value="หมวดทางหลวงยะรัง">หมวดทางหลวงยะรัง</option>
+                    <option value="หมวดทางหลวงโคกโพธิ์">หมวดทางหลวงโคกโพธิ์</option>
+                    <option value="หมวดทางหลวงสายบุรี">หมวดทางหลวงสายบุรี</option>
+                    <option value="แขวงทางหลวงชนบทปัตตานี">แขวงทางหลวงชนบทปัตตานี</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-300 block mb-1">ประเภททางหลวง</label>
+                  <select
+                    value={editingRouteSpecs.highwayType}
+                    onChange={(e: any) => setEditingRouteSpecs({ ...editingRouteSpecs, highwayType: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  >
+                    <option value="MAIN_HIGHWAY">ทางหลวงสายหลัก</option>
+                    <option value="SECOND_HIGHWAY">ทางหลวงสายรอง</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 5: Remarks */}
+              <div>
+                <label className="text-slate-300 block mb-1">หมายเหตุ</label>
+                <input
+                  type="text"
+                  value={editingRouteSpecs.remarks}
+                  onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, remarks: e.target.value })}
+                  placeholder="เช่น เส้นทางหลักเชื่อมโยง สงขลา - ปัตตานี"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                />
+              </div>
+
+              {/* Row 6: Visibility Switch */}
+              <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-heading font-bold text-white block">
+                    แสดงผลบนแผนที่ (Map Layer Visibility)
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    เปิดเพื่อให้เส้นทางนี้ปรากฏบนแผนที่ของทั้งประชาชนและเจ้าหน้าที่
+                  </span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingRouteSpecs.isVisible}
+                    onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, isVisible: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingRouteSpecs(null)}
+                className="bg-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs hover:bg-slate-700 transition"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveRouteSpecsModal}
+                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-5 py-2 rounded-xl text-xs shadow-lg transition flex items-center gap-1.5"
+              >
+                <Save className="w-4 h-4" /> บันทึกคุณสมบัติทางวิศวกรรม
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

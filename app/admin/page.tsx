@@ -72,43 +72,44 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-body">
       {/* Official Thai Government Protected Top Header */}
-      <header className="bg-[#0f2347] border-b-2 border-amber-500 sticky top-0 z-50 h-16 px-4 sm:px-6 flex items-center justify-between shadow-xl">
-        <div className="flex items-center gap-3">
+      <header className="bg-[#0f2347] border-b-2 border-amber-500 sticky top-0 z-50 h-16 px-3 sm:px-5 flex items-center justify-between gap-2 shadow-xl">
+        <div className="flex items-center gap-2.5 min-w-0">
           <Link
             href="/"
-            className="flex items-center gap-1.5 text-xs text-amber-300 hover:text-white bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-700 transition font-heading font-bold"
+            className="flex items-center gap-1.5 text-xs text-amber-300 hover:text-white bg-slate-900/90 px-2.5 py-1.5 rounded-lg border border-slate-700 transition font-heading font-bold shrink-0"
           >
-            <ArrowLeft className="w-3.5 h-3.5" /> หน้าประชาชน
+            <ArrowLeft className="w-3.5 h-3.5" /> <span className="hidden sm:inline">หน้าประชาชน</span>
           </Link>
-          <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-heading font-black text-xs shadow">
-              ขท.
-            </span>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="bg-amber-400 text-slate-950 text-[10px] font-heading font-black px-1.5 py-0.2 rounded uppercase">
+          <div className="flex items-center gap-2 min-w-0">
+            {systemData.systemSettings?.logoUrl ? (
+              <img
+                src={systemData.systemSettings.logoUrl}
+                alt="Logo"
+                className="w-8 h-8 rounded-lg object-contain shadow shrink-0 bg-slate-900 p-0.5 border border-slate-700"
+              />
+            ) : (
+              <span className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-heading font-black text-xs shadow shrink-0">
+                ขท.
+              </span>
+            )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="bg-amber-400 text-slate-950 text-[10px] font-heading font-black px-1.5 py-0.2 rounded uppercase shrink-0">
                   ส่วนราชการ
                 </span>
-                <span className="text-[11px] text-amber-300 font-heading font-medium hidden sm:inline">
+                <span className="text-[11px] text-amber-300 font-heading font-medium hidden md:inline truncate">
                   สำนักงานทางหลวงที่ ๑๘ กรมทางหลวง
                 </span>
               </div>
-              <h1 className="font-heading text-xs sm:text-sm font-bold text-white">
+              <h1 className="font-heading text-xs sm:text-sm font-bold text-white whitespace-nowrap truncate">
                 ศูนย์ปฏิบัติการและรายงานข้อมูลอุทกภัย แขวงทางหลวงปัตตานี
               </h1>
             </div>
           </div>
         </div>
 
-        {/* View Switcher: Matching Image 1 (สำหรับประชาชน, รายงานผู้ว่าฯ / KPI, ระบบหลังบ้าน Admin) */}
-        <div className="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-700">
-          <Link
-            href="/"
-            className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-heading font-bold text-slate-300 hover:text-white transition flex items-center gap-1.5"
-            title="หน้าแผนที่สำหรับประชาชน"
-          >
-            <Smartphone className="w-3.5 h-3.5" /> <span className="hidden md:inline">สำหรับประชาชน</span>
-          </Link>
+        {/* View Switcher: (รายงานผู้ว่าฯ / KPI vs ระบบหลังบ้าน Admin) */}
+        <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-700 shrink-0">
           <button
             type="button"
             onClick={() => setAdminViewMode("executive")}
@@ -117,9 +118,9 @@ export default function AdminPage() {
                 ? "bg-amber-500 text-slate-950 shadow-md"
                 : "text-slate-300 hover:text-white"
             }`}
-            title="แดชบอร์ดสรุปผลผู้ว่าฯ และ KPI เชิงยุทธศาสตร์ (ตามภาพที่ 1)"
+            title="แดชบอร์ดสรุปผลผู้ว่าฯ และ KPI เชิงยุทธศาสตร์"
           >
-            <PieChart className="w-3.5 h-3.5" /> <span>รายงานผู้ว่าฯ / KPI</span>
+            <PieChart className="w-3.5 h-3.5" /> <span className="hidden sm:inline">รายงานผู้ว่าฯ / KPI</span>
           </button>
           <button
             type="button"
@@ -131,21 +132,20 @@ export default function AdminPage() {
             }`}
             title="ระบบจัดการข้อมูลหลังบ้าน Admin"
           >
-            <Settings className="w-3.5 h-3.5" /> <span>ระบบหลังบ้าน (Admin)</span>
+            <Settings className="w-3.5 h-3.5" /> <span className="hidden sm:inline">ระบบหลังบ้าน (Admin)</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => setIsDispatchModalOpen(true)}
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition"
+            className="bg-red-600 hover:bg-red-500 text-white font-heading font-black text-xs px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition shrink-0"
             title="ออกรายงานสถานการณ์เสนอผู้ว่าราชการจังหวัด (ด่วนที่สุด)"
           >
             <FileText className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">รายงานผู้ว่าฯ (ด่วนที่สุด)</span>
+            <span className="hidden sm:inline">รายงานผู้ว่าฯ ด่วน</span>
           </button>
-          <OsrmRoutingBadge />
           <OfflineSyncStatus onSyncComplete={() => refetch()} />
           <button
             type="button"
@@ -154,7 +154,7 @@ export default function AdminPage() {
               showToast("รีเฟรชฐานข้อมูลสารสนเทศเรียบร้อย");
             }}
             title="รีเฟรชข้อมูล"
-            className="p-1.5 text-slate-300 hover:text-amber-400"
+            className="p-1.5 text-slate-300 hover:text-amber-400 shrink-0"
           >
             <RotateCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
           </button>

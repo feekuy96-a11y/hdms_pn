@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from "react";
 import { SystemDataPayload, DohOfficeLocation } from "@/db/default-data";
 import { APP_CONFIG, DEFAULT_DOH_OFFICES } from "@/lib/constants";
-import { Settings, Building, Plus, Edit, Trash2, Phone, ExternalLink } from "lucide-react";
+import { Settings, Building, Plus, Edit, Trash2, Phone, ExternalLink, Upload, Image as ImageIcon } from "lucide-react";
 import { updateSystemSettingsAction, saveOfficeAction, deleteOfficeAction } from "@/app/actions/doh-actions";
+import { compressImageToBase64 } from "@/lib/gis-utils";
 
 interface SystemSettingsTabProps {
   systemData: SystemDataPayload;
@@ -31,6 +32,7 @@ export function SystemSettingsTab({
     systemData.systemSettings?.desc || "ระบบติดตามและรายงานสถานการณ์อุทกภัย เส้นทางน้ำท่วมและทางเลี่ยงแบบเรียลไทม์"
   );
   const [sysPhone, setSysPhone] = useState(systemData.systemSettings?.phone || APP_CONFIG.HOTLINE);
+  const [sysLogo, setSysLogo] = useState(systemData.systemSettings?.logoUrl || "");
 
   const [isOfficeFormOpen, setIsOfficeFormOpen] = useState(false);
   const [officeEditId, setOfficeEditId] = useState("");
@@ -49,6 +51,18 @@ export function SystemSettingsTab({
     }
   }, [pickedCoordinate, onToast]);
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const base64 = await compressImageToBase64(file, 400, 0.85);
+      setSysLogo(base64);
+      onToast("อัปโหลดไฟล์ตราสัญลักษณ์สำเร็จ กรุณากดบันทึกข้อมูลระบบ");
+    } catch {
+      onToast("ไม่สามารถประมวลผลไฟล์รูปภาพได้");
+    }
+  };
+
   const handleSaveSystemSettings = async () => {
     try {
       const res = await updateSystemSettingsAction({
@@ -56,10 +70,11 @@ export function SystemSettingsTab({
         org: sysOrg,
         desc: sysDesc,
         phone: sysPhone,
+        logoUrl: sysLogo,
       });
       if (res.success) {
         onDataRefresh(res.systemData);
-        showSuccessModal("บันทึกข้อมูลระบบเรียบร้อย", "ข้อมูลชื่อระบบและเบอร์ติดต่อจะแสดงบนหน้าประชาชนทันที");
+        showSuccessModal("บันทึกข้อมูลระบบเรียบร้อย", "ข้อมูลชื่อระบบ เบอร์ติดต่อ และตราสัญลักษณ์จะแสดงบนหน้าประชาชนและแอดมินทันที");
       }
     } catch (e: any) {
       onToast("เกิดข้อผิดพลาด: " + e.message);
@@ -157,6 +172,47 @@ export function SystemSettingsTab({
               onChange={(e) => setSysDesc(e.target.value)}
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-400 focus:outline-none"
             />
+          </div>
+        </div>
+
+        {/* Agency Logo Upload (Issue #9) */}
+        <div className="pt-2 border-t border-slate-800">
+          <label className="text-xs font-semibold text-slate-200 block mb-1.5">
+            ตราสัญลักษณ์ / โลโก้หน่วยงาน (แทนที่ไอคอนระบบ)
+          </label>
+          <div className="flex flex-wrap items-center gap-4 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+            <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-700 bg-slate-950 flex items-center justify-center overflow-hidden shrink-0">
+              {sysLogo ? (
+                <img src={sysLogo} alt="Logo Preview" className="w-full h-full object-contain p-1" />
+              ) : (
+                <ImageIcon className="w-6 h-6 text-slate-600" />
+              )}
+            </div>
+            <div className="space-y-1.5 flex-1 min-w-[200px]">
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-heading font-medium flex items-center gap-1.5 border border-slate-700 transition">
+                  <Upload className="w-3.5 h-3.5 text-amber-400" /> อัปโหลดรูปภาพตราสัญลักษณ์
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                  />
+                </label>
+                {sysLogo && (
+                  <button
+                    type="button"
+                    onClick={() => setSysLogo("")}
+                    className="text-xs text-red-400 hover:text-red-300 py-1.5 px-2 font-medium"
+                  >
+                    ลบรูปภาพ
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400">
+                รองรับ PNG, JPG, SVG, WebP แนะนำพื้นหลังโปร่งใส (จะแสดงผลแทนที่ไอคอน ขท. / สามเหลี่ยมเตือนภัย บนแถบบาร์หลัก)
+              </p>
+            </div>
           </div>
         </div>
 

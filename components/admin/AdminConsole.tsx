@@ -164,9 +164,17 @@ export function AdminConsole({
       >
         {/* Sidebar Header Brand */}
         <div className="flex h-16 items-center border-b border-white/10 gap-3 px-4">
-          <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/20 shadow">
-            <ShieldCheck className="h-5 w-5 text-yellow-300" />
-          </span>
+          {systemData.systemSettings?.logoUrl ? (
+            <img
+              src={systemData.systemSettings.logoUrl}
+              alt="Logo"
+              className="h-10 w-10 shrink-0 rounded-xl object-contain shadow bg-white/10 p-0.5"
+            />
+          ) : (
+            <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/20 shadow">
+              <ShieldCheck className="h-5 w-5 text-yellow-300" />
+            </span>
+          )}
           {!isSidebarCollapsed && (
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-white">แขวงทางหลวงปัตตานี</p>

@@ -98,6 +98,43 @@ export function MapManagementTab({
   const [fieldImages, setFieldImages] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Dynamic Highway Routes strictly from database (Issue #12)
+  const availableHighways = React.useMemo(() => {
+    const map = new Map<string, string>();
+    (systemData.highwayLayers || []).forEach((layer) => {
+      if (layer.geojson_data && Array.isArray(layer.geojson_data.features)) {
+        layer.geojson_data.features.forEach((f: any) => {
+          const props = f.properties || {};
+          const no = props.route_no || props.route_code || props.ROAD_NO || props.route || props.code;
+          const name = props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || "";
+          if (no) {
+            const cleanNo = String(no).replace(/^ทล\.?/i, "").trim();
+            if (!map.has(cleanNo)) {
+              map.set(cleanNo, name ? `ทล.${cleanNo} - ${name}` : `ทล.${cleanNo}`);
+            }
+          }
+        });
+      }
+    });
+
+    (systemData.floodRoutes || []).forEach((r) => {
+      if (r.route_no) {
+        const cleanNo = String(r.route_no).replace(/^ทล\.?/i, "").trim();
+        if (!map.has(cleanNo)) {
+          map.set(cleanNo, r.section_name ? `ทล.${cleanNo} - ${r.section_name}` : `ทล.${cleanNo}`);
+        }
+      }
+    });
+
+    if (map.size === 0) {
+      HIGHWAY_ROUTES.forEach((h) => {
+        map.set(h.no, `ทล.${h.no} - ${h.name}`);
+      });
+    }
+
+    return Array.from(map.entries()).map(([no, name]) => ({ no, name }));
+  }, [systemData.highwayLayers, systemData.floodRoutes]);
+
   // Sync with editingRoute prop
   useEffect(() => {
     if (!editingRoute) return;
@@ -418,15 +455,15 @@ export function MapManagementTab({
         {routeMode === "FLOOD" ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-slate-300">หมายเลขทางหลวง (ทล.) *</label>
+              <label className="text-xs text-slate-300">หมายเลขทางหลวง *</label>
               <select
                 value={routeNo}
                 onChange={(e) => setRouteNo(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
               >
-                {HIGHWAY_ROUTES.map((h) => (
+                {availableHighways.map((h) => (
                   <option key={h.no} value={h.no}>
-                    ทล.{h.no} - {h.name}
+                    {h.name}
                   </option>
                 ))}
               </select>
@@ -512,20 +549,11 @@ export function MapManagementTab({
 
         {/* 2. Coordinates & Dual-Source Snapping Controls */}
         <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-heading font-bold text-amber-400">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <span className="text-xs font-heading font-bold text-amber-400 shrink-0">
               ๑. กำหนดจุดเริ่มต้น (A) และ สิ้นสุด (B)
             </span>
             <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={handleSwapEndpoints}
-                title="สลับจุดเริ่มต้น (A) ↔ สิ้นสุด (B) และกลับทิศทางเส้นทาง"
-                className="text-[11px] px-2.5 py-1 rounded-lg border font-heading transition bg-slate-800 text-sky-300 border-sky-700/60 hover:bg-sky-900/60 flex items-center gap-1 shadow-sm"
-              >
-                <ArrowRightLeft className="w-3 h-3 text-sky-400" />
-                <span>สลับ A ⇄ B</span>
-              </button>
               <button
                 type="button"
                 onClick={() => setAdminPickMode("PICK_START")}
@@ -547,6 +575,15 @@ export function MapManagementTab({
                 }`}
               >
                 {adminPickMode === "PICK_END" ? "คลิกจุด B..." : "จิ้มจุด B"}
+              </button>
+              <button
+                type="button"
+                onClick={handleSwapEndpoints}
+                title="สลับจุดเริ่มต้น (A) ↔ สิ้นสุด (B) และกลับทิศทางเส้นทาง"
+                className="text-[11px] px-2.5 py-1 rounded-lg border font-heading transition bg-slate-800 text-sky-300 border-sky-700/60 hover:bg-sky-900/60 flex items-center gap-1 shadow-sm"
+              >
+                <ArrowRightLeft className="w-3 h-3 text-sky-400" />
+                <span>สลับ A ⇄ B</span>
               </button>
             </div>
           </div>
