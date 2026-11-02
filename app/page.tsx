@@ -330,12 +330,12 @@ export default function HomePage() {
                 </div>
                 <h4 className="font-heading font-bold text-white text-xs">
                   {systemData.floodRoutes.length === 0
-                    ? "สถานการณ์ปกติ"
+                    ? "ยังไม่มีรายงานจุดน้ำท่วม"
                     : "ไม่พบจุดที่ตรงกับตัวกรอง"}
                 </h4>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   {systemData.floodRoutes.length === 0
-                    ? "ขณะนี้ไม่มีรายงานจุดน้ำท่วมขังบนโครงข่ายทางหลวง ทุกเส้นทางสัญจรได้ตามปกติ"
+                    ? "ยังไม่มีรายงานในระบบ ข้อมูลนี้ไม่ยืนยันว่าทุกเส้นทางปลอดภัย โปรดตรวจสอบกับสายด่วน 1586 ก่อนเดินทาง"
                     : "กรุณาลองเปลี่ยนคำค้นหา หรือกดปุ่มด้านล่างเพื่อล้างตัวกรอง"}
                 </p>
                 {systemData.floodRoutes.length > 0 && (
