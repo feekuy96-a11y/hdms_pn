@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { getSystemDataAction } from "@/app/actions/doh-actions";
@@ -112,7 +113,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-body">
       {/* =================================================================== */}
-      {/* 1. TOP NAVBAR (Official DOH Brand + Hotline + Admin Switcher)       */}
+      {/* 1. TOP NAVBAR (Official DOH Brand + Status + Hotline + Admin)       */}
       {/* =================================================================== */}
       <header className="doh-header border-b-2 border-amber-500 sticky top-0 z-50 h-16 px-3 sm:px-6 flex items-center justify-between shadow-xl bg-[#091122]">
         <div className="flex items-center gap-3 min-w-0">
@@ -127,22 +128,25 @@ export default function HomePage() {
               <span className="bg-amber-400 text-slate-950 text-[10px] font-heading font-extrabold px-1.5 py-0.2 rounded uppercase">
                 ศูนย์ปฏิบัติการฉุกเฉิน 24 ชม.
               </span>
+              <span className="text-[10px] bg-emerald-950/80 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-bold hidden md:inline-flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ออนไลน์ (DB พร้อม)
+              </span>
             </div>
             <h1 className="font-heading text-xs sm:text-sm font-semibold text-slate-300 truncate">
-              ตรวจสอบจุดน้ำท่วมและคำแนะนำการเดินทาง
+              ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย (HDMS Real-Time GIS)
             </h1>
           </div>
         </div>
 
         {/* Right Actions: Admin Link + Refresh + Hotline 1586 */}
         <div className="flex items-center gap-2 shrink-0">
-          {adminUrl && <a
-            href={adminUrl}
-            className="hidden lg:flex min-h-11 px-3 py-1.5 rounded-xl text-xs font-heading font-bold transition items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-700 hover:border-amber-400 shadow-md"
-            title="หน้าเจ้าหน้าที่บนระบบที่จำกัดการเข้าถึง"
+          <Link
+            href="/admin"
+            className="flex min-h-11 px-3 py-1.5 rounded-xl text-xs font-heading font-bold transition items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 hover:border-amber-400 shadow-md"
+            title="ระบบแอดมินสำหรับเจ้าหน้าที่"
           >
             <Settings className="w-3.5 h-3.5" /> <span>ระบบแอดมิน</span>
-          </a>}
+          </Link>
 
           <button
             type="button"
@@ -165,10 +169,6 @@ export default function HomePage() {
           </a>
         </div>
       </header>
-
-      <div role="status" className="bg-amber-400 px-4 py-2 text-center text-sm font-bold text-slate-950">
-        ระบบยังไม่ยืนยันความสดใหม่ของข้อมูล โปรดโทร 1586 ก่อนตัดสินใจเดินทาง
-      </div>
 
       {/* =================================================================== */}
       {/* 2. MAIN LAYOUT: GIS MAP + COLLAPSIBLE SIDEBAR + DETAIL DOSSIER     */}
@@ -519,7 +519,7 @@ export default function HomePage() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 text-amber-300 text-xs font-heading font-bold">
                       <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span>คำแนะนำเส้นทางเลี่ยงน้ำท่วม</span>
+                      <span>คำแนะนำเส้นทางเลี่ยงน้ำท่วม (Yellow Line)</span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -556,12 +556,12 @@ export default function HomePage() {
                       })()}
 
                       <a
-                        href={`https://www.google.com/maps/search/?api=1&query=${selectedFlood.lat_start},${selectedFlood.lon_start}`}
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${selectedFlood.lat_start},${selectedFlood.lon_start}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 shadow shrink-0 transition"
+                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-md shrink-0 transition"
                       >
-                        <Navigation className="w-3 h-3" /> แผนที่ Google
+                        <Navigation className="w-3.5 h-3.5" /> นำทาง
                       </a>
                     </div>
                   </div>
@@ -594,8 +594,9 @@ export default function HomePage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs font-heading font-bold text-white">
                     <span className="flex items-center gap-1.5 text-red-400">
-                      <span>📈</span> ประวัติระดับน้ำ
+                      <span>📈</span> ไทม์ไลน์ระดับน้ำแต่ละช่วงเวลา (Water Level Timeline)
                     </span>
+                    <span className="text-[10px] text-amber-300 font-normal">+ อัปเดตระดับน้ำล่าสุด</span>
                   </div>
 
                   <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800 h-28 w-full">

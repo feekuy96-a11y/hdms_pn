@@ -2,13 +2,14 @@
 
 import React, { useState } from "react";
 import { MitigationProject } from "@/db/default-data";
-import { CheckCircle2, Clock, Coins, Printer, ArrowRight } from "lucide-react";
+import { CheckCircle2, Clock, Coins, Printer, ArrowRight, Settings } from "lucide-react";
 
 interface ExecutiveDashboardProps {
   projects: MitigationProject[];
+  onManageProjects?: () => void;
 }
 
-export function ExecutiveDashboard({ projects }: ExecutiveDashboardProps) {
+export function ExecutiveDashboard({ projects, onManageProjects }: ExecutiveDashboardProps) {
   const completed = projects.filter((p) => p.status_group === "COMPLETED");
   const pending = projects.filter((p) => p.status_group === "PENDING_BUDGET");
   const sumPendingBudget = pending.reduce((sum, p) => sum + Number(p.budget_mb || 0), 0);
@@ -34,7 +35,17 @@ export function ExecutiveDashboard({ projects }: ExecutiveDashboardProps) {
             ข้อมูลเชิงยุทธศาสตร์เพื่อรายงานผู้ว่าราชการจังหวัดปัตตานีและผู้บริหารระดับสูง กรมทางหลวง
           </p>
         </div>
-        <div className="flex items-center gap-2 print:hidden">
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          {onManageProjects && (
+            <button
+              type="button"
+              onClick={onManageProjects}
+              className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-heading font-black shadow transition"
+              title="สลับไปยังหน้าจัดการข้อมูลโครงการ เพื่อแก้ไขรูปถ่ายหรือรายละเอียด"
+            >
+              <Settings className="w-4 h-4" /> จัดการข้อมูลโครงการ (แก้ไขรูป/รายละเอียด)
+            </button>
+          )}
           <button
             type="button"
             onClick={handlePrint}

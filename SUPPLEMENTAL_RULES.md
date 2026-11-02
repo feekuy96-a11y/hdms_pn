@@ -1,4 +1,4 @@
-﻿# กฎเพิ่มเติมและประวัติการอัปเดตระบบ (Supplemental Rules & System Update History)
+# กฎเพิ่มเติมและประวัติการอัปเดตระบบ (Supplemental Rules & System Update History)
 **ระบบแผนที่รายงานสถานการณ์น้ำท่วมและเส้นทางเลี่ยง แขวงทางหลวงปัตตานี กรมทางหลวง (DOH_Pattani_Flood)**
 
 ---

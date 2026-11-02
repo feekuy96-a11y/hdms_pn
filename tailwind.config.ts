@@ -21,8 +21,9 @@ const config: Config = {
         },
       },
       fontFamily: {
-        heading: ["Prompt", "sans-serif"],
-        body: ["Sarabun", "sans-serif"],
+        heading: ["var(--font-heading)", "Prompt", "sans-serif"],
+        body: ["var(--font-body)", "Sarabun", "sans-serif"],
+        sans: ["var(--font-body)", "Sarabun", "sans-serif"],
       },
       animation: {
         "pulse-fast": "pulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite",

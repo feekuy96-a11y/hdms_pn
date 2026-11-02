@@ -161,10 +161,13 @@ export default function AdminPage() {
         </div>
       </header>
 
-      {/* Main Content Area: Executive Dashboard (ภาพที่ 1) vs Admin Console + Map */}
+      {/* Main Content Area: Executive Dashboard (ภาพที่ 2) vs Admin Console + Map */}
       {adminViewMode === "executive" ? (
         <main className="flex-1 overflow-y-auto p-2 sm:p-4 bg-slate-950">
-          <ExecutiveDashboard projects={systemData.mitigationProjects} />
+          <ExecutiveDashboard
+            projects={systemData.mitigationProjects}
+            onManageProjects={() => setAdminViewMode("console")}
+          />
         </main>
       ) : (
         /* Main Split Layout: Admin Console on Left (ฝั่งซ้ายมือ), GIS Map on Right */

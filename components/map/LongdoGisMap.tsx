@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
@@ -254,6 +254,9 @@ export function LongdoGisMap({
       const group = overlayGroupRef.current;
       group.clearLayers();
 
+      // Hardware-accelerated canvas renderer for 60fps vector rendering
+      const vectorCanvas = L.canvas ? L.canvas({ padding: 0.5 }) : undefined;
+
       // A. Draw Official Highway Route Shields (ไอคอนแสดงหมายเลขทางหลวงบนแผนที่ในรูปแบบทางการ)
       if (showHighwayShields) {
         OFFICIAL_PATTANI_HIGHWAYS.forEach((hwy) => {
@@ -325,6 +328,7 @@ export function LongdoGisMap({
               weight: 5,
               dashArray: "6, 6",
               opacity: 0.95,
+              renderer: vectorCanvas,
             }).addTo(group);
           }
         });
@@ -350,6 +354,7 @@ export function LongdoGisMap({
         if (layer.geojson_data) {
           try {
             const geoLayer = L.geoJSON(layer.geojson_data, {
+              renderer: vectorCanvas,
               style: {
                 color,
                 weight,
@@ -439,6 +444,7 @@ export function LongdoGisMap({
               dashArray: dDash,
               opacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
               className: `${dAnim} ${dSpeed}`.trim(),
+              renderer: vectorCanvas,
             }).addTo(group);
 
             polyline.bindPopup(`
@@ -485,6 +491,7 @@ export function LongdoGisMap({
               opacity: fOpacity,
               dashArray: fDash,
               className: `${fAnim} ${fSpeed}`.trim(),
+              renderer: vectorCanvas,
             }).addTo(group);
 
             polyline.on("click", (e: any) => {
@@ -542,6 +549,7 @@ export function LongdoGisMap({
           weight: 6,
           dashArray: draftMode === "DETOUR" ? "6, 6" : undefined,
           opacity: 0.95,
+          renderer: vectorCanvas,
         }).addTo(group);
       }
 
@@ -634,41 +642,104 @@ export function LongdoGisMap({
         style={{ minHeight: "100%", height: "100%" }}
       />
 
-      {/* Top Map KPI Status Badges & Base Map Switcher */}
-      <div className="absolute top-3 left-3 right-3 z-[400] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-        {!publicMode ? (
-          <div className="flex flex-wrap gap-1.5 pointer-events-auto">
-            <div className="bg-slate-950/90 backdrop-blur border border-red-500/60 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
-              <span className="text-[11px] text-slate-300">ผ่านไม่ได้:</span>
-              <strong className="text-xs sm:text-sm font-heading text-red-400">
-                {systemData.floodRoutes.filter((r) => r.is_active && r.traffic_status === "CLOSED").length} จุด
-              </strong>
-            </div>
-            <div className="bg-slate-950/90 backdrop-blur border border-amber-500/60 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-              <span className="text-[11px] text-slate-300">เฝ้าระวัง:</span>
-              <strong className="text-xs sm:text-sm font-heading text-amber-300">
-                {systemData.floodRoutes.filter((r) => r.is_active && r.traffic_status !== "CLOSED").length} จุด
-              </strong>
-            </div>
-            <div className="bg-slate-950/90 backdrop-blur border border-yellow-400/60 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg">
-              <Navigation className="w-3.5 h-3.5 text-yellow-400" />
-              <span className="text-[11px] text-slate-300">ทางเลี่ยง:</span>
-              <strong className="text-xs sm:text-sm font-heading text-yellow-300">
-                {systemData.detourRoutes.length} สาย
-              </strong>
-            </div>
-          </div>
-        ) : <div className="pointer-events-auto" />}
+      {/* Layer Control Legend (Floating Top-Right matching Reference Image 1) */}
+      <div className="absolute top-4 right-4 z-[400] bg-[#0b162c]/95 backdrop-blur border border-slate-700/80 rounded-2xl p-3.5 shadow-2xl min-w-[215px] sm:min-w-[230px] text-xs pointer-events-auto">
+        <div className="font-heading font-bold text-amber-400 flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+          <span className="flex items-center gap-1.5 text-xs text-white">
+            <Layers className="w-3.5 h-3.5 text-amber-400" /> เลเยอร์แผนที่ทางหลวง <span className="text-[10px] bg-amber-400/20 text-amber-300 px-1 rounded font-mono">GIS Live</span>
+          </span>
+          <button type="button" onClick={resetCamera} className="text-[10px] text-sky-400 hover:text-sky-300 hover:underline">
+            รีเซ็ต
+          </button>
+        </div>
 
-        {/* Base Map Switcher: Visible for both citizens & admins */}
-        <div className="pointer-events-auto ml-auto flex items-center gap-1 bg-slate-950/90 backdrop-blur p-1 rounded-xl border border-slate-700 shadow-lg text-[11px] font-heading">
+        <div className="space-y-2">
+          <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-1.5 inline-block rounded bg-[#1B5E20]" />
+              <span>ทางหลวงสายหลัก</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={showMainHwy}
+              onChange={(e) => setShowMainHwy(e.target.checked)}
+              className="accent-emerald-500 rounded"
+            />
+          </label>
+
+          <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-1.5 inline-block rounded bg-[#0284c7]" />
+              <span>ทางหลวงสายรอง</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={showSecHwy}
+              onChange={(e) => setShowSecHwy(e.target.checked)}
+              className="accent-sky-400 rounded"
+            />
+          </label>
+
+          <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-1.5 inline-block rounded bg-red-600 animate-pulse" />
+              <span>เส้นทางน้ำท่วม (Red)</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={showFloodLayer}
+              onChange={(e) => setShowFloodLayer(e.target.checked)}
+              className="accent-red-500 rounded"
+            />
+          </label>
+
+          <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-1.5 inline-block rounded bg-yellow-400 border-b border-dashed border-slate-900" />
+              <span>ทางเลี่ยงแนะนำ (Yellow)</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={showDetourLayer}
+              onChange={(e) => setShowDetourLayer(e.target.checked)}
+              className="accent-yellow-400 rounded"
+            />
+          </label>
+
+          <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
+            <span className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block shadow-sm" />
+              <span>หมุดระดับน้ำ & ภาพถ่าย</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={showRoadLabels}
+              onChange={(e) => setShowRoadLabels(e.target.checked)}
+              className="accent-amber-400 rounded"
+            />
+          </label>
+
+          <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
+            <span className="flex items-center gap-2">
+              <Building2 className="w-3 h-3 text-sky-400 inline-block" />
+              <span>หมุดแขวงฯ & หมวดทางหลวง</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={showOffices}
+              onChange={(e) => setShowOffices(e.target.checked)}
+              className="accent-sky-400 rounded"
+            />
+          </label>
+        </div>
+
+        {/* Base Map Switcher: Matching Image 1 (แผนที่ถนน | ดาวเทียม) */}
+        <div className="mt-3 pt-2.5 border-t border-slate-800 grid grid-cols-2 gap-1.5 text-[11px] font-heading font-bold">
           <button
             type="button"
             onClick={() => switchBaseMap("road")}
-            className={`px-2.5 py-1 rounded-lg font-bold transition ${
-              activeBaseMap === "road" ? "bg-amber-500 text-slate-950" : "text-slate-300 hover:text-white"
+            className={`py-1 rounded-lg transition text-center ${
+              activeBaseMap === "road" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
             }`}
           >
             แผนที่ถนน
@@ -676,123 +747,14 @@ export function LongdoGisMap({
           <button
             type="button"
             onClick={() => switchBaseMap("sat")}
-            className={`px-2.5 py-1 rounded-lg font-bold transition ${
-              activeBaseMap === "sat" ? "bg-amber-500 text-slate-950" : "text-slate-300 hover:text-white"
+            className={`py-1 rounded-lg transition text-center ${
+              activeBaseMap === "sat" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
             }`}
           >
-            ดาวเทียม Hybrid
-          </button>
-          <button
-            type="button"
-            onClick={() => switchBaseMap("longdo")}
-            className={`px-2.5 py-1 rounded-lg font-bold transition ${
-              activeBaseMap === "longdo" ? "bg-amber-500 text-slate-950" : "text-slate-300 hover:text-white"
-            }`}
-          >
-            Longdo HD
+            ดาวเทียม
           </button>
         </div>
       </div>
-
-      {/* Layer Control Legend */}
-      <details className={`absolute z-[400] bg-slate-950/95 border border-slate-700 rounded-xl p-2.5 text-xs shadow-xl max-w-[250px] bottom-3 ${publicMode ? "right-3" : "left-3"}`} open={!publicMode}>
-        {publicMode && <summary className="min-h-11 cursor-pointer font-bold text-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">ตัวเลือกแผนที่</summary>}
-        <div className="space-y-2">
-        <div className="font-heading font-bold text-amber-400 flex items-center justify-between">
-          <span className="flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5" /> เลเยอร์โครงข่าย
-          </span>
-          <button type="button" onClick={resetCamera} className="text-[10px] text-sky-400 hover:underline">
-            รวมทั้งจังหวัด
-          </button>
-        </div>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showFloodLayer}
-            onChange={(e) => setShowFloodLayer(e.target.checked)}
-            className="accent-red-500"
-          />
-          <span
-            className="w-4 h-1.5 inline-block rounded shadow-sm"
-            style={{ backgroundColor: mapStyles.flood?.color || "#D32F2F" }}
-          />
-          <span>เส้นทางน้ำท่วม</span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showDetourLayer}
-            onChange={(e) => setShowDetourLayer(e.target.checked)}
-            className="accent-yellow-400"
-          />
-          <span
-            className="w-4 h-1.5 inline-block rounded shadow-sm"
-            style={{ backgroundColor: mapStyles.detour?.color || "#FBC02D" }}
-          />
-          <span>เส้นทางเลี่ยง</span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showMainHwy}
-            onChange={(e) => setShowMainHwy(e.target.checked)}
-            className="accent-emerald-500"
-          />
-          <span
-            className="w-4 h-1.5 inline-block rounded shadow-sm"
-            style={{ backgroundColor: mapStyles.primary?.color || "#1B5E20" }}
-          />
-          <span>ทางหลวงสายหลัก</span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showSecHwy}
-            onChange={(e) => setShowSecHwy(e.target.checked)}
-            className="accent-sky-400"
-          />
-          <span
-            className="w-4 h-1 inline-block rounded shadow-sm"
-            style={{ backgroundColor: mapStyles.secondary?.color || "#0284c7" }}
-          />
-          <span>ทางหลวงสายรอง</span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showHighwayShields}
-            onChange={(e) => setShowHighwayShields(e.target.checked)}
-            className="accent-amber-400"
-          />
-          <span className="w-4 h-4 rounded bg-white border border-slate-900 inline-flex items-center justify-center text-[8px] font-black text-slate-950 font-heading">
-            42
-          </span>
-          <span>ป้ายหมายเลขทางหลวง (Official Shields)</span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showOffices}
-            onChange={(e) => setShowOffices(e.target.checked)}
-            className="accent-amber-400"
-          />
-          <span className="w-3.5 h-3.5 rounded bg-[#0B2A5B] border border-amber-400 inline-block" />
-          <span>หมุดแขวงฯ & ๕ หมวดทางหลวง</span>
-        </label>
-        <div className="pt-1.5 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-300">
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showRoadLabels}
-              onChange={(e) => setShowRoadLabels(e.target.checked)}
-              className="accent-amber-500 rounded"
-            />
-            <span>แสดงป้ายชื่อสายทาง</span>
-          </label>
-        </div>
-        </div>
-      </details>
     </div>
   );
 }
