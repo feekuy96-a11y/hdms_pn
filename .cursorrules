@@ -4,8 +4,17 @@
 
 ---
 
+## 0. กฎข้อบังคับเริ่มต้นและอัปเดตระบบ (Mandatory Pre-Flight & Logging Directives)
+- **บังคับอ่านกฎเพิ่มเติมก่อนเริ่มงานทุกครั้ง (Mandatory Pre-Flight Check):** เมื่อเริ่มทำงานในทุกครั้ง AI Assistant ต้องอ่านไฟล์ `SUPPLEMENTAL_RULES.md` (กฎเพิ่มเติม) ก่อนเสมอ เพื่อให้เข้าใจว่าขณะนี้ระบบมีการอัปเดตอะไรบ้าง ฟังก์ชันใดที่มีการเปลี่ยนแปลง และโครงสร้างใดที่ทำงานอยู่แล้ว ห้ามเริ่มลงมือเขียนโค้ดหรือแก้ไขโดยไม่อ่าน `SUPPLEMENTAL_RULES.md`
+- **บังคับบันทึกประวัติทุกครั้งที่มีการอัปเดตใหม่ (Mandatory Post-Update Logging):** ทุกครั้งที่มีการอัปเดตระบบใหม่ หรือเพิ่มฟังก์ชันใหม่ ต้องเขียนบันทึกประวัติการพัฒนาลงใน `SUPPLEMENTAL_RULES.md` เสมอ โดยระบุ วันที่, วัตถุประสงค์, รายการไฟล์ที่แก้ไข, รายละเอียดฟังก์ชัน, และผลการทดสอบ
+
+---
+
 ## 1. Core Execution Protocol (The Master Developer Rules)
 For EVERY user input (requirement, bug, idea, or refactor), you MUST execute the following sequence before writing any code. Never skip steps.
+
+**Step 0: Mandatory Supplemental Rules Check**
+- Always read `SUPPLEMENTAL_RULES.md` first to synchronize with the latest project updates, active modules, and existing conventions.
 
 **Step 1: Environment Discovery (Inspect & Read)**
 - Analyze the user request. Identify direct impacts, related dependencies, and out-of-scope areas.
@@ -22,9 +31,10 @@ For EVERY user input (requirement, bug, idea, or refactor), you MUST execute the
 - Make the minimal necessary changes. Do not perform broad refactoring unless explicitly requested.
 - Never hardcode secrets, tokens, or DB URLs. Always use `.env`.
 
-**Step 4: Validation (Verify)**
+**Step 4: Validation & Changelog (Verify & Record)**
 - Detail how the implementation will be tested (Static checks, UI states, Error handling).
 - Ensure UI handles 4 states: Loading, Empty, Error, Success.
+- **Append Update Entry:** Record the completion details and test results into `SUPPLEMENTAL_RULES.md`.
 
 ---
 
