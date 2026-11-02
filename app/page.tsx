@@ -21,7 +21,6 @@ const LongdoGisMap = dynamic(
     ),
   }
 );
-import Link from "next/link";
 import {
   AlertTriangle,
   Settings,
@@ -40,6 +39,9 @@ import {
 import { extractDirectionalAdvice } from "@/lib/gis-utils";
 
 export default function HomePage() {
+  const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL?.startsWith("https://")
+    ? process.env.NEXT_PUBLIC_ADMIN_URL
+    : null;
   const previousFocus = useRef<HTMLElement | null>(null);
   const closeDetailsRef = useRef<HTMLButtonElement | null>(null);
   const [selectedFloodId, setSelectedFloodId] = useState<string>("");
@@ -134,13 +136,13 @@ export default function HomePage() {
 
         {/* Right Actions: Admin Link + Refresh + Hotline 1586 */}
         <div className="flex items-center gap-2 shrink-0">
-          <Link
-            href="/admin"
+          {adminUrl && <a
+            href={adminUrl}
             className="hidden lg:flex min-h-11 px-3 py-1.5 rounded-xl text-xs font-heading font-bold transition items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-700 hover:border-amber-400 shadow-md"
-            title="เข้าสู่ระบบหลังบ้าน เจ้าหน้าที่ (Admin Panel)"
+            title="หน้าเจ้าหน้าที่บนระบบที่จำกัดการเข้าถึง"
           >
             <Settings className="w-3.5 h-3.5" /> <span>ระบบแอดมิน</span>
-          </Link>
+          </a>}
 
           <button
             type="button"
@@ -359,7 +361,7 @@ export default function HomePage() {
             <span className="text-[11px] flex items-center gap-1.5">
               <Phone className="w-3.5 h-3.5 text-amber-400" /> ติดต่อศูนย์ความปลอดภัย: 073-336-000
             </span>
-            <Link href="/admin" className="text-[11px] text-amber-400 underline underline-offset-2">สำหรับเจ้าหน้าที่</Link>
+            {adminUrl && <a href={adminUrl} className="text-[11px] text-amber-400 underline underline-offset-2">สำหรับเจ้าหน้าที่</a>}
           </div>
         </div>
 
