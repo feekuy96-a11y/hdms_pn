@@ -346,6 +346,19 @@ export async function updateHighwayLayerAction(payload: {
   return { success: true, systemData: runtimeState };
 }
 
+export async function deleteHighwayLayerAction(
+  layerId: string
+): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  runtimeState.highwayLayers = runtimeState.highwayLayers.filter((l) => l.layer_id !== layerId);
+  const { deleteHighwayLayerSupabase } = await import("@/db/supabase-server");
+  await deleteHighwayLayerSupabase(layerId);
+
+  runtimeState.updatedAt = new Date().toISOString();
+  revalidatePath("/");
+  revalidatePath("/admin");
+  return { success: true, systemData: runtimeState };
+}
+
 /**
  * เปลี่ยนสถานะเหตุการณ์: คืนสภาพปกติ (ซ่อน) หรือ เปิดเหตุการณ์ใหม่
  */

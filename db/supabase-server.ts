@@ -259,6 +259,20 @@ export async function updateHighwayLayerSupabase(payload: {
   }
 }
 
+export async function deleteHighwayLayerSupabase(layerId: string): Promise<boolean> {
+  try {
+    const { error } = await supabaseServer.from("doh_highway_layers").delete().eq("layer_id", layerId);
+    if (error) {
+      console.warn("[Supabase Server] deleteHighwayLayer error:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("[Supabase Server] Network error in deleteHighwayLayer:", (err as Error).message);
+    return false;
+  }
+}
+
 /**
  * สลับสถานะเหตุการณ์น้ำท่วม (is_active)
  */
