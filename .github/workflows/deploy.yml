@@ -39,6 +39,8 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Build with Next.js (Static Export)
+        env:
+          NEXT_PUBLIC_ADMIN_URL: ${{ vars.ADMIN_URL }}
         run: npm run build
 
       - name: Upload Pages artifact

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import "leaflet/dist/leaflet.css";
 import "./globals.css";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 
@@ -10,8 +11,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 export default function RootLayout({

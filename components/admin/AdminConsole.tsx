@@ -29,6 +29,7 @@ import {
   compressImageToBase64,
   calculateRoadSnappedDualSource,
   generateAutoDetourAdvice,
+  extractDirectionalAdvice,
   simplifyCoordinates,
   extractLinesFromGeoJson,
   extractLinesFromKml,
@@ -84,6 +85,7 @@ import {
   Sparkles,
   Tag,
   MapPin,
+  ArrowRightLeft,
 } from "lucide-react";
 
 export type AdminTab = "system" | "map" | "incidents" | "routes" | "style" | "projects";
@@ -184,9 +186,10 @@ export function AdminConsole({
   const [snappingStatusText, setSnappingStatusText] = useState("");
 
   // Detour specifics
-  const [detourRefId, setDetourRefId] = useState(systemData.floodRoutes[0]?.id || "F-001");
+  const [detourRefId, setDetourRefId] = useState(systemData.floodRoutes[0]?.id || "");
   const [detourName, setDetourName] = useState("");
   const [detourDesc, setDetourDesc] = useState("");
+  const [detourAdviceView, setDetourAdviceView] = useState<"FORWARD" | "REVERSE" | "COMBINED">("COMBINED");
 
   // Route Stations
   const [startLat, setStartLat] = useState(6.842);
@@ -296,8 +299,9 @@ export function AdminConsole({
 
     // If in Detour mode, auto generate detour advice text
     if (routeMode === "DETOUR" && (!detourDesc || detourDesc.length < 10)) {
-      const autoAdvice = generateAutoDetourAdvice([sLon, sLat], [eLon, eLat], result.coords, routeNo);
-      setDetourDesc(autoAdvice);
+      generateAutoDetourAdvice([sLon, sLat], [eLon, eLat], result.coords, routeNo, systemData.highwayLayers)
+        .then((autoAdvice) => setDetourDesc(autoAdvice))
+        .catch(() => {});
     }
   };
 
@@ -353,11 +357,46 @@ export function AdminConsole({
     onToast("ล้างแนวเส้นร่างเรียบร้อย");
   };
 
+  // Swap Endpoint A <-> Endpoint B
+  const handleSwapEndpoints = () => {
+    const prevSLat = startLat;
+    const prevSLon = startLon;
+    const prevELat = endLat;
+    const prevELon = endLon;
+
+    setStartLat(prevELat);
+    setStartLon(prevELon);
+    setEndLat(prevSLat);
+    setEndLon(prevSLon);
+
+    const nextWaypoints = [...draftWaypoints].reverse();
+    setDraftWaypoints(nextWaypoints);
+
+    if (draftCoordinates.length >= 2) {
+      const reversedCoords = [...draftCoordinates].reverse();
+      setDraftCoordinates(reversedCoords);
+      triggerDualRoadSnapping(prevELat, prevELon, prevSLat, prevSLon, nextWaypoints);
+    }
+
+    onToast("สลับจุดเริ่มต้น (A) ↔ สิ้นสุด (B) และกลับทิศทางเส้นทางเรียบร้อย");
+  };
+
   // Auto Detour Generator Click
-  const handleGenerateDetourAdviceClick = () => {
-    const advice = generateAutoDetourAdvice([startLon, startLat], [endLon, endLat], draftCoordinates, routeNo);
-    setDetourDesc(advice);
-    showSuccessModal("วิเคราะห์เส้นทางเลี่ยงสำเร็จ", advice);
+  const handleGenerateDetourAdviceClick = async () => {
+    onToast("กำลังอ่านชื่อถนนและจุดเลี้ยวเพื่อสร้างคำแนะนำ...");
+    try {
+      const advice = await generateAutoDetourAdvice(
+        [startLon, startLat],
+        [endLon, endLat],
+        draftCoordinates,
+        routeNo,
+        systemData.highwayLayers
+      );
+      setDetourDesc(advice);
+      showSuccessModal("วิเคราะห์เส้นทางเลี่ยงสำเร็จ", advice);
+    } catch (e: any) {
+      onToast("เกิดข้อผิดพลาดในการวิเคราะห์เส้นทาง: " + (e?.message || ""));
+    }
   };
 
   // Image Upload with Canvas Compression
@@ -1465,11 +1504,15 @@ export function AdminConsole({
                         onChange={(e) => setDetourRefId(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                       >
-                        {systemData.floodRoutes.map((f) => (
-                          <option key={f.id} value={f.id}>
-                            [{f.id}] ทล.{f.route_no} - {f.section_name}
-                          </option>
-                        ))}
+                        {systemData.floodRoutes.length === 0 ? (
+                          <option value="">-- ยังไม่มีจุดน้ำท่วมอ้างอิงในระบบ --</option>
+                        ) : (
+                          systemData.floodRoutes.map((f) => (
+                            <option key={f.id} value={f.id}>
+                              [{f.id}] ทล.{f.route_no} - {f.section_name}
+                            </option>
+                          ))
+                        )}
                       </select>
                     </div>
                     <div>
@@ -1516,7 +1559,16 @@ export function AdminConsole({
                     <span className="text-xs font-heading font-bold text-amber-400">
                       ๑. กำหนดจุดเริ่มต้น (A) และ สิ้นสุด (B)
                     </span>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleSwapEndpoints}
+                        title="สลับจุดเริ่มต้น (A) ↔ สิ้นสุด (B) และกลับทิศทางเส้นทาง"
+                        className="text-[11px] px-2.5 py-1 rounded-lg border font-heading transition bg-slate-800 text-sky-300 border-sky-700/60 hover:bg-sky-900/60 flex items-center gap-1 shadow-sm"
+                      >
+                        <ArrowRightLeft className="w-3 h-3 text-sky-400" />
+                        <span>สลับ A ⇄ B</span>
+                      </button>
                       <button
                         type="button"
                         onClick={() => setAdminPickMode("PICK_START")}
@@ -1645,26 +1697,90 @@ export function AdminConsole({
 
                 {/* 3. Auto Detour Advice Generator (If in Detour mode) */}
                 {routeMode === "DETOUR" && (
-                  <div className="p-3 bg-amber-950/30 border border-amber-600/40 rounded-xl space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-heading font-bold text-amber-300">
-                        คำแนะนำเส้นทางเลี่ยงสำหรับประชาชน
-                      </label>
+                  <div className="p-3 bg-amber-950/30 border border-amber-600/40 rounded-xl space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-heading font-bold text-amber-300">
+                          คำแนะนำเส้นทางเลี่ยงสำหรับประชาชน
+                        </label>
+                        {/* Switch View Tabs */}
+                        <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-800 text-[10px] font-heading font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setDetourAdviceView("FORWARD")}
+                            className={`px-2 py-0.5 rounded transition ${
+                              detourAdviceView === "FORWARD" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            🚗 ขาไป (A → B)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDetourAdviceView("REVERSE")}
+                            className={`px-2 py-0.5 rounded transition ${
+                              detourAdviceView === "REVERSE" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            🚙 ขากลับ (B → A)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDetourAdviceView("COMBINED")}
+                            className={`px-2 py-0.5 rounded transition ${
+                              detourAdviceView === "COMBINED" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            📋 ทั้ง ๒ ทิศทาง
+                          </button>
+                        </div>
+                      </div>
+
                       <button
                         type="button"
                         onClick={handleGenerateDetourAdviceClick}
-                        className="text-[10px] bg-amber-500 text-slate-950 font-heading font-bold px-2 py-0.5 rounded shadow hover:bg-amber-400 flex items-center gap-1"
+                        className="text-[10px] bg-amber-500 text-slate-950 font-heading font-bold px-2.5 py-1 rounded-lg shadow hover:bg-amber-400 flex items-center gap-1 shrink-0"
                       >
-                        <Sparkles className="w-3 h-3" /> วิเคราะห์คำแนะนำอัตโนมัติ
+                        <Sparkles className="w-3 h-3" /> วิเคราะห์คำแนะนำ (ไป-กลับ)
                       </button>
                     </div>
+
                     <textarea
-                      rows={2}
-                      value={detourDesc}
-                      onChange={(e) => setDetourDesc(e.target.value)}
-                      placeholder="แนะนำใช้ ทล.4092 ผ่านแยกนาเกตุ..."
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-xs text-white"
+                      rows={8}
+                      value={
+                        detourAdviceView === "FORWARD"
+                          ? extractDirectionalAdvice(detourDesc).forward
+                          : detourAdviceView === "REVERSE"
+                          ? extractDirectionalAdvice(detourDesc).reverse
+                          : detourDesc
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (detourAdviceView === "FORWARD") {
+                          const ext = extractDirectionalAdvice(detourDesc);
+                          setDetourDesc(`=== ทิศทางขาไป: จุด A → จุด B ===\n${val}\n\n=== ทิศทางขากลับ: จุด B → จุด A ===\n${ext.reverse}`);
+                        } else if (detourAdviceView === "REVERSE") {
+                          const ext = extractDirectionalAdvice(detourDesc);
+                          setDetourDesc(`=== ทิศทางขาไป: จุด A → จุด B ===\n${ext.forward}\n\n=== ทิศทางขากลับ: จุด B → จุด A ===\n${val}`);
+                        } else {
+                          setDetourDesc(val);
+                        }
+                      }}
+                      placeholder="วิเคราะห์คำแนะนำอัตโนมัติ หรือกรอกคำแนะนำทั้ง ๒ ทิศทาง..."
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-mono leading-relaxed"
                     />
+
+                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                      <span>💡 ประชาชนสามารถสลับทิศทางเดินทางได้ทันทีในหน้าหลัก</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetourAdviceView((prev) => (prev === "FORWARD" ? "REVERSE" : prev === "REVERSE" ? "FORWARD" : "FORWARD"));
+                        }}
+                        className="text-amber-400 hover:underline flex items-center gap-1 font-heading"
+                      >
+                        <ArrowRightLeft className="w-3 h-3" /> สลับมุมมองทิศทาง
+                      </button>
+                    </div>
                   </div>
                 )}
 

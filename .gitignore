@@ -28,6 +28,7 @@
 
 # Agent & IDE local configurations
 .agents/
+.impeccable/
 
 # Vercel
 .vercel

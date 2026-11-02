@@ -1,14 +1,26 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
-import { getSystemDataAction, upsertRouteAction, saveTimelineUpdateAction } from "@/app/actions/doh-actions";
-import { INITIAL_SYSTEM_DATA, SystemDataPayload, FloodRoute } from "@/db/default-data";
-import { LongdoGisMap } from "@/components/map/LongdoGisMap";
+import { getSystemDataAction } from "@/app/actions/doh-actions";
+import { INITIAL_SYSTEM_DATA, SystemDataPayload } from "@/db/default-data";
 import { WaterTimelineChart } from "@/components/charts/WaterTimelineChart";
-import { OfflineSyncStatus } from "@/components/offline/OfflineSyncStatus";
-import { latLonToUtm47N, formatThaiBuddhistDate } from "@/lib/gis-utils";
-import Link from "next/link";
+
+const LongdoGisMap = dynamic(
+  () => import("@/components/map/LongdoGisMap").then((mod) => mod.LongdoGisMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full min-h-[350px] bg-[#0b1426] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-slate-400">
+          <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-heading font-medium">กำลังโหลดแผนที่ GIS ปัตตานี...</span>
+        </div>
+      </div>
+    ),
+  }
+);
 import {
   AlertTriangle,
   Settings,
@@ -17,44 +29,34 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Edit3,
   Navigation,
   Compass,
   Phone,
   Clock,
-  Camera,
   CheckCircle2,
-  Plus,
-  ShieldAlert,
+  ArrowRightLeft,
 } from "lucide-react";
+import { extractDirectionalAdvice } from "@/lib/gis-utils";
 
 export default function HomePage() {
-  const [selectedFloodId, setSelectedFloodId] = useState<string>("F-001");
-  const [showDossier, setShowDossier] = useState<boolean>(true);
+  const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL?.startsWith("https://")
+    ? process.env.NEXT_PUBLIC_ADMIN_URL
+    : null;
+  const previousFocus = useRef<HTMLElement | null>(null);
+  const closeDetailsRef = useRef<HTMLButtonElement | null>(null);
+  const [selectedFloodId, setSelectedFloodId] = useState<string>("");
+  const [showDossier, setShowDossier] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRouteFilter, setSelectedRouteFilter] = useState("ALL");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [citizenDetourDirection, setCitizenDetourDirection] = useState<"FORWARD" | "REVERSE">("FORWARD");
 
-  // Quick Edit Modal State
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [editForm, setEditForm] = useState({
-    routeNo: "",
-    sectionName: "",
-    kmStart: "",
-    kmEnd: "",
-    waterLevelCm: 0,
-    trafficStatus: "WARNING" as "CLOSED" | "WARNING" | "PASSABLE",
-    photoUrl: "",
-    detourAdvice: "",
-    timelineRemark: "",
-  });
 
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
 
   // TanStack Query for Data Fetching & Sync
-  const { data: systemData = INITIAL_SYSTEM_DATA, refetch, isFetching } = useQuery<SystemDataPayload>({
+  const { data: systemData = INITIAL_SYSTEM_DATA, refetch, isFetching, isError } = useQuery<SystemDataPayload>({
     queryKey: ["dohSystemData"],
     queryFn: async () => {
       return await getSystemDataAction();
@@ -66,6 +68,20 @@ export default function HomePage() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3800);
   };
+
+  useEffect(() => {
+    if (!showDossier) return;
+    previousFocus.current = document.activeElement as HTMLElement;
+    closeDetailsRef.current?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowDossier(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+      previousFocus.current?.focus();
+    };
+  }, [showDossier]);
 
   const selectedFlood =
     systemData.floodRoutes.find((r) => r.id === selectedFloodId) || systemData.floodRoutes[0];
@@ -87,79 +103,11 @@ export default function HomePage() {
       (r.subdistrict && r.subdistrict.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (r.district && r.district.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchChip =
-      selectedRouteFilter === "ALL" ||
-      r.route_no.includes(selectedRouteFilter) ||
-      (selectedRouteFilter === "43" && r.route_no === "43") ||
-      (selectedRouteFilter === "42" && r.route_no === "42") ||
-      (selectedRouteFilter === "418" && r.route_no === "418");
+    const matchChip = selectedRouteFilter === "ALL" || r.route_no === selectedRouteFilter;
 
     return matchSearch && matchChip;
   });
 
-  // Open Edit Modal with current flood values
-  const handleOpenEditModal = (flood: FloodRoute) => {
-    setEditForm({
-      routeNo: flood.route_no,
-      sectionName: flood.section_name,
-      kmStart: flood.km_start,
-      kmEnd: flood.km_end,
-      waterLevelCm: flood.water_level_cm,
-      trafficStatus: flood.traffic_status as any,
-      photoUrl: flood.latest_photo_url || "",
-      detourAdvice: flood.detour_advice || "",
-      timelineRemark: `ระดับน้ำ ${flood.water_level_cm} ซม. รายงานสถานการณ์ล่าสุด`,
-    });
-    setIsEditModalOpen(true);
-  };
-
-  // Submit quick edit to database
-  const handleSaveEdit = async () => {
-    if (!selectedFlood) return;
-    setIsSavingEdit(true);
-    try {
-      // 1. Update Route Details
-      await upsertRouteAction({
-        recordType: "FLOOD",
-        id: selectedFlood.id,
-        routeNo: editForm.routeNo,
-        sectionName: editForm.sectionName,
-        kmStart: editForm.kmStart,
-        kmEnd: editForm.kmEnd,
-        waterLevelCm: Number(editForm.waterLevelCm),
-        trafficStatus: editForm.trafficStatus,
-        detourAdvice: editForm.detourAdvice,
-        photoUrl: editForm.photoUrl,
-      });
-
-      // 2. Also record a new timeline update entry
-      await saveTimelineUpdateAction({
-        floodId: selectedFlood.id,
-        waterLevelCm: Number(editForm.waterLevelCm),
-        trafficStatus: editForm.trafficStatus,
-        latitude: selectedFlood.lat_start,
-        longitude: selectedFlood.lon_start,
-        reporterName: "เจ้าหน้าที่เวรศูนย์ฯ แขวงฯ ปัตตานี",
-        remark: editForm.timelineRemark || "อัปเดตข้อมูลและภาพถ่ายระดับน้ำหน้างาน",
-        photoUrl: editForm.photoUrl,
-      });
-
-      await refetch();
-      setIsEditModalOpen(false);
-      showToast("บันทึกการแก้ไขและอัปเดตระดับน้ำสำเร็จ");
-    } catch (err) {
-      showToast("เกิดข้อผิดพลาดในการบันทึก: " + (err as Error).message);
-    } finally {
-      setIsSavingEdit(false);
-    }
-  };
-
-  // Sample photo options for rapid selection in edit modal
-  const samplePhotoOptions = [
-    { label: "น้ำท่วมสูง ทล.43 เกาะหม้อแกง", url: "https://images.unsplash.com/photo-1547683905-f686c993aae5?q=80&w=800&auto=format&fit=crop" },
-    { label: "น้ำท่วมไหลผ่านผิวจราจร ทล.418", url: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?q=80&w=800&auto=format&fit=crop" },
-    { label: "น้ำลดลงระดับเฝ้าระวัง ทล.42", url: "https://images.unsplash.com/photo-1508873696983-2df5293cb395?q=80&w=800&auto=format&fit=crop" },
-  ];
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-body">
@@ -179,56 +127,60 @@ export default function HomePage() {
               <span className="bg-amber-400 text-slate-950 text-[10px] font-heading font-extrabold px-1.5 py-0.2 rounded uppercase">
                 ศูนย์ปฏิบัติการฉุกเฉิน 24 ชม.
               </span>
-              <OfflineSyncStatus onSyncComplete={() => refetch()} />
             </div>
             <h1 className="font-heading text-xs sm:text-sm font-semibold text-slate-300 truncate">
-              ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย (HDMS Real-Time GIS)
+              ตรวจสอบจุดน้ำท่วมและคำแนะนำการเดินทาง
             </h1>
           </div>
         </div>
 
         {/* Right Actions: Admin Link + Refresh + Hotline 1586 */}
         <div className="flex items-center gap-2 shrink-0">
-          <Link
-            href="/admin"
-            className="px-3 py-1.5 rounded-xl text-xs font-heading font-bold transition flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-700 hover:border-amber-400 shadow-md"
-            title="เข้าสู่ระบบหลังบ้าน เจ้าหน้าที่ (Admin Panel)"
+          {adminUrl && <a
+            href={adminUrl}
+            className="hidden lg:flex min-h-11 px-3 py-1.5 rounded-xl text-xs font-heading font-bold transition items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-700 hover:border-amber-400 shadow-md"
+            title="หน้าเจ้าหน้าที่บนระบบที่จำกัดการเข้าถึง"
           >
             <Settings className="w-3.5 h-3.5" /> <span>ระบบแอดมิน</span>
-          </Link>
+          </a>}
 
           <button
             type="button"
-            onClick={() => {
-              refetch();
-              showToast("รีเฟรชข้อมูลจากระบบเรียบร้อย");
+            onClick={async () => {
+              const result = await refetch();
+              showToast(result.isError ? "ตรวจสอบข้อมูลล่าสุดไม่สำเร็จ โปรดลองอีกครั้ง" : "ตรวจสอบข้อมูลล่าสุดแล้ว");
             }}
             title="รีเฟรชข้อมูล"
-            className="p-2 text-slate-300 hover:text-amber-400 rounded-xl bg-slate-900 border border-slate-700 hover:bg-slate-800 transition"
+            aria-label="ตรวจสอบข้อมูลล่าสุด"
+            className="min-h-11 min-w-11 p-2 text-slate-300 hover:text-amber-400 rounded-xl bg-slate-900 border border-slate-700 hover:bg-slate-800 transition"
           >
             <RotateCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
           </button>
 
           <a
             href="tel:1586"
-            className="hidden sm:flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white font-heading font-bold text-xs px-3 py-1.5 rounded-xl shadow-lg transition"
+            className="min-h-11 flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white font-heading font-bold text-xs px-3 py-1.5 rounded-xl shadow-lg transition"
           >
             <Phone className="w-3.5 h-3.5" /> สายด่วน 1586
           </a>
         </div>
       </header>
 
+      <div role="status" className="bg-amber-400 px-4 py-2 text-center text-sm font-bold text-slate-950">
+        ระบบยังไม่ยืนยันความสดใหม่ของข้อมูล โปรดโทร 1586 ก่อนตัดสินใจเดินทาง
+      </div>
+
       {/* =================================================================== */}
       {/* 2. MAIN LAYOUT: GIS MAP + COLLAPSIBLE SIDEBAR + DETAIL DOSSIER     */}
       {/* =================================================================== */}
-      <div className="flex-1 flex flex-col-reverse lg:flex-row relative overflow-hidden h-[calc(100vh-64px)]">
+      <div className="flex-1 flex flex-col lg:flex-row relative lg:overflow-hidden min-h-[calc(100vh-104px)] lg:h-[calc(100vh-104px)]">
         {/* ================================================================= */}
         {/* A. LEFT SIDEBAR: ROUTE LIST (COLLAPSIBLE)                        */}
         {/* ================================================================= */}
         <div
           className={`${
             isSidebarCollapsed ? "hidden" : "flex"
-          } w-full lg:w-[410px] xl:w-[440px] bg-[#0c1527] border-t lg:border-t-0 lg:border-r border-slate-800 flex-col shrink-0 z-20 h-[50vh] lg:h-full overflow-hidden transition-all duration-300`}
+          } order-2 lg:order-1 w-full lg:w-[410px] xl:w-[440px] bg-[#0c1527] border-t lg:border-t-0 lg:border-r border-slate-800 flex-col shrink-0 z-20 lg:h-full overflow-hidden transition-all duration-300`}
         >
           {/* Sidebar Header & Search */}
           <div className="p-3.5 bg-[#091122] border-b border-slate-800 space-y-2.5 shrink-0">
@@ -242,7 +194,8 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={() => setIsSidebarCollapsed(true)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                aria-label="ย่อรายการสายทาง"
+                className="hidden lg:flex text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition"
                 title="ย่อแถบข้างเพื่อขยายแผนที่เต็มจอ"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -257,7 +210,8 @@ export default function HomePage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="ค้นหาสายทาง (ทล.43, ทล.42, ทล.418) หรือชื่อจุด/อำเภอ..."
-                className="w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                aria-label="ค้นหาหมายเลขทางหลวงหรือพื้นที่"
+                className="min-h-11 w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-sm text-white placeholder-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
               />
             </div>
 
@@ -270,7 +224,8 @@ export default function HomePage() {
                     key={chip.id}
                     type="button"
                     onClick={() => setSelectedRouteFilter(chip.id)}
-                    className={`px-2.5 py-1 rounded-lg font-heading font-bold whitespace-nowrap transition ${
+                    aria-pressed={isActive}
+                    className={`min-h-11 px-3 py-1 rounded-lg font-heading font-bold whitespace-nowrap transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
                       isActive
                         ? "bg-amber-500 text-slate-950 shadow-md"
                         : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
@@ -291,8 +246,10 @@ export default function HomePage() {
               const isWarning = flood.traffic_status === "WARNING";
 
               return (
-                <div
+                <button
                   key={flood.id}
+                  type="button"
+                  aria-pressed={isSelected}
                   onClick={() => {
                     setSelectedFloodId(flood.id);
                     setShowDossier(true);
@@ -300,13 +257,13 @@ export default function HomePage() {
                       setFocusCoordinates([flood.lon_start, flood.lat_start]);
                     }
                   }}
-                  className={`p-3 rounded-2xl border transition cursor-pointer shadow-md ${
+                  className={`block w-full text-left min-h-20 p-3 rounded-2xl border transition cursor-pointer shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400 ${
                     isSelected
                       ? "bg-slate-900 ring-2 ring-amber-400 border-transparent shadow-amber-500/10"
                       : "bg-[#0f1b33] border-slate-800/90 hover:border-slate-700"
                   }`}
                   style={{
-                    borderLeftWidth: "4px",
+                    borderLeftWidth: "1px",
                     borderLeftColor: isClosed ? "#ef4444" : isWarning ? "#f59e0b" : "#10b981",
                   }}
                 >
@@ -338,7 +295,7 @@ export default function HomePage() {
                       {isClosed
                         ? "⛔ ปิดทาง / ทางเบี่ยง"
                         : isWarning
-                        ? `⚠️ รถเล็กมองผ่าน (${flood.water_level_cm} ซม.)`
+                        ? `⚠️ รถเล็กห้ามผ่าน (${flood.water_level_cm} ซม.)`
                         : "✅ ผ่านได้ปกติ"}
                     </span>
                   </div>
@@ -365,9 +322,38 @@ export default function HomePage() {
                       <span className="truncate">ทางเลี่ยง: {flood.detour_advice}</span>
                     </div>
                   )}
-                </div>
+                </button>
               );
             })}
+            {filteredFloods.length === 0 && (
+              <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-6 text-center text-sm space-y-2.5">
+                <div className="w-10 h-10 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <h4 className="font-heading font-bold text-white text-xs">
+                  {systemData.floodRoutes.length === 0
+                    ? "ยังไม่มีรายงานจุดน้ำท่วม"
+                    : "ไม่พบจุดที่ตรงกับตัวกรอง"}
+                </h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  {systemData.floodRoutes.length === 0
+                    ? "ยังไม่มีรายงานในระบบ ข้อมูลนี้ไม่ยืนยันว่าทุกเส้นทางปลอดภัย โปรดตรวจสอบกับสายด่วน 1586 ก่อนเดินทาง"
+                    : "กรุณาลองเปลี่ยนคำค้นหา หรือกดปุ่มด้านล่างเพื่อล้างตัวกรอง"}
+                </p>
+                {systemData.floodRoutes.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSelectedRouteFilter("ALL");
+                    }}
+                    className="mt-3 min-h-11 rounded-lg border border-amber-400 px-4 font-bold text-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                  >
+                    ล้างตัวกรอง
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Sidebar Bottom Footer: Call Contact */}
@@ -375,22 +361,14 @@ export default function HomePage() {
             <span className="text-[11px] flex items-center gap-1.5">
               <Phone className="w-3.5 h-3.5 text-amber-400" /> ติดต่อศูนย์ความปลอดภัย: 073-336-000
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                if (selectedFlood) handleOpenEditModal(selectedFlood);
-              }}
-              className="text-[11px] text-amber-400 hover:text-amber-300 font-heading font-bold flex items-center gap-1 bg-slate-900 border border-slate-700 px-2.5 py-1 rounded-lg"
-            >
-              <Edit3 className="w-3 h-3" /> แก้ไขข้อมูล
-            </button>
+            {adminUrl && <a href={adminUrl} className="text-[11px] text-amber-400 underline underline-offset-2">สำหรับเจ้าหน้าที่</a>}
           </div>
         </div>
 
         {/* ================================================================= */}
         {/* B. MAIN GIS MAP VIEWPORT                                          */}
         {/* ================================================================= */}
-        <div className="flex-1 relative h-[55vh] lg:h-full min-h-[460px] lg:min-h-0 w-full overflow-hidden">
+        <div className="order-1 lg:order-2 relative h-[55vh] shrink-0 lg:shrink lg:flex-1 lg:h-full min-h-[350px] lg:min-h-0 w-full overflow-hidden bg-[#0b1426]">
           {/* Floating Expand Sidebar Button (when collapsed) */}
           {isSidebarCollapsed && (
             <button
@@ -403,6 +381,8 @@ export default function HomePage() {
           )}
 
           <LongdoGisMap
+            publicMode
+            isSidebarCollapsed={isSidebarCollapsed}
             systemData={systemData}
             selectedFloodId={selectedFloodId}
             onSelectFlood={(id) => {
@@ -414,14 +394,21 @@ export default function HomePage() {
               }
             }}
             focusCoordinates={focusCoordinates}
-            className="h-full w-full min-h-[460px] lg:min-h-0"
+            className="h-full w-full"
           />
 
           {/* =============================================================== */}
           {/* C. FLOATING DETAIL DOSSIER CARD (MATCHING REFERENCE IMAGE 3)   */}
           {/* =============================================================== */}
+          {selectedFlood && !showDossier && (
+            <div className="absolute bottom-3 left-3 right-3 z-[500] rounded-xl bg-[#0c162c] p-3 shadow-xl lg:right-auto lg:w-[420px]">
+              <p className="text-xs text-amber-300">ทล.{selectedFlood.route_no} · กม.{selectedFlood.km_start}–{selectedFlood.km_end}</p>
+              <h2 className="font-heading text-sm font-bold">{selectedFlood.traffic_status === "CLOSED" ? "ปิดการจราจร" : selectedFlood.traffic_status === "WARNING" ? "รถเล็กห้ามผ่าน" : "ผ่านได้ปกติ"} · {selectedFlood.section_name}</h2>
+              <div className="mt-2 flex items-center justify-between gap-2"><span className="text-xs text-slate-300">น้ำ {selectedFlood.water_level_cm} ซม. · {selectedFlood.updated_at ? new Date(selectedFlood.updated_at).toLocaleString("th-TH") : "ยังไม่มีเวลายืนยันล่าสุด"}</span><button type="button" onClick={() => setShowDossier(true)} className="min-h-11 shrink-0 rounded-lg bg-amber-400 px-3 text-xs font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">ดูรายละเอียด</button></div>
+            </div>
+          )}
           {selectedFlood && showDossier && (
-            <div className="absolute bottom-3 left-3 right-3 sm:right-auto sm:left-4 sm:bottom-4 z-[500] w-auto sm:w-[500px] max-h-[85vh] overflow-y-auto bg-[#0c162c] text-slate-100 rounded-2xl border border-slate-700/80 shadow-2xl p-0 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <div role="dialog" aria-modal="false" aria-label={`รายละเอียดจุดน้ำท่วม ${selectedFlood.section_name}`} className="fixed inset-x-0 bottom-0 z-[600] max-h-[82vh] overflow-y-auto rounded-t-2xl border border-slate-700/80 bg-[#0c162c] text-slate-100 shadow-2xl lg:absolute lg:bottom-4 lg:left-4 lg:right-auto lg:w-[500px] lg:rounded-2xl lg:max-h-[80vh]">
               {/* Header: Dark Navy Header with Badge, Section Title, KM Range & Action Buttons */}
               <div className="bg-[#0c1a30] text-white p-3.5 border-b border-slate-800 flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -439,21 +426,13 @@ export default function HomePage() {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {/* Quick Edit Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEditModal(selectedFlood)}
-                    className="p-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 transition text-xs font-heading flex items-center gap-1"
-                    title="แก้ไขข้อมูลหรือเปลี่ยนรูปภาพ"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span className="text-[10px] hidden sm:inline">แก้ไข</span>
-                  </button>
                   {/* Close Dossier Button */}
                   <button
+                    ref={closeDetailsRef}
                     type="button"
                     onClick={() => setShowDossier(false)}
-                    className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition"
+                    aria-label="ปิดรายละเอียด"
+                    className="min-h-11 min-w-11 p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                     title="ปิดหน้าต่างรายละเอียด"
                   >
                     <X className="w-4 h-4" />
@@ -469,11 +448,10 @@ export default function HomePage() {
                   <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900 group">
                     <img
                       src={
-                        selectedFlood.latest_photo_url ||
-                        "https://images.unsplash.com/photo-1547683905-f686c993aae5?q=80&w=800&auto=format&fit=crop"
+                        selectedFlood.latest_photo_url || undefined
                       }
                       alt={selectedFlood.section_name}
-                      className="w-full h-36 object-cover transition duration-300 group-hover:scale-105"
+                      className="w-full h-36 object-cover"
                     />
                     {/* Animated Alert Badge Overlay on photo */}
                     <div className="absolute top-2 left-2 z-10">
@@ -537,40 +515,87 @@ export default function HomePage() {
                 </div>
 
                 {/* Detour Recommendation Box (Yellow Banner) */}
-                <div className="bg-amber-500/10 border border-amber-400/50 rounded-xl p-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
+                <div className="bg-amber-500/10 border border-amber-400/50 rounded-xl p-3.5 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 text-amber-300 text-xs font-heading font-bold">
                       <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span>คำแนะนำเส้นทางเลี่ยงน้ำท่วม (Yellow Line)</span>
+                      <span>คำแนะนำเส้นทางเลี่ยงน้ำท่วม</span>
                     </div>
-                    <p className="text-[11px] text-amber-100/90 mt-1 leading-snug">
-                      {selectedFlood.detour_advice || "ทางเบี่ยงสวนเลนฝั่งขาล่อง (SB) กม.84+397 - 85+000 (ระยะทาง 603 ม.)"}
-                    </p>
+
+                    <div className="flex items-center gap-2">
+                      {/* Direction Switcher Toggle if bidirectional advice exists */}
+                      {(() => {
+                        const ext = extractDirectionalAdvice(selectedFlood.detour_advice || "");
+                        if (!ext.hasBoth) return null;
+                        return (
+                          <div className="flex items-center bg-slate-950/80 p-0.5 rounded-lg border border-amber-500/40 text-[10px] font-heading font-bold">
+                            <button
+                              type="button"
+                              onClick={() => setCitizenDetourDirection("FORWARD")}
+                              className={`px-2 py-0.5 rounded transition flex items-center gap-1 ${
+                                citizenDetourDirection === "FORWARD"
+                                  ? "bg-amber-500 text-slate-950 shadow"
+                                  : "text-amber-300/80 hover:text-white"
+                              }`}
+                            >
+                              <span>🚗 ขาไป (A → B)</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCitizenDetourDirection("REVERSE")}
+                              className={`px-2 py-0.5 rounded transition flex items-center gap-1 ${
+                                citizenDetourDirection === "REVERSE"
+                                  ? "bg-amber-500 text-slate-950 shadow"
+                                  : "text-amber-300/80 hover:text-white"
+                              }`}
+                            >
+                              <span>🚙 ขากลับ (B → A)</span>
+                            </button>
+                          </div>
+                        );
+                      })()}
+
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${selectedFlood.lat_start},${selectedFlood.lon_start}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 shadow shrink-0 transition"
+                      >
+                        <Navigation className="w-3 h-3" /> แผนที่ Google
+                      </a>
+                    </div>
                   </div>
 
-                  <a
-                    href={`https://www.google.com/maps/dir/?api=1&destination=${selectedFlood.lat_start},${selectedFlood.lon_start}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black text-xs px-3.5 py-2 rounded-lg flex items-center gap-1 shadow-md shrink-0 transition"
-                  >
-                    <Navigation className="w-3.5 h-3.5" /> นำทาง
-                  </a>
+                  {/* Detour Text Content with Direction Handling */}
+                  {(() => {
+                    if (!selectedFlood.detour_advice) {
+                      return (
+                        <p className="text-[11px] text-amber-100/90 leading-snug">
+                          ยังไม่มีคำแนะนำเส้นทางเลี่ยงที่ยืนยันแล้ว โปรดโทร 1586 ก่อนเดินทาง
+                        </p>
+                      );
+                    }
+                    const ext = extractDirectionalAdvice(selectedFlood.detour_advice);
+                    const displayText = ext.hasBoth
+                      ? citizenDetourDirection === "FORWARD"
+                        ? ext.forward
+                        : ext.reverse
+                      : selectedFlood.detour_advice;
+
+                    return (
+                      <div className="bg-slate-950/70 p-3 rounded-lg border border-amber-500/20 text-xs text-amber-100/95 leading-relaxed font-sans whitespace-pre-line max-h-56 overflow-y-auto">
+                        {displayText}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Timeline Section */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs font-heading font-bold text-white">
                     <span className="flex items-center gap-1.5 text-red-400">
-                      <span>📈</span> ไทม์ไลน์ระดับน้ำแต่ละช่วงเวลา (Water Level Timeline)
+                      <span>📈</span> ประวัติระดับน้ำ
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEditModal(selectedFlood)}
-                      className="text-sky-400 hover:text-sky-300 font-heading font-bold text-[10px] flex items-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" /> อัปเดตระดับน้ำล่าสุด
-                    </button>
                   </div>
 
                   <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800 h-28 w-full">
@@ -612,172 +637,12 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* =================================================================== */}
-      {/* 3. QUICK DATA MANAGEMENT & PHOTO EDIT MODAL (POPUP)                */}
-      {/* =================================================================== */}
-      {isEditModalOpen && selectedFlood && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#0c1527] border-2 border-amber-500 rounded-2xl w-full max-w-lg shadow-2xl p-5 space-y-4 text-slate-100">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-heading font-bold">
-                  <Edit3 className="w-4 h-4" />
-                </span>
-                <div>
-                  <h3 className="font-heading font-bold text-sm sm:text-base text-white">
-                    แก้ไขข้อมูลจุดน้ำท่วม & จัดการรูปภาพ
-                  </h3>
-                  <p className="text-[11px] text-amber-300">
-                    ทล.{selectedFlood.route_no} {selectedFlood.section_name}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEditModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Body Form */}
-            <div className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">หมายเลขสายทาง</label>
-                  <input
-                    type="text"
-                    value={editForm.routeNo}
-                    onChange={(e) => setEditForm({ ...editForm, routeNo: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">ระดับน้ำ (ซม.)</label>
-                  <input
-                    type="number"
-                    value={editForm.waterLevelCm}
-                    onChange={(e) => setEditForm({ ...editForm, waterLevelCm: Number(e.target.value) })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-amber-400 font-bold font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">ชื่อตอน / จุดน้ำท่วม</label>
-                <input
-                  type="text"
-                  value={editForm.sectionName}
-                  onChange={(e) => setEditForm({ ...editForm, sectionName: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">สถานะการจราจร</label>
-                <select
-                  value={editForm.trafficStatus}
-                  onChange={(e) => setEditForm({ ...editForm, trafficStatus: e.target.value as any })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                >
-                  <option value="CLOSED">⛔ ผ่านไม่ได้ (ปิดการจราจรเด็ดขาด)</option>
-                  <option value="WARNING">⚠️ เฝ้าระวัง / รถเล็กห้ามผ่าน</option>
-                  <option value="PASSABLE">✅ ผ่านได้ปกติ</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">คำแนะนำเส้นทางเลี่ยง (Yellow Line)</label>
-                <textarea
-                  rows={2}
-                  value={editForm.detourAdvice}
-                  onChange={(e) => setEditForm({ ...editForm, detourAdvice: e.target.value })}
-                  placeholder="ระบุทางเลี่ยง เช่น ใช้ ทล.43 ขาออก หรือถนนสายรอง..."
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
-                />
-              </div>
-
-              {/* Photo URL & Quick Presets */}
-              <div className="space-y-1.5">
-                <label className="block text-slate-300 font-bold flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Camera className="w-3.5 h-3.5 text-amber-400" /> ลิงก์รูปภาพสภาพน้ำท่วมหน้างาน
-                  </span>
-                  <span className="text-[10px] text-slate-400">รองรับ URL ภาพถ่าย</span>
-                </label>
-                <input
-                  type="text"
-                  value={editForm.photoUrl}
-                  onChange={(e) => setEditForm({ ...editForm, photoUrl: e.target.value })}
-                  placeholder="https://..."
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-[11px]"
-                />
-
-                {/* Quick Presets */}
-                <div className="flex gap-1.5 overflow-x-auto pt-1">
-                  {samplePhotoOptions.map((opt, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setEditForm({ ...editForm, photoUrl: opt.url })}
-                      className="text-[10px] bg-slate-900 hover:bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700 truncate max-w-[140px]"
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Timeline Remark */}
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">ข้อความบันทึกไทม์ไลน์ล่าสุด</label>
-                <input
-                  type="text"
-                  value={editForm.timelineRemark}
-                  onChange={(e) => setEditForm({ ...editForm, timelineRemark: e.target.value })}
-                  placeholder="เช่น ระดับน้ำลดลง 5 ซม. รถกระบะผ่านได้..."
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                />
-              </div>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-3">
-              <button
-                type="button"
-                onClick={() => setIsEditModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700"
-              >
-                ยกเลิก
-              </button>
-              <button
-                type="button"
-                disabled={isSavingEdit}
-                onClick={handleSaveEdit}
-                className="px-4 py-2 rounded-xl text-xs font-heading font-bold text-slate-950 bg-amber-500 hover:bg-amber-400 shadow-lg flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {isSavingEdit ? (
-                  <>
-                    <RotateCw className="w-3.5 h-3.5 animate-spin" /> กำลังบันทึก...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-3.5 h-3.5" /> บันทึกและซิงค์ข้อมูล
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-4 right-4 z-[9999] bg-slate-950 border-2 border-amber-400 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-heading flex items-center gap-2.5 max-w-sm">
+      {(toastMessage || isError) && (
+        <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-[9999] bg-slate-950 border-2 border-amber-400 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-heading flex items-center gap-2.5 max-w-sm">
           <span className="w-2 h-2 rounded-full bg-amber-400" />
-          <span>{toastMessage}</span>
+          <span>{toastMessage || "ตรวจสอบข้อมูลล่าสุดไม่สำเร็จ โปรดลองอีกครั้ง"}</span>
         </div>
       )}
     </div>

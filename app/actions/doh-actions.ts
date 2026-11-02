@@ -37,7 +37,7 @@ let runtimeState: SystemDataPayload = JSON.parse(JSON.stringify(INITIAL_SYSTEM_D
 export async function getSystemDataAction(): Promise<SystemDataPayload> {
   try {
     const cloudData = await getSystemDataFromSupabase();
-    if (cloudData && Array.isArray(cloudData.floodRoutes) && cloudData.floodRoutes.length > 0) {
+    if (cloudData && Array.isArray(cloudData.floodRoutes)) {
       // Merge cloud data into runtimeState
       runtimeState = {
         ...cloudData,
@@ -131,14 +131,16 @@ export async function upsertRouteAction(payload: {
   sectionName?: string;
   kmStart?: string;
   kmEnd?: string;
-  latStart: number;
-  lonStart: number;
-  latEnd: number;
-  lonEnd: number;
-  coordinates: [number, number][];
+  latStart?: number;
+  lonStart?: number;
+  latEnd?: number;
+  lonEnd?: number;
+  coordinates?: [number, number][];
   waterLevelCm?: number;
   trafficStatus?: "CLOSED" | "WARNING" | "PASSABLE";
   latestPhotoUrl?: string;
+  photoUrl?: string;
+  detourAdvice?: string;
   detourRefId?: string;
   detourName?: string;
   detourDesc?: string;
@@ -150,25 +152,27 @@ export async function upsertRouteAction(payload: {
   if (payload.recordType === "FLOOD") {
     const id = payload.id || "F-" + Date.now().toString().slice(-4);
     const existingIdx = runtimeState.floodRoutes.findIndex((r) => r.id === id);
+    const existing = existingIdx > -1 ? runtimeState.floodRoutes[existingIdx] : null;
 
     const floodRecord: FloodRoute = {
       id,
-      route_no: payload.routeNo || "42",
-      section_name: payload.sectionName || "สายทางทั่วไป",
-      km_start: payload.kmStart || "0+000",
-      km_end: payload.kmEnd || "1+000",
-      lat_start: payload.latStart,
-      lon_start: payload.lonStart,
-      lat_end: payload.latEnd,
-      lon_end: payload.lonEnd,
-      coordinates_json: payload.coordinates,
-      water_level_cm: payload.waterLevelCm || 30,
-      traffic_status: payload.trafficStatus || "WARNING",
-      latest_photo_url: payload.latestPhotoUrl || "",
+      route_no: payload.routeNo || existing?.route_no || "42",
+      section_name: payload.sectionName || existing?.section_name || "สายทางทั่วไป",
+      km_start: payload.kmStart || existing?.km_start || "0+000",
+      km_end: payload.kmEnd || existing?.km_end || "1+000",
+      lat_start: payload.latStart ?? existing?.lat_start ?? 6.842,
+      lon_start: payload.lonStart ?? existing?.lon_start ?? 101.242,
+      lat_end: payload.latEnd ?? existing?.lat_end ?? 6.8485,
+      lon_end: payload.lonEnd ?? existing?.lon_end ?? 101.268,
+      coordinates_json: payload.coordinates ?? existing?.coordinates_json ?? [],
+      water_level_cm: payload.waterLevelCm ?? existing?.water_level_cm ?? 30,
+      traffic_status: payload.trafficStatus || existing?.traffic_status || "WARNING",
+      latest_photo_url: payload.photoUrl || payload.latestPhotoUrl || existing?.latest_photo_url || "",
       is_active: true,
       updated_at: nowIso,
-      district: payload.district,
-      subdistrict: payload.subdistrict,
+      district: payload.district || existing?.district,
+      subdistrict: payload.subdistrict || existing?.subdistrict,
+      detour_advice: payload.detourAdvice || existing?.detour_advice,
     };
 
     if (existingIdx > -1) {
@@ -182,17 +186,18 @@ export async function upsertRouteAction(payload: {
   } else {
     const id = payload.id || "D-" + Date.now().toString().slice(-4);
     const existingIdx = runtimeState.detourRoutes.findIndex((d) => d.id === id);
+    const existing = existingIdx > -1 ? runtimeState.detourRoutes[existingIdx] : null;
 
     const detourRecord: DetourRoute = {
       id,
-      flood_id_ref: payload.detourRefId || runtimeState.floodRoutes[0]?.id || "F-001",
-      route_name: payload.detourName || "เส้นทางเลี่ยงน้ำท่วม",
-      lat_start: payload.latStart,
-      lon_start: payload.lonStart,
-      lat_end: payload.latEnd,
-      lon_end: payload.lonEnd,
-      coordinates_json: payload.coordinates,
-      description: payload.detourDesc || "",
+      flood_id_ref: payload.detourRefId || existing?.flood_id_ref || runtimeState.floodRoutes[0]?.id || "",
+      route_name: payload.detourName || existing?.route_name || "เส้นทางเลี่ยงน้ำท่วม",
+      lat_start: payload.latStart ?? existing?.lat_start ?? 6.7845,
+      lon_start: payload.lonStart ?? existing?.lon_start ?? 101.178,
+      lat_end: payload.latEnd ?? existing?.lat_end ?? 6.779,
+      lon_end: payload.lonEnd ?? existing?.lon_end ?? 101.205,
+      coordinates_json: payload.coordinates ?? existing?.coordinates_json ?? [],
+      description: payload.detourDesc || existing?.description || "",
       is_active: true,
       updated_at: nowIso,
     };
@@ -205,6 +210,15 @@ export async function upsertRouteAction(payload: {
 
     // Persist to Supabase
     await upsertDetourRouteSupabase(detourRecord);
+
+    // ซิงก์คำแนะนำเส้นทางเลี่ยงไปยังจุดน้ำท่วมอ้างอิงอัตโนมัติ (เพื่อให้หน้าประชาชนแสดงผลทันที)
+    if (detourRecord.flood_id_ref && detourRecord.description) {
+      const linkedFlood = runtimeState.floodRoutes.find((f) => f.id === detourRecord.flood_id_ref);
+      if (linkedFlood) {
+        linkedFlood.detour_advice = detourRecord.description;
+        await upsertFloodRouteSupabase(linkedFlood);
+      }
+    }
   }
 
   runtimeState.updatedAt = nowIso;

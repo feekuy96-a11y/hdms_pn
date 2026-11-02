@@ -1,12 +1,28 @@
 "use client";
 
 import React, { useState } from "react";
+import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { getSystemDataAction } from "@/app/actions/doh-actions";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload } from "@/db/default-data";
-import { LongdoGisMap } from "@/components/map/LongdoGisMap";
 import { AdminConsole } from "@/components/admin/AdminConsole";
+
+const LongdoGisMap = dynamic(
+  () => import("@/components/map/LongdoGisMap").then((mod) => mod.LongdoGisMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full min-h-[350px] bg-[#0b1426] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-slate-400">
+          <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-heading font-medium">กำลังโหลดแผนที่ GIS ปัตตานี...</span>
+        </div>
+      </div>
+    ),
+  }
+);
 import { OfflineSyncStatus } from "@/components/offline/OfflineSyncStatus";
+import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
 import Link from "next/link";
 import { ArrowLeft, RotateCw, LogOut, FileText, PieChart, Settings, Smartphone } from "lucide-react";
@@ -14,7 +30,7 @@ import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDi
 import { ExecutiveDashboard } from "@/components/executive/ExecutiveDashboard";
 
 export default function AdminPage() {
-  const [selectedFloodId, setSelectedFloodId] = useState<string>("F-001");
+  const [selectedFloodId, setSelectedFloodId] = useState<string>("");
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
   const [adminViewMode, setAdminViewMode] = useState<"console" | "executive">("console");
   const [adminPickMode, setAdminPickMode] = useState<string | null>(null);
@@ -129,6 +145,7 @@ export default function AdminPage() {
             <FileText className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">รายงานผู้ว่าฯ (ด่วนที่สุด)</span>
           </button>
+          <OsrmRoutingBadge />
           <OfflineSyncStatus onSyncComplete={() => refetch()} />
           <button
             type="button"

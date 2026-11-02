@@ -1,10 +1,15 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import "leaflet/dist/leaflet.css";
 import { SystemDataPayload } from "@/db/default-data";
 import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { PATTANI_DISTRICTS_GEOJSON } from "@/lib/gis-utils";
 import { Layers, Navigation, Building2, Map } from "lucide-react";
+
+const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+}[character] || character));
 
 interface LongdoGisMapProps {
   systemData: SystemDataPayload;
@@ -19,6 +24,8 @@ interface LongdoGisMapProps {
   focusCoordinates?: [number, number] | null;
   incomingGisLines?: [number, number][][];
   className?: string;
+  publicMode?: boolean;
+  isSidebarCollapsed?: boolean;
 }
 
 export function LongdoGisMap({
@@ -34,6 +41,8 @@ export function LongdoGisMap({
   focusCoordinates = null,
   incomingGisLines = [],
   className = "h-full w-full",
+  publicMode = false,
+  isSidebarCollapsed = false,
 }: LongdoGisMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
@@ -81,60 +90,72 @@ export function LongdoGisMap({
       if (typeof window === "undefined" || !mapContainerRef.current) return;
       if (leafletMapRef.current) return;
 
-      const L = (await import("leaflet")).default;
+      try {
+        const leafletModule = await import("leaflet");
+        const L = (leafletModule as any).default?.map
+          ? (leafletModule as any).default
+          : (leafletModule as any);
 
-      if (!isMounted || !mapContainerRef.current) return;
+        if (!isMounted || !mapContainerRef.current) return;
 
-      const map = L.map(mapContainerRef.current, {
-        center: [APP_CONFIG.DEFAULT_CENTER.lat, APP_CONFIG.DEFAULT_CENTER.lon],
-        zoom: APP_CONFIG.DEFAULT_ZOOM,
-        zoomControl: true,
-      });
+        // Clean up previous leaflet id on DOM element to prevent "Map container is already initialized" error
+        if ((mapContainerRef.current as any)._leaflet_id) {
+          delete (mapContainerRef.current as any)._leaflet_id;
+        }
 
-      const longdoKey = process.env.NEXT_PUBLIC_LONGDO_MAP_KEY || "demokey";
+        const map = L.map(mapContainerRef.current, {
+          center: [APP_CONFIG.DEFAULT_CENTER.lat, APP_CONFIG.DEFAULT_CENTER.lon],
+          zoom: APP_CONFIG.DEFAULT_ZOOM,
+          zoomControl: true,
+          fadeAnimation: false,
+        });
 
-      const baseLayers = {
-        road: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          maxZoom: 19,
-          attribution: "© OpenStreetMap • ขท.ปัตตานี",
-        }),
-        sat: L.tileLayer("https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
-          maxZoom: 20,
-          attribution: "© Google Hybrid Satellite • ขท.ปัตตานี",
-        }),
-        longdo: L.tileLayer(
-          `https://ms.longdo.com/mmmap/tile.php?zoom={z}&x={x}&y={y}&key=${longdoKey}&proj=epsg3857&mode=icons`,
-          {
+        const longdoKey = process.env.NEXT_PUBLIC_LONGDO_MAP_KEY || "demokey";
+
+        const baseLayers = {
+          road: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
             maxZoom: 19,
-            attribution: "© Longdo Map / ขท.ปัตตานี",
-          }
-        ),
-      };
+            attribution: "© OpenStreetMap • ขท.ปัตตานี",
+          }),
+          sat: L.tileLayer("https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
+            maxZoom: 20,
+            attribution: "© Google Hybrid Satellite • ขท.ปัตตานี",
+          }),
+          longdo: L.tileLayer(
+            `https://ms.longdo.com/mmmap/tile.php?zoom={z}&x={x}&y={y}&key=${longdoKey}&proj=epsg3857&mode=icons`,
+            {
+              maxZoom: 19,
+              attribution: "© Longdo Map / ขท.ปัตตานี",
+            }
+          ),
+        };
 
-      baseLayers.road.addTo(map);
-      baseLayersRef.current = baseLayers;
-      leafletMapRef.current = map;
+        baseLayers.road.addTo(map);
+        baseLayersRef.current = baseLayers;
+        leafletMapRef.current = map;
 
-      const overlayGroup = L.layerGroup().addTo(map);
-      overlayGroupRef.current = overlayGroup;
+        const overlayGroup = L.layerGroup().addTo(map);
+        overlayGroupRef.current = overlayGroup;
 
-      setMapReady(true);
+        setMapReady(true);
 
-      // Invalidate size multiple times to ensure full canvas coverage
-      setTimeout(() => {
-        if (map) map.invalidateSize();
-      }, 200);
-      setTimeout(() => {
-        if (map) map.invalidateSize();
-      }, 600);
+        // Invalidate size multiple times to ensure full canvas coverage across viewports
+        [100, 300, 600, 1000].forEach((delay) => {
+          setTimeout(() => {
+            if (map) map.invalidateSize();
+          }, delay);
+        });
 
-      // Handle map clicks for coordinate picking
-      map.on("click", (e: any) => {
-        if (!adminPickModeRef.current) return;
-        const lat = Number(e.latlng.lat.toFixed(6));
-        const lon = Number(e.latlng.lng.toFixed(6));
-        onCoordinatePickedRef.current?.(lat, lon, adminPickModeRef.current);
-      });
+        // Handle map clicks for coordinate picking
+        map.on("click", (e: any) => {
+          if (!adminPickModeRef.current) return;
+          const lat = Number(e.latlng.lat.toFixed(6));
+          const lon = Number(e.latlng.lng.toFixed(6));
+          onCoordinatePickedRef.current?.(lat, lon, adminPickModeRef.current);
+        });
+      } catch (err) {
+        console.error("[LongdoGisMap] Failed to initialize Leaflet map:", err);
+      }
     }
 
     initMap();
@@ -143,13 +164,25 @@ export function LongdoGisMap({
       isMounted = false;
       setMapReady(false);
       if (leafletMapRef.current) {
-        leafletMapRef.current.remove();
+        try {
+          leafletMapRef.current.remove();
+        } catch (e) {}
         leafletMapRef.current = null;
       }
     };
   }, []);
 
-  // Responsive Container Resize Observer: Auto Invalidate Size
+  // Responsive Container Resize Observer & Sidebar Toggle Invalidator
+  useEffect(() => {
+    if (!leafletMapRef.current) return;
+    const timers = [50, 150, 300, 500].map((delay) =>
+      setTimeout(() => {
+        leafletMapRef.current?.invalidateSize();
+      }, delay)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [isSidebarCollapsed]);
+
   useEffect(() => {
     if (!mapContainerRef.current || !leafletMapRef.current) return;
     const ro = new ResizeObserver(() => {
@@ -158,7 +191,18 @@ export function LongdoGisMap({
       }
     });
     ro.observe(mapContainerRef.current);
-    return () => ro.disconnect();
+
+    const handleWindowResize = () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.invalidateSize();
+      }
+    };
+    window.addEventListener("resize", handleWindowResize);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", handleWindowResize);
+    };
   }, [mapReady]);
 
   // 2. FlyTo focus when coordinates change
@@ -191,7 +235,10 @@ export function LongdoGisMap({
   useEffect(() => {
     async function renderOverlays() {
       if (!leafletMapRef.current || !overlayGroupRef.current) return;
-      const L = (await import("leaflet")).default;
+      const leafletModule = await import("leaflet");
+      const L = (leafletModule as any).default?.map
+        ? (leafletModule as any).default
+        : (leafletModule as any);
       const group = overlayGroupRef.current;
       group.clearLayers();
 
@@ -350,8 +397,8 @@ export function LongdoGisMap({
                 <span class="text-slate-950 text-[10px] font-bold px-1.5 py-0.5 rounded font-heading shadow" style="background-color: ${dColor}">
                   เส้นทางเลี่ยงแนะนำ
                 </span>
-                <h4 class="font-bold text-white text-sm mt-1.5 font-heading">${detour.route_name}</h4>
-                <p class="text-slate-300 mt-1">${detour.description || "-"}</p>
+                <h4 class="font-bold text-white text-sm mt-1.5 font-heading">${escapeHtml(detour.route_name)}</h4>
+                <p class="text-slate-300 mt-1">${escapeHtml(detour.description || "-")}</p>
               </div>
             `);
           }
@@ -417,8 +464,8 @@ export function LongdoGisMap({
           const iconHtml = `
             <div class="${capsuleClass}">
               <span class="text-xs">${statusIcon}</span>
-              <span>ทล.${flood.route_no}</span>
-              <span class="opacity-90">(${levelText})</span>
+              <span>ทล.${escapeHtml(flood.route_no)}</span>
+              <span class="opacity-90">(${escapeHtml(levelText)})</span>
             </div>
           `;
 
@@ -497,11 +544,11 @@ export function LongdoGisMap({
                   ${isHq ? "สำนักงานใหญ่" : "หมวดทางหลวง"}
                 </span>
               </div>
-              <h4 class="font-bold text-white text-sm font-heading">${office.name}</h4>
-              <p class="text-slate-300 text-[11px] mt-1">${office.address}</p>
+              <h4 class="font-bold text-white text-sm font-heading">${escapeHtml(office.name)}</h4>
+              <p class="text-slate-300 text-[11px] mt-1">${escapeHtml(office.address)}</p>
               <div class="mt-2 pt-1.5 border-t border-slate-700 flex items-center justify-between">
                 <a href="tel:${office.phone.replace(/[^0-9]/g, "")}" class="text-amber-300 hover:underline font-bold text-xs flex items-center gap-1">
-                  📞 ${office.phone}
+                  📞 ${escapeHtml(office.phone)}
                 </a>
                 <a href="https://www.google.com/maps/dir/?api=1&destination=${office.lat},${office.lon}" target="_blank" rel="noopener noreferrer" class="bg-amber-500 text-slate-950 px-2 py-0.5 rounded text-[10px] font-bold hover:bg-amber-400">
                   นำทาง
@@ -531,37 +578,43 @@ export function LongdoGisMap({
   ]);
 
   return (
-    <div className={`relative ${className} overflow-hidden`}>
-      <div ref={mapContainerRef} className="w-full h-full bg-slate-950" />
+    <div className={`relative ${className} overflow-hidden w-full h-full min-h-[350px]`}>
+      <div
+        ref={mapContainerRef}
+        className="w-full h-full min-h-[350px] bg-[#0b1426] relative z-0"
+        style={{ minHeight: "100%", height: "100%" }}
+      />
 
       {/* Top Map KPI Status Badges & Base Map Switcher */}
       <div className="absolute top-3 left-3 right-3 z-[400] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-        <div className="flex flex-wrap gap-1.5 pointer-events-auto">
-          <div className="bg-slate-950/90 backdrop-blur border border-red-500/60 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
-            <span className="text-[11px] text-slate-300">ผ่านไม่ได้:</span>
-            <strong className="text-xs sm:text-sm font-heading text-red-400">
-              {systemData.floodRoutes.filter((r) => r.is_active && r.traffic_status === "CLOSED").length} จุด
-            </strong>
+        {!publicMode ? (
+          <div className="flex flex-wrap gap-1.5 pointer-events-auto">
+            <div className="bg-slate-950/90 backdrop-blur border border-red-500/60 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+              <span className="text-[11px] text-slate-300">ผ่านไม่ได้:</span>
+              <strong className="text-xs sm:text-sm font-heading text-red-400">
+                {systemData.floodRoutes.filter((r) => r.is_active && r.traffic_status === "CLOSED").length} จุด
+              </strong>
+            </div>
+            <div className="bg-slate-950/90 backdrop-blur border border-amber-500/60 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <span className="text-[11px] text-slate-300">เฝ้าระวัง:</span>
+              <strong className="text-xs sm:text-sm font-heading text-amber-300">
+                {systemData.floodRoutes.filter((r) => r.is_active && r.traffic_status !== "CLOSED").length} จุด
+              </strong>
+            </div>
+            <div className="bg-slate-950/90 backdrop-blur border border-yellow-400/60 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg">
+              <Navigation className="w-3.5 h-3.5 text-yellow-400" />
+              <span className="text-[11px] text-slate-300">ทางเลี่ยง:</span>
+              <strong className="text-xs sm:text-sm font-heading text-yellow-300">
+                {systemData.detourRoutes.length} สาย
+              </strong>
+            </div>
           </div>
-          <div className="bg-slate-950/90 backdrop-blur border border-amber-500/60 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-            <span className="text-[11px] text-slate-300">เฝ้าระวัง:</span>
-            <strong className="text-xs sm:text-sm font-heading text-amber-300">
-              {systemData.floodRoutes.filter((r) => r.is_active && r.traffic_status !== "CLOSED").length} จุด
-            </strong>
-          </div>
-          <div className="bg-slate-950/90 backdrop-blur border border-yellow-400/60 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg">
-            <Navigation className="w-3.5 h-3.5 text-yellow-400" />
-            <span className="text-[11px] text-slate-300">ทางเลี่ยง:</span>
-            <strong className="text-xs sm:text-sm font-heading text-yellow-300">
-              {systemData.detourRoutes.length} สาย
-            </strong>
-          </div>
-        </div>
+        ) : <div className="pointer-events-auto" />}
 
-        {/* Base Map Switcher */}
-        <div className="pointer-events-auto flex items-center gap-1 bg-slate-950/90 backdrop-blur p-1 rounded-xl border border-slate-700 shadow-lg text-[11px] font-heading">
+        {/* Base Map Switcher: Visible for both citizens & admins */}
+        <div className="pointer-events-auto ml-auto flex items-center gap-1 bg-slate-950/90 backdrop-blur p-1 rounded-xl border border-slate-700 shadow-lg text-[11px] font-heading">
           <button
             type="button"
             onClick={() => switchBaseMap("road")}
@@ -592,8 +645,10 @@ export function LongdoGisMap({
         </div>
       </div>
 
-      {/* Layer Control Legend on Bottom Left */}
-      <div className="absolute bottom-3 left-3 z-[400] bg-slate-950/90 backdrop-blur border border-slate-700 rounded-xl p-2.5 text-[11px] shadow-xl space-y-1.5 max-w-[230px]">
+      {/* Layer Control Legend */}
+      <details className={`absolute z-[400] bg-slate-950/95 border border-slate-700 rounded-xl p-2.5 text-xs shadow-xl max-w-[250px] bottom-3 ${publicMode ? "right-3" : "left-3"}`} open={!publicMode}>
+        {publicMode && <summary className="min-h-11 cursor-pointer font-bold text-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">ตัวเลือกแผนที่</summary>}
+        <div className="space-y-2">
         <div className="font-heading font-bold text-amber-400 flex items-center justify-between">
           <span className="flex items-center gap-1.5">
             <Layers className="w-3.5 h-3.5" /> เลเยอร์โครงข่าย
@@ -613,7 +668,7 @@ export function LongdoGisMap({
             className="w-4 h-1.5 inline-block rounded shadow-sm"
             style={{ backgroundColor: mapStyles.flood?.color || "#D32F2F" }}
           />
-          <span>เส้นทางน้ำท่วม (Flood Line)</span>
+          <span>เส้นทางน้ำท่วม</span>
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -626,7 +681,7 @@ export function LongdoGisMap({
             className="w-4 h-1.5 inline-block rounded shadow-sm"
             style={{ backgroundColor: mapStyles.detour?.color || "#FBC02D" }}
           />
-          <span>เส้นทางเลี่ยง (Detour Line)</span>
+          <span>เส้นทางเลี่ยง</span>
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -682,20 +737,11 @@ export function LongdoGisMap({
               onChange={(e) => setShowRoadLabels(e.target.checked)}
               className="accent-amber-500 rounded"
             />
-            <span>แสดงป้ายชื่อสายทาง (Road Labels)</span>
+            <span>แสดงป้ายชื่อสายทาง</span>
           </label>
         </div>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showOffices}
-            onChange={(e) => setShowOffices(e.target.checked)}
-            className="accent-amber-400"
-          />
-          <span className="w-2.5 h-2.5 bg-amber-400 inline-block rounded" />
-          <span>หมุดแขวง/หมวดทางหลวง</span>
-        </label>
-      </div>
+        </div>
+      </details>
     </div>
   );
 }
