@@ -93,6 +93,9 @@ export async function upsertFloodRouteSupabase(route: FloodRoute): Promise<boole
       water_level_cm: route.water_level_cm,
       traffic_status: route.traffic_status,
       latest_photo_url: route.latest_photo_url || "",
+      district: route.district || "",
+      subdistrict: route.subdistrict || "",
+      detour_advice: route.detour_advice || "",
       is_active: route.is_active ?? true,
       updated_at: new Date().toISOString(),
     });

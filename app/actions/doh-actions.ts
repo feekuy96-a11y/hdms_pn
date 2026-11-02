@@ -210,6 +210,15 @@ export async function upsertRouteAction(payload: {
 
     // Persist to Supabase
     await upsertDetourRouteSupabase(detourRecord);
+
+    // ซิงก์คำแนะนำเส้นทางเลี่ยงไปยังจุดน้ำท่วมอ้างอิงอัตโนมัติ (เพื่อให้หน้าประชาชนแสดงผลทันที)
+    if (detourRecord.flood_id_ref && detourRecord.description) {
+      const linkedFlood = runtimeState.floodRoutes.find((f) => f.id === detourRecord.flood_id_ref);
+      if (linkedFlood) {
+        linkedFlood.detour_advice = detourRecord.description;
+        await upsertFloodRouteSupabase(linkedFlood);
+      }
+    }
   }
 
   runtimeState.updatedAt = nowIso;

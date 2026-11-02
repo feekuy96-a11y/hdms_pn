@@ -35,7 +35,9 @@ import {
   Phone,
   Clock,
   CheckCircle2,
+  ArrowRightLeft,
 } from "lucide-react";
+import { extractDirectionalAdvice } from "@/lib/gis-utils";
 
 export default function HomePage() {
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -46,6 +48,7 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRouteFilter, setSelectedRouteFilter] = useState("ALL");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [citizenDetourDirection, setCitizenDetourDirection] = useState<"FORWARD" | "REVERSE">("FORWARD");
 
 
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
@@ -510,25 +513,79 @@ export default function HomePage() {
                 </div>
 
                 {/* Detour Recommendation Box (Yellow Banner) */}
-                <div className="bg-amber-500/10 border border-amber-400/50 rounded-xl p-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
+                <div className="bg-amber-500/10 border border-amber-400/50 rounded-xl p-3.5 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 text-amber-300 text-xs font-heading font-bold">
                       <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                       <span>คำแนะนำเส้นทางเลี่ยงน้ำท่วม</span>
                     </div>
-                    <p className="text-[11px] text-amber-100/90 mt-1 leading-snug">
-                      {selectedFlood.detour_advice || "ยังไม่มีคำแนะนำเส้นทางเลี่ยงที่ยืนยันแล้ว โปรดโทร 1586 ก่อนเดินทาง"}
-                    </p>
+
+                    <div className="flex items-center gap-2">
+                      {/* Direction Switcher Toggle if bidirectional advice exists */}
+                      {(() => {
+                        const ext = extractDirectionalAdvice(selectedFlood.detour_advice || "");
+                        if (!ext.hasBoth) return null;
+                        return (
+                          <div className="flex items-center bg-slate-950/80 p-0.5 rounded-lg border border-amber-500/40 text-[10px] font-heading font-bold">
+                            <button
+                              type="button"
+                              onClick={() => setCitizenDetourDirection("FORWARD")}
+                              className={`px-2 py-0.5 rounded transition flex items-center gap-1 ${
+                                citizenDetourDirection === "FORWARD"
+                                  ? "bg-amber-500 text-slate-950 shadow"
+                                  : "text-amber-300/80 hover:text-white"
+                              }`}
+                            >
+                              <span>🚗 ขาไป (A → B)</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCitizenDetourDirection("REVERSE")}
+                              className={`px-2 py-0.5 rounded transition flex items-center gap-1 ${
+                                citizenDetourDirection === "REVERSE"
+                                  ? "bg-amber-500 text-slate-950 shadow"
+                                  : "text-amber-300/80 hover:text-white"
+                              }`}
+                            >
+                              <span>🚙 ขากลับ (B → A)</span>
+                            </button>
+                          </div>
+                        );
+                      })()}
+
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${selectedFlood.lat_start},${selectedFlood.lon_start}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 shadow shrink-0 transition"
+                      >
+                        <Navigation className="w-3 h-3" /> แผนที่ Google
+                      </a>
+                    </div>
                   </div>
 
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${selectedFlood.lat_start},${selectedFlood.lon_start}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black text-xs px-3.5 py-2 rounded-lg flex items-center gap-1 shadow-md shrink-0 transition"
-                  >
-                    <Navigation className="w-3.5 h-3.5" /> ดูจุดรายงาน
-                  </a>
+                  {/* Detour Text Content with Direction Handling */}
+                  {(() => {
+                    if (!selectedFlood.detour_advice) {
+                      return (
+                        <p className="text-[11px] text-amber-100/90 leading-snug">
+                          ยังไม่มีคำแนะนำเส้นทางเลี่ยงที่ยืนยันแล้ว โปรดโทร 1586 ก่อนเดินทาง
+                        </p>
+                      );
+                    }
+                    const ext = extractDirectionalAdvice(selectedFlood.detour_advice);
+                    const displayText = ext.hasBoth
+                      ? citizenDetourDirection === "FORWARD"
+                        ? ext.forward
+                        : ext.reverse
+                      : selectedFlood.detour_advice;
+
+                    return (
+                      <div className="bg-slate-950/70 p-3 rounded-lg border border-amber-500/20 text-xs text-amber-100/95 leading-relaxed font-sans whitespace-pre-line max-h-56 overflow-y-auto">
+                        {displayText}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Timeline Section */}

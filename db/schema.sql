@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS doh_flood_routes (
     water_level_cm INTEGER NOT NULL DEFAULT 0,
     traffic_status VARCHAR(20) NOT NULL DEFAULT 'WARNING', -- 'CLOSED', 'WARNING', 'PASSABLE'
     latest_photo_url TEXT DEFAULT '',
+    district VARCHAR(100) DEFAULT '',
+    subdistrict VARCHAR(100) DEFAULT '',
+    detour_advice TEXT DEFAULT '',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
