@@ -13,12 +13,26 @@ import {
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  "https://ebyobrtvisylwawxiurx.supabase.co";
+  "https://iiuearxdsbilcpsfzhyp.supabase.co";
 
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVieW9icnR2aXN5bHdhd3hpdXJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNzA0OTgsImV4cCI6MjEwODc0NjQ5OH0.aDMnfQk3GG6TFWp5xpKyZekQ2nxT8mLfGtUawpLVrAo";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpdWVhcnhkc2JpbGNwc2Z6aHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3ODAyMTksImV4cCI6MjEwNzM1NjIxOX0.NlmieOWIm9medTsUzHkQdEvUySj-tat4KwIDOsCVvxg";
+
+if (typeof WebSocket === "undefined" && typeof globalThis !== "undefined") {
+  (globalThis as any).WebSocket = class MockWebSocket {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    static readonly CLOSING = 2;
+    static readonly CLOSED = 3;
+    readonly readyState = 3;
+    send() {}
+    close() {}
+    addEventListener() {}
+    removeEventListener() {}
+  };
+}
 
 export const supabaseServer = createClient(supabaseUrl, supabaseKey, {
   auth: {
@@ -216,6 +230,7 @@ export async function updateHighwayLayerSupabase(payload: {
   colorHex?: string;
   lineWidth?: number;
   geojsonData?: any;
+  metadata?: Record<string, any>;
 }): Promise<boolean> {
   try {
     const updateData: Record<string, any> = { updated_at: new Date().toISOString() };
@@ -223,6 +238,7 @@ export async function updateHighwayLayerSupabase(payload: {
     if (payload.colorHex !== undefined) updateData.color_hex = payload.colorHex;
     if (payload.lineWidth !== undefined) updateData.line_width = payload.lineWidth;
     if (payload.geojsonData !== undefined) updateData.geojson_data = payload.geojsonData;
+    if (payload.metadata !== undefined) updateData.metadata = payload.metadata;
 
     const { error } = await supabaseServer
       .from("doh_highway_layers")

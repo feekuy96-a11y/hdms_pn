@@ -26,7 +26,7 @@ import {
 } from "@/db/supabase-server";
 
 // Static Export friendly cache & revalidation
-const revalidatePath = (_path: string) => {};
+const revalidatePath = (_path: string) => { };
 
 // Persistent in-memory cache for development resilience, fast rendering and offline fallback
 let runtimeState: SystemDataPayload = JSON.parse(JSON.stringify(INITIAL_SYSTEM_DATA));
@@ -316,13 +316,26 @@ export async function updateHighwayLayerAction(payload: {
   colorHex?: string;
   lineWidth?: number;
   geojsonData?: any;
+  metadata?: Record<string, any>;
 }): Promise<{ success: boolean; systemData: SystemDataPayload }> {
-  const layer = runtimeState.highwayLayers.find((l) => l.layer_id === payload.layerId);
-  if (layer) {
+  let layer = runtimeState.highwayLayers.find((l) => l.layer_id === payload.layerId);
+  if (!layer) {
+    layer = {
+      layer_id: payload.layerId,
+      layer_name: payload.layerName || payload.layerId,
+      color_hex: payload.colorHex || "#1B5E20",
+      line_width: payload.lineWidth || 4,
+      geojson_data: payload.geojsonData || null,
+      is_visible: true,
+      metadata: payload.metadata || {},
+    };
+    runtimeState.highwayLayers.push(layer);
+  } else {
     if (payload.layerName) layer.layer_name = payload.layerName;
     if (payload.colorHex) layer.color_hex = payload.colorHex;
     if (payload.lineWidth) layer.line_width = payload.lineWidth;
     if (payload.geojsonData) layer.geojson_data = payload.geojsonData;
+    if (payload.metadata) layer.metadata = { ...(layer.metadata || {}), ...payload.metadata };
   }
 
   await updateHighwayLayerSupabase(payload);
