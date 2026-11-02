@@ -3,8 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import { SystemDataPayload } from "@/db/default-data";
-import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
-import { PATTANI_DISTRICTS_GEOJSON } from "@/lib/gis-utils";
+import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES, OFFICIAL_PATTANI_HIGHWAYS } from "@/lib/constants";
 import { Layers, Navigation, Building2, Map } from "lucide-react";
 
 const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -56,7 +55,7 @@ export function LongdoGisMap({
   const [showDetourLayer, setShowDetourLayer] = useState(true);
   const [showMainHwy, setShowMainHwy] = useState(true);
   const [showSecHwy, setShowSecHwy] = useState(true);
-  const [showBoundaries, setShowBoundaries] = useState(true);
+  const [showHighwayShields, setShowHighwayShields] = useState(true);
   const [showOffices, setShowOffices] = useState(true);
   const [showRoadLabels, setShowRoadLabels] = useState(true);
 
@@ -242,28 +241,65 @@ export function LongdoGisMap({
       const group = overlayGroupRef.current;
       group.clearLayers();
 
-      // A. Draw Boundary Layers (เส้นขอบเขต ๑๒ อำเภอ จ.ปัตตานี)
-      if (showBoundaries) {
-        try {
-          L.geoJSON(PATTANI_DISTRICTS_GEOJSON as any, {
-            style: {
-              color: "#38bdf8",
-              weight: 1.5,
-              dashArray: "4, 4",
-              fillColor: "#0284c7",
-              fillOpacity: 0.05,
-            },
-            onEachFeature: (feature: any, layer: any) => {
-              if (feature?.properties?.name) {
-                layer.bindTooltip(feature.properties.name, {
-                  permanent: false,
-                  direction: "center",
-                  className: "bg-slate-900 text-sky-300 font-heading text-[10px] px-1.5 py-0.5 rounded border border-sky-600 shadow",
-                });
-              }
-            },
-          }).addTo(group);
-        } catch (e) {}
+      // A. Draw Official Highway Route Shields (ไอคอนแสดงหมายเลขทางหลวงบนแผนที่ในรูปแบบทางการ)
+      if (showHighwayShields) {
+        OFFICIAL_PATTANI_HIGHWAYS.forEach((hwy) => {
+          const isRural = hwy.type === "RURAL_ROAD";
+          const code = hwy.code;
+          const is4Digits = code.length >= 4;
+
+          const shieldSvg = isRural
+            ? `
+              <div class="doh-drr-shield group relative cursor-pointer flex flex-col items-center justify-center transition-transform hover:scale-125" style="transform: translate(-50%, -50%);">
+                <svg width="36" height="40" viewBox="0 0 38 42" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));">
+                  <path d="M19 1 C30 1 37 6 37 17 C37 28 24 37 19 40 C14 37 1 28 1 17 C1 6 8 1 19 1 Z" fill="#0284c7" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round"/>
+                  <path d="M19 3 C28 3 34.5 7.5 34.5 17 C34.5 26.5 23 34.5 19 37.5 C15 34.5 3.5 26.5 3.5 17 C3.5 7.5 10 3 19 3 Z" fill="#0284c7" stroke="#facc15" stroke-width="1"/>
+                  <text x="19" y="12" text-anchor="middle" font-family="'Sarabun', sans-serif" font-weight="800" font-size="7.5" fill="#fef08a">ทช.</text>
+                  <text x="19" y="26" text-anchor="middle" font-family="'Sarabun', sans-serif" font-weight="900" font-size="${is4Digits ? 9.5 : 11.5}" fill="#ffffff" letter-spacing="-0.3">${escapeHtml(code)}</text>
+                </svg>
+              </div>
+            `
+            : `
+              <div class="doh-hwy-shield group relative cursor-pointer flex flex-col items-center justify-center transition-transform hover:scale-125" style="transform: translate(-50%, -50%);">
+                <svg width="34" height="40" viewBox="0 0 34 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 5px rgba(0,0,0,0.65));">
+                  <path d="M17 1 C28 1 33 6 33 17 C33 28 21 36 17 39 C13 36 1 28 1 17 C1 6 6 1 17 1 Z" fill="#ffffff" stroke="#0f172a" stroke-width="2.5" stroke-linejoin="round"/>
+                  <path d="M17 3.5 C26 3.5 30.5 7.5 30.5 17 C30.5 26 19.5 33.5 17 36 C14.5 33.5 3.5 26 3.5 17 C3.5 7.5 8 3.5 17 3.5 Z" fill="#ffffff" stroke="#475569" stroke-width="0.9"/>
+                  <text x="17" y="11" text-anchor="middle" font-family="'Sarabun', sans-serif" font-weight="800" font-size="7.5" fill="#64748b">ทล.</text>
+                  <text x="17" y="26" text-anchor="middle" font-family="'Sarabun', sans-serif" font-weight="900" font-size="${is4Digits ? 10.5 : 13.5}" fill="#0f172a" letter-spacing="-0.5">${escapeHtml(code)}</text>
+                </svg>
+              </div>
+            `;
+
+          const shieldIcon = L.divIcon({
+            html: shieldSvg,
+            className: "doh-shield-marker",
+            iconSize: [34, 40],
+            iconAnchor: [17, 20],
+          });
+
+          const marker = L.marker([hwy.lat, hwy.lon], { icon: shieldIcon }).addTo(group);
+          marker.bindTooltip(`<strong>ทล.${hwy.code}</strong> ${hwy.name}`, { direction: "top", offset: [0, -20] });
+          marker.bindPopup(`
+            <div class="text-xs p-1 min-w-[270px] font-body text-slate-100">
+              <div class="flex items-center gap-1.5 mb-1.5">
+                <span class="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded font-heading">
+                  ${isRural ? `ทางหลวงชนบท ${hwy.code}` : `ทางหลวงแผ่นดิน ทล.${hwy.code}`}
+                </span>
+                <span class="text-[10px] text-emerald-400 font-bold ml-auto flex items-center gap-1">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse"></span> สัญจรปกติ
+                </span>
+              </div>
+              <h4 class="font-bold text-white text-sm font-heading leading-tight">${escapeHtml(hwy.name)}</h4>
+              <div class="mt-2 space-y-1 text-[11px] text-slate-300 bg-slate-900/90 p-2.5 rounded-xl border border-slate-700/80">
+                <div class="flex items-center justify-between"><span class="text-slate-400">จุดสังเกต:</span> <strong class="text-white">${escapeHtml(hwy.locationName)}</strong></div>
+                <div class="flex items-center justify-between"><span class="text-slate-400">มาตรฐานช่องจราจร:</span> <span class="text-sky-300 font-medium">${escapeHtml(hwy.lanes)}</span></div>
+                <div class="flex items-center justify-between"><span class="text-slate-400">ประเภทผิวทาง:</span> <span class="text-amber-200">${escapeHtml(hwy.surface)}</span></div>
+                <div class="flex items-center justify-between"><span class="text-slate-400">หมวดทางหลวงรับผิดชอบ:</span> <span class="text-white font-medium">${escapeHtml(hwy.responsibleOffice)}</span></div>
+                <div class="flex items-center justify-between"><span class="text-slate-400">ความเร็วจำกัด:</span> <span class="text-slate-200">${escapeHtml(hwy.speedLimit)}</span></div>
+              </div>
+            </div>
+          `);
+        });
       }
 
       // B. Draw Dual-Color GIS File Preview (เส้นสีน้ำเงิน = ข้อมูลที่กำลังนำเข้า)
@@ -569,7 +605,7 @@ export function LongdoGisMap({
     showDetourLayer,
     showMainHwy,
     showSecHwy,
-    showBoundaries,
+    showHighwayShields,
     showOffices,
     draftCoordinates,
     draftWaypoints,
@@ -712,12 +748,14 @@ export function LongdoGisMap({
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
-            checked={showBoundaries}
-            onChange={(e) => setShowBoundaries(e.target.checked)}
-            className="accent-cyan-400"
+            checked={showHighwayShields}
+            onChange={(e) => setShowHighwayShields(e.target.checked)}
+            className="accent-amber-400"
           />
-          <span className="w-4 h-1 border-t-2 border-dashed border-cyan-400 inline-block" />
-          <span>ขอบเขต ๑๒ อำเภอ</span>
+          <span className="w-4 h-4 rounded bg-white border border-slate-900 inline-flex items-center justify-center text-[8px] font-black text-slate-950 font-heading">
+            42
+          </span>
+          <span>ป้ายหมายเลขทางหลวง (Official Shields)</span>
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input

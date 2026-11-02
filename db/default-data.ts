@@ -84,6 +84,15 @@ export interface HighwayLayer {
   line_width: number;
   geojson_data: any;
   is_visible: boolean;
+  metadata?: {
+    lanes?: string;
+    surface?: string;
+    responsibleOffice?: string;
+    speedLimit?: string;
+    roadStatus?: string;
+    remarks?: string;
+    [key: string]: any;
+  };
 }
 
 export interface SystemSettingsConfig {
@@ -231,73 +240,5 @@ export const INITIAL_SYSTEM_DATA: SystemDataPayload = {
       after_image_url: "",
     },
   ],
-  highwayLayers: [
-    {
-      layer_id: "MAIN_HIGHWAY",
-      layer_name: "ทางหลวงแผ่นดินสายหลัก (ทล.42, 43, 418, 410)",
-      color_hex: "#1e3a8a",
-      line_width: 5,
-      geojson_data: {
-        type: "FeatureCollection",
-        features: [
-          {
-            type: "Feature",
-            geometry: {
-              type: "MultiLineString",
-              coordinates: [
-                [
-                  [101.135, 6.792],
-                  [101.178, 6.7845],
-                  [101.242, 6.842],
-                  [101.285, 6.868],
-                ],
-                [
-                  [101.242, 6.842],
-                  [101.268, 6.8485],
-                  [101.32, 6.855],
-                ],
-                [
-                  [101.255, 6.865],
-                  [101.285, 6.752],
-                  [101.292, 6.65],
-                ],
-              ],
-            },
-          },
-        ],
-      },
-      is_visible: true,
-    },
-    {
-      layer_id: "SECOND_HIGHWAY",
-      layer_name: "ทางหลวงแผ่นดินสายรอง (ทล.409, 4061, 4074, 4092)",
-      color_hex: "#0284c7",
-      line_width: 3,
-      geojson_data: {
-        type: "FeatureCollection",
-        features: [
-          {
-            type: "Feature",
-            geometry: {
-              type: "MultiLineString",
-              coordinates: [
-                [
-                  [101.178, 6.7845],
-                  [101.181, 6.802],
-                  [101.198, 6.804],
-                  [101.205, 6.779],
-                ],
-                [
-                  [101.268, 6.8485],
-                  [101.35, 6.74],
-                  [101.41, 6.72],
-                ],
-              ],
-            },
-          },
-        ],
-      },
-      is_visible: true,
-    },
-  ],
+  highwayLayers: [],
 };

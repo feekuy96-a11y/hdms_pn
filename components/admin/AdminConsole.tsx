@@ -16,6 +16,7 @@ import {
   upsertMitigationProjectAction,
   deleteMitigationProjectAction,
   updateHighwayLayerAction,
+  deleteHighwayLayerAction,
   setIncidentStatusAction,
   updateMapStyleAction,
   saveOfficeAction,
@@ -226,6 +227,14 @@ export function AdminConsole({
   const [targetLayerCategory, setTargetLayerCategory] = useState<"MAIN_HIGHWAY" | "SECOND_HIGHWAY" | "AUTO">("MAIN_HIGHWAY");
   const [labelDisplayMode, setLabelDisplayMode] = useState<"hover" | "permanent" | "click">("hover");
 
+  // Extended Highway Specifications (รายละเอียดเพิ่มเติมของเส้นทางหลวง)
+  const [layerLanes, setLayerLanes] = useState("๔ ช่องจราจร (มีเกาะกลาง/มาตรฐานชั้น ๑)");
+  const [layerSurface, setLayerSurface] = useState("ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)");
+  const [layerResponsibleOffice, setLayerResponsibleOffice] = useState("หมวดทางหลวงปัตตานี");
+  const [layerSpeedLimit, setLayerSpeedLimit] = useState("๙๐ กม./ชม.");
+  const [layerRoadStatus, setLayerRoadStatus] = useState("สัญจรได้ตามปกติ");
+  const [layerRemarks, setLayerRemarks] = useState("");
+
   // =========================================================================
   // 5. LINE STYLING STUDIO STATE
   // =========================================================================
@@ -246,6 +255,7 @@ export function AdminConsole({
   const [projSolution, setProjSolution] = useState("");
   const [projBeforeImg, setProjBeforeImg] = useState("");
   const [projAfterImg, setProjAfterImg] = useState("");
+  const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
 
   // =========================================================================
   // REACTIVE MAP COORDINATE LISTENER
@@ -715,6 +725,55 @@ export function AdminConsole({
     });
   };
 
+  // Mitigation Project Save (เพิ่ม/แก้ไข โครงการผู้ว่าฯ)
+  const handleSaveProject = async () => {
+    if (!projLocation || !projSolution) {
+      onToast("กรุณาระบุสถานที่และแนวทางการแก้ไขปัญหา");
+      return;
+    }
+    const id = projId || "P-" + Date.now().toString().slice(-4);
+    try {
+      const res = await upsertMitigationProjectAction({
+        projectId: id,
+        routeNo: projRouteNo,
+        locationName: projLocation,
+        kmRange: projKmRange || "กม.0+000 - 1+000",
+        statusGroup: projStatus,
+        solutionDetail: projSolution,
+        budgetMb: Number(projBudget) || 0,
+        beforeImageUrl: projBeforeImg,
+        afterImageUrl: projAfterImg,
+      });
+      if (res.success) {
+        onDataRefresh(res.systemData);
+        setIsProjectFormOpen(false);
+        setProjId("");
+        setProjLocation("");
+        setProjKmRange("");
+        setProjSolution("");
+        setProjBudget(30.0);
+        showSuccessModal(projId ? "แก้ไขโครงการสำเร็จ" : "เพิ่มโครงการสำเร็จ", `บันทึกข้อมูลโครงการ [${id}] ทล.${projRouteNo} เรียบร้อยแล้ว`);
+      }
+    } catch (e: any) {
+      onToast("ข้อผิดพลาด: " + e.message);
+    }
+  };
+
+  // Mitigation Project Delete (ลบโครงการผู้ว่าฯ)
+  const handleDeleteProject = (projectId: string) => {
+    showConfirmModal("ยืนยันการลบโครงการ?", `ท่านกำลังจะลบโครงการ [${projectId}] ออกจากแผนงานผู้ว่าฯ`, async () => {
+      try {
+        const res = await deleteMitigationProjectAction(projectId);
+        if (res.success) {
+          onDataRefresh(res.systemData);
+          showSuccessModal("ลบโครงการเรียบร้อย", `ลบโครงการ [${projectId}] สำเร็จ`);
+        }
+      } catch (e: any) {
+        onToast("ข้อผิดพลาด: " + e.message);
+      }
+    });
+  };
+
   // Update Current Selected Line Style (Real-time sync)
   const handleUpdateCurrentStyle = (patch: Partial<MapLineStyleItem>) => {
     const current = lineStyles[selectedStyleKey] || DEFAULT_MAP_STYLES[selectedStyleKey];
@@ -894,6 +953,14 @@ export function AdminConsole({
         colorHex,
         lineWidth,
         geojsonData,
+        metadata: {
+          lanes: layerLanes,
+          surface: layerSurface,
+          responsibleOffice: layerResponsibleOffice,
+          speedLimit: layerSpeedLimit,
+          roadStatus: layerRoadStatus,
+          remarks: layerRemarks,
+        },
       });
 
       if (res.success) {
@@ -912,6 +979,25 @@ export function AdminConsole({
     } catch (e: any) {
       onToast("ข้อผิดพลาด: " + e.message);
     }
+  };
+
+  // Delete Highway Layer
+  const handleDeleteHighwayLayer = (layerId: string, layerName: string) => {
+    showConfirmModal(
+      "ยืนยันการลบเลเยอร์โครงข่าย?",
+      `ท่านกำลังจะลบชั้นข้อมูล [${layerName}] (${layerId}) ออกจากแผนที่ระบบ`,
+      async () => {
+        try {
+          const res = await deleteHighwayLayerAction(layerId);
+          if (res.success) {
+            onDataRefresh(res.systemData);
+            showSuccessModal("ลบชั้นข้อมูลสำเร็จ", `ลบเลเยอร์ [${layerName}] ออกจากระบบเรียบร้อย`);
+          }
+        } catch (e: any) {
+          onToast("ข้อผิดพลาดในการลบเลเยอร์: " + e.message);
+        }
+      }
+    );
   };
 
   // Filtered Incidents
@@ -2316,6 +2402,103 @@ export function AdminConsole({
                       </div>
                     </div>
 
+                    {/* Extended Highway Specifications (กำหนดรายละเอียดเพิ่มเติมของเส้นทางหลวง) */}
+                    <div className="mt-3 p-3 bg-slate-950/80 rounded-xl border border-sky-950/60 space-y-3">
+                      <div className="flex items-center gap-2 text-sky-400 font-heading font-semibold text-xs border-b border-sky-950 pb-1.5">
+                        <Building className="w-4 h-4 text-sky-400" />
+                        <span>กำหนดรายละเอียดและคุณสมบัติทางวิศวกรรมของเส้นทาง (Highway Specifications)</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                        {/* Lanes */}
+                        <div>
+                          <label className="text-slate-300 block mb-1">จำนวนช่องจราจร (Lanes)</label>
+                          <select
+                            value={layerLanes}
+                            onChange={(e) => setLayerLanes(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                          >
+                            <option value="๒ ช่องจราจร (สวนทาง)">๒ ช่องจราจร (สวนทาง)</option>
+                            <option value="๔ ช่องจราจร (มีเกาะกลาง/มาตรฐานชั้น ๑)">๔ ช่องจราจร (มีเกาะกลาง/มาตรฐานชั้น ๑)</option>
+                            <option value="๖ ช่องจราจร (สายหลักหนาแน่น)">๖ ช่องจราจร (สายหลักหนาแน่น)</option>
+                            <option value="๘ ช่องจราจร ขึ้นไป">๘ ช่องจราจร ขึ้นไป</option>
+                          </select>
+                        </div>
+
+                        {/* Surface Type */}
+                        <div>
+                          <label className="text-slate-300 block mb-1">ชนิดผิวจราจร (Pavement Surface)</label>
+                          <select
+                            value={layerSurface}
+                            onChange={(e) => setLayerSurface(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                          >
+                            <option value="ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)">ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)</option>
+                            <option value="คอนกรีตเสริมเหล็ก (Rigid Pavement / Concrete)">คอนกรีตเสริมเหล็ก (Rigid Concrete)</option>
+                            <option value="ผิวทางลาดยาง (Surface Treatment / AC)">ผิวทางลาดยาง (Surface Treatment)</option>
+                          </select>
+                        </div>
+
+                        {/* Responsible Subdivision */}
+                        <div>
+                          <label className="text-slate-300 block mb-1">หน่วยงานรับผิดชอบ (Subdivision)</label>
+                          <select
+                            value={layerResponsibleOffice}
+                            onChange={(e) => setLayerResponsibleOffice(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-amber-300 font-heading font-medium"
+                          >
+                            <option value="หมวดทางหลวงปัตตานี">หมวดทางหลวงปัตตานี</option>
+                            <option value="หมวดทางหลวงหนองจิก">หมวดทางหลวงหนองจิก</option>
+                            <option value="หมวดทางหลวงยะรัง">หมวดทางหลวงยะรัง</option>
+                            <option value="หมวดทางหลวงโคกโพธิ์">หมวดทางหลวงโคกโพธิ์</option>
+                            <option value="หมวดทางหลวงสายบุรี">หมวดทางหลวงสายบุรี</option>
+                            <option value="แขวงทางหลวงชนบทปัตตานี">แขวงทางหลวงชนบทปัตตานี</option>
+                          </select>
+                        </div>
+
+                        {/* Speed Limit */}
+                        <div>
+                          <label className="text-slate-300 block mb-1">ความเร็วจำกัดตามกฎหมาย (Speed Limit)</label>
+                          <select
+                            value={layerSpeedLimit}
+                            onChange={(e) => setLayerSpeedLimit(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                          >
+                            <option value="๕๐ กม./ชม. (เขตชุมชน/หน้าโรงเรียน)">๕๐ กม./ชม. (เขตชุมชน)</option>
+                            <option value="๖๐ กม./ชม. (ทางเลี่ยงเมือง/สายรอง)">๖๐ กม./ชม. (ทางเลี่ยงเมือง/สายรอง)</option>
+                            <option value="๘๐ กม./ชม. (ทางหลวงชนบท/สองช่องทาง)">๘๐ กม./ชม. (สองช่องทาง)</option>
+                            <option value="๙๐ กม./ชม. (ทางหลวงแผ่นดินทั่วไป)">๙๐ กม./ชม. (ทางหลวงแผ่นดินทั่วไป)</option>
+                            <option value="๑๒๐ กม./ชม. (ทางหลวง ๔ ช่องจราจรเกาะกลาง)">๑๒๐ กม./ชม. (สายหลัก ๔ ช่อง)</option>
+                          </select>
+                        </div>
+
+                        {/* Road Status */}
+                        <div>
+                          <label className="text-slate-300 block mb-1">สถานะความพร้อมของสายทาง (Road Status)</label>
+                          <select
+                            value={layerRoadStatus}
+                            onChange={(e) => setLayerRoadStatus(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-emerald-400 font-medium"
+                          >
+                            <option value="สัญจรได้ตามปกติ">สัญจรได้ตามปกติ (Normal)</option>
+                            <option value="อยู่ระหว่างงานบำรุงรักษาทาง">อยู่ระหว่างงานบำรุงรักษาทาง (Maintenance)</option>
+                            <option value="มีจุดเฝ้าระวังน้ำท่วมขัง">มีจุดเฝ้าระวังน้ำท่วมขัง (Flood Watch)</option>
+                          </select>
+                        </div>
+
+                        {/* Remarks */}
+                        <div>
+                          <label className="text-slate-300 block mb-1">หมายเหตุเพิ่มเติม (Remarks)</label>
+                          <input
+                            type="text"
+                            value={layerRemarks}
+                            onChange={(e) => setLayerRemarks(e.target.value)}
+                            placeholder="เช่น โครงข่ายหลักเชื่อมต่อ ๓ จังหวัดชายแดนใต้"
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Sample Mapping Table (First 5 Rows) */}
                     <div className="mt-3 pt-2 border-t border-slate-800">
                       <div className="flex items-center justify-between mb-1.5">
@@ -2425,11 +2608,45 @@ export function AdminConsole({
                             <span className="text-slate-400 text-[11px]">
                               รหัส: {layer.layer_id} • สี: {layerColor}
                             </span>
+                            {layer.metadata && (
+                              <div className="flex flex-wrap gap-1.5 mt-1">
+                                {layer.metadata.lanes && (
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-sky-300">
+                                    {layer.metadata.lanes}
+                                  </span>
+                                )}
+                                {layer.metadata.surface && (
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-amber-300">
+                                    {layer.metadata.surface}
+                                  </span>
+                                )}
+                                {layer.metadata.responsibleOffice && (
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-emerald-300">
+                                    {layer.metadata.responsibleOffice}
+                                  </span>
+                                )}
+                                {layer.metadata.speedLimit && (
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-slate-300">
+                                    {layer.metadata.speedLimit}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <span className="text-emerald-400 font-heading font-medium flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> เปิดใช้งานบนแผนที่
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-emerald-400 font-heading font-medium flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> เปิดใช้งานบนแผนที่
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteHighwayLayer(layer.layer_id, layer.layer_name)}
+                            title="ลบเลเยอร์โครงข่าย"
+                            className="p-1.5 bg-slate-900 hover:bg-red-600 hover:text-white text-red-400 rounded-lg text-xs transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -2859,34 +3076,190 @@ export function AdminConsole({
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setIsDispatchModalOpen(true)}
+                    onClick={() => {
+                      setProjId("");
+                      setProjRouteNo("42");
+                      setProjKmRange("");
+                      setProjLocation("");
+                      setProjStatus("COMPLETED");
+                      setProjBudget(30.0);
+                      setProjSolution("");
+                      setProjBeforeImg("");
+                      setProjAfterImg("");
+                      setIsProjectFormOpen(true);
+                    }}
                     className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow"
+                  >
+                    <Plus className="w-4 h-4" /> เพิ่มโครงการใหม่
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsDispatchModalOpen(true)}
+                    className="bg-slate-800 hover:bg-slate-700 text-amber-300 font-heading font-semibold text-xs px-3.5 py-2 rounded-xl border border-slate-700 flex items-center gap-1.5 shadow"
                   >
                     <Printer className="w-4 h-4" /> พิมพ์รายงานด่วน (รง.ทล.๐๑)
                   </button>
                 </div>
               </div>
 
+              {/* Add / Edit Project Form */}
+              {isProjectFormOpen && (
+                <div className="bg-slate-950 p-4 sm:p-5 rounded-2xl border-2 border-amber-400/80 space-y-4 shadow-2xl animate-scale-up">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <h3 className="font-heading font-bold text-sm text-white flex items-center gap-2">
+                      <Briefcase className="w-4 h-4 text-amber-400" />
+                      {projId ? `แก้ไขโครงการ [${projId}]` : "เพิ่มโครงการแก้ไขปัญหาน้ำท่วมใหม่"}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setIsProjectFormOpen(false)}
+                      className="text-xs text-slate-400 hover:text-white"
+                    >
+                      ปิดฟอร์ม
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs text-slate-300 block mb-1">หมายเลขทางหลวง (ทล.) *</label>
+                      <select
+                        value={projRouteNo}
+                        onChange={(e) => setProjRouteNo(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      >
+                        {HIGHWAY_ROUTES.map((h) => (
+                          <option key={h.no} value={h.no}>
+                            ทล.{h.no} - {h.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-300 block mb-1">ช่วง กม. *</label>
+                      <input
+                        type="text"
+                        value={projKmRange}
+                        onChange={(e) => setProjKmRange(e.target.value)}
+                        placeholder="เช่น กม.12+500 - 13+800"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-300 block mb-1">สถานะโครงการ *</label>
+                      <select
+                        value={projStatus}
+                        onChange={(e: any) => setProjStatus(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-heading font-medium"
+                      >
+                        <option value="COMPLETED">แก้ไขแล้วเสร็จ (Completed)</option>
+                        <option value="PENDING_BUDGET">รอรับงบประมาณ (Pending Budget)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-slate-300 block mb-1">ชื่อโครงการ / สถานที่ดำเนินงาน *</label>
+                      <input
+                        type="text"
+                        value={projLocation}
+                        onChange={(e) => setProjLocation(e.target.value)}
+                        placeholder="เช่น ก่อสร้างคันกั้นน้ำและท่อระบายน้ำลอด ต.ดอนรัก"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-300 block mb-1">งบประมาณที่ใช้ (ล้านบาท) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={projBudget}
+                        onChange={(e) => setProjBudget(Number(e.target.value))}
+                        placeholder="เช่น 15.5"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-emerald-400 font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 block mb-1">รายละเอียดแนวทางการแก้ไขปัญหาทางวิศวกรรม *</label>
+                    <textarea
+                      rows={3}
+                      value={projSolution}
+                      onChange={(e) => setProjSolution(e.target.value)}
+                      placeholder="เช่น เสริมผิวจราจรยกสูง ๕๐ ซม. พร้อมขยายสะพานระบายน้ำเพื่อรองรับน้ำหลาก..."
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white leading-relaxed"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setIsProjectFormOpen(false)}
+                      className="bg-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs hover:bg-slate-700 transition"
+                    >
+                      ยกเลิก
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveProject}
+                      className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-heading font-bold px-5 py-2 rounded-xl text-xs shadow-lg transition flex items-center gap-1.5"
+                    >
+                      <Save className="w-4 h-4" /> บันทึกโครงการ
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Projects List */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {(systemData.mitigationProjects || []).map((p) => (
                   <div
                     key={p.project_id}
-                    className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2.5 shadow-lg"
+                    className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2.5 shadow-lg relative group hover:border-slate-700 transition"
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-heading font-bold text-amber-300 text-xs">
                         โครงการ [{p.project_id}] ทล.{p.route_no}
                       </span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded font-heading ${
-                          p.status_group === "COMPLETED"
-                            ? "bg-emerald-950 text-emerald-300 border border-emerald-700"
-                            : "bg-amber-950 text-amber-300 border border-amber-700"
-                        }`}
-                      >
-                        {p.status_group === "COMPLETED" ? "แก้ไขแล้วเสร็จ" : "รอรับงบประมาณ"}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded font-heading ${
+                            p.status_group === "COMPLETED"
+                              ? "bg-emerald-950 text-emerald-300 border border-emerald-700"
+                              : "bg-amber-950 text-amber-300 border border-amber-700"
+                          }`}
+                        >
+                          {p.status_group === "COMPLETED" ? "แก้ไขแล้วเสร็จ" : "รอรับงบประมาณ"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProjId(p.project_id);
+                            setProjRouteNo(p.route_no);
+                            setProjKmRange(p.km_range);
+                            setProjLocation(p.location_name);
+                            setProjStatus(p.status_group);
+                            setProjBudget(p.budget_mb);
+                            setProjSolution(p.solution_detail);
+                            setProjBeforeImg(p.before_image_url || "");
+                            setProjAfterImg(p.after_image_url || "");
+                            setIsProjectFormOpen(true);
+                          }}
+                          title="แก้ไขโครงการ"
+                          className="p-1 bg-slate-900 hover:bg-amber-500 hover:text-slate-950 text-amber-300 rounded-lg text-xs"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteProject(p.project_id)}
+                          title="ลบโครงการ"
+                          className="p-1 bg-slate-900 hover:bg-red-600 hover:text-white text-red-400 rounded-lg text-xs"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                     <h4 className="font-heading font-bold text-sm text-white">{p.location_name}</h4>
                     <p className="text-xs text-slate-400">{p.solution_detail}</p>
@@ -2894,7 +3267,7 @@ export function AdminConsole({
                       <span className="text-slate-400">
                         งบประมาณ: <strong className="text-emerald-400 font-mono">{p.budget_mb} ลบ.</strong>
                       </span>
-                      <span className="text-slate-400 font-mono">ช่วง กม. {p.km_range}</span>
+                      <span className="text-slate-400 font-mono">ช่วง {p.km_range}</span>
                     </div>
                   </div>
                 ))}
