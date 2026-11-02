@@ -190,7 +190,7 @@ export async function upsertRouteAction(payload: {
 
     const detourRecord: DetourRoute = {
       id,
-      flood_id_ref: payload.detourRefId || existing?.flood_id_ref || runtimeState.floodRoutes[0]?.id || "F-001",
+      flood_id_ref: payload.detourRefId || existing?.flood_id_ref || runtimeState.floodRoutes[0]?.id || "",
       route_name: payload.detourName || existing?.route_name || "เส้นทางเลี่ยงน้ำท่วม",
       lat_start: payload.latStart ?? existing?.lat_start ?? 6.7845,
       lon_start: payload.lonStart ?? existing?.lon_start ?? 101.178,

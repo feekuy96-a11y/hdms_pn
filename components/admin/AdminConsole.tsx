@@ -184,7 +184,7 @@ export function AdminConsole({
   const [snappingStatusText, setSnappingStatusText] = useState("");
 
   // Detour specifics
-  const [detourRefId, setDetourRefId] = useState(systemData.floodRoutes[0]?.id || "F-001");
+  const [detourRefId, setDetourRefId] = useState(systemData.floodRoutes[0]?.id || "");
   const [detourName, setDetourName] = useState("");
   const [detourDesc, setDetourDesc] = useState("");
 
@@ -296,8 +296,9 @@ export function AdminConsole({
 
     // If in Detour mode, auto generate detour advice text
     if (routeMode === "DETOUR" && (!detourDesc || detourDesc.length < 10)) {
-      const autoAdvice = generateAutoDetourAdvice([sLon, sLat], [eLon, eLat], result.coords, routeNo);
-      setDetourDesc(autoAdvice);
+      generateAutoDetourAdvice([sLon, sLat], [eLon, eLat], result.coords, routeNo, systemData.highwayLayers)
+        .then((autoAdvice) => setDetourDesc(autoAdvice))
+        .catch(() => {});
     }
   };
 
@@ -354,10 +355,21 @@ export function AdminConsole({
   };
 
   // Auto Detour Generator Click
-  const handleGenerateDetourAdviceClick = () => {
-    const advice = generateAutoDetourAdvice([startLon, startLat], [endLon, endLat], draftCoordinates, routeNo);
-    setDetourDesc(advice);
-    showSuccessModal("วิเคราะห์เส้นทางเลี่ยงสำเร็จ", advice);
+  const handleGenerateDetourAdviceClick = async () => {
+    onToast("กำลังอ่านชื่อถนนและจุดเลี้ยวเพื่อสร้างคำแนะนำ...");
+    try {
+      const advice = await generateAutoDetourAdvice(
+        [startLon, startLat],
+        [endLon, endLat],
+        draftCoordinates,
+        routeNo,
+        systemData.highwayLayers
+      );
+      setDetourDesc(advice);
+      showSuccessModal("วิเคราะห์เส้นทางเลี่ยงสำเร็จ", advice);
+    } catch (e: any) {
+      onToast("เกิดข้อผิดพลาดในการวิเคราะห์เส้นทาง: " + (e?.message || ""));
+    }
   };
 
   // Image Upload with Canvas Compression
@@ -1465,11 +1477,15 @@ export function AdminConsole({
                         onChange={(e) => setDetourRefId(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                       >
-                        {systemData.floodRoutes.map((f) => (
-                          <option key={f.id} value={f.id}>
-                            [{f.id}] ทล.{f.route_no} - {f.section_name}
-                          </option>
-                        ))}
+                        {systemData.floodRoutes.length === 0 ? (
+                          <option value="">-- ยังไม่มีจุดน้ำท่วมอ้างอิงในระบบ --</option>
+                        ) : (
+                          systemData.floodRoutes.map((f) => (
+                            <option key={f.id} value={f.id}>
+                              [{f.id}] ทล.{f.route_no} - {f.section_name}
+                            </option>
+                          ))
+                        )}
                       </select>
                     </div>
                     <div>

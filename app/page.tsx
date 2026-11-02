@@ -1,11 +1,26 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { getSystemDataAction } from "@/app/actions/doh-actions";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload } from "@/db/default-data";
-import { LongdoGisMap } from "@/components/map/LongdoGisMap";
 import { WaterTimelineChart } from "@/components/charts/WaterTimelineChart";
+
+const LongdoGisMap = dynamic(
+  () => import("@/components/map/LongdoGisMap").then((mod) => mod.LongdoGisMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full min-h-[350px] bg-[#0b1426] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-slate-400">
+          <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-heading font-medium">กำลังโหลดแผนที่ GIS ปัตตานี...</span>
+        </div>
+      </div>
+    ),
+  }
+);
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -19,12 +34,13 @@ import {
   Compass,
   Phone,
   Clock,
+  CheckCircle2,
 } from "lucide-react";
 
 export default function HomePage() {
   const previousFocus = useRef<HTMLElement | null>(null);
   const closeDetailsRef = useRef<HTMLButtonElement | null>(null);
-  const [selectedFloodId, setSelectedFloodId] = useState<string>("F-001");
+  const [selectedFloodId, setSelectedFloodId] = useState<string>("");
   const [showDossier, setShowDossier] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -152,7 +168,7 @@ export default function HomePage() {
       {/* =================================================================== */}
       {/* 2. MAIN LAYOUT: GIS MAP + COLLAPSIBLE SIDEBAR + DETAIL DOSSIER     */}
       {/* =================================================================== */}
-      <div className="flex-1 flex flex-col lg:flex-row relative lg:overflow-hidden lg:h-[calc(100vh-64px)]">
+      <div className="flex-1 flex flex-col lg:flex-row relative lg:overflow-hidden min-h-[calc(100vh-104px)] lg:h-[calc(100vh-104px)]">
         {/* ================================================================= */}
         {/* A. LEFT SIDEBAR: ROUTE LIST (COLLAPSIBLE)                        */}
         {/* ================================================================= */}
@@ -305,9 +321,32 @@ export default function HomePage() {
               );
             })}
             {filteredFloods.length === 0 && (
-              <div className="rounded-xl bg-slate-900 p-5 text-center text-sm">
-                <p>ไม่พบจุดที่ตรงกับการค้นหา</p>
-                <button type="button" onClick={() => { setSearchQuery(""); setSelectedRouteFilter("ALL"); }} className="mt-3 min-h-11 rounded-lg border border-amber-400 px-4 font-bold text-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">ล้างตัวกรอง</button>
+              <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-6 text-center text-sm space-y-2.5">
+                <div className="w-10 h-10 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <h4 className="font-heading font-bold text-white text-xs">
+                  {systemData.floodRoutes.length === 0
+                    ? "สถานการณ์ปกติ"
+                    : "ไม่พบจุดที่ตรงกับตัวกรอง"}
+                </h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  {systemData.floodRoutes.length === 0
+                    ? "ขณะนี้ไม่มีรายงานจุดน้ำท่วมขังบนโครงข่ายทางหลวง ทุกเส้นทางสัญจรได้ตามปกติ"
+                    : "กรุณาลองเปลี่ยนคำค้นหา หรือกดปุ่มด้านล่างเพื่อล้างตัวกรอง"}
+                </p>
+                {systemData.floodRoutes.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSelectedRouteFilter("ALL");
+                    }}
+                    className="mt-3 min-h-11 rounded-lg border border-amber-400 px-4 font-bold text-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                  >
+                    ล้างตัวกรอง
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -324,7 +363,7 @@ export default function HomePage() {
         {/* ================================================================= */}
         {/* B. MAIN GIS MAP VIEWPORT                                          */}
         {/* ================================================================= */}
-        <div className="order-1 lg:order-2 relative h-[55vh] shrink-0 lg:shrink lg:flex-1 lg:h-full min-h-[340px] lg:min-h-0 w-full overflow-hidden">
+        <div className="order-1 lg:order-2 relative h-[55vh] shrink-0 lg:shrink lg:flex-1 lg:h-full min-h-[350px] lg:min-h-0 w-full overflow-hidden bg-[#0b1426]">
           {/* Floating Expand Sidebar Button (when collapsed) */}
           {isSidebarCollapsed && (
             <button
@@ -338,6 +377,7 @@ export default function HomePage() {
 
           <LongdoGisMap
             publicMode
+            isSidebarCollapsed={isSidebarCollapsed}
             systemData={systemData}
             selectedFloodId={selectedFloodId}
             onSelectFlood={(id) => {
