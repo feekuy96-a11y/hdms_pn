@@ -127,21 +127,25 @@ export function GisDataImportTab({
   const handleSaveRouteSpecsModal = async () => {
     if (!editingRouteSpecs) return;
     const { layerId, featureIdx, ...specs } = editingRouteSpecs;
-    const layer = (systemData.highwayLayers || []).find((l) => l.layer_id === layerId);
-    if (!layer || !layer.geojson_data?.features?.[featureIdx]) return;
+    const layer =
+      (systemData.highwayLayers || []).find((l) => l.layer_id === layerId) ||
+      (systemData.highwayLayers || [])[0];
+    if (!layer) return;
 
     try {
-      const updatedGeojson = JSON.parse(JSON.stringify(layer.geojson_data));
-      const targetFeature = updatedGeojson.features[featureIdx];
-      targetFeature.properties = {
-        ...(targetFeature.properties || {}),
+      const updatedGeojson = layer.geojson_data
+        ? JSON.parse(JSON.stringify(layer.geojson_data))
+        : { type: "FeatureCollection", features: [] };
+      if (!Array.isArray(updatedGeojson.features)) updatedGeojson.features = [];
+
+      const newProps = {
         route_no: specs.routeNo.trim(),
         route_code: specs.routeNo.trim(),
         section_name: specs.sectionName.trim(),
         route_name: specs.sectionName.trim(),
         km_start: specs.kmStart.trim(),
         km_end: specs.kmEnd.trim(),
-        length_km: Number(specs.lengthKm) || targetFeature.properties?.length_km || 0,
+        length_km: Number(specs.lengthKm) || 0,
         responsible_office: specs.responsibleOffice,
         highway_type: specs.highwayType,
         lanes: specs.lanes,
@@ -150,8 +154,28 @@ export function GisDataImportTab({
         is_visible: specs.isVisible,
       };
 
+      if (featureIdx >= 0 && updatedGeojson.features[featureIdx]) {
+        updatedGeojson.features[featureIdx].properties = {
+          ...(updatedGeojson.features[featureIdx].properties || {}),
+          ...newProps,
+        };
+      } else {
+        // Create new feature
+        updatedGeojson.features.push({
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [101.186, 6.834],
+              [101.205, 6.842],
+            ],
+          },
+          properties: newProps,
+        });
+      }
+
       const res = await updateHighwayLayerAction({
-        layerId,
+        layerId: layer.layer_id,
         geojsonData: updatedGeojson,
       });
 
@@ -166,6 +190,80 @@ export function GisDataImportTab({
     } catch (e: any) {
       onToast("เกิดข้อผิดพลาด: " + e.message);
     }
+  };
+
+  // Delete a single highway feature
+  const handleDeleteHighwayFeature = (layerId: string, featureIdx: number, routeTitle: string) => {
+    showConfirmModal(
+      "ยืนยันการลบสายทาง",
+      `คุณต้องการลบสายทาง [${routeTitle}] ออกจากโครงข่ายทางหลวงใช่หรือไม่?`,
+      async () => {
+        const layer = (systemData.highwayLayers || []).find((l) => l.layer_id === layerId);
+        if (!layer || !layer.geojson_data?.features?.[featureIdx]) return;
+        try {
+          const updatedGeojson = JSON.parse(JSON.stringify(layer.geojson_data));
+          updatedGeojson.features.splice(featureIdx, 1);
+          const res = await updateHighwayLayerAction({
+            layerId,
+            geojsonData: updatedGeojson,
+          });
+          if (res.success) {
+            onDataRefresh(res.systemData);
+            showSuccessModal("ลบสำเร็จ", `ลบสายทาง [${routeTitle}] เรียบร้อยแล้ว`);
+          }
+        } catch (e: any) {
+          onToast("เกิดข้อผิดพลาดในการลบ: " + e.message);
+        }
+      }
+    );
+  };
+
+  // Export Highway Specs CSV
+  const handleExportHighwaySpecsCSV = () => {
+    if (allHighwayFeatures.length === 0) {
+      onToast("ไม่มีรายการทางหลวงสำหรับส่งออก");
+      return;
+    }
+    const headers = [
+      "ลำดับ",
+      "การแสดงผลบนแผนที่",
+      "หมายเลขทางหลวง",
+      "ชื่อสายทาง_ตอนควบคุม",
+      "กม_เริ่มต้น",
+      "กม_สิ้นสุด",
+      "ระยะทาง_กม",
+      "จำนวนช่องจราจร",
+      "ชนิดผิวจราจร",
+      "หน่วยงานรับผิดชอบ",
+      "ประเภททางหลวง",
+      "หมายเหตุ",
+    ];
+    const rows = allHighwayFeatures.map((item, idx) =>
+      [
+        idx + 1,
+        item.isVisible ? "แสดง" : "ซ่อน",
+        `"ทล.${item.routeNo}"`,
+        `"${item.sectionName.replace(/"/g, '""')}"`,
+        `"${item.kmStart}"`,
+        `"${item.kmEnd}"`,
+        item.lengthKm || "",
+        `"${item.lanes}"`,
+        `"${item.surface}"`,
+        `"${item.responsibleOffice}"`,
+        item.highwayType === "MAIN_HIGHWAY" ? "สายหลัก" : "สายรอง",
+        `"${(item.remarks || "").replace(/"/g, '""')}"`,
+      ].join(",")
+    );
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `DOH_Highway_Specifications_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    onToast("ส่งออกบัญชีคุณสมบัติทางหลวง CSV สำเร็จ");
   };
 
   // Flattened highway features list for specifications table (Issue #13)
@@ -792,7 +890,7 @@ export function GisDataImportTab({
 
       {/* Individual Highway Specifications Table (Issue #13) */}
       <div className="space-y-3 pt-3 border-t border-slate-800">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h3 className="font-heading font-bold text-sm text-white flex items-center gap-2">
               <Building className="w-4 h-4 text-amber-400" /> ตารางรายการทางหลวงและคุณสมบัติทางวิศวกรรม (Highway Specifications)
@@ -801,9 +899,44 @@ export function GisDataImportTab({
               คลิกไอคอนรูปดวงตาเพื่อ เปิด/ปิด การแสดงผลเส้นทาง หรือคลิก &quot;ตั้งค่า&quot; เพื่อปรับแต่งช่องจราจร (มีผลต่อความหนาเส้นบนแผนที่) ผิวจราจร และข้อมูลเฉพาะสายทาง
             </p>
           </div>
-          <span className="text-[11px] bg-slate-900 border border-slate-700 px-2.5 py-1 rounded-xl text-amber-300 font-mono self-start sm:self-auto">
-            {allHighwayFeatures.length} เส้นทางในระบบ
-          </span>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <span className="text-[11px] bg-slate-900 border border-slate-700 px-2.5 py-1.5 rounded-xl text-amber-300 font-mono">
+              {allHighwayFeatures.length} เส้นทาง
+            </span>
+            <button
+              type="button"
+              onClick={handleExportHighwaySpecsCSV}
+              className="bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 px-2.5 py-1.5 rounded-xl text-xs font-heading flex items-center gap-1.5 transition shadow-sm"
+              title="ส่งออกรายการทางหลวงทั้งหมดเป็น CSV"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-sky-400" />
+              <span>ส่งออก CSV</span>
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setEditingRouteSpecs({
+                  layerId: "MAIN_HIGHWAY",
+                  featureIdx: -1,
+                  routeNo: "",
+                  sectionName: "",
+                  kmStart: "",
+                  kmEnd: "",
+                  lengthKm: "",
+                  responsibleOffice: "หมวดทางหลวงปัตตานี",
+                  highwayType: "MAIN_HIGHWAY",
+                  lanes: "๔ ช่องจราจร (มีเกาะกลาง/มาตรฐานชั้น ๑)",
+                  surface: "AC - ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)",
+                  remarks: "",
+                  isVisible: true,
+                })
+              }
+              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ เพิ่มสายทางใหม่</span>
+            </button>
+          </div>
         </div>
 
         {allHighwayFeatures.length === 0 ? (
@@ -878,30 +1011,47 @@ export function GisDataImportTab({
                       <td className="p-3 text-[11px] text-slate-400 max-w-[120px] truncate" title={item.remarks}>
                         {item.remarks || "-"}
                       </td>
-                      <td className="p-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEditingRouteSpecs({
-                              layerId: item.layerId,
-                              featureIdx: item.featureIdx,
-                              routeNo: item.routeNo,
-                              sectionName: item.sectionName,
-                              kmStart: item.kmStart !== "-" ? item.kmStart : "",
-                              kmEnd: item.kmEnd !== "-" ? item.kmEnd : "",
-                              lengthKm: item.lengthKm !== "-" ? item.lengthKm : "",
-                              responsibleOffice: item.responsibleOffice,
-                              highwayType: item.highwayType,
-                              lanes: item.lanes,
-                              surface: item.surface,
-                              remarks: item.remarks !== "-" ? item.remarks : "",
-                              isVisible: item.isVisible,
-                            })
-                          }
-                          className="bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 hover:border-amber-400 px-2.5 py-1.5 rounded-xl font-heading text-xs font-bold transition inline-flex items-center gap-1 shadow-sm"
-                        >
-                          <Sliders className="w-3.5 h-3.5 text-amber-400" /> ตั้งค่า
-                        </button>
+                      <td className="p-3 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditingRouteSpecs({
+                                layerId: item.layerId,
+                                featureIdx: item.featureIdx,
+                                routeNo: item.routeNo,
+                                sectionName: item.sectionName,
+                                kmStart: item.kmStart !== "-" ? item.kmStart : "",
+                                kmEnd: item.kmEnd !== "-" ? item.kmEnd : "",
+                                lengthKm: item.lengthKm !== "-" ? item.lengthKm : "",
+                                responsibleOffice: item.responsibleOffice,
+                                highwayType: item.highwayType,
+                                lanes: item.lanes,
+                                surface: item.surface,
+                                remarks: item.remarks !== "-" ? item.remarks : "",
+                                isVisible: item.isVisible,
+                              })
+                            }
+                            className="bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 hover:border-amber-400 px-2.5 py-1.5 rounded-xl font-heading text-xs font-bold transition inline-flex items-center gap-1 shadow-sm"
+                            title="ตั้งค่าคุณสมบัติทางวิศวกรรม"
+                          >
+                            <Sliders className="w-3.5 h-3.5 text-amber-400" /> ตั้งค่า
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDeleteHighwayFeature(
+                                item.layerId,
+                                item.featureIdx,
+                                `ทล.${item.routeNo} ${item.sectionName}`
+                              )
+                            }
+                            className="p-1.5 bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 hover:border-rose-600 rounded-xl transition shadow-sm"
+                            title="ลบสายทางนี้"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -965,7 +1115,28 @@ export function GisDataImportTab({
                   <input
                     type="text"
                     value={editingRouteSpecs.kmStart}
-                    onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, kmStart: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const parse = (kp: string) => {
+                        const cl = kp.replace(/กม\.?/gi, "").trim();
+                        const pts = cl.split("+");
+                        if (pts.length === 2) {
+                          const k = parseFloat(pts[0]);
+                          const m = parseFloat(pts[1]);
+                          if (!isNaN(k) && !isNaN(m)) return k + m / 1000;
+                        }
+                        const num = parseFloat(cl);
+                        return !isNaN(num) ? num : null;
+                      };
+                      const s = parse(val);
+                      const end = parse(editingRouteSpecs.kmEnd);
+                      const autoDist = s !== null && end !== null ? Math.abs(end - s).toFixed(3) : "";
+                      setEditingRouteSpecs({
+                        ...editingRouteSpecs,
+                        kmStart: val,
+                        lengthKm: autoDist || editingRouteSpecs.lengthKm,
+                      });
+                    }}
                     placeholder="เช่น 12+500"
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
                   />
@@ -975,7 +1146,28 @@ export function GisDataImportTab({
                   <input
                     type="text"
                     value={editingRouteSpecs.kmEnd}
-                    onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, kmEnd: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const parse = (kp: string) => {
+                        const cl = kp.replace(/กม\.?/gi, "").trim();
+                        const pts = cl.split("+");
+                        if (pts.length === 2) {
+                          const k = parseFloat(pts[0]);
+                          const m = parseFloat(pts[1]);
+                          if (!isNaN(k) && !isNaN(m)) return k + m / 1000;
+                        }
+                        const num = parseFloat(cl);
+                        return !isNaN(num) ? num : null;
+                      };
+                      const s = parse(editingRouteSpecs.kmStart);
+                      const end = parse(val);
+                      const autoDist = s !== null && end !== null ? Math.abs(end - s).toFixed(3) : "";
+                      setEditingRouteSpecs({
+                        ...editingRouteSpecs,
+                        kmEnd: val,
+                        lengthKm: autoDist || editingRouteSpecs.lengthKm,
+                      });
+                    }}
                     placeholder="เช่น 18+200"
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
                   />
@@ -1007,7 +1199,7 @@ export function GisDataImportTab({
                     <option value="๒ ช่องจราจร (สวนทาง)">๒ ช่องจราจร (สวนทาง) - ความหนา 3.5px</option>
                     <option value="๔ ช่องจราจร (มีเกาะกลาง/มาตรฐานชั้น ๑)">๔ ช่องจราจร (มาตรฐานชั้น ๑) - ความหนา 5.5px</option>
                     <option value="๖ ช่องจราจร (สายหลักหนาแน่น)">๖ ช่องจราจร (สายหลัก) - ความหนา 7.5px</option>
-                    <option value="๘ ช่องจราจร ขึ้นไป">๘ ช่องจราจร ขึ้นไป - ความหนา 9.0px</option>
+                    <option value="๘ ช่องจราจร ขึ้นไป">๘ ช่องจราจร ขึ้นไป - ความหนา 8.5px</option>
                   </select>
                 </div>
                 <div>
@@ -1017,9 +1209,10 @@ export function GisDataImportTab({
                     onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, surface: e.target.value })}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-amber-300"
                   >
-                    <option value="ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)">ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)</option>
-                    <option value="คอนกรีตเสริมเหล็ก (Rigid Concrete)">คอนกรีตเสริมเหล็ก (Rigid Concrete)</option>
-                    <option value="ผิวทางลาดยาง (Surface Treatment)">ผิวทางลาดยาง (Surface Treatment)</option>
+                    <option value="AC - ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)">AC - ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)</option>
+                    <option value="PCC - คอนกรีตเสริมเหล็ก (Portland Cement Concrete)">PCC - คอนกรีตเสริมเหล็ก (Portland Cement Concrete)</option>
+                    <option value="DST - ผิวทางลาดยางสองชั้น (Double Surface Treatment)">DST - ผิวทางลาดยางสองชั้น (Double Surface Treatment)</option>
+                    <option value="SMA - สโตนแมสติกแอสฟัลต์ (Stone Mastic Asphalt)">SMA - สโตนแมสติกแอสฟัลต์ (Stone Mastic Asphalt)</option>
                   </select>
                 </div>
               </div>

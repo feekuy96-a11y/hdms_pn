@@ -294,6 +294,26 @@ export async function setIncidentStatusSupabase(id: string, isActive: boolean): 
 }
 
 /**
+ * ปรับสถานะเส้นทางเลี่ยง (is_active)
+ */
+export async function setDetourStatusSupabase(id: string, isActive: boolean): Promise<boolean> {
+  try {
+    const { error } = await supabaseServer
+      .from("doh_detour_routes")
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) {
+      console.warn("[Supabase Server] setDetourStatus error:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("[Supabase Server] Network error in setDetourStatus:", (err as Error).message);
+    return false;
+  }
+}
+
+/**
  * บันทึกสไตล์เส้นแผนที่ (doh_map_styles)
  */
 export async function updateMapStylesSupabase(

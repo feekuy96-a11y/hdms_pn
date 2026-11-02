@@ -255,8 +255,8 @@ export function LongdoGisMap({
       const group = overlayGroupRef.current;
       group.clearLayers();
 
-      // Hardware-accelerated canvas renderer for 60fps vector rendering
-      const vectorCanvas = L.canvas ? L.canvas({ padding: 0.5 }) : undefined;
+      // Hardware-accelerated canvas renderer for 60fps vector rendering with click tolerance
+      const vectorCanvas = L.canvas ? (L.canvas as any)({ padding: 0.5, tolerance: 10 }) : undefined;
 
       // A. Draw Official Highway Route Shields (ไอคอนแสดงหมายเลขทางหลวงบนแผนที่ในรูปแบบทางการ)
       if (showHighwayShields) {
@@ -366,9 +366,9 @@ export function LongdoGisMap({
                 if (props.lanes) {
                   const lanesStr = String(props.lanes);
                   if (lanesStr.includes("๘") || lanesStr.includes("8")) featureWeight = 8.5;
-                  else if (lanesStr.includes("๖") || lanesStr.includes("6")) featureWeight = 7;
-                  else if (lanesStr.includes("๔") || lanesStr.includes("4")) featureWeight = 5;
-                  else if (lanesStr.includes("๒") || lanesStr.includes("2")) featureWeight = 3;
+                  else if (lanesStr.includes("๖") || lanesStr.includes("6")) featureWeight = 7.5;
+                  else if (lanesStr.includes("๔") || lanesStr.includes("4")) featureWeight = 5.5;
+                  else if (lanesStr.includes("๒") || lanesStr.includes("2")) featureWeight = 3.5;
                 }
                 const featureColor = props.color || color;
                 return {

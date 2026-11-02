@@ -19,6 +19,7 @@ import {
   deleteMitigationProjectSupabase,
   updateHighwayLayerSupabase,
   setIncidentStatusSupabase,
+  setDetourStatusSupabase,
   updateMapStylesSupabase,
   upsertOfficeSupabase,
   deleteOfficeSupabase,
@@ -373,6 +374,27 @@ export async function setIncidentStatusAction(
   }
 
   await setIncidentStatusSupabase(id, isActive);
+
+  runtimeState.updatedAt = new Date().toISOString();
+  revalidatePath("/");
+  revalidatePath("/admin");
+  return { success: true, systemData: runtimeState };
+}
+
+/**
+ * เปลี่ยนสถานะเส้นทางเลี่ยง: เปิดใช้งาน / ปิดใช้งานชั่วคราว
+ */
+export async function toggleDetourStatusAction(
+  id: string,
+  isActive: boolean
+): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  const detour = runtimeState.detourRoutes.find((d) => d.id === id);
+  if (detour) {
+    detour.is_active = isActive;
+    detour.updated_at = new Date().toISOString();
+  }
+
+  await setDetourStatusSupabase(id, isActive);
 
   runtimeState.updatedAt = new Date().toISOString();
   revalidatePath("/");

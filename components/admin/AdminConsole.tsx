@@ -7,6 +7,7 @@ import {
   Settings,
   MapPinned,
   ClipboardList,
+  Signpost,
   FileSpreadsheet,
   Palette,
   Briefcase,
@@ -22,6 +23,7 @@ import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDi
 import { SystemSettingsTab } from "@/components/admin/tabs/SystemSettingsTab";
 import { MapManagementTab } from "@/components/admin/tabs/MapManagementTab";
 import { IncidentRegistryTab } from "@/components/admin/tabs/IncidentRegistryTab";
+import { DetourManagementTab } from "@/components/admin/tabs/DetourManagementTab";
 import { GisDataImportTab } from "@/components/admin/tabs/GisDataImportTab";
 import { LineStylingTab } from "@/components/admin/tabs/LineStylingTab";
 import { GovernorProjectsTab } from "@/components/admin/tabs/GovernorProjectsTab";
@@ -49,12 +51,13 @@ export function AdminConsole({
   draftCoordinates,
   setDraftCoordinates,
   pickedCoordinate,
+  onFocusCoordinates,
   onToast,
   setIncomingGisLines,
 }: AdminConsoleProps) {
   // Navigation & View
   const [activeTab, setActiveTab] = useState<
-    "system" | "map" | "incidents" | "routes" | "style" | "projects"
+    "system" | "map" | "incidents" | "detours" | "routes" | "style" | "projects"
   >("map");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
@@ -130,6 +133,13 @@ export function AdminConsole({
       subLabel: `อัปเดตระดับน้ำ (${systemData.floodRoutes?.length || 0} จุด) & ส่งออก CSV`,
       icon: ClipboardList,
       badge: systemData.floodRoutes?.filter((r) => r.is_active).length || 0,
+    },
+    {
+      id: "detours" as const,
+      label: "รายการทางเลี่ยง",
+      subLabel: `ทางเลี่ยง & คำแนะนำ (${systemData.detourRoutes?.length || 0} เส้นทาง)`,
+      icon: Signpost,
+      badge: systemData.detourRoutes?.filter((r) => r.is_active).length || 0,
     },
     {
       id: "routes" as const,
@@ -348,7 +358,28 @@ export function AdminConsole({
             />
           )}
 
-          {/* TAB 4: GIS Data Import & Highway Layers */}
+          {/* TAB 4: Detour Routes Management */}
+          {activeTab === "detours" && (
+            <DetourManagementTab
+              systemData={systemData}
+              onDataRefresh={onDataRefresh}
+              onToast={onToast}
+              showConfirmModal={showConfirmModal}
+              showSuccessModal={showSuccessModal}
+              showErrorModal={showErrorModal}
+              onEditDetourOnMap={(detourId) => {
+                setEditingRoute({ type: "DETOUR", id: detourId });
+                setActiveTab("map");
+              }}
+              onAddDetour={() => {
+                setEditingRoute({ type: "DETOUR", id: "" });
+                setActiveTab("map");
+              }}
+              onFocusCoordinates={onFocusCoordinates}
+            />
+          )}
+
+          {/* TAB 5: GIS Data Import & Highway Layers */}
           {activeTab === "routes" && (
             <GisDataImportTab
               systemData={systemData}

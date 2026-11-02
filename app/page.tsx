@@ -58,13 +58,14 @@ export default function HomePage() {
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
   const previousDataFingerprint = useRef<string>("");
 
-  // TanStack Query for Data Fetching & Sync with automatic background refetch (Issue #6)
+  // TanStack Query for Data Fetching & Sync with automatic background refetch (Network-First live data)
   const { data: systemData = INITIAL_SYSTEM_DATA, isFetching, isError } = useQuery<SystemDataPayload>({
     queryKey: ["dohSystemData"],
     queryFn: async () => {
       return await getSystemDataAction();
     },
-    initialData: INITIAL_SYSTEM_DATA,
+    staleTime: 0,
+    refetchOnMount: "always",
     refetchInterval: 10000, // Poll every 10 seconds in background
     refetchIntervalInBackground: true,
   });
@@ -658,39 +659,50 @@ export default function HomePage() {
             </button>
           )}
           {selectedFlood && showDossier && (
-            <div role="dialog" aria-modal="false" aria-label={`รายละเอียดจุดน้ำท่วม ${selectedFlood.section_name}`} className="fixed inset-x-2 bottom-2 z-[700] max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700/80 bg-[#0c162c] text-slate-100 shadow-2xl lg:absolute lg:bottom-4 lg:left-4 lg:right-auto lg:w-[500px] lg:max-h-[80vh]">
-              {/* Pull handle on mobile */}
-              <div className="w-12 h-1.5 bg-slate-600 rounded-full mx-auto my-2 lg:hidden" />
-              {/* Header: Dark Navy Header with Badge, Section Title, KM Range & Action Buttons */}
-              <div className="sticky top-0 z-20 bg-[#0c1a30] text-white p-3.5 border-b border-slate-800 flex items-start justify-between gap-2 shadow-md">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="bg-[#f59e0b] text-slate-950 font-heading font-black text-xs px-2.5 py-1 rounded-md shadow shrink-0">
-                      ทล.{selectedFlood.route_no}
-                    </span>
-                    <h3 className="font-heading font-bold text-sm sm:text-base text-white truncate">
-                      {selectedFlood.section_name}
-                    </h3>
+            <div
+              className="fixed inset-0 z-[700] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/65 backdrop-blur-xs animate-fade-in"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setShowDossier(false);
+              }}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label={`รายละเอียดจุดน้ำท่วม ${selectedFlood.section_name}`}
+                className="w-full max-w-[530px] max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-700/80 bg-[#0c162c] text-slate-100 shadow-2xl relative"
+              >
+                {/* Pull handle on mobile */}
+                <div className="w-12 h-1.5 bg-slate-600 rounded-full mx-auto my-2 lg:hidden" />
+                {/* Header: Dark Navy Header with Badge, Section Title, KM Range & Action Buttons */}
+                <div className="sticky top-0 z-20 bg-[#0c1a30] text-white p-3.5 border-b border-slate-800 flex items-start justify-between gap-2 shadow-md">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-[#f59e0b] text-slate-950 font-heading font-black text-xs px-2.5 py-1 rounded-md shadow shrink-0">
+                        ทล.{selectedFlood.route_no}
+                      </span>
+                      <h3 className="font-heading font-bold text-sm sm:text-base text-white truncate">
+                        {selectedFlood.section_name}
+                      </h3>
+                    </div>
+                    <div className="text-[11px] text-slate-300 mt-1">
+                      กม.{selectedFlood.km_start} ถึง กม.{selectedFlood.km_end} ({selectedFlood.subdistrict || selectedFlood.district || "อ.หนองจิก"}) • พิกัด {selectedFlood.lat_start.toFixed(4)}, {selectedFlood.lon_start.toFixed(4)}
+                    </div>
                   </div>
-                  <div className="text-[11px] text-slate-300 mt-1">
-                    กม.{selectedFlood.km_start} ถึง กม.{selectedFlood.km_end} ({selectedFlood.subdistrict || selectedFlood.district || "อ.หนองจิก"}) • พิกัด {selectedFlood.lat_start.toFixed(4)}, {selectedFlood.lon_start.toFixed(4)}
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {/* Close Dossier Button */}
-                  <button
-                    ref={closeDetailsRef}
-                    type="button"
-                    onClick={() => setShowDossier(false)}
-                    aria-label="ปิดรายละเอียด"
-                    className="min-h-11 min-w-11 p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
-                    title="ปิดหน้าต่างรายละเอียด"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Close Dossier Button */}
+                    <button
+                      ref={closeDetailsRef}
+                      type="button"
+                      onClick={() => setShowDossier(false)}
+                      aria-label="ปิดรายละเอียด"
+                      className="min-h-11 min-w-11 p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                      title="ปิดหน้าต่างรายละเอียด"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
 
               {/* Body Content */}
               <div className="p-4 space-y-3.5">
@@ -886,7 +898,8 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
         </div>
       </div>
 

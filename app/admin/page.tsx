@@ -46,7 +46,10 @@ export default function AdminPage() {
     queryFn: async () => {
       return await getSystemDataAction();
     },
-    initialData: INITIAL_SYSTEM_DATA,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchInterval: 10000,
+    refetchIntervalInBackground: true,
   });
 
   const showToast = (msg: string) => {

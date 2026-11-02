@@ -67,7 +67,7 @@ export function MapManagementTab({
   const [routeEditId, setRouteEditId] = useState<string>("");
 
   // Common Highway Attributes
-  const [routeNo, setRouteNo] = useState("43");
+  const [routeNo, setRouteNo] = useState("");
   const [kmStart, setKmStart] = useState("");
   const [kmEnd, setKmEnd] = useState("");
   const [sectionName, setSectionName] = useState("");
@@ -78,19 +78,19 @@ export function MapManagementTab({
   const [detourDesc, setDetourDesc] = useState("");
   const [detourAdviceView, setDetourAdviceView] = useState<"FORWARD" | "REVERSE" | "COMBINED">("COMBINED");
 
-  // Coordinates
-  const [startLat, setStartLat] = useState(6.834);
-  const [startLon, setStartLon] = useState(101.186);
-  const [endLat, setEndLat] = useState(6.839);
-  const [endLon, setEndLon] = useState(101.192);
+  // Coordinates - Start empty without hardcoded mock defaults
+  const [startLat, setStartLat] = useState<number | string>("");
+  const [startLon, setStartLon] = useState<number | string>("");
+  const [endLat, setEndLat] = useState<number | string>("");
+  const [endLon, setEndLon] = useState<number | string>("");
   const [draftWaypoints, setDraftWaypoints] = useState<[number, number][]>([]);
 
   // Snapping & Geocoding State
   const [snappingStatusText, setSnappingStatusText] = useState("");
   const [isGeocoding, setIsGeocoding] = useState(false);
 
-  // Flood Severity & Traffic Status
-  const [routeWaterLevel, setRouteWaterLevel] = useState<number>(35);
+  // Flood Severity & Traffic Status - Start empty for clean input
+  const [routeWaterLevel, setRouteWaterLevel] = useState<number | string>("");
   const [routeStatus, setRouteStatus] = useState<"WARNING" | "CLOSED" | "PASSABLE">("WARNING");
   const [selectedMeasure, setSelectedMeasure] = useState<string>(SAFETY_MEASURES[0]);
 
@@ -210,19 +210,29 @@ export function MapManagementTab({
 
   // Trigger Road Snapping
   const triggerDualRoadSnapping = async (
-    sLat: number,
-    sLon: number,
-    eLat: number,
-    eLon: number,
+    sLat: number | string,
+    sLon: number | string,
+    eLat: number | string,
+    eLon: number | string,
     waypoints: [number, number][] = draftWaypoints
   ) => {
+    const numSLat = Number(sLat);
+    const numSLon = Number(sLon);
+    const numELat = Number(eLat);
+    const numELon = Number(eLon);
+
+    if (!numSLat || !numSLon || !numELat || !numELon || isNaN(numSLat) || isNaN(numELat)) {
+      onToast("กรุณาระบุพิกัด A และ B ให้ครบถ้วนก่อนคำนวณเส้นเกาะถนน");
+      return;
+    }
+
     setSnappingStatusText("กำลังคำนวณเส้นเกาะถนนจริง (Dual-Source Snapping)...");
     try {
       const snapped = await calculateRoadSnappedDualSource(
-        sLat,
-        sLon,
-        eLat,
-        eLon,
+        numSLat,
+        numSLon,
+        numELat,
+        numELon,
         waypoints,
         HIGHWAY_ROUTES,
         systemData.highwayLayers
@@ -232,12 +242,12 @@ export function MapManagementTab({
         setSnappingStatusText(`✓ คำนวณเส้นทางเกาะโครงข่ายถนนสำเร็จ (${snapped.length} จุด)`);
         onToast(`สร้างแนวเส้นทางเกาะถนนสำเร็จ: ${snapped.length} จุด`);
       } else {
-        const fallback: [number, number][] = [[sLon, sLat], ...waypoints, [eLon, eLat]];
+        const fallback: [number, number][] = [[numSLon, numSLat], ...waypoints, [numELon, numELat]];
         setDraftCoordinates(fallback);
         setSnappingStatusText("ไม่สามารถเชื่อมต่อโครงข่ายทางหลวงได้ จึงใช้เส้นตรงระหว่างจุด");
       }
     } catch {
-      const fallback: [number, number][] = [[sLon, sLat], ...waypoints, [eLon, eLat]];
+      const fallback: [number, number][] = [[numSLon, numSLat], ...waypoints, [numELon, numELat]];
       setDraftCoordinates(fallback);
       setSnappingStatusText("ใช้เส้นตรงระหว่างจุด (โครงข่ายอยู่นอกพื้นที่สำรวจ)");
     }
@@ -309,21 +319,37 @@ export function MapManagementTab({
     setDraftCoordinates([]);
     setDraftWaypoints([]);
     setSnappingStatusText("");
-    onToast("ล้างเส้นทางร่างบนแผนที่แล้ว");
+    setStartLat("");
+    setStartLon("");
+    setEndLat("");
+    setEndLon("");
+    setKmStart("");
+    setKmEnd("");
+    setSectionName("");
+    setRouteWaterLevel("");
+    setDetourName("");
+    setDetourDesc("");
+    setFieldImages([]);
+    onToast("ล้างเส้นทางร่างและแบบฟอร์มแล้ว");
   };
 
   // Generate Detour Advice
   const handleGenerateDetourAdviceClick = () => {
+    const numSLat = Number(startLat) || 6.834;
+    const numSLon = Number(startLon) || 101.186;
+    const numELat = Number(endLat) || 6.839;
+    const numELon = Number(endLon) || 101.192;
+
     const advice = generateAutoDetourAdvice({
-      routeNo,
+      routeNo: routeNo || (availableHighways[0]?.no || "43"),
       sectionName: sectionName || "ทางหลวงปัตตานี",
       kmStart,
       kmEnd,
       detourName: detourName || "เส้นทางเลี่ยง",
-      startLat,
-      startLon,
-      endLat,
-      endLon,
+      startLat: numSLat,
+      startLon: numSLon,
+      endLat: numELat,
+      endLon: numELon,
     });
     setDetourDesc(advice);
     onToast("วิเคราะห์คำแนะนำการเดินทางไป-กลับสำเร็จ");
@@ -356,7 +382,14 @@ export function MapManagementTab({
       onToast("กรุณาระบุชื่อตอนควบคุมหรือบริเวณที่เกิดเหตุ");
       return;
     }
-    if (draftCoordinates.length < 2 && (!startLat || !endLat)) {
+
+    const numSLat = Number(startLat);
+    const numSLon = Number(startLon);
+    const numELat = Number(endLat);
+    const numELon = Number(endLon);
+    const numWaterLevel = Number(routeWaterLevel) || 0;
+
+    if (draftCoordinates.length < 2 && (!numSLat || !numELat || isNaN(numSLat) || isNaN(numELat))) {
       onToast("กรุณากำหนดจุดพิกัดเริ่มต้นและสิ้นสุดบนแผนที่");
       return;
     }
@@ -367,27 +400,29 @@ export function MapManagementTab({
         draftCoordinates.length >= 2
           ? draftCoordinates
           : [
-              [startLon, startLat],
-              [endLon, endLat],
+              [numSLon, numSLat],
+              [numELon, numELat],
             ]
       ) as [number, number][];
+
+      const chosenRouteNo = routeNo || (availableHighways[0]?.no || "43");
 
       const res = await upsertRouteAction({
         id: routeEditId || undefined,
         recordType: routeMode,
-        routeNo,
+        routeNo: chosenRouteNo,
         kmStart,
         kmEnd,
         sectionName: sectionName || "จุดรายงานน้ำท่วม",
-        waterLevelCm: routeWaterLevel,
+        waterLevelCm: numWaterLevel,
         trafficStatus: routeStatus,
         detourRefId,
         detourName: detourName || "เส้นทางเลี่ยงน้ำท่วม",
         detourDesc,
-        latStart: startLat,
-        lonStart: startLon,
-        latEnd: endLat,
-        lonEnd: endLon,
+        latStart: numSLat || undefined,
+        lonStart: numSLon || undefined,
+        latEnd: numELat || undefined,
+        lonEnd: numELon || undefined,
         coordinates: coords,
         latestPhotoUrl: fieldImages[0] || undefined,
       });
@@ -461,6 +496,7 @@ export function MapManagementTab({
                 onChange={(e) => setRouteNo(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
               >
+                {!routeNo && <option value="">-- เลือกหมายเลขทางหลวง --</option>}
                 {availableHighways.map((h) => (
                   <option key={h.no} value={h.no}>
                     {h.name}
@@ -596,8 +632,9 @@ export function MapManagementTab({
                 type="number"
                 step="any"
                 value={startLat}
-                onChange={(e) => setStartLat(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px]"
+                onChange={(e) => setStartLat(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder="เช่น 6.8340"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px] placeholder:text-slate-600"
               />
             </div>
             <div>
@@ -606,8 +643,9 @@ export function MapManagementTab({
                 type="number"
                 step="any"
                 value={startLon}
-                onChange={(e) => setStartLon(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px]"
+                onChange={(e) => setStartLon(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder="เช่น 101.1860"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px] placeholder:text-slate-600"
               />
             </div>
             <div>
@@ -616,8 +654,9 @@ export function MapManagementTab({
                 type="number"
                 step="any"
                 value={endLat}
-                onChange={(e) => setEndLat(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px]"
+                onChange={(e) => setEndLat(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder="เช่น 6.8390"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px] placeholder:text-slate-600"
               />
             </div>
             <div>
@@ -626,8 +665,9 @@ export function MapManagementTab({
                 type="number"
                 step="any"
                 value={endLon}
-                onChange={(e) => setEndLon(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px]"
+                onChange={(e) => setEndLon(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder="เช่น 101.1920"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px] placeholder:text-slate-600"
               />
             </div>
           </div>
@@ -787,8 +827,9 @@ export function MapManagementTab({
                 <input
                   type="number"
                   value={routeWaterLevel}
-                  onChange={(e) => setRouteWaterLevel(Number(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                  onChange={(e) => setRouteWaterLevel(e.target.value === "" ? "" : Number(e.target.value))}
+                  placeholder="เช่น 35 (ระบุเป็นตัวเลข ซม.)"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 font-mono"
                 />
               </div>
               <div>
