@@ -395,3 +395,4 @@ export function IncidentRegistryTab({
     </div>
   );
 }
+
