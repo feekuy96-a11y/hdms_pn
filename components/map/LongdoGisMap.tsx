@@ -6,6 +6,10 @@ import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { PATTANI_DISTRICTS_GEOJSON } from "@/lib/gis-utils";
 import { Layers, Navigation, Building2, Map } from "lucide-react";
 
+const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+}[character] || character));
+
 interface LongdoGisMapProps {
   systemData: SystemDataPayload;
   selectedFloodId: string;
@@ -19,6 +23,7 @@ interface LongdoGisMapProps {
   focusCoordinates?: [number, number] | null;
   incomingGisLines?: [number, number][][];
   className?: string;
+  publicMode?: boolean;
 }
 
 export function LongdoGisMap({
@@ -34,6 +39,7 @@ export function LongdoGisMap({
   focusCoordinates = null,
   incomingGisLines = [],
   className = "h-full w-full",
+  publicMode = false,
 }: LongdoGisMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
@@ -350,8 +356,8 @@ export function LongdoGisMap({
                 <span class="text-slate-950 text-[10px] font-bold px-1.5 py-0.5 rounded font-heading shadow" style="background-color: ${dColor}">
                   เส้นทางเลี่ยงแนะนำ
                 </span>
-                <h4 class="font-bold text-white text-sm mt-1.5 font-heading">${detour.route_name}</h4>
-                <p class="text-slate-300 mt-1">${detour.description || "-"}</p>
+                <h4 class="font-bold text-white text-sm mt-1.5 font-heading">${escapeHtml(detour.route_name)}</h4>
+                <p class="text-slate-300 mt-1">${escapeHtml(detour.description || "-")}</p>
               </div>
             `);
           }
@@ -417,8 +423,8 @@ export function LongdoGisMap({
           const iconHtml = `
             <div class="${capsuleClass}">
               <span class="text-xs">${statusIcon}</span>
-              <span>ทล.${flood.route_no}</span>
-              <span class="opacity-90">(${levelText})</span>
+              <span>ทล.${escapeHtml(flood.route_no)}</span>
+              <span class="opacity-90">(${escapeHtml(levelText)})</span>
             </div>
           `;
 
@@ -497,11 +503,11 @@ export function LongdoGisMap({
                   ${isHq ? "สำนักงานใหญ่" : "หมวดทางหลวง"}
                 </span>
               </div>
-              <h4 class="font-bold text-white text-sm font-heading">${office.name}</h4>
-              <p class="text-slate-300 text-[11px] mt-1">${office.address}</p>
+              <h4 class="font-bold text-white text-sm font-heading">${escapeHtml(office.name)}</h4>
+              <p class="text-slate-300 text-[11px] mt-1">${escapeHtml(office.address)}</p>
               <div class="mt-2 pt-1.5 border-t border-slate-700 flex items-center justify-between">
                 <a href="tel:${office.phone.replace(/[^0-9]/g, "")}" class="text-amber-300 hover:underline font-bold text-xs flex items-center gap-1">
-                  📞 ${office.phone}
+                  📞 ${escapeHtml(office.phone)}
                 </a>
                 <a href="https://www.google.com/maps/dir/?api=1&destination=${office.lat},${office.lon}" target="_blank" rel="noopener noreferrer" class="bg-amber-500 text-slate-950 px-2 py-0.5 rounded text-[10px] font-bold hover:bg-amber-400">
                   นำทาง
@@ -535,7 +541,7 @@ export function LongdoGisMap({
       <div ref={mapContainerRef} className="w-full h-full bg-slate-950" />
 
       {/* Top Map KPI Status Badges & Base Map Switcher */}
-      <div className="absolute top-3 left-3 right-3 z-[400] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+      {!publicMode && <div className="absolute top-3 left-3 right-3 z-[400] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
         <div className="flex flex-wrap gap-1.5 pointer-events-auto">
           <div className="bg-slate-950/90 backdrop-blur border border-red-500/60 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg">
             <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
@@ -590,10 +596,12 @@ export function LongdoGisMap({
             Longdo HD
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* Layer Control Legend on Bottom Left */}
-      <div className="absolute bottom-3 left-3 z-[400] bg-slate-950/90 backdrop-blur border border-slate-700 rounded-xl p-2.5 text-[11px] shadow-xl space-y-1.5 max-w-[230px]">
+      <details className={`absolute z-[400] bg-slate-950/95 border border-slate-700 rounded-xl p-2.5 text-xs shadow-xl max-w-[250px] ${publicMode ? "top-3 right-3" : "bottom-3 left-3"}`} open={!publicMode}>
+        {publicMode && <summary className="min-h-11 cursor-pointer font-bold text-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">ตัวเลือกแผนที่</summary>}
+        <div className="space-y-2">
         <div className="font-heading font-bold text-amber-400 flex items-center justify-between">
           <span className="flex items-center gap-1.5">
             <Layers className="w-3.5 h-3.5" /> เลเยอร์โครงข่าย
@@ -613,7 +621,7 @@ export function LongdoGisMap({
             className="w-4 h-1.5 inline-block rounded shadow-sm"
             style={{ backgroundColor: mapStyles.flood?.color || "#D32F2F" }}
           />
-          <span>เส้นทางน้ำท่วม (Flood Line)</span>
+          <span>เส้นทางน้ำท่วม</span>
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -626,7 +634,7 @@ export function LongdoGisMap({
             className="w-4 h-1.5 inline-block rounded shadow-sm"
             style={{ backgroundColor: mapStyles.detour?.color || "#FBC02D" }}
           />
-          <span>เส้นทางเลี่ยง (Detour Line)</span>
+          <span>เส้นทางเลี่ยง</span>
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -682,20 +690,11 @@ export function LongdoGisMap({
               onChange={(e) => setShowRoadLabels(e.target.checked)}
               className="accent-amber-500 rounded"
             />
-            <span>แสดงป้ายชื่อสายทาง (Road Labels)</span>
+            <span>แสดงป้ายชื่อสายทาง</span>
           </label>
         </div>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showOffices}
-            onChange={(e) => setShowOffices(e.target.checked)}
-            className="accent-amber-400"
-          />
-          <span className="w-2.5 h-2.5 bg-amber-400 inline-block rounded" />
-          <span>หมุดแขวง/หมวดทางหลวง</span>
-        </label>
-      </div>
+        </div>
+      </details>
     </div>
   );
 }
