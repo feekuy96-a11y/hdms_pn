@@ -28,6 +28,14 @@
 
 ## 🕒 ประวัติการอัปเดตระบบ (System Update Changelog)
 
+### [UPDATE-008] 2026-11-02: แก้ Docker Compose ให้ตรงกับ source ปัจจุบัน
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** ป้องกัน local/cloud container startup ล้มเหลวจากการ mount ไฟล์ seed ที่ถูกลบออกจาก repository แล้ว
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `docker-compose.yml`, `SUPPLEMENTAL_RULES.md`
+- **รายละเอียดการทำงาน (Technical Changes):** เอา mount `db/seed.sql` ออกจาก PostgreSQL service โดยให้เริ่มต้นจาก schema ปัจจุบันและข้อมูลจริงจาก Supabase แทน
+- **การทดสอบและผลลัพธ์ (Verification):** ตรวจสอบแล้ว `db/seed.sql` ไม่มีอยู่จริง; `npx tsc --noEmit` ผ่าน 0 errors; ไม่สามารถรัน Docker validation ได้เพราะเครื่องนี้ไม่มี Docker CLI/daemon
+- **สถานะ:** พร้อมใช้งานเมื่อ attach cloud runtime ที่มี Docker (READY)
+
 ### [UPDATE-006] 2026-11-02: ซิงก์โครงสร้างระบบขึ้น Supabase และ Push ข้อมูลขึ้น GitHub
 - **ผู้ดำเนินการ:** ทีมพัฒนาระบบสารสนเทศ แขวงทางหลวงปัตตานี & AI Assistant
 - **วัตถุประสงค์:** ติดตั้ง Schema, RPCs, Security RLS บน Supabase Cloud Database และซิงก์โค้ดล่าสุดขึ้น GitHub
