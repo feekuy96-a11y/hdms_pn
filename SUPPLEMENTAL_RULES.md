@@ -28,6 +28,24 @@
 
 ## 🕒 ประวัติการอัปเดตระบบ (System Update Changelog)
 
+### [UPDATE-012] 2026-11-02: ล้างข้อมูลตัวอย่างที่ไม่เป็นทางการทั้งหมด พร้อมแก้ไขพิกัดเส้นพุ่งลงทะเลให้แผนที่สะอาดพร้อมใช้งานจริง 100%
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** เคลียร์ข้อมูลตัวอย่างที่ไม่เป็นทางการทั้งหมด (ลบ Mock Flood Route F-42-01, Mock Detour D-42-01, Timeline และรูป Mock Unsplash) ออกจากทั้งฐานข้อมูล Supabase และ Default State, แก้ไขบั๊กการสลับพิกัด [lon, lat] ใน Leaflet ที่ทำให้เกิดเส้นพุ่งทะลุลงทะเล, และตั้งค่าการแสดงผลแผนที่เริ่มต้นให้สะอาด เป็นทางการ มุ่งเน้นหมุดที่ตั้งจริงของแขวงทางหลวงปัตตานีและ ๕ หมวดทางหลวง
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):**
+  - components/map/LongdoGisMap.tsx (เพิ่มฟังก์ชัน toLeafletLatLng ตรวจสอบและแปลงพิกัดเข้า Leaflet อย่างถูกต้อง, แก้ไข FlyTo, ปิดป้าย Shield ตัวอย่างโดยตั้งค่าเริ่มต้นเป็น false ให้เปิดดูเฉพาะเมื่อเลือก)
+  - db/default-data.ts (ล้าง mock mitigationProjects และกำหนด initial state ทุกรายการน้ำท่วม/ทางเลี่ยง/ไทม์ไลน์เป็น array ว่าง [] โหลดสดจาก Supabase เท่านั้น)
+  - ฐานข้อมูล Supabase Cloud iiuearxdsbilcpsfzhyp (ลบ mock records ใน doh_flood_routes, doh_detour_routes, doh_timeline_updates คงเหลือเฉพาะข้อมูลทางการจริง)
+- **รายละเอียดการทำงาน (Technical Changes):**
+  1. สร้าง toLeafletLatLng() ตรวจสอบช่วงพิกัดประเทศไทย (Latitude ~6, Longitude ~101) หากพบพิกัดสลับจะสลับคืนอัตโนมัติ ทำให้เส้นทางทุกประเภทถูกวาดบนผิวทางหลวงปัตตานีอย่างถูกต้อง 100% ไม่หลุดขอบเขตหรือพุ่งลงทะเล
+  2. ลบข้อมูล mock incidents ออกจาก Supabase Cloud ทำให้สถานะระบบพร้อมใช้งานจริง (ผ่านไม่ได้ 0 จุด, เฝ้าระวัง 0 จุด, ทางเลี่ยง 0 สาย) เมื่อมีเหตุน้ำท่วมจริงเจ้าหน้าที่สามารถกรอกบันทึกเข้า Supabase ได้ทันที
+  3. ป้ายสัญลักษณ์ทางหลวง (Highway Shields) ปรับค่าเริ่มต้นเป็นปิด (Checkbox ในชั้นข้อมูล) เพื่อไม่ให้รกบดบังแนวถนนในเขตเมือง
+  4. คงหมุดที่ตั้งทางการของสำนักงานแขวงทางหลวงปัตตานี และ ๕ หมวดทางหลวง (ปัตตานี, หนองจิก, ยะรัง, โคกโพธิ์, สายบุรี) ที่เชื่อมโยงจากตาราง doh_offices ใน Supabase
+- **การทดสอบและผลลัพธ์ (Verification):**
+  - npx tsc --noEmit ผ่าน 0 errors
+  - npm run build ผ่าน 100% (Static Export)
+  - ทดสอบดึงข้อมูล doh_get_system_data_rpc จาก Supabase ส่งคืน: FloodCount: 0, DetourCount: 0, OfficeCount: 6 ครบถ้วน
+- **สถานะ:** ใช้งานได้จริง (ACTIVE) / สะอาดพร้อมใช้งานจริง 100%
+
 ### [UPDATE-011] 2026-11-02: แก้ไขปัญหา GitHub Pages Deployment, อัปเดต Main Branch และความปลอดภัยการเชื่อมต่อ Supabase Cloud
 - **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
 - **วัตถุประสงค์ (Objective):** แก้ไขปัญหา Deploy workflow บน GitHub Pages ล้มเหลวเนื่องจาก Environment Branch Policy อนุญาตเฉพาะ branch main, รวมงานทั้งหมดเข้าสู่ main, ปรับแต่ง CI/CD workflow ให้ deploy เฉพาะ branch main อย่างปลอดภัย และอัปเดตค่า configuration/fallback การเชื่อมต่อ Supabase Cloud (iiuearxdsbilcpsfzhyp) ให้ตรงกันทุกไฟล์

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
@@ -10,6 +10,19 @@ const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[character] || character));
 
+/**
+ * ปรับพิกัดให้เป็น [Latitude, Longitude] สำหรับ Leaflet เสมอ
+ * ป้องกันพิกัดสลับที่ทำให้ละติจูดพุ่งขึ้นไป 101 องศาลงทะเล
+ */
+function toLeafletLatLng(coord: [number, number]): [number, number] {
+  if (!coord || coord.length < 2) return [APP_CONFIG.DEFAULT_CENTER.lat, APP_CONFIG.DEFAULT_CENTER.lon];
+  const [val1, val2] = coord;
+  // ในประเทศไทย: Lat อยู่ระหว่าง 5 - 21 N, Lon อยู่ระหว่าง 97 - 106 E
+  if (val1 > 50 && val2 < 30) {
+    return [val2, val1];
+  }
+  return [val1, val2];
+}
 interface LongdoGisMapProps {
   systemData: SystemDataPayload;
   selectedFloodId: string;
@@ -55,7 +68,7 @@ export function LongdoGisMap({
   const [showDetourLayer, setShowDetourLayer] = useState(true);
   const [showMainHwy, setShowMainHwy] = useState(true);
   const [showSecHwy, setShowSecHwy] = useState(true);
-  const [showHighwayShields, setShowHighwayShields] = useState(true);
+  const [showHighwayShields, setShowHighwayShields] = useState(false);
   const [showOffices, setShowOffices] = useState(true);
   const [showRoadLabels, setShowRoadLabels] = useState(true);
 
@@ -207,7 +220,7 @@ export function LongdoGisMap({
   // 2. FlyTo focus when coordinates change
   useEffect(() => {
     if (leafletMapRef.current && focusCoordinates) {
-      leafletMapRef.current.flyTo([focusCoordinates[1], focusCoordinates[0]], 13, { duration: 1.2 });
+      leafletMapRef.current.flyTo(toLeafletLatLng(focusCoordinates) as any, 13, { duration: 1.2 });
     }
   }, [focusCoordinates]);
 
@@ -306,7 +319,7 @@ export function LongdoGisMap({
       if (incomingGisLines && incomingGisLines.length > 0) {
         incomingGisLines.forEach((line) => {
           if (line.length >= 2) {
-            const latLngs = line.map((c) => [c[1], c[0]]);
+            const latLngs = line.map(toLeafletLatLng);
             L.polyline(latLngs as any, {
               color: "#0284c7",
               weight: 5,
@@ -413,7 +426,7 @@ export function LongdoGisMap({
           }
 
           if (coords.length >= 2) {
-            const latLngs = coords.map((c) => [c[1], c[0]]);
+            const latLngs = coords.map(toLeafletLatLng);
             const detourStyle = mapStyles.detour;
             const dColor = detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
             const dDash = detourStyle?.pattern === "solid" ? undefined : (detourStyle?.dashArray || LAYER_CONFIG.DETOUR_YELLOW_LINE.dashArray);
@@ -465,7 +478,7 @@ export function LongdoGisMap({
           const fSpeed = floodStyle?.animationSpeed === "slow" ? "doh-anim-slow" : floodStyle?.animationSpeed === "fast" ? "doh-anim-fast" : "";
 
           if (coords.length >= 2) {
-            const latLngs = coords.map((c) => [c[1], c[0]]);
+            const latLngs = coords.map(toLeafletLatLng);
             const polyline = L.polyline(latLngs as any, {
               color: fColor,
               weight: fWeight,
@@ -522,7 +535,7 @@ export function LongdoGisMap({
 
       // D. Draw Admin Draft Snapped Route
       if (draftCoordinates.length >= 2) {
-        const draftLatLngs = draftCoordinates.map((c) => [c[1], c[0]]);
+        const draftLatLngs = draftCoordinates.map(toLeafletLatLng);
         const draftColor = draftMode === "FLOOD" ? "#ef4444" : "#f59e0b";
         L.polyline(draftLatLngs as any, {
           color: draftColor,
