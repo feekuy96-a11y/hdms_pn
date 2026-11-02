@@ -131,3 +131,4 @@
   1. กำหนดกรอบความปลอดภัย Least Privilege และการแยก Environment ระหว่าง Dev, Staging และ Production
   2. กำหนดนโยบายความปลอดภัยฐานข้อมูล Row Level Security (RLS)
 - **สถานะ:** ใช้งานได้จริง (ACTIVE)
+

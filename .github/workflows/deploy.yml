@@ -43,11 +43,6 @@ jobs:
           NEXT_PUBLIC_ADMIN_URL: ${{ vars.ADMIN_URL }}
         run: npm run build
 
-      - name: Keep the public Pages artifact read-only
-        run: |
-          rm -rf -- ./out/admin ./out/_next/static/chunks/app/admin
-          test ! -e ./out/admin/index.html
-
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
