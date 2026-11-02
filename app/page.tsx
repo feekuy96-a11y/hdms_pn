@@ -52,7 +52,7 @@ export default function HomePage() {
   const [selectedRouteFilter, setSelectedRouteFilter] = useState("ALL");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [citizenDetourDirection, setCitizenDetourDirection] = useState<"FORWARD" | "REVERSE">("FORWARD");
-
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
 
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
 
@@ -175,11 +175,11 @@ export default function HomePage() {
       {/* =================================================================== */}
       <div className="flex-1 flex flex-col lg:flex-row relative lg:overflow-hidden min-h-[calc(100vh-104px)] lg:h-[calc(100vh-104px)]">
         {/* ================================================================= */}
-        {/* A. LEFT SIDEBAR: ROUTE LIST (COLLAPSIBLE)                        */}
+        {/* A. LEFT SIDEBAR: ROUTE LIST (DESKTOP COLLAPSIBLE)                 */}
         {/* ================================================================= */}
         <div
           className={`${
-            isSidebarCollapsed ? "hidden" : "flex"
+            isSidebarCollapsed ? "hidden" : "hidden lg:flex"
           } order-2 lg:order-1 w-full lg:w-[410px] xl:w-[440px] bg-[#0c1527] border-t lg:border-t-0 lg:border-r border-slate-800 flex-col shrink-0 z-20 lg:h-full overflow-hidden transition-all duration-300`}
         >
           {/* Sidebar Header & Search */}
@@ -368,13 +368,13 @@ export default function HomePage() {
         {/* ================================================================= */}
         {/* B. MAIN GIS MAP VIEWPORT                                          */}
         {/* ================================================================= */}
-        <div className="order-1 lg:order-2 relative h-[55vh] shrink-0 lg:shrink lg:flex-1 lg:h-full min-h-[350px] lg:min-h-0 w-full overflow-hidden bg-[#0b1426]">
-          {/* Floating Expand Sidebar Button (when collapsed) */}
+        <div className="order-1 lg:order-2 relative h-[calc(100vh-64px)] lg:h-full flex-1 w-full overflow-hidden bg-[#0b1426]">
+          {/* Floating Expand Sidebar Button (when collapsed on desktop) */}
           {isSidebarCollapsed && (
             <button
               type="button"
               onClick={() => setIsSidebarCollapsed(false)}
-              className="absolute top-4 left-4 z-[400] bg-slate-950/95 hover:bg-slate-900 text-amber-400 border border-amber-400/50 px-3 py-2 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-heading font-bold transition"
+              className="hidden lg:flex absolute top-4 left-4 z-[400] bg-slate-950/95 hover:bg-slate-900 text-amber-400 border border-amber-400/50 px-3 py-2 rounded-xl shadow-2xl items-center gap-2 text-xs font-heading font-bold transition"
             >
               <ChevronRight className="w-4 h-4" /> แสดงรายการสายทาง
             </button>
@@ -388,6 +388,7 @@ export default function HomePage() {
             onSelectFlood={(id) => {
               setSelectedFloodId(id);
               setShowDossier(true);
+              setIsMobileDrawerOpen(false);
               const flood = systemData.floodRoutes.find((r) => r.id === id);
               if (flood && flood.lat_start && flood.lon_start) {
                 setFocusCoordinates([flood.lon_start, flood.lat_start]);
@@ -398,19 +399,186 @@ export default function HomePage() {
           />
 
           {/* =============================================================== */}
-          {/* C. FLOATING DETAIL DOSSIER CARD (MATCHING REFERENCE IMAGE 3)   */}
+          {/* C. MOBILE FLOATING ACTION BAR & BOTTOM SHEET DRAWER             */}
+          {/* =============================================================== */}
+          {/* 1. Floating bottom pill on mobile when drawer & dossier are closed */}
+          {!isMobileDrawerOpen && !showDossier && (
+            <div className="lg:hidden fixed bottom-3 inset-x-3 z-[450] bg-[#091122]/95 backdrop-blur-md border border-amber-500/50 p-2.5 rounded-2xl shadow-2xl flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+                <div className="truncate">
+                  <div className="text-xs font-heading font-bold text-white truncate">
+                    จุดเฝ้าระวังและน้ำท่วม ({filteredFloods.length} จุด)
+                  </div>
+                  <div className="text-[10px] text-amber-300 font-mono truncate">
+                    ปิดทาง {systemData.floodRoutes.filter((r) => r.traffic_status === "CLOSED").length} จุด · ห้ามผ่าน {systemData.floodRoutes.filter((r) => r.traffic_status === "WARNING").length} จุด
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileDrawerOpen(true)}
+                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black text-xs px-3.5 py-2 rounded-xl shadow-lg flex items-center gap-1.5 shrink-0 transition"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>ดูรายการสายทาง</span>
+              </button>
+            </div>
+          )}
+
+          {/* 2. Slide-up Drawer on mobile */}
+          {isMobileDrawerOpen && (
+            <div className="lg:hidden fixed inset-0 z-[650] flex flex-col justify-end bg-black/60 backdrop-blur-sm animate-fade-in">
+              <div className="flex-1" onClick={() => setIsMobileDrawerOpen(false)} />
+              <div className="bg-[#0c1527] border-t-2 border-amber-500 rounded-t-3xl max-h-[82vh] flex flex-col shadow-2xl overflow-hidden">
+                <div className="p-3 bg-[#091122] border-b border-slate-800 space-y-2.5 shrink-0">
+                  <div className="w-12 h-1.5 bg-slate-600 rounded-full mx-auto mb-1" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+                      <h2 className="font-heading font-bold text-sm text-white">
+                        จุดเฝ้าระวังและน้ำท่วมทางหลวง ({filteredFloods.length} จุด)
+                      </h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileDrawerOpen(false)}
+                      aria-label="ปิดรายการสายทาง"
+                      className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="ค้นหาสายทาง (ทล.43, ทล.42, ทล.418)..."
+                      className="min-h-11 w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-sm text-white placeholder-slate-400"
+                    />
+                  </div>
+
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px]">
+                    {routeChips.map((chip) => {
+                      const isActive = selectedRouteFilter === chip.id;
+                      return (
+                        <button
+                          key={chip.id}
+                          type="button"
+                          onClick={() => setSelectedRouteFilter(chip.id)}
+                          className={`min-h-10 px-3 py-1 rounded-lg font-heading font-bold whitespace-nowrap transition ${
+                            isActive
+                              ? "bg-amber-500 text-slate-950 shadow-md"
+                              : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
+                          }`}
+                        >
+                          {chip.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+                  {filteredFloods.map((flood) => {
+                    const isSelected = flood.id === selectedFloodId;
+                    const isClosed = flood.traffic_status === "CLOSED";
+                    const isWarning = flood.traffic_status === "WARNING";
+
+                    return (
+                      <button
+                        key={flood.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedFloodId(flood.id);
+                          setShowDossier(true);
+                          setIsMobileDrawerOpen(false);
+                          if (flood.lat_start && flood.lon_start) {
+                            setFocusCoordinates([flood.lon_start, flood.lat_start]);
+                          }
+                        }}
+                        className={`block w-full text-left p-3 rounded-2xl border transition shadow-md ${
+                          isSelected
+                            ? "bg-slate-900 ring-2 ring-amber-400 border-transparent shadow-amber-500/10"
+                            : "bg-[#0f1b33] border-slate-800/90 hover:border-slate-700"
+                        }`}
+                        style={{
+                          borderLeftWidth: "4px",
+                          borderLeftColor: isClosed ? "#ef4444" : isWarning ? "#f59e0b" : "#10b981",
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="bg-amber-400 text-slate-950 font-heading font-black text-[10px] px-1.5 py-0.2 rounded">
+                                ทล.{flood.route_no}
+                              </span>
+                              <span className="text-slate-400 text-[10px]">
+                                กม.{flood.km_start} - {flood.km_end}
+                              </span>
+                            </div>
+                            <h3 className="font-heading font-bold text-xs sm:text-sm text-white truncate">
+                              {flood.section_name}
+                            </h3>
+                          </div>
+
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border shrink-0 ${
+                              isClosed
+                                ? "bg-red-500/20 text-red-400 border-red-500/40"
+                                : isWarning
+                                ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                            }`}
+                          >
+                            {isClosed
+                              ? "⛔ ปิดทาง / ทางเบี่ยง"
+                              : isWarning
+                              ? `⚠️ รถเล็กห้ามผ่าน (${flood.water_level_cm} ซม.)`
+                              : "✅ ผ่านได้ปกติ"}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 text-[11px] text-slate-300 flex items-start gap-1.5 bg-slate-950/40 p-2 rounded-xl">
+                          <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <p className="line-clamp-2">
+                              {flood.detour_advice
+                                ? `คำแนะนำ: ${flood.detour_advice}`
+                                : `ระดับน้ำ ${flood.water_level_cm} ซม. รายงานสถานการณ์ล่าสุด`}
+                            </p>
+                          </div>
+                          <span className="text-amber-400 font-bold hover:underline shrink-0 text-[10px]">
+                            ดูไทม์ไลน์ &gt;
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* D. FLOATING DETAIL DOSSIER CARD (MATCHING REFERENCE IMAGE 3)   */}
           {/* =============================================================== */}
           {selectedFlood && !showDossier && (
-            <div className="absolute bottom-3 left-3 right-3 z-[500] rounded-xl bg-[#0c162c] p-3 shadow-xl lg:right-auto lg:w-[420px]">
+            <div className="hidden lg:block absolute bottom-3 left-3 right-3 z-[500] rounded-xl bg-[#0c162c] p-3 shadow-xl lg:right-auto lg:w-[420px]">
               <p className="text-xs text-amber-300">ทล.{selectedFlood.route_no} · กม.{selectedFlood.km_start}–{selectedFlood.km_end}</p>
               <h2 className="font-heading text-sm font-bold">{selectedFlood.traffic_status === "CLOSED" ? "ปิดการจราจร" : selectedFlood.traffic_status === "WARNING" ? "รถเล็กห้ามผ่าน" : "ผ่านได้ปกติ"} · {selectedFlood.section_name}</h2>
               <div className="mt-2 flex items-center justify-between gap-2"><span className="text-xs text-slate-300">น้ำ {selectedFlood.water_level_cm} ซม. · {selectedFlood.updated_at ? new Date(selectedFlood.updated_at).toLocaleString("th-TH") : "ยังไม่มีเวลายืนยันล่าสุด"}</span><button type="button" onClick={() => setShowDossier(true)} className="min-h-11 shrink-0 rounded-lg bg-amber-400 px-3 text-xs font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">ดูรายละเอียด</button></div>
             </div>
           )}
           {selectedFlood && showDossier && (
-            <div role="dialog" aria-modal="false" aria-label={`รายละเอียดจุดน้ำท่วม ${selectedFlood.section_name}`} className="fixed inset-x-0 bottom-0 z-[600] max-h-[82vh] overflow-y-auto rounded-t-2xl border border-slate-700/80 bg-[#0c162c] text-slate-100 shadow-2xl lg:absolute lg:bottom-4 lg:left-4 lg:right-auto lg:w-[500px] lg:rounded-2xl lg:max-h-[80vh]">
+            <div role="dialog" aria-modal="false" aria-label={`รายละเอียดจุดน้ำท่วม ${selectedFlood.section_name}`} className="fixed inset-x-2 bottom-2 z-[700] max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700/80 bg-[#0c162c] text-slate-100 shadow-2xl lg:absolute lg:bottom-4 lg:left-4 lg:right-auto lg:w-[500px] lg:max-h-[80vh]">
+              {/* Pull handle on mobile */}
+              <div className="w-12 h-1.5 bg-slate-600 rounded-full mx-auto my-2 lg:hidden" />
               {/* Header: Dark Navy Header with Badge, Section Title, KM Range & Action Buttons */}
-              <div className="bg-[#0c1a30] text-white p-3.5 border-b border-slate-800 flex items-start justify-between gap-2">
+              <div className="sticky top-0 z-20 bg-[#0c1a30] text-white p-3.5 border-b border-slate-800 flex items-start justify-between gap-2 shadow-md">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="bg-[#f59e0b] text-slate-950 font-heading font-black text-xs px-2.5 py-1 rounded-md shadow shrink-0">
