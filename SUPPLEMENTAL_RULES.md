@@ -1,4 +1,4 @@
-# กฎเพิ่มเติมและประวัติการอัปเดตระบบ (Supplemental Rules & System Update History)
+﻿# กฎเพิ่มเติมและประวัติการอัปเดตระบบ (Supplemental Rules & System Update History)
 **ระบบแผนที่รายงานสถานการณ์น้ำท่วมและเส้นทางเลี่ยง แขวงทางหลวงปัตตานี กรมทางหลวง (DOH_Pattani_Flood)**
 
 ---
@@ -27,6 +27,28 @@
 ---
 
 ## 🕒 ประวัติการอัปเดตระบบ (System Update Changelog)
+
+### [UPDATE-011] 2026-11-02: แก้ไขปัญหา GitHub Pages Deployment, อัปเดต Main Branch และความปลอดภัยการเชื่อมต่อ Supabase Cloud
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** แก้ไขปัญหา Deploy workflow บน GitHub Pages ล้มเหลวเนื่องจาก Environment Branch Policy อนุญาตเฉพาะ branch main, รวมงานทั้งหมดเข้าสู่ main, ปรับแต่ง CI/CD workflow ให้ deploy เฉพาะ branch main อย่างปลอดภัย และอัปเดตค่า configuration/fallback การเชื่อมต่อ Supabase Cloud (iiuearxdsbilcpsfzhyp) ให้ตรงกันทุกไฟล์
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):**
+  - .github/workflows/deploy.yml (เพิ่ม environment variables สำหรับ build และเงื่อนไข if: github.ref == 'refs/heads/main' ใน deploy step)
+  - lib/supabase/client.ts (ปรับแก้ค่า URL และ publishable anon key สำรองให้ตรงกับโปรเจกต์จริง iiuearxdsbilcpsfzhyp)
+  - lib/supabase/server.ts (ปรับแก้ค่า URL และ publishable anon key สำรองให้ตรงกับโปรเจกต์จริง iiuearxdsbilcpsfzhyp)
+  - lib/supabase/middleware.ts (ปรับแก้ค่า URL และ publishable anon key สำรองให้ตรงกับโปรเจกต์จริง iiuearxdsbilcpsfzhyp)
+  - .mcp.json (อัปเดต project_ref ชี้ไปยัง iiuearxdsbilcpsfzhyp)
+- **รายละเอียดการทำงาน (Technical Changes):**
+  1. วิเคราะห์ Root Cause ของ GitHub Actions Run 41416458686 พบว่า github-pages environment มีนโยบายจำกัด branch การ deploy เฉพาะ main เท่านั้น จึงทำการ merge โค้ดทั้งหมดจาก codex/public-flood-interface เข้าสู่ main
+  2. ปรับแต่ง .github/workflows/deploy.yml เพิ่ม if: github.ref == 'refs/heads/main' เพื่อให้การ push บน feature branch ทำงานเฉพาะ build validation (CI) โดยไม่ล้มเหลวที่ deploy step
+  3. เพิ่ม build-time injection ของ NEXT_PUBLIC_SUPABASE_URL และ NEXT_PUBLIC_SUPABASE_ANON_KEY ใน GitHub Actions workflow
+  4. ผลการรัน GitHub Actions Run ล่าสุดบน main (Run ID: 41417813776) สำเร็จสมบูรณ์ 100% ทั้งขั้นตอน build และ deploy
+  5. ตรวจสอบการเปิดใช้งานระบบบน GitHub Pages (https://feekuy96-a11y.github.io/hdms_pn/ และ /admin/) ตอบสนอง HTTP 200 OK และโหลด Assets ผ่านทั้งหมด
+- **การทดสอบและผลลัพธ์ (Verification):**
+  - ตรวจสอบชนิดข้อมูล npx tsc --noEmit ผ่าน 0 errors
+  - คำสั่ง npm run build ผ่าน 100% (Static Export ไปยังโฟลเดอร์ out/)
+  - GitHub Actions Workflow Run 41417813776 สถานะ: completed / conclusion: success
+  - GitHub Pages URL https://feekuy96-a11y.github.io/hdms_pn/ ตอบสนอง HTTP 200 OK
+- **สถานะ:** ใช้งานได้จริง (ACTIVE) / ออนไลน์บน GitHub Pages พร้อมใช้งาน 100%
 
 ### [UPDATE-010] 2026-11-02: ติดตั้งปุ่มและระบบจัดการข้อมูลครบทุกรายการ (Full CRUD Management Coverage)
 - **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant

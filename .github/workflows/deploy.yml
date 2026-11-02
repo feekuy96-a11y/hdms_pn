@@ -41,6 +41,8 @@ jobs:
       - name: Build with Next.js (Static Export)
         env:
           NEXT_PUBLIC_ADMIN_URL: ${{ vars.ADMIN_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://iiuearxdsbilcpsfzhyp.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpdWVhcnhkc2JpbGNwc2Z6aHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3ODAyMTksImV4cCI6MjEwNzM1NjIxOX0.NlmieOWIm9medTsUzHkQdEvUySj-tat4KwIDOsCVvxg' }}
         run: npm run build
 
       - name: Upload Pages artifact
@@ -49,6 +51,7 @@ jobs:
           path: ./out
 
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     environment:
