@@ -26,6 +26,14 @@ import {
   SAFETY_MEASURES,
 } from "@/lib/constants";
 
+function parseCoordinatePair(value: string): [number, number] | null {
+  const numbers = value.match(/-?\d+(?:\.\d+)?/g)?.map(Number) || [];
+  if (numbers.length < 2) return null;
+  const [lat, lon] = numbers;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  return [lat, lon];
+}
+
 interface MapManagementTabProps {
   systemData: SystemDataPayload;
   onDataRefresh: (data?: any) => Promise<any> | void;
@@ -608,49 +616,25 @@ export function MapManagementTab({
             </div>
           </div>
 
-          {/* Lat/Lon Inputs */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          {/* Coordinate Inputs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
             <div>
-              <span className="text-[10px] text-slate-400">Lat A (เริ่ม)</span>
+              <span className="text-[10px] text-slate-400">พิกัดจุด A</span>
               <input
-                type="number"
-                step="any"
-                value={startLat}
-                onChange={(e) => setStartLat(e.target.value === "" ? "" : Number(e.target.value))}
-                placeholder="เช่น 6.8340"
+                type="text"
+                value={startLat !== "" && startLon !== "" ? `${startLat}, ${startLon}` : ""}
+                onChange={(e) => { const pair = parseCoordinatePair(e.target.value); if (pair) { setStartLat(pair[0]); setStartLon(pair[1]); } else if (!e.target.value) { setStartLat(""); setStartLon(""); } }}
+                placeholder="วางจาก Google Maps เช่น 6.8340, 101.1860"
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px] placeholder:text-slate-600"
               />
             </div>
             <div>
-              <span className="text-[10px] text-slate-400">Lon A (เริ่ม)</span>
+              <span className="text-[10px] text-slate-400">พิกัดจุด B</span>
               <input
-                type="number"
-                step="any"
-                value={startLon}
-                onChange={(e) => setStartLon(e.target.value === "" ? "" : Number(e.target.value))}
-                placeholder="เช่น 101.1860"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px] placeholder:text-slate-600"
-              />
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-400">Lat B (สิ้นสุด)</span>
-              <input
-                type="number"
-                step="any"
-                value={endLat}
-                onChange={(e) => setEndLat(e.target.value === "" ? "" : Number(e.target.value))}
-                placeholder="เช่น 6.8390"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px] placeholder:text-slate-600"
-              />
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-400">Lon B (สิ้นสุด)</span>
-              <input
-                type="number"
-                step="any"
-                value={endLon}
-                onChange={(e) => setEndLon(e.target.value === "" ? "" : Number(e.target.value))}
-                placeholder="เช่น 101.1920"
+                type="text"
+                value={endLat !== "" && endLon !== "" ? `${endLat}, ${endLon}` : ""}
+                onChange={(e) => { const pair = parseCoordinatePair(e.target.value); if (pair) { setEndLat(pair[0]); setEndLon(pair[1]); } else if (!e.target.value) { setEndLat(""); setEndLon(""); } }}
+                placeholder="วางจาก Google Maps เช่น 6.8390, 101.1920"
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px] placeholder:text-slate-600"
               />
             </div>
