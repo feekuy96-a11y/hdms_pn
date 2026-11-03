@@ -135,10 +135,10 @@ export function LineStylingTab({
       {/* Line Type Selector Pills */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[
-          { key: "flood", label: "เส้นน้ำท่วม (Flood)" },
-          { key: "detour", label: "ทางเลี่ยง (Detour)" },
-          { key: "primary", label: "ทางหลวงสายหลัก (Main)" },
-          { key: "secondary", label: "ทางหลวงสายรอง (Second)" },
+          { key: "flood", label: "เส้นน้ำท่วม" },
+          { key: "detour", label: "ทางเลี่ยง" },
+          { key: "primary", label: "ทางหลวงสายหลัก" },
+          { key: "secondary", label: "ทางหลวงสายรอง" },
         ].map((item) => {
           const currentItemColor = lineStyles[item.key as any]?.color || DEFAULT_MAP_STYLES[item.key as any]?.color;
           return (

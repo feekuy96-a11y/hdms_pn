@@ -31,6 +31,7 @@ interface LongdoGisMapProps {
   onCoordinatePicked?: (lat: number, lon: number, mode: string) => void;
   draftCoordinates?: [number, number][];
   draftWaypoints?: [number, number][];
+  draftPickMarkers?: { lat: number; lon: number; label: string }[];
   onWaypointDragged?: (index: number, newCoord: [number, number]) => void;
   draftMode?: "FLOOD" | "DETOUR";
   focusCoordinates?: [number, number] | null;
@@ -48,6 +49,7 @@ export function LongdoGisMap({
   onCoordinatePicked,
   draftCoordinates = [],
   draftWaypoints = [],
+  draftPickMarkers = [],
   onWaypointDragged,
   draftMode = "FLOOD",
   focusCoordinates = null,
@@ -605,7 +607,9 @@ export function LongdoGisMap({
       // D. Draw Admin Draft Snapped Route
       if (draftCoordinates.length >= 2) {
         const draftLatLngs = draftCoordinates.map(toLeafletLatLng);
-        const draftColor = draftMode === "FLOOD" ? "#ef4444" : "#f59e0b";
+        const draftColor = draftMode === "FLOOD"
+          ? (mapStyles.flood?.color || "#ef4444")
+          : (mapStyles.detour?.color || "#f59e0b");
         L.polyline(draftLatLngs as any, {
           color: draftColor,
           weight: 6,
@@ -614,6 +618,17 @@ export function LongdoGisMap({
           renderer: vectorCanvas,
         }).addTo(group);
       }
+
+      // E. Draw Numbered Draggable Waypoints for Bending Paths (ดัดเส้น)
+      draftPickMarkers.forEach((point) => {
+        const icon = L.divIcon({
+          html: `<div class="w-7 h-7 rounded-full bg-sky-500 text-white border-2 border-white font-heading font-black text-xs flex items-center justify-center shadow-lg">${escapeHtml(point.label)}</div>`,
+          className: "doh-draft-endpoint",
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+        L.marker([point.lat, point.lon], { icon, zIndexOffset: 1200 }).bindTooltip(`จุด${point.label}`, { direction: "top" }).addTo(group);
+      });
 
       // E. Draw Numbered Draggable Waypoints for Bending Paths (ดัดเส้น)
       draftWaypoints.forEach((wp, idx) => {
@@ -692,6 +707,7 @@ export function LongdoGisMap({
     showOffices,
     draftCoordinates,
     draftWaypoints,
+    draftPickMarkers,
     draftMode,
     incomingGisLines,
   ]);
@@ -789,7 +805,7 @@ export function LongdoGisMap({
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
                 <span className="w-4 h-1.5 inline-block rounded bg-yellow-400 border-b border-dashed border-slate-900" />
-                <span>ทางเลี่ยงแนะนำ <span className="ml-1 rounded-full bg-amber-950 px-1.5 py-0.5 text-[10px] text-amber-300">{showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
+                <span>ทางเลี่ยง <span className="ml-1 rounded-full bg-amber-950 px-1.5 py-0.5 text-[10px] text-amber-300">{showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
               </span>
               <input
                 type="checkbox"

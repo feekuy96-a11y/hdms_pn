@@ -714,7 +714,7 @@ export function GisDataImportTab({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               {/* Field 1: Route Code */}
               <div>
-                <label className="text-slate-300 block mb-1">ฟิลด์รหัสสายทาง (Route Code)</label>
+                <label className="text-slate-300 block mb-1">ฟิลด์รหัสสายทาง</label>
                 <select
                   value={selectedRouteCodeField}
                   onChange={(e) => setSelectedRouteCodeField(e.target.value)}
@@ -740,7 +740,7 @@ export function GisDataImportTab({
 
               {/* Field 2: Route Name / Label */}
               <div>
-                <label className="text-slate-300 block mb-1">ฟิลด์ชื่อสายทาง / ป้ายกำกับ (Label/Name)</label>
+                <label className="text-slate-300 block mb-1">ฟิลด์ชื่อสายทาง / ป้ายกำกับ</label>
                 <select
                   value={selectedRouteNameField}
                   onChange={(e) => setSelectedRouteNameField(e.target.value)}
@@ -766,28 +766,28 @@ export function GisDataImportTab({
 
               {/* Field 3: Classification */}
               <div>
-                <label className="text-slate-300 block mb-1">ประเภททางหลวง (Classification)</label>
+                <label className="text-slate-300 block mb-1">ประเภททางหลวง</label>
                 <select
                   value={targetLayerCategory}
                   onChange={(e: any) => setTargetLayerCategory(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-heading font-medium"
                 >
-                  <option value="MAIN_HIGHWAY">ทางหลวงสายหลัก (Primary Highway - ประธาน/หลัก)</option>
-                  <option value="SECOND_HIGHWAY">ทางหลวงสายรอง (Secondary Highway - เชื่อมต่ออำเภอ)</option>
+                  <option value="MAIN_HIGHWAY">ทางหลวงสายหลัก</option>
+                  <option value="SECOND_HIGHWAY">ทางหลวงสายรอง</option>
                 </select>
               </div>
 
               {/* Field 4: Label Display Mode */}
               <div>
-                <label className="text-slate-300 block mb-1">โหมดการแสดงป้ายชื่อบนแผนที่ (Label Display)</label>
+                <label className="text-slate-300 block mb-1">โหมดการแสดงป้ายชื่อบนแผนที่</label>
                 <select
                   value={labelDisplayMode}
                   onChange={(e: any) => setLabelDisplayMode(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-heading font-medium"
                 >
-                  <option value="hover">แสดงป้ายชื่อลอยเมื่อเลื่อนเมาส์ชี้ (Hover Tooltip)</option>
-                  <option value="permanent">แสดงป้ายชื่อตลอดเวลาบนแนวเส้น (Permanent Label)</option>
-                  <option value="click">แสดงเมื่อคลิกดูรายละเอียดเท่านั้น (Click Popup Only)</option>
+                  <option value="hover">แสดงเมื่อเลื่อนเมาส์ชี้</option>
+                  <option value="permanent">แสดงตลอดเวลาบนแนวเส้น</option>
+                  <option value="click">แสดงเมื่อคลิกดูรายละเอียด</option>
                 </select>
               </div>
             </div>
@@ -841,47 +841,6 @@ export function GisDataImportTab({
                   </select>
                 </div>
 
-                {/* Speed Limit */}
-                <div>
-                  <label className="text-slate-300 block mb-1">ความเร็วจำกัดตามกฎหมาย (Speed Limit)</label>
-                  <select
-                    value={layerSpeedLimit}
-                    onChange={(e) => setLayerSpeedLimit(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                  >
-                    <option value="๕๐ กม./ชม. (เขตชุมชน/หน้าโรงเรียน)">๕๐ กม./ชม. (เขตชุมชน)</option>
-                    <option value="๖๐ กม./ชม. (ทางเลี่ยงเมือง/สายรอง)">๖๐ กม./ชม. (ทางเลี่ยงเมือง/สายรอง)</option>
-                    <option value="๘๐ กม./ชม. (ทางหลวงชนบท/สองช่องทาง)">๘๐ กม./ชม. (สองช่องทาง)</option>
-                    <option value="๙๐ กม./ชม. (ทางหลวงแผ่นดินทั่วไป)">๙๐ กม./ชม. (ทางหลวงแผ่นดินทั่วไป)</option>
-                    <option value="๑๒๐ กม./ชม. (ทางหลวง ๔ ช่องจราจรเกาะกลาง)">๑๒๐ กม./ชม. (สายหลัก ๔ ช่อง)</option>
-                  </select>
-                </div>
-
-                {/* Road Status */}
-                <div>
-                  <label className="text-slate-300 block mb-1">สถานะความพร้อมของสายทาง (Road Status)</label>
-                  <select
-                    value={layerRoadStatus}
-                    onChange={(e) => setLayerRoadStatus(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-emerald-400 font-medium"
-                  >
-                    <option value="สัญจรได้ตามปกติ">สัญจรได้ตามปกติ (Normal)</option>
-                    <option value="อยู่ระหว่างงานบำรุงรักษาทาง">อยู่ระหว่างงานบำรุงรักษาทาง (Maintenance)</option>
-                    <option value="มีจุดเฝ้าระวังน้ำท่วมขัง">มีจุดเฝ้าระวังน้ำท่วมขัง (Flood Watch)</option>
-                  </select>
-                </div>
-
-                {/* Remarks */}
-                <div>
-                  <label className="text-slate-300 block mb-1">หมายเหตุเพิ่มเติม (Remarks)</label>
-                  <input
-                    type="text"
-                    value={layerRemarks}
-                    onChange={(e) => setLayerRemarks(e.target.value)}
-                    placeholder="เช่น โครงข่ายหลักเชื่อมต่อ ๓ จังหวัดชายแดนใต้"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                  />
-                </div>
               </div>
             </div>
 

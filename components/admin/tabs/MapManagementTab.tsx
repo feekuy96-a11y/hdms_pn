@@ -489,7 +489,7 @@ export function MapManagementTab({
               </select>
             </div>
             <div>
-              <label className="text-xs text-slate-300">ช่วง กม. เริ่มต้น</label>
+                <label className="text-xs text-slate-300">กม. เริ่มต้น</label>
               <input
                 type="text"
                 value={kmStart}
@@ -499,7 +499,7 @@ export function MapManagementTab({
               />
             </div>
             <div>
-              <label className="text-xs text-slate-300">ช่วง กม. สิ้นสุด</label>
+                <label className="text-xs text-slate-300">กม. สิ้นสุด</label>
               <input
                 type="text"
                 value={kmEnd}
@@ -523,7 +523,7 @@ export function MapManagementTab({
                 ) : (
                   systemData.floodRoutes.map((f) => (
                     <option key={f.id} value={f.id}>
-                      [{f.id}] ทล.{f.route_no} - {f.section_name}
+                      ทอรอ{f.id.replace(/^F[-_]?/i, "").slice(0, 2)} - {f.section_name}
                     </option>
                   ))
                 )}

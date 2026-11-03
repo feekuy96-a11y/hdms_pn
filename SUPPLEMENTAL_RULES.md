@@ -280,3 +280,11 @@
 - **การทดสอบและผลลัพธ์ (Verification):** `npm run check` ผ่าน; GitHub Pages static build ผ่าน; E2E บน static preview ผ่าน 6 รายการและข้าม 1 รายการที่ไม่มี geometry; E2E บนโดเมน production ผ่าน 7 รายการ; ตรวจเบราว์เซอร์จริงพบ Edge API ตอบ HTTP 200, ไม่พบคำเตือนโหลดฐานข้อมูลหรือ JavaScript error และหน้าแอดมินแสดงข้อมูลทางหลวง/โครงการ
 - **สถานะ:** เผยแพร่และตรวจสอบ production แล้ว (ACTIVE)
 
+### [UPDATE-020] 2026-11-04: ปรับข้อความหน้าประชาชนและพรีวิวโครงข่ายตามข้อเสนอรอบใหม่
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** ลดข้อความที่ไม่จำเป็นในหน้าประชาชนและหน้าพรีวิว พร้อมทำให้สีเส้นร่างอ้างอิงสไตล์กลาง
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `app/page.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `components/admin/tabs/LineStylingTab.tsx`, `components/map/LongdoGisMap.tsx`
+- **รายละเอียดการทำงาน (Technical Changes):** ปรับสถานะเป็น LIVE; ตัดคำอังกฤษ/วงเล็บในตัวเลือกสไตล์และพรีวิว; ใช้หัวข้อ กม. เริ่มต้น/กม. สิ้นสุด; ซ่อนรหัสเหตุการณ์ยาวในตัวเลือกทางเลี่ยง; ตัดช่องความเร็ว สถานะสายทาง และหมายเหตุจากพรีวิว; เส้นร่างบนแผนที่ใช้สีจากสไตล์น้ำท่วมหรือทางเลี่ยง
+- **การทดสอบและผลลัพธ์ (Verification):** `npm run check` ผ่าน lint, typecheck และ production build
+- **สถานะ:** ปรับปรุงใน workspace (รอรวมข้อกำหนดแผนที่และ Popup รอบถัดไป)
+

@@ -183,7 +183,7 @@ export default function HomePage() {
                 ศูนย์ปฏิบัติการฉุกเฉิน 24 ชม.
               </span>
               <span className="text-[10px] bg-emerald-950/80 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-bold hidden md:inline-flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ออนไลน์ (ข้อมูลล่าสุด)
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> <span className="tracking-wide">LIVE</span>
               </span>
             </div>
             <h1 className="font-heading text-xs sm:text-sm font-semibold text-slate-300 truncate">

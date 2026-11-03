@@ -41,6 +41,7 @@ export default function AdminPage() {
   const [draftWaypoints, setDraftWaypoints] = useState<[number, number][]>([]);
   const [incomingGisLines, setIncomingGisLines] = useState<[number, number][][]>([]);
   const [pickedCoordinate, setPickedCoordinate] = useState<{ lat: number; lon: number; mode: string; ts: number } | null>(null);
+  const [draftPickMarkers, setDraftPickMarkers] = useState<Array<{ lat: number; lon: number; label: string }>>([]);
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -215,12 +216,19 @@ export default function AdminPage() {
               adminPickMode={adminPickMode}
               onCoordinatePicked={(lat, lon, mode) => {
                 setPickedCoordinate({ lat, lon, mode, ts: Date.now() });
+                if (mode === "PICK_START" || mode === "PICK_END") {
+                  setDraftPickMarkers((prev) => [
+                    ...prev.filter((item) => item.label !== (mode === "PICK_START" ? "A" : "B")),
+                    { lat, lon, label: mode === "PICK_START" ? "A" : "B" },
+                  ]);
+                }
                 if (mode !== "ADD_WAYPOINT") {
                   setAdminPickMode(null);
                 }
               }}
               draftCoordinates={draftCoordinates}
               draftWaypoints={draftWaypoints}
+              draftPickMarkers={draftPickMarkers}
               onWaypointDragged={handleWaypointDragged}
               focusCoordinates={focusCoordinates}
               incomingGisLines={incomingGisLines}
