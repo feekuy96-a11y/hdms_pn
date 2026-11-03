@@ -28,6 +28,26 @@
 
 ## 🕒 ประวัติการอัปเดตระบบ (System Update Changelog)
 
+### [UPDATE-015] 2026-11-03: แก้ไข Dependabot Update ล้มเหลวและขจัดช่องโหว่ความปลอดภัย minimatch
+- **ผู้ดำเนินการ/ผู้สั่งการ:** ทีมพัฒนาระบบสารสนเทศ แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** แก้ไขปัญหา GitHub Actions Workflow Run 41571038555 (Dependabot Updates #6) ล้มเหลวจากข้อขัดแย้งของ minimatch <11.0.1 (GHSA-g3hv-75wg-m249) ที่ติด transitive dependency ของ eslint และ eslint-config-next
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):**
+  - `package.json` (เพิ่ม npm overrides ให้ minimatch ใช้ ^11.0.4)
+  - `package-lock.json` (อัปเดต lockfile dependency graph ให้สอดคล้อง)
+  - `eslint.config.mjs` (เพิ่ม work/** และ outputs/** ใน globalIgnores)
+  - `.github/dependabot.yml` (สร้างไฟล์คอนฟิก Dependabot อย่างเป็นทางการ จัดกลุ่ม dependencies รายสัปดาห์)
+- **รายละเอียดการทำงาน (Technical Changes):**
+  1. วิเคราะห์ Root Cause ของ Dependabot Run 41571038555 พบว่า container ของ Dependabot ทำการรัน update_files แบบกลุ่ม npm_and_yarn แต่ไม่สามารถหา resolution path สำหรับ minimatch 11.0.1 ได้โดยไม่กระทบ eslint จึง exit code 1
+  2. กำหนด overrides ใน package.json: `"minimatch": "^11.0.4"` เพื่อบังคับให้ทุกแพ็กเกจ (รวมทั้ง eslint และ eslint-config-next) ใช้ minimatch เวอร์ชันปลอดภัยล่าสุด
+  3. ผลการรัน `npm audit` ลดช่องโหว่ความปลอดภัยจาก 16 รายการเหลือ **0 vulnerabilities**
+  4. สร้าง `.github/dependabot.yml` เพื่อควบคุมรอบการทำงานของ Dependabot ให้มีมาตรฐานและไม่รันแบบ unguided generic scan
+- **การทดสอบและผลลัพธ์ (Verification):**
+  - `npm audit`: found 0 vulnerabilities
+  - `npx eslint . --max-warnings=0`: 0 warnings, 0 errors
+  - `npx tsc --noEmit`: ผ่าน 0 errors
+  - `npm run build` และ static export: ผ่าน 100%
+- **สถานะ:** ใช้งานได้จริง (ACTIVE) / ปลอดภัยและผ่านการทดสอบ 100%
+
 ### [UPDATE-014] 2026-11-03: รองรับ Next.js server และ GitHub Pages ด้วย Edge API ร่วมกัน
 - วัตถุประสงค์: ให้ UI ชุดเดียวใช้งานสอง deployment โดยไม่ส่ง secret key ไป browser
 - ไฟล์: app/actions/doh-actions.ts, app/admin/layout.tsx, components/admin/AdminGate.tsx, app/login/page.tsx, lib/hdms-api.ts, supabase/functions/hdms-api/index.ts, db/shared-edge-api.sql, db/deleted-visibility-and-snapping.sql, db/incident-location-fields.sql, next.config.mjs, .github/workflows/*, scripts/serve-pages.mjs
