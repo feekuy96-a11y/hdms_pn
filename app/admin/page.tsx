@@ -25,6 +25,7 @@ import { OfflineSyncStatus } from "@/components/offline/OfflineSyncStatus";
 import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 import { ArrowLeft, RotateCw, LogOut, FileText, PieChart, Settings, Smartphone } from "lucide-react";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 import { ExecutiveDashboard } from "@/components/executive/ExecutiveDashboard";
@@ -140,6 +141,7 @@ export default function AdminPage() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <button type="button" title="ออกจากระบบ" className="p-2 text-slate-300 hover:text-amber-400" onClick={async () => { await createClient().auth.signOut(); }}><LogOut className="w-4 h-4" /></button>
           <button
             type="button"
             onClick={() => setIsDispatchModalOpen(true)}

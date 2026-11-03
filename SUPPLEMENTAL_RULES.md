@@ -28,6 +28,14 @@
 
 ## 🕒 ประวัติการอัปเดตระบบ (System Update Changelog)
 
+### [UPDATE-014] 2026-11-03: รองรับ Next.js server และ GitHub Pages ด้วย Edge API ร่วมกัน
+- วัตถุประสงค์: ให้ UI ชุดเดียวใช้งานสอง deployment โดยไม่ส่ง secret key ไป browser
+- ไฟล์: app/actions/doh-actions.ts, app/admin/layout.tsx, components/admin/AdminGate.tsx, app/login/page.tsx, lib/hdms-api.ts, supabase/functions/hdms-api/index.ts, db/shared-edge-api.sql, db/deleted-visibility-and-snapping.sql, db/incident-location-fields.sql, next.config.mjs, .github/workflows/*, scripts/serve-pages.mjs
+- เปลี่ยนแปลง: ย้าย mutation ไป Edge Function ตรวจ session และ app_metadata.role ใช้ user-scoped RLS; บันทึกเหตุการณ์/ทางเลี่ยงพร้อมคำแนะนำผ่าน RPC transaction; ป้องกันข้อมูล soft-delete จาก public; รองรับ snapping MultiLineString
+- Build: build:server และ build:pages แยกกัน พร้อมทดสอบ base path /hdms_pn และ workflow Pages
+- ตรวจสอบ: public Edge API 200, unauthenticated mutation 401, SQL transaction rollback และ public visibility 0 rows ผ่าน; ตรวจ build และ browser smoke ทั้งสองรูปแบบก่อนเผยแพร่
+- ข้อยกเว้นสถาปัตยกรรม: คำสั่งผู้ใช้ให้รองรับ Pages ทำให้เปลี่ยนจาก Server Actions ไป API adapters ร่วมกัน โดยคง Next.js/React Query/Supabase/PostGIS
+
 ### [UPDATE-013] 2026-11-03: รวมโครงสร้างแท็บใหม่และแก้ transaction นำเข้า
 - วัตถุประสงค์: รวม main กับงาน stabilization โดยรักษาแท็บใหม่ การจัดการทางเลี่ยง สเปกถนน และ routing service
 - ไฟล์: components/admin/tabs/*, app/actions/doh-actions.ts, db/supabase-server.ts, db/atomic-route-import.sql, PRODUCTION.md

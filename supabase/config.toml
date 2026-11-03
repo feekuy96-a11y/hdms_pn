@@ -1,0 +1,4 @@
+[functions.hdms-api]
+# Public reads are allowed. Every mutation verifies its user JWT with Auth
+# and checks app_metadata.role inside the handler before database access.
+verify_jwt = false

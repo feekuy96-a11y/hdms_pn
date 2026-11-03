@@ -1,13 +1,29 @@
 "use client";
 
 import { useActionState } from "react";
+import { useRouter } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
-import { login, type LoginState } from "./actions";
+import { createClient } from "@/lib/supabase/client";
+
+type LoginState = { error?: string };
+async function login(_state: LoginState, form: FormData, navigate: () => void): Promise<LoginState> {
+  try {
+    const client = createClient();
+    const { data, error } = await client.auth.signInWithPassword({ email: String(form.get("email") || "").trim(), password: String(form.get("password") || "") });
+    if (error || !data.user || !["admin", "doh_admin"].includes(data.user.app_metadata?.role)) {
+      if (data.session) await client.auth.signOut();
+      return { error: "ข้อมูลเข้าสู่ระบบไม่ถูกต้อง หรือบัญชีไม่มีสิทธิ์ผู้ดูแล" };
+    }
+    navigate();
+    return {};
+  } catch { return { error: "ไม่สามารถเชื่อมต่อระบบเข้าสู่ระบบได้" }; }
+}
 
 const initialState: LoginState = {};
 
 export default function LoginPage() {
-  const [state, formAction, pending] = useActionState(login, initialState);
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState((state: LoginState, form: FormData) => login(state, form, () => router.replace("/admin/")), initialState);
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 grid place-items-center p-4">

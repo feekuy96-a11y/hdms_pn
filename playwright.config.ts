@@ -18,8 +18,8 @@ export default defineConfig({
     { name: "mobile-chromium", use: { ...devices["Pixel 7"] } },
   ],
   webServer: {
-    command: "npm run start",
-    url: "http://localhost:3000",
+    command: process.env.PLAYWRIGHT_STATIC ? "node scripts/serve-pages.mjs" : "npm run start",
+    url: `http://localhost:3000${process.env.BASE_PATH || ""}/`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

@@ -1,0 +1,1 @@
+ALTER TABLE public.doh_flood_routes ADD COLUMN IF NOT EXISTS district text NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS subdistrict text NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS detour_advice text NOT NULL DEFAULT '';

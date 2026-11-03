@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
-  output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
+  output: process.env.NEXT_OUTPUT === 'export' ? 'export' : process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
   turbopack: {
     root: process.cwd(),
   },
@@ -11,6 +11,7 @@ const nextConfig = {
     NEXT_PUBLIC_BASE_PATH: process.env.BASE_PATH || '',
   },
   images: {
+    unoptimized: process.env.NEXT_OUTPUT === "export",
     remotePatterns: [
       {
         protocol: 'https',
