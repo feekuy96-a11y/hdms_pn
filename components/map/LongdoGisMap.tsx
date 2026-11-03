@@ -658,11 +658,11 @@ export function LongdoGisMap({
   ]);
 
   return (
-    <div className={`relative ${className} overflow-hidden w-full h-full min-h-[350px]`}>
+    <div className={`relative ${className} overflow-hidden w-full h-full min-h-[450px]`} style={{ minHeight: 450 }}>
       <div
         ref={mapContainerRef}
         className="w-full h-full min-h-[350px] bg-[#0b1426] relative z-0"
-        style={{ minHeight: "100%", height: "100%" }}
+        style={{ position: "absolute", inset: 0, minHeight: 450 }}
       />
 
       {/* Layer Control Legend (Floating Top-Right matching Reference Image 1 & Collapsible for Issue #4) */}
