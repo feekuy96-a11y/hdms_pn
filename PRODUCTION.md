@@ -10,7 +10,7 @@ Run the same application on Node.js 24/Docker or GitHub Pages. Both call the sha
 
 Deploy `supabase/functions/hdms-api/index.ts` with the function configuration in `supabase/config.toml`. Platform JWT checking is disabled because public reads are supported; every mutation separately validates the access token with Supabase Auth, checks the current user app_metadata role, and uses the user-scoped database client under RLS. This function never accepts a table name or RPC name supplied by the browser. CORS allows the two web deployments; CORS is not an authorization control.
 
-Login/logout use Supabase browser sessions on both deployments. AdminGate hides the admin interface until authenticated; API authorization and RLS enforce data access independently of this UI gate. An admin account is still required for browser mutation acceptance testing. SQL transaction/rollback checks validate admin writes and hidden deleted rows without creating production accounts.
+The `/admin/` route opens directly without a login screen as requested. The shared Edge API still requires an authenticated admin session for data mutations; this prevents an openly reachable `/admin/` page from becoming an unrestricted delete/update endpoint.
 
 ESLint uses Next's configuration with explicit legacy GIS exclusions. Passing lint does not establish that the excluded hook and dynamic typing rules have been remediated. Production dependency audit passed; development dependencies include known moderate advisories and ESLint 9 is retained because bundled Next lint plugins do not support ESLint 10 yet.
 

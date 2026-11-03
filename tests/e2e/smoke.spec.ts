@@ -9,10 +9,10 @@ test("public flood map loads without horizontal overflow", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("admin route requires authentication", async ({ page }) => {
+test("admin route opens directly", async ({ page }) => {
   await page.goto(`${base}/admin/`);
-  await expect(page).toHaveURL(/\/login/);
-  await expect(page.getByRole("heading", { name: "เข้าสู่ระบบเจ้าหน้าที่" })).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/?$/);
+  await expect(page.getByTitle("ระบบจัดการข้อมูลหลังบ้าน Admin")).toBeVisible();
 });
 
 test("public search exposes a recoverable empty state", async ({ page }) => {

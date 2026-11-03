@@ -123,7 +123,7 @@ export function LongdoGisMap({
           fadeAnimation: false,
         });
 
-        const longdoKey = process.env.NEXT_PUBLIC_LONGDO_MAP_KEY || "demokey";
+        const longdoKey = process.env.NEXT_PUBLIC_LONGDO_MAP_KEY;
 
         const baseLayers = {
           road: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {

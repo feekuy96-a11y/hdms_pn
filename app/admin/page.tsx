@@ -76,8 +76,8 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-body">
       {/* Official Thai Government Protected Top Header */}
-      <header className="bg-[#0f2347] border-b-2 border-amber-500 sticky top-0 z-50 h-16 px-3 sm:px-5 flex items-center justify-between gap-2 shadow-xl">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <header className="bg-[#0f2347] border-b-2 border-amber-500 sticky top-0 z-50 min-h-16 px-3 sm:px-5 py-2 lg:py-0 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 shadow-xl">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1 lg:flex-none">
           <Link
             href="/"
             className="flex items-center gap-1.5 text-xs text-amber-300 hover:text-white bg-slate-900/90 px-2.5 py-1.5 rounded-lg border border-slate-700 transition font-heading font-bold shrink-0"
@@ -113,7 +113,7 @@ export default function AdminPage() {
         </div>
 
         {/* View Switcher: (รายงานผู้ว่าฯ / KPI vs ระบบหลังบ้าน Admin) */}
-        <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-700 shrink-0">
+        <div className="order-3 lg:order-none w-full lg:w-auto flex items-center justify-center lg:justify-start gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-700 shrink-0">
           <button
             type="button"
             onClick={() => setAdminViewMode("executive")}
@@ -140,7 +140,7 @@ export default function AdminPage() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button type="button" title="ออกจากระบบ" className="p-2 text-slate-300 hover:text-amber-400" onClick={async () => { await createClient().auth.signOut(); }}><LogOut className="w-4 h-4" /></button>
           <button
             type="button"
@@ -176,9 +176,9 @@ export default function AdminPage() {
         </main>
       ) : (
         /* Main Split Layout: Admin Console on Left (ฝั่งซ้ายมือ), GIS Map on Right */
-        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        <div className="flex-1 flex flex-col lg:flex-row lg:min-h-0 overflow-visible lg:overflow-hidden">
           {/* Left: Full Government Administrative Console (ฝั่งซ้ายมือ) */}
-          <div className="w-full lg:w-[680px] xl:w-[720px] flex flex-col overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0">
+          <div className="w-full lg:w-[42vw] xl:w-[720px] min-h-[72vh] lg:min-h-0 flex flex-col overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0">
             <AdminConsole
               systemData={systemData}
               onDataRefresh={(newData) => {
@@ -198,7 +198,7 @@ export default function AdminPage() {
           </div>
 
           {/* Right: Interactive GIS Map */}
-          <div className="h-[48vh] lg:h-[calc(100vh-64px)] lg:flex-1 relative">
+          <div className="h-[44vh] min-h-[360px] lg:h-auto lg:min-h-0 lg:flex-1 relative">
             <LongdoGisMap
               systemData={systemData}
               selectedFloodId={selectedFloodId}

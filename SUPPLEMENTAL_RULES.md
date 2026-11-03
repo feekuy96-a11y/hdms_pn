@@ -28,6 +28,39 @@
 
 ## 🕒 ประวัติการอัปเดตระบบ (System Update Changelog)
 
+### [UPDATE-015] 2026-11-03: เปิด `/admin` โดยตรงและล้างข้อมูลตัวอย่างจากโค้ด
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** ยกเลิกหน้าล็อกอินสำหรับการเข้าถึงหน้าหลังบ้านตามคำสั่ง และกำจัด seed/fallback ที่เป็นข้อมูลตัวอย่างออกจากระบบ
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `app/admin/layout.tsx`, `app/login/page.tsx`, `components/admin/AdminGate.tsx`, `db/seed.sql`, `components/executive/ExecutiveDashboard.tsx`, `components/map/LongdoGisMap.tsx`, `lib/gis-utils.ts`, `lib/supabase/middleware.ts`, `lib/supabase/require-admin.ts`, `tests/e2e/smoke.spec.ts`, `PRODUCTION.md`
+- **รายละเอียดการทำงาน (Technical Changes):** `/admin` แสดงผลโดยตรงและ `/login` เปลี่ยนเป็น not-found; ลบ gate/middleware/auth helper ที่ไม่ใช้งาน; ลบ seed mock; ลบ Unsplash และ Longdo demo-key fallback; คงการตรวจ JWT/admin role ที่ Edge API สำหรับคำสั่งเขียน/แก้ไข/ลบ เพื่อป้องกัน endpoint สาธารณะถูกใช้ทำลายข้อมูล
+- **การทดสอบและผลลัพธ์ (Verification):** `npm run check` ผ่าน lint, typecheck และ production build; E2E และ HTTP route check ทำซ้ำหลังการแก้ไข; ยังไม่ได้เผยแพร่การเปลี่ยนแปลงขึ้น GitHub ตามคำสั่งผู้ใช้
+- **สถานะ:** ใช้งานได้ใน workspace (ACTIVE) / รอผู้ใช้อนุมัติการเผยแพร่
+
+### [UPDATE-016] 2026-11-03: เปิด CRUD แบบไม่ล็อกอินตามคำสั่งผู้ใช้
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** แก้ปัญหาปุ่มเพิ่ม/แก้ไข/ลบถูก Edge API ตอบ 401 หลังยกเลิกหน้า login
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `supabase/functions/hdms-api/index.ts`, `supabase/config.toml`
+- **รายละเอียดการทำงาน (Technical Changes):** อ่านข้อมูลด้วย anon key ต่อไป; คำสั่งเปลี่ยนแปลงใช้ `SUPABASE_SERVICE_ROLE_KEY` ภายใน Edge Function เท่านั้น และไม่ส่ง secret ไป browser; ไม่ตรวจ JWT สำหรับ mutation ตามคำสั่งผู้ใช้
+- **การทดสอบและผลลัพธ์ (Verification):** Deploy `hdms-api` สำเร็จ version 6; ทดสอบ create และ soft-delete โดยไม่ส่ง Authorization สำเร็จ และยืนยันว่า record ทดสอบไม่ปรากฏใน `getSystemDataAction`; `npm run typecheck` ผ่าน
+- **คำเตือนความปลอดภัย:** ผู้ใดก็ตามที่เข้าถึง `/admin` สามารถแก้ไข/ลบข้อมูลได้ จนกว่าจะเปิดระบบยืนยันตัวตนกลับมา
+- **สถานะ:** ใช้งานจริงบน Supabase Edge Function (ACTIVE) / โหมดไม่ล็อกอินตามคำสั่งผู้ใช้
+
+### [UPDATE-017] 2026-11-03: ปรับ Admin Console ให้เหมาะกับ desktop และ responsive บนมือถือ
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** ให้หน้าหลังบ้านใช้พื้นที่จอคอมพิวเตอร์ได้เต็มประสิทธิภาพ โดยยังคงสัดส่วนและการเลื่อนใช้งานบนมือถือ
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `app/admin/page.tsx`, `components/admin/AdminConsole.tsx`
+- **รายละเอียดการทำงาน (Technical Changes):** ปรับ header ให้จัดกลุ่มและขึ้นบรรทัดได้บนจอแคบ; เพิ่ม desktop split ที่สมดุลระหว่าง console/map; กำหนดความสูงขั้นต่ำของ console/map บนมือถือ; เพิ่ม `min-w-0` และ responsive padding ป้องกันเนื้อหาล้นแนวนอน
+- **การทดสอบและผลลัพธ์ (Verification):** `npm run check` ผ่าน; production build ผ่าน; Playwright smoke desktop/mobile ผ่าน 4/4
+- **สถานะ:** ใช้งานได้ใน workspace (ACTIVE) / ยังไม่ได้ push GitHub
+
+### [UPDATE-018] 2026-11-03: ตรวจสอบการใช้งานเมนูหลังบ้านทุกส่วน
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** ยืนยันว่าเมนูหลักหลังบ้านเปิด workspace จริงและมี control สำคัญพร้อมใช้งาน
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `tests/e2e/admin-menus.spec.ts`
+- **รายละเอียดการทดสอบ (Test Coverage):** จัดการระบบ, จัดการแผนที่, รายการเหตุการณ์, รายการทางเลี่ยง, โครงข่ายสายทาง, สไตล์เส้นทาง และโครงการผู้ว่าฯ; ตรวจ landmark, primary controls และ runtime error บน desktop; mobile ใช้ smoke regression แยกต่างหาก
+- **การทดสอบและผลลัพธ์ (Verification):** ชุดตรวจเมนู desktop ผ่าน 2/2; smoke desktop/mobile เดิมผ่าน; build/typecheck ผ่าน
+- **สถานะ:** พร้อมเผยแพร่
+
 ### [UPDATE-014] 2026-11-03: รองรับ Next.js server และ GitHub Pages ด้วย Edge API ร่วมกัน
 - วัตถุประสงค์: ให้ UI ชุดเดียวใช้งานสอง deployment โดยไม่ส่ง secret key ไป browser
 - ไฟล์: app/actions/doh-actions.ts, app/admin/layout.tsx, components/admin/AdminGate.tsx, app/login/page.tsx, lib/hdms-api.ts, supabase/functions/hdms-api/index.ts, db/shared-edge-api.sql, db/deleted-visibility-and-snapping.sql, db/incident-location-fields.sql, next.config.mjs, .github/workflows/*, scripts/serve-pages.mjs

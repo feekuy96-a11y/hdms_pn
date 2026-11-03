@@ -277,7 +277,7 @@ export function AdminConsole({
       {/* ===================================================================== */}
       {/* 2. MAIN WORKING PANE                                                  */}
       {/* ===================================================================== */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-950">
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-950">
         {/* Mobile / Tablet Horizontal Navigation Bar */}
         <div className="lg:hidden flex items-center overflow-x-auto border-b border-slate-800 p-2 gap-1.5 bg-slate-900 shrink-0">
           {NAV_ITEMS.map((item) => {
@@ -305,7 +305,7 @@ export function AdminConsole({
         </div>
 
         {/* Scrollable Tab Workspace */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 lg:p-6">
           {/* TAB 1: System Settings */}
           {activeTab === "system" && (
             <SystemSettingsTab

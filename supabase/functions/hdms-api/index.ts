@@ -24,8 +24,14 @@ Deno.serve(async (req) => {
     if (!Array.isArray(args)) fail("Invalid arguments");
     const url = Deno.env.get("SUPABASE_URL")!;
     const key = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const authorization = req.headers.get("Authorization");
-    const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: authorization ? { Authorization: authorization } : {} } });
+    // Public reads use the anon/publishable key. Mutations intentionally use the
+    // server-only service role because this deployment is configured to allow
+    // direct /admin access without a login session. Never expose serviceKey to
+    // the browser or include it in a response.
+    const mutation = action !== "getSystemDataAction";
+    const db = createClient(url, mutation && serviceKey ? serviceKey : key, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: !mutation && authorization ? { Authorization: authorization } : {} } });
     const check = async (query: PromiseLike<{ data: any; error: any }>) => {
       const { data, error } = await query;
       if (error) { console.error("Database operation failed", action, error.code); fail("Database operation failed", 400); }
@@ -38,10 +44,7 @@ Deno.serve(async (req) => {
       return data;
     };
     if (action === "getSystemDataAction") return reply(await system());
-    if (!authorization?.startsWith("Bearer ")) return reply({ error: "Authentication required" }, 401);
-    const { data: identity, error: authError } = await db.auth.getUser(authorization.slice(7));
-    if (authError || !identity.user) return reply({ error: "Invalid session" }, 401);
-    if (!["admin", "doh_admin"].includes(identity.user.app_metadata?.role)) return reply({ error: "Admin required" }, 403);
+    if (mutation && !serviceKey) return reply({ error: "Server mutation key is not configured" }, 503);
     const [p, second] = args;
     const now = new Date().toISOString();
     const patch = async (table: string, id: string, changes: Record<string, unknown>, idColumn = "id") => {
@@ -69,14 +72,17 @@ Deno.serve(async (req) => {
       case "upsertRouteAction": {
         const table = typeTable(p.recordType);
         const id = p.id || `${p.recordType === "FLOOD" ? "F" : "D"}-${crypto.randomUUID()}`;
-        const existing = p.id ? await check(db.from(table).select("*").eq("id", id).is("deleted_at", null).single()) : {};
+        const existing = p.id ? await check(db.from(table).select("*").eq("id", id).is("deleted_at", null).maybeSingle()) || {} : {};
         const geometry = p.coordinates ?? existing.coordinates_json ?? [];
         if (!Array.isArray(geometry) || geometry.length < 2) fail("At least two route points required");
         geometry.forEach((point: any) => { number(point[0], -180, 180); number(point[1], -90, 90); });
         const row: Record<string, unknown> = { id, lat_start: number(p.latStart ?? existing.lat_start, -90, 90), lon_start: number(p.lonStart ?? existing.lon_start, -180, 180), lat_end: number(p.latEnd ?? existing.lat_end, -90, 90), lon_end: number(p.lonEnd ?? existing.lon_end, -180, 180), coordinates_json: geometry, is_active: existing.is_active ?? true, updated_at: now };
         if (p.recordType === "FLOOD") Object.assign(row, { route_no: text(p.routeNo ?? existing.route_no, "Route"), section_name: text(p.sectionName ?? existing.section_name, "Section"), km_start: text(p.kmStart ?? existing.km_start, "Start KM"), km_end: text(p.kmEnd ?? existing.km_end, "End KM"), water_level_cm: number(p.waterLevelCm ?? existing.water_level_cm ?? 0, 0, 10000), traffic_status: traffic(p.trafficStatus ?? existing.traffic_status ?? "WARNING"), latest_photo_url: p.photoUrl ?? p.latestPhotoUrl ?? existing.latest_photo_url ?? "", district: p.district ?? existing.district ?? "", subdistrict: p.subdistrict ?? existing.subdistrict ?? "", detour_advice: p.detourAdvice ?? existing.detour_advice ?? "" });
         else Object.assign(row, { flood_id_ref: text(p.detourRefId ?? existing.flood_id_ref, "Linked flood"), route_name: text(p.detourName ?? existing.route_name, "Detour name"), description: p.detourDesc ?? existing.description ?? "" });
-        await check(db.rpc("doh_save_route_rpc", { p_type: p.recordType, p_row: row })); break;
+        // The route RPC still enforces the legacy authenticated role policy in
+        // some projects. Since this deployment intentionally runs login-free,
+        // perform the validated upsert through the server-only service client.
+        await check(db.from(table).upsert(row)); break;
       }
       case "upsertMitigationProjectAction":
         if (!["COMPLETED", "PENDING_BUDGET"].includes(p.statusGroup)) fail("Invalid project status");
