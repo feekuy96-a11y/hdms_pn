@@ -19,10 +19,14 @@ export default defineConfig({
     { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "mobile-chromium", use: { ...devices["Pixel 7"] } },
   ],
-  webServer: {
-    command: process.env.PLAYWRIGHT_STATIC ? "node scripts/serve-pages.mjs" : "npm run start",
-    url: `${baseURL}${process.env.BASE_PATH || ""}/`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  ...(process.env.PLAYWRIGHT_BASE_URL
+    ? {}
+    : {
+        webServer: {
+          command: process.env.PLAYWRIGHT_STATIC ? "node scripts/serve-pages.mjs" : "npm run start",
+          url: `${baseURL}${process.env.BASE_PATH || ""}/`,
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+        },
+      }),
 });
