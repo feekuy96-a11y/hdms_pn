@@ -127,21 +127,11 @@ export function DetourManagementTab({
   };
 
   // Auto Generate Advice inside Modal
-  const handleGenerateAdviceInModal = () => {
+  const handleGenerateAdviceInModal = async () => {
     if (!editingDetour) return;
     const linkedFlood = floodList.find((f) => f.id === editDetourRefId);
 
-    const advice = generateAutoDetourAdvice({
-      routeNo: linkedFlood?.route_no || "43",
-      sectionName: linkedFlood?.section_name || "ทางหลวงปัตตานี",
-      kmStart: linkedFlood?.km_start || "",
-      kmEnd: linkedFlood?.km_end || "",
-      detourName: editDetourName || "เส้นทางเลี่ยงน้ำท่วม",
-      startLat: editingDetour.lat_start,
-      startLon: editingDetour.lon_start,
-      endLat: editingDetour.lat_end,
-      endLon: editingDetour.lon_end,
-    });
+    const advice = await generateAutoDetourAdvice([editingDetour.lon_start, editingDetour.lat_start], [editingDetour.lon_end, editingDetour.lat_end], typeof editingDetour.coordinates_json === "string" ? JSON.parse(editingDetour.coordinates_json) : editingDetour.coordinates_json, linkedFlood?.route_no || "43");
 
     setEditDetourDesc(advice);
     onToast("วิเคราะห์คำแนะนำการเดินทาง ๒ ทิศทางสำเร็จ");
@@ -167,7 +157,7 @@ export function DetourManagementTab({
         lonStart: editingDetour.lon_start,
         latEnd: editingDetour.lat_end,
         lonEnd: editingDetour.lon_end,
-        coordinates: editingDetour.coordinates_json,
+        coordinates: typeof editingDetour.coordinates_json === "string" ? JSON.parse(editingDetour.coordinates_json) : editingDetour.coordinates_json,
       });
 
       // Update active state if changed

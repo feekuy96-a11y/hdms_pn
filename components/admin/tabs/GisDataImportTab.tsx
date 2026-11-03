@@ -1,10 +1,12 @@
 "use client";
+import { readRouteFile } from "@/lib/route-import";
 
 import React, { useState } from "react";
 import { SystemDataPayload } from "@/db/default-data";
-import { LineStylesMap } from "@/lib/constants";
+type LineStylesMap = Record<string, import("@/db/default-data").MapLineStyleItem>;
 import {
   FileSpreadsheet,
+  Plus,
   Upload,
   MapPin,
   Tag,
@@ -267,7 +269,7 @@ export function GisDataImportTab({
   };
 
   // Flattened highway features list for specifications table (Issue #13)
-  const allHighwayFeatures = React.useMemo(() => {
+  const allHighwayFeatures = (() => {
     const list: Array<{
       layerId: string;
       layerName: string;
@@ -313,7 +315,7 @@ export function GisDataImportTab({
     });
 
     return list;
-  }, [systemData.highwayLayers]);
+  })();
 
   // Handle GIS File Upload (KML, KMZ, Shapefile .zip, GeoJSON, GPX)
   const handleGisUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -325,21 +327,7 @@ export function GisDataImportTab({
       let extractedFeatures: ExtractedGisFeature[] = [];
       const lower = file.name.toLowerCase();
 
-      if (lower.endsWith(".kmz")) {
-        extractedFeatures = await extractFeaturesFromKmz(file);
-      } else if (lower.endsWith(".kml")) {
-        const text = await file.text();
-        extractedFeatures = extractFeaturesFromKml(text);
-      } else if (lower.endsWith(".zip")) {
-        const shp = (await import("shpjs")).default;
-        const buf = await file.arrayBuffer();
-        const geojson = await shp(buf);
-        extractedFeatures = extractFeaturesFromGeoJson(geojson);
-      } else {
-        const text = await file.text();
-        const geojson = JSON.parse(text);
-        extractedFeatures = extractFeaturesFromGeoJson(geojson);
-      }
+      extractedFeatures = await readRouteFile(file);
 
       if (extractedFeatures.length === 0) {
         throw new Error("ไม่พบแนวเส้นทาง (LineString) ในไฟล์ หรือรูปแบบพิกัดไม่ใช่ WGS84");

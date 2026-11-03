@@ -96,7 +96,7 @@ export function SystemSettingsTab({
         phone: officePhone || "073-349041",
         lat: Number(officeLat),
         lon: Number(officeLon),
-        isActive: true,
+        is_active: true,
       });
       if (res.success) {
         onDataRefresh(res.systemData);

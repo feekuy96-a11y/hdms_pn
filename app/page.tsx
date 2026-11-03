@@ -204,7 +204,7 @@ export default function HomePage() {
       {/* =================================================================== */}
       {/* 2. MAIN LAYOUT: GIS MAP + COLLAPSIBLE SIDEBAR + DETAIL DOSSIER     */}
       {/* =================================================================== */}
-      <div className="flex-1 flex flex-col lg:flex-row relative lg:overflow-hidden min-h-[calc(100vh-104px)] lg:h-[calc(100vh-104px)]">
+      <div className="flex flex-col lg:flex-row relative lg:overflow-hidden" style={{ height: "calc(100dvh - 64px)", minHeight: 450 }}>
         {/* ================================================================= */}
         {/* A. LEFT SIDEBAR: ROUTE LIST (DESKTOP COLLAPSIBLE)                 */}
         {/* ================================================================= */}
@@ -371,7 +371,7 @@ export default function HomePage() {
                     ? "ยังไม่มีรายงานในระบบ ข้อมูลนี้ไม่ยืนยันว่าทุกเส้นทางปลอดภัย โปรดตรวจสอบกับสายด่วน 1586 ก่อนเดินทาง"
                     : "กรุณาลองเปลี่ยนคำค้นหา หรือกดปุ่มด้านล่างเพื่อล้างตัวกรอง"}
                 </p>
-                {systemData.floodRoutes.length > 0 && (
+                {(searchQuery || selectedRouteFilter !== "ALL") && (
                   <button
                     type="button"
                     onClick={() => {
@@ -514,6 +514,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+                  {filteredFloods.length === 0 && <div className="rounded-xl border border-slate-700 p-4 text-slate-300 text-sm"><p>{systemData.floodRoutes.length === 0 ? "ยังไม่มีรายงานจุดน้ำท่วม" : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p><button type="button" className="mt-3 min-h-11 text-amber-300" onClick={() => { setSearchQuery(""); setSelectedRouteFilter("ALL"); }}>ล้างตัวกรอง</button></div>}
                   {filteredFloods.map((flood) => {
                     const isSelected = flood.id === selectedFloodId;
                     const isClosed = flood.traffic_status === "CLOSED";

@@ -1,57 +1,39 @@
-name: Deploy to GitHub Pages
-
+name: Deploy GitHub Pages
 on:
   push:
-    branches: [main, codex/public-flood-interface]
+    branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
-  group: pages-${{ github.ref }}
+  group: github-pages
   cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
-
-      - name: Set Base Path for GitHub Pages
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Load public configuration
         run: |
+          node -e 'const fs=require("fs"),c=require("./.github/hdms-public.json");fs.appendFileSync(process.env.GITHUB_ENV,`NEXT_PUBLIC_SUPABASE_URL=${c.supabaseUrl}\nNEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${c.supabasePublishableKey}\n`);'
           REPO="${GITHUB_REPOSITORY#*/}"
           if [[ "$REPO" == *.github.io ]]; then
             echo "BASE_PATH=" >> "$GITHUB_ENV"
           else
             echo "BASE_PATH=/$REPO" >> "$GITHUB_ENV"
           fi
-
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Build with Next.js (Static Export)
-        env:
-          NEXT_PUBLIC_ADMIN_URL: ${{ vars.ADMIN_URL }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://iiuearxdsbilcpsfzhyp.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpdWVhcnhkc2JpbGNwc2Z6aHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3ODAyMTksImV4cCI6MjEwNzM1NjIxOX0.NlmieOWIm9medTsUzHkQdEvUySj-tat4KwIDOsCVvxg' }}
-        run: npm run build
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - run: npm run lint && npm run typecheck && npm run build:pages
+      - uses: actions/upload-pages-artifact@v3
         with:
-          path: ./out
-
+          path: out
   deploy:
-    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     environment:

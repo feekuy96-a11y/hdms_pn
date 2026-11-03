@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Load public configuration
+        run: node -e 'const fs=require("fs"),c=require("./.github/hdms-public.json");fs.appendFileSync(process.env.GITHUB_ENV,`NEXT_PUBLIC_SUPABASE_URL=${c.supabaseUrl}\nNEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${c.supabasePublishableKey}\n`);'
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - run: npm run build:pages
+        env:
+          BASE_PATH: /hdms_pn
+      - run: npm run test:e2e
+        env:
+          PLAYWRIGHT_STATIC: "1"
+          BASE_PATH: /hdms_pn

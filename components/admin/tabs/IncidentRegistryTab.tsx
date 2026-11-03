@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { FloodRoute, SystemDataPayload } from "@/db/default-data";
 import { ClipboardList, Plus, FileText, Search, Trash2, Edit, CheckCircle2 } from "lucide-react";
-import { deleteRouteAction, setIncidentStatusAction, saveTimelineUpdateAction } from "@/app/actions/doh-actions";
+import { deleteRouteAction, setIncidentStatusAction, saveTimelineUpdateAction, getDeletedRoutesAction, restoreRouteAction } from "@/app/actions/doh-actions";
 
 interface IncidentRegistryTabProps {
   systemData: SystemDataPayload;
@@ -26,6 +26,7 @@ export function IncidentRegistryTab({
 }: IncidentRegistryTabProps) {
   const [incidentFilter, setIncidentFilter] = useState<"ALL" | "ACTIVE" | "RESOLVED">("ACTIVE");
   const [incidentSearch, setIncidentSearch] = useState("");
+  const [deleted, setDeleted] = useState<{id: string; route_no: string; section_name: string}[] | null>(null);
   const [updateModalIncident, setUpdateModalIncident] = useState<FloodRoute | null>(null);
   const [newWaterLevel, setNewWaterLevel] = useState<number>(0);
   const [updateNote, setUpdateNote] = useState("");
@@ -103,7 +104,7 @@ export function IncidentRegistryTab({
   };
 
   const handleDeleteRoute = (id: string) => {
-    showConfirmModal("ยืนยันการลบจุดน้ำท่วม?", `ท่านกำลังจะลบข้อมูลจุดน้ำท่วม [${id}] อย่างถาวร`, async () => {
+    showConfirmModal("ยืนยันการลบจุดน้ำท่วม?", `ซ่อนจุดน้ำท่วม [${id}] โดยสามารถกู้คืนภายหลังได้`, async () => {
       try {
         const res = await deleteRouteAction("FLOOD", id);
         if (res.success) {
@@ -149,6 +150,7 @@ export function IncidentRegistryTab({
 
   return (
     <div className="space-y-5 max-w-4xl">
+      {deleted && <div className="border border-slate-700 rounded-xl p-3 text-sm text-slate-300"><button type="button" onClick={() => setDeleted(null)}>ปิดรายการ</button>{deleted.length === 0 && <p>ไม่มีรายการที่ลบ</p>}{deleted.map((r) => <div key={r.id} className="flex justify-between py-2"><span>ทล.{r.route_no} {r.section_name}</span><button type="button" className="text-emerald-300" onClick={async () => { try { const res = await restoreRouteAction("FLOOD", r.id); onDataRefresh(res.systemData); setDeleted(await getDeletedRoutesAction()); } catch { onToast("กู้คืนไม่สำเร็จ"); } }}>กู้คืน</button></div>)}</div>}
       {/* Incident Header Stats */}
       <div className="border-b border-slate-800 pb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -162,6 +164,7 @@ export function IncidentRegistryTab({
           </p>
         </div>
         <div className="flex gap-2">
+          <button type="button" className="text-sky-300 text-xs" onClick={async () => { try { setDeleted(await getDeletedRoutesAction()); } catch { onToast("โหลดรายการที่ลบไม่สำเร็จ"); } }}>รายการที่ลบ / กู้คืน</button>
           <button
             type="button"
             onClick={onAddFlood}

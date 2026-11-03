@@ -13,7 +13,7 @@ import {
   Camera,
   Save,
 } from "lucide-react";
-import { upsertRouteAction } from "@/app/actions/doh-actions";
+import { upsertRouteAction, snapRouteAction } from "@/app/actions/doh-actions";
 import {
   calculateRoadSnappedDualSource,
   generateAutoDetourAdvice,
@@ -157,15 +157,15 @@ export function MapManagementTab({
       setEndLon(flood.lon_end);
 
       let coords: [number, number][] = [];
-      if (Array.isArray(flood.coordinates_json)) coords = flood.coordinates_json;
-      else if (flood.coordinates) coords = flood.coordinates;
+      if (Array.isArray(flood.coordinates_json)) coords = flood.coordinates_json as [number, number][];
+      else if (typeof flood.coordinates_json === "string") coords = JSON.parse(flood.coordinates_json);
       setDraftCoordinates(coords);
       setFieldImages(flood.latest_photo_url ? [flood.latest_photo_url] : []);
     } else {
       const detour = systemData.detourRoutes.find((r) => r.id === id);
       if (!detour) return;
-      setDetourRefId(detour.flood_route_id || "");
-      setDetourName(detour.detour_name);
+      setDetourRefId(detour.flood_id_ref || "");
+      setDetourName(detour.route_name);
       setDetourDesc(detour.description || "");
       setStartLat(detour.lat_start || 0);
       setStartLon(detour.lon_start || 0);
@@ -173,8 +173,8 @@ export function MapManagementTab({
       setEndLon(detour.lon_end || 0);
 
       let coords: [number, number][] = [];
-      if (Array.isArray(detour.coordinates_json)) coords = detour.coordinates_json;
-      else if (detour.coordinates) coords = detour.coordinates;
+      if (Array.isArray(detour.coordinates_json)) coords = detour.coordinates_json as [number, number][];
+      else if (typeof detour.coordinates_json === "string") coords = JSON.parse(detour.coordinates_json);
       setDraftCoordinates(coords);
     }
   }, [editingRoute, systemData]);
@@ -228,15 +228,9 @@ export function MapManagementTab({
 
     setSnappingStatusText("กำลังคำนวณเส้นเกาะถนนจริง (Dual-Source Snapping)...");
     try {
-      const snapped = await calculateRoadSnappedDualSource(
-        numSLat,
-        numSLon,
-        numELat,
-        numELon,
-        waypoints,
-        HIGHWAY_ROUTES,
-        systemData.highwayLayers
-      );
+      const dbCoords = waypoints.length === 0 ? await snapRouteAction([numSLon, numSLat], [numELon, numELat]).catch(() => null) : null;
+      const result = dbCoords ? { coords: dbCoords } : await calculateRoadSnappedDualSource([numSLon, numSLat], [numELon, numELat], waypoints, systemData.highwayLayers);
+      const snapped = result.coords;
       if (snapped && snapped.length > 0) {
         setDraftCoordinates(snapped);
         setSnappingStatusText(`✓ คำนวณเส้นทางเกาะโครงข่ายถนนสำเร็จ (${snapped.length} จุด)`);
@@ -259,7 +253,7 @@ export function MapManagementTab({
     try {
       const location = await reverseGeocodeTambonAmphoe(lon, lat);
       if (location) {
-        setSectionName(location);
+        setSectionName(`ต.${location.subdistrict} อ.${location.district} จ.${location.province}`);
         onToast(`ระบุพื้นที่อัตโนมัติ: ${location}`);
       }
     } catch {
@@ -334,23 +328,13 @@ export function MapManagementTab({
   };
 
   // Generate Detour Advice
-  const handleGenerateDetourAdviceClick = () => {
+  const handleGenerateDetourAdviceClick = async () => {
     const numSLat = Number(startLat) || 6.834;
     const numSLon = Number(startLon) || 101.186;
     const numELat = Number(endLat) || 6.839;
     const numELon = Number(endLon) || 101.192;
 
-    const advice = generateAutoDetourAdvice({
-      routeNo: routeNo || (availableHighways[0]?.no || "43"),
-      sectionName: sectionName || "ทางหลวงปัตตานี",
-      kmStart,
-      kmEnd,
-      detourName: detourName || "เส้นทางเลี่ยง",
-      startLat: numSLat,
-      startLon: numSLon,
-      endLat: numELat,
-      endLon: numELon,
-    });
+    const advice = await generateAutoDetourAdvice([numSLon, numSLat], [numELon, numELat], draftCoordinates, routeNo);
     setDetourDesc(advice);
     onToast("วิเคราะห์คำแนะนำการเดินทางไป-กลับสำเร็จ");
   };
@@ -566,7 +550,7 @@ export function MapManagementTab({
               <button
                 type="button"
                 disabled={isGeocoding}
-                onClick={() => handleAutoGeocode(startLon, startLat)}
+                onClick={() => handleAutoGeocode(Number(startLon), Number(startLat))}
                 className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1 bg-sky-950/60 border border-sky-800 px-2 py-0.5 rounded-lg font-heading transition"
               >
                 <Navigation className="w-3 h-3" />

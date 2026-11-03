@@ -76,7 +76,7 @@ export function OfflineSyncStatus({ onSyncComplete }: { onSyncComplete?: () => v
       {isOnline ? (
         <span className="flex items-center gap-1.5 text-emerald-400 bg-emerald-950/60 border border-emerald-500/40 px-2.5 py-1 rounded-lg">
           <Wifi className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">ออนไลน์ (DB พร้อม)</span>
+          <span className="hidden sm:inline">เชื่อมต่ออินเทอร์เน็ต</span>
         </span>
       ) : (
         <span className="flex items-center gap-1.5 text-amber-300 bg-amber-950/60 border border-amber-500/40 px-2.5 py-1 rounded-lg animate-pulse">

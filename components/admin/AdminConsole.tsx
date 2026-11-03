@@ -40,7 +40,7 @@ interface AdminConsoleProps {
   pickedCoordinate?: { lat: number; lon: number; mode: string } | null;
   onFocusCoordinates?: (coords: [number, number]) => void;
   onToast: (msg: string) => void;
-  setIncomingGisLines?: (lines: [number, number][]) => void;
+  setIncomingGisLines?: (lines: [number, number][][]) => void;
 }
 
 export function AdminConsole({
@@ -71,7 +71,7 @@ export function AdminConsole({
   // Status Modal State
   const [modalState, setModalState] = useState<{
     isOpen: boolean;
-    type: "confirm" | "success" | "error" | "warning";
+    type: "confirm" | "success" | "error" | "info";
     title: string;
     message: string;
     onConfirm?: () => void;

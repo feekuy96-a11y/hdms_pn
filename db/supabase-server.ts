@@ -1,3 +1,4 @@
+import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import {
   SystemDataPayload,
@@ -11,29 +12,8 @@ import {
   SystemSettingsConfig,
 } from "./default-data";
 
-const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  "https://iiuearxdsbilcpsfzhyp.supabase.co";
-
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpdWVhcnhkc2JpbGNwc2Z6aHlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3ODAyMTksImV4cCI6MjEwNzM1NjIxOX0.NlmieOWIm9medTsUzHkQdEvUySj-tat4KwIDOsCVvxg";
-
-if (typeof WebSocket === "undefined" && typeof globalThis !== "undefined") {
-  (globalThis as any).WebSocket = class MockWebSocket {
-    static readonly CONNECTING = 0;
-    static readonly OPEN = 1;
-    static readonly CLOSING = 2;
-    static readonly CLOSED = 3;
-    readonly readyState = 3;
-    send() {}
-    close() {}
-    addEventListener() {}
-    removeEventListener() {}
-  };
-}
-
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://127.0.0.1:54321";
+const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "configuration-required";
 export const supabaseServer = createClient(supabaseUrl, supabaseKey, {
   auth: {
     persistSession: false,
@@ -161,7 +141,7 @@ export async function deleteRouteSupabase(
   id: string
 ): Promise<boolean> {
   try {
-    const { error } = await supabaseServer.from(table).delete().eq("id", id);
+    const { error } = await supabaseServer.from(table).update({ deleted_at: new Date().toISOString() }).eq("id", id);
     if (error) {
       console.warn(`[Supabase Server] delete ${table} error:`, error.message);
       return false;
@@ -240,13 +220,7 @@ export async function updateHighwayLayerSupabase(payload: {
     if (payload.geojsonData !== undefined) updateData.geojson_data = payload.geojsonData;
     if (payload.metadata !== undefined) updateData.metadata = payload.metadata;
 
-    const { error } = await supabaseServer
-      .from("doh_highway_layers")
-      .upsert({
-        layer_id: payload.layerId,
-        layer_name: payload.layerName || payload.layerId,
-        ...updateData,
-      });
+    const { error } = await supabaseServer.rpc("doh_import_routes_rpc", { payload });
 
     if (error) {
       console.warn("[Supabase Server] updateHighwayLayer error:", error.message);

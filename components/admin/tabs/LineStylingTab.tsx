@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { SystemDataPayload } from "@/db/default-data";
-import { DEFAULT_MAP_STYLES, LINE_STYLE_PRESET_THEMES, LineStylePresetTheme, MapLineStyleItem } from "@/lib/constants";
+import { DEFAULT_MAP_STYLES, LINE_STYLE_PRESET_THEMES, MapLineStyleItem } from "@/lib/constants";
 import { Palette, Save, Sparkles } from "lucide-react";
 import { updateMapStyleAction } from "@/app/actions/doh-actions";
 
@@ -38,7 +38,7 @@ export function LineStylingTab({
     }
   };
 
-  const handleApplyPresetTheme = (theme: LineStylePresetTheme) => {
+  const handleApplyPresetTheme = (theme: (typeof LINE_STYLE_PRESET_THEMES)[number]) => {
     setLineStyles(theme.styles);
     if (systemData) {
       systemData.mapStyles = theme.styles as any;

@@ -68,4 +68,3 @@ You must strictly implement the DOH_Pattani_Flood system using this stack:
 - **NO Mock Code Left Behind:** Any temporary scripts, mock data files, or test components MUST be deleted immediately after validation.
 - **NO Blind Refactoring:** Do not rewrite untouched components just to "clean them up".
 - **NO Over-Engineering:** Build what is required efficiently.
-
