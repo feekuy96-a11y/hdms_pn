@@ -28,6 +28,25 @@
 
 ## 🕒 ประวัติการอัปเดตระบบ (System Update Changelog)
 
+### [UPDATE-016] 2026-11-03: ปลดล็อกหน้า Login และเปิดให้เข้าใช้งานแผงควบคุม /admin ได้โดยตรง (Direct Admin Access)
+- **ผู้ดำเนินการ/ผู้สั่งการ:** ทีมพัฒนาระบบสารสนเทศ แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** ปรับแก้ระบบบน GitHub และ GitHub Pages ให้สามารถเข้าใช้งานหน้าจัดการข้อมูล `/admin` ได้โดยตรงตามความต้องการ ไม่ติดหน้าจอเข้าสู่ระบบ (Login Wall) และหากเข้าลิงก์ `/login` จะ Redirect ไปยัง `/admin` ทันที
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):**
+  - `app/admin/layout.tsx` (ปลดล็อก `<AdminGate>` wrapper ให้ render หน้าแอดมินทันที)
+  - `components/admin/AdminGate.tsx` (ปิดการดักสิทธิ์ auth / login redirection ให้คืนค่า `{children}` ได้โดยตรง)
+  - `app/login/page.tsx` (เปลี่ยนหน้าล็อกอินเป็น auto-redirect ไปยัง `/admin/`)
+  - `lib/supabase/middleware.ts` (ยกเลิกการบล็อกเส้นทาง `/admin` และ redirect `/login` ตรงเข้า `/admin/`)
+  - `lib/hdms-api.ts` (เพิ่ม fallback `executeDirectAction` สำหรับการทำ CRUD ทุกรายการผ่าน Supabase Client โดยตรงเมื่อไม่ได้ส่ง Token ล็อกอิน)
+- **รายละเอียดการทำงาน (Technical Changes):**
+  1. ลบอุปสรรคการเข้าใช้งานหน้าควบคุม โดยเปิดให้เข้า URL `/admin` ได้โดยตรงทันที ไม่แสดงฟอร์มกรอกอีเมล/รหัสผ่าน
+  2. กรณีมีการเรียกเข้าหน้า `/login` เก่า ระบบจะ redirect สลับไปที่ `/admin/` ทันที
+  3. ปรับ `invokeHdms` ใน `lib/hdms-api.ts` ให้มีระบบสำรองแบบ Hybrid: หากเข้าใช้งานแบบ direct โดยไม่มี session login จาก Edge Function ระบบจะทำงานแบบ Direct Execution ผ่าน Supabase Client ทันที ทั้งการเพิ่ม ลบ แก้ไข จุดน้ำท่วม ทางเลี่ยง โครงการผู้ว่าฯ เลเยอร์ทางหลวง และข้อมูลระบบ
+- **การทดสอบและผลลัพธ์ (Verification):**
+  - `npx tsc --noEmit`: 0 errors
+  - `npm run lint`: 0 warnings, 0 errors
+  - `NEXT_OUTPUT="export" next build`: สำเร็จ 100% (/admin และ /login prerendered as static content)
+- **สถานะ:** ใช้งานได้จริง (ACTIVE) / พร้อมใช้งาน 100%
+
 ### [UPDATE-015] 2026-11-03: แก้ไข Dependabot Update ล้มเหลวและขจัดช่องโหว่ความปลอดภัย minimatch
 - **ผู้ดำเนินการ/ผู้สั่งการ:** ทีมพัฒนาระบบสารสนเทศ แขวงทางหลวงปัตตานี / AI Assistant
 - **วัตถุประสงค์ (Objective):** แก้ไขปัญหา GitHub Actions Workflow Run 41571038555 (Dependabot Updates #6) ล้มเหลวจากข้อขัดแย้งของ minimatch <11.0.1 (GHSA-g3hv-75wg-m249) ที่ติด transitive dependency ของ eslint และ eslint-config-next

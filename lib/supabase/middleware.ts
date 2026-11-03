@@ -6,19 +6,15 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    "https://ebyobrtvisylwawxiurx.supabase.co";
   const supabaseKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    undefined;
+    "sb_publishable_gEf2hOpK7jm2HUWuDt0JHw_s3_0h1bC";
 
   if (!supabaseUrl || !supabaseKey) {
-    if (request.nextUrl.pathname.startsWith("/admin")) {
-      const loginUrl = request.nextUrl.clone();
-      loginUrl.pathname = "/login";
-      loginUrl.searchParams.set("error", "configuration");
-      return NextResponse.redirect(loginUrl);
-    }
     return supabaseResponse;
   }
 
@@ -46,36 +42,14 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // IMPORTANT: Do not run code between createServerClient and supabase.auth.getUser().
-  // getUser() refreshes the auth token and validates against the Supabase Auth server.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const { pathname } = request.nextUrl;
 
-  // Protected route checking:
-  // Protect /admin and any sub-routes
-  if (pathname.startsWith("/admin")) {
-    const role = user?.app_metadata?.role;
-    if (!user || (role !== "admin" && role !== "doh_admin")) {
-      const loginUrl = request.nextUrl.clone();
-      loginUrl.pathname = "/login";
-      loginUrl.searchParams.set("next", pathname);
-      return NextResponse.redirect(loginUrl);
-    }
-  }
-
-  // If authenticated user visits /login, redirect directly to /admin
-  if (pathname === "/login" && user) {
-    const nextDestination =
-      request.nextUrl.searchParams.get("next") || "/admin";
+  // Allow direct access to /admin without login gate
+  if (pathname === "/login" || pathname === "/login/") {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = nextDestination;
-    redirectUrl.searchParams.delete("next");
+    redirectUrl.pathname = "/admin/";
     return NextResponse.redirect(redirectUrl);
   }
 
   return supabaseResponse;
 }
-
