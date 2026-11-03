@@ -1004,7 +1004,7 @@ export async function reverseGeocodeTambonAmphoe(
 ): Promise<{ subdistrict: string; district: string; province: string } | null> {
   if (isNaN(lon) || isNaN(lat)) return null;
 
-  const longdoKey = process.env.NEXT_PUBLIC_LONGDO_MAP_KEY || "demokey";
+  const longdoKey = process.env.NEXT_PUBLIC_LONGDO_MAP_KEY;
 
   // 1. ลองค้นหาผ่าน Longdo Map Address API (แม่นยำที่สุดสำหรับประเทศไทย)
   try {

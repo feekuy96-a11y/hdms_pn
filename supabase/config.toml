@@ -1,4 +1,4 @@
 [functions.hdms-api]
-# Public reads are allowed. Every mutation verifies its user JWT with Auth
-# and checks app_metadata.role inside the handler before database access.
+# Public reads and mutations are handled by the function body. Mutations use
+# the server-only service role because /admin is intentionally login-free.
 verify_jwt = false

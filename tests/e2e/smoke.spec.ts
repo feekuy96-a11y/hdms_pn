@@ -9,13 +9,10 @@ test("public flood map loads without horizontal overflow", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("admin route is accessible directly and login redirects to admin", async ({ page }) => {
+test("admin route opens directly", async ({ page }) => {
   await page.goto(`${base}/admin/`);
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("ศูนย์ปฏิบัติการและรายงานข้อมูลอุทกภัย");
-
-  await page.goto(`${base}/login/`);
-  await expect(page).toHaveURL(/\/admin/);
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("ศูนย์ปฏิบัติการและรายงานข้อมูลอุทกภัย");
+  await expect(page).toHaveURL(/\/admin\/?$/);
+  await expect(page.getByTitle("ระบบจัดการข้อมูลหลังบ้าน Admin")).toBeVisible();
 });
 
 test("public search exposes a recoverable empty state", async ({ page }) => {

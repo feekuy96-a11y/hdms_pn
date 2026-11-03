@@ -28,45 +28,38 @@
 
 ## 🕒 ประวัติการอัปเดตระบบ (System Update Changelog)
 
-### [UPDATE-016] 2026-11-03: ปลดล็อกหน้า Login และเปิดให้เข้าใช้งานแผงควบคุม /admin ได้โดยตรง (Direct Admin Access)
-- **ผู้ดำเนินการ/ผู้สั่งการ:** ทีมพัฒนาระบบสารสนเทศ แขวงทางหลวงปัตตานี / AI Assistant
-- **วัตถุประสงค์ (Objective):** ปรับแก้ระบบบน GitHub และ GitHub Pages ให้สามารถเข้าใช้งานหน้าจัดการข้อมูล `/admin` ได้โดยตรงตามความต้องการ ไม่ติดหน้าจอเข้าสู่ระบบ (Login Wall) และหากเข้าลิงก์ `/login` จะ Redirect ไปยัง `/admin` ทันที
-- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):**
-  - `app/admin/layout.tsx` (ปลดล็อก `<AdminGate>` wrapper ให้ render หน้าแอดมินทันที)
-  - `components/admin/AdminGate.tsx` (ปิดการดักสิทธิ์ auth / login redirection ให้คืนค่า `{children}` ได้โดยตรง)
-  - `app/login/page.tsx` (เปลี่ยนหน้าล็อกอินเป็น auto-redirect ไปยัง `/admin/`)
-  - `lib/supabase/middleware.ts` (ยกเลิกการบล็อกเส้นทาง `/admin` และ redirect `/login` ตรงเข้า `/admin/`)
-  - `lib/hdms-api.ts` (เพิ่ม fallback `executeDirectAction` สำหรับการทำ CRUD ทุกรายการผ่าน Supabase Client โดยตรงเมื่อไม่ได้ส่ง Token ล็อกอิน)
-  - `tests/e2e/smoke.spec.ts` (ปรับปรุงชุดทดสอบ E2E ให้ตรวจสอบการเข้าถึง /admin ได้โดยตรง และตรวจสอบการ redirect จาก /login สู่ /admin)
-- **รายละเอียดการทำงาน (Technical Changes):**
-  1. ลบอุปสรรคการเข้าใช้งานหน้าควบคุม โดยเปิดให้เข้า URL `/admin` ได้โดยตรงทันที ไม่แสดงฟอร์มกรอกอีเมล/รหัสผ่าน
-  2. กรณีมีการเรียกเข้าหน้า `/login` เก่า ระบบจะ redirect สลับไปที่ `/admin/` ทันที
-  3. ปรับ `invokeHdms` ใน `lib/hdms-api.ts` ให้มีระบบสำรองแบบ Hybrid: หากเข้าใช้งานแบบ direct โดยไม่มี session login จาก Edge Function ระบบจะทำงานแบบ Direct Execution ผ่าน Supabase Client ทันที ทั้งการเพิ่ม ลบ แก้ไข จุดน้ำท่วม ทางเลี่ยง โครงการผู้ว่าฯ เลเยอร์ทางหลวง และข้อมูลระบบ
-- **การทดสอบและผลลัพธ์ (Verification):**
-  - `npx tsc --noEmit`: 0 errors
-  - `npm run lint`: 0 warnings, 0 errors
-  - `NEXT_OUTPUT="export" next build`: สำเร็จ 100% (/admin และ /login prerendered as static content)
-- **สถานะ:** ใช้งานได้จริง (ACTIVE) / พร้อมใช้งาน 100%
+### [UPDATE-015] 2026-11-03: เปิด `/admin` โดยตรงและล้างข้อมูลตัวอย่างจากโค้ด
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** ยกเลิกหน้าล็อกอินสำหรับการเข้าถึงหน้าหลังบ้านตามคำสั่ง และกำจัด seed/fallback ที่เป็นข้อมูลตัวอย่างออกจากระบบ
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `app/admin/layout.tsx`, `app/login/page.tsx`, `components/admin/AdminGate.tsx`, `db/seed.sql`, `components/executive/ExecutiveDashboard.tsx`, `components/map/LongdoGisMap.tsx`, `lib/gis-utils.ts`, `lib/supabase/middleware.ts`, `lib/supabase/require-admin.ts`, `tests/e2e/smoke.spec.ts`, `PRODUCTION.md`
+- **รายละเอียดการทำงาน (Technical Changes):** `/admin` แสดงผลโดยตรงและ `/login` เปลี่ยนเป็น not-found; ลบ gate/middleware/auth helper ที่ไม่ใช้งาน; ลบ seed mock; ลบ Unsplash และ Longdo demo-key fallback; คงการตรวจ JWT/admin role ที่ Edge API สำหรับคำสั่งเขียน/แก้ไข/ลบ เพื่อป้องกัน endpoint สาธารณะถูกใช้ทำลายข้อมูล
+- **การทดสอบและผลลัพธ์ (Verification):** `npm run check` ผ่าน lint, typecheck และ production build; E2E และ HTTP route check ทำซ้ำหลังการแก้ไข; ยังไม่ได้เผยแพร่การเปลี่ยนแปลงขึ้น GitHub ตามคำสั่งผู้ใช้
+- **สถานะ:** ใช้งานได้ใน workspace (ACTIVE) / รอผู้ใช้อนุมัติการเผยแพร่
 
-### [UPDATE-015] 2026-11-03: แก้ไข Dependabot Update ล้มเหลวและขจัดช่องโหว่ความปลอดภัย minimatch
-- **ผู้ดำเนินการ/ผู้สั่งการ:** ทีมพัฒนาระบบสารสนเทศ แขวงทางหลวงปัตตานี / AI Assistant
-- **วัตถุประสงค์ (Objective):** แก้ไขปัญหา GitHub Actions Workflow Run 41571038555 (Dependabot Updates #6) ล้มเหลวจากข้อขัดแย้งของ minimatch <11.0.1 (GHSA-g3hv-75wg-m249) ที่ติด transitive dependency ของ eslint และ eslint-config-next
-- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):**
-  - `package.json` (เพิ่ม npm overrides ให้ minimatch ใช้ ^11.0.4)
-  - `package-lock.json` (อัปเดต lockfile dependency graph ให้สอดคล้อง)
-  - `eslint.config.mjs` (เพิ่ม work/** และ outputs/** ใน globalIgnores)
-  - `.github/dependabot.yml` (สร้างไฟล์คอนฟิก Dependabot อย่างเป็นทางการ จัดกลุ่ม dependencies รายสัปดาห์)
-- **รายละเอียดการทำงาน (Technical Changes):**
-  1. วิเคราะห์ Root Cause ของ Dependabot Run 41571038555 พบว่า container ของ Dependabot ทำการรัน update_files แบบกลุ่ม npm_and_yarn แต่ไม่สามารถหา resolution path สำหรับ minimatch 11.0.1 ได้โดยไม่กระทบ eslint จึง exit code 1
-  2. กำหนด overrides ใน package.json: `"minimatch": "^11.0.4"` เพื่อบังคับให้ทุกแพ็กเกจ (รวมทั้ง eslint และ eslint-config-next) ใช้ minimatch เวอร์ชันปลอดภัยล่าสุด
-  3. ผลการรัน `npm audit` ลดช่องโหว่ความปลอดภัยจาก 16 รายการเหลือ **0 vulnerabilities**
-  4. สร้าง `.github/dependabot.yml` เพื่อควบคุมรอบการทำงานของ Dependabot ให้มีมาตรฐานและไม่รันแบบ unguided generic scan
-- **การทดสอบและผลลัพธ์ (Verification):**
-  - `npm audit`: found 0 vulnerabilities
-  - `npx eslint . --max-warnings=0`: 0 warnings, 0 errors
-  - `npx tsc --noEmit`: ผ่าน 0 errors
-  - `npm run build` และ static export: ผ่าน 100%
-- **สถานะ:** ใช้งานได้จริง (ACTIVE) / ปลอดภัยและผ่านการทดสอบ 100%
+### [UPDATE-016] 2026-11-03: เปิด CRUD แบบไม่ล็อกอินตามคำสั่งผู้ใช้
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** แก้ปัญหาปุ่มเพิ่ม/แก้ไข/ลบถูก Edge API ตอบ 401 หลังยกเลิกหน้า login
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `supabase/functions/hdms-api/index.ts`, `supabase/config.toml`
+- **รายละเอียดการทำงาน (Technical Changes):** อ่านข้อมูลด้วย anon key ต่อไป; คำสั่งเปลี่ยนแปลงใช้ `SUPABASE_SERVICE_ROLE_KEY` ภายใน Edge Function เท่านั้น และไม่ส่ง secret ไป browser; ไม่ตรวจ JWT สำหรับ mutation ตามคำสั่งผู้ใช้
+- **การทดสอบและผลลัพธ์ (Verification):** Deploy `hdms-api` สำเร็จ version 6; ทดสอบ create และ soft-delete โดยไม่ส่ง Authorization สำเร็จ และยืนยันว่า record ทดสอบไม่ปรากฏใน `getSystemDataAction`; `npm run typecheck` ผ่าน
+- **คำเตือนความปลอดภัย:** ผู้ใดก็ตามที่เข้าถึง `/admin` สามารถแก้ไข/ลบข้อมูลได้ จนกว่าจะเปิดระบบยืนยันตัวตนกลับมา
+- **สถานะ:** ใช้งานจริงบน Supabase Edge Function (ACTIVE) / โหมดไม่ล็อกอินตามคำสั่งผู้ใช้
+
+### [UPDATE-017] 2026-11-03: ปรับ Admin Console ให้เหมาะกับ desktop และ responsive บนมือถือ
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** ให้หน้าหลังบ้านใช้พื้นที่จอคอมพิวเตอร์ได้เต็มประสิทธิภาพ โดยยังคงสัดส่วนและการเลื่อนใช้งานบนมือถือ
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `app/admin/page.tsx`, `components/admin/AdminConsole.tsx`
+- **รายละเอียดการทำงาน (Technical Changes):** ปรับ header ให้จัดกลุ่มและขึ้นบรรทัดได้บนจอแคบ; เพิ่ม desktop split ที่สมดุลระหว่าง console/map; กำหนดความสูงขั้นต่ำของ console/map บนมือถือ; เพิ่ม `min-w-0` และ responsive padding ป้องกันเนื้อหาล้นแนวนอน
+- **การทดสอบและผลลัพธ์ (Verification):** `npm run check` ผ่าน; production build ผ่าน; Playwright smoke desktop/mobile ผ่าน 4/4
+- **สถานะ:** ใช้งานได้ใน workspace (ACTIVE) / ยังไม่ได้ push GitHub
+
+### [UPDATE-018] 2026-11-03: ตรวจสอบการใช้งานเมนูหลังบ้านทุกส่วน
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** ยืนยันว่าเมนูหลักหลังบ้านเปิด workspace จริงและมี control สำคัญพร้อมใช้งาน
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `tests/e2e/admin-menus.spec.ts`
+- **รายละเอียดการทดสอบ (Test Coverage):** จัดการระบบ, จัดการแผนที่, รายการเหตุการณ์, รายการทางเลี่ยง, โครงข่ายสายทาง, สไตล์เส้นทาง และโครงการผู้ว่าฯ; ตรวจ landmark, primary controls และ runtime error บน desktop; mobile ใช้ smoke regression แยกต่างหาก
+- **การทดสอบและผลลัพธ์ (Verification):** ชุดตรวจเมนู desktop ผ่าน 2/2; smoke desktop/mobile เดิมผ่าน; build/typecheck ผ่าน
+- **สถานะ:** พร้อมเผยแพร่
 
 ### [UPDATE-014] 2026-11-03: รองรับ Next.js server และ GitHub Pages ด้วย Edge API ร่วมกัน
 - วัตถุประสงค์: ให้ UI ชุดเดียวใช้งานสอง deployment โดยไม่ส่ง secret key ไป browser

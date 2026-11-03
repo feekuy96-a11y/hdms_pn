@@ -121,21 +121,13 @@ export function ExecutiveDashboard({ projects, onManageProjects }: ExecutiveDash
                   <span className="absolute top-2 left-2 bg-red-600/90 text-white text-[10px] font-heading font-bold px-2 py-0.5 rounded shadow z-10">
                     BEFORE (ก่อนแก้ไข)
                   </span>
-                  <img
-                    src={p.before_image_url || "https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=600&q=80"}
-                    className="w-full h-36 sm:h-40 object-cover hover:scale-105 transition duration-300"
-                    alt="Before mitigation"
-                  />
+                  {p.before_image_url ? <img src={p.before_image_url} className="w-full h-36 sm:h-40 object-cover hover:scale-105 transition duration-300" alt="Before mitigation" /> : <div className="w-full h-36 sm:h-40 grid place-items-center text-xs text-slate-500">ยังไม่มีภาพก่อนดำเนินการ</div>}
                 </div>
                 <div className="relative rounded-lg overflow-hidden border border-emerald-500/40">
                   <span className="absolute top-2 left-2 bg-emerald-600/90 text-white text-[10px] font-heading font-bold px-2 py-0.5 rounded shadow z-10">
                     AFTER (หลังแก้ไข)
                   </span>
-                  <img
-                    src={p.after_image_url || "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=600&q=80"}
-                    className="w-full h-36 sm:h-40 object-cover hover:scale-105 transition duration-300"
-                    alt="After mitigation"
-                  />
+                  {p.after_image_url ? <img src={p.after_image_url} className="w-full h-36 sm:h-40 object-cover hover:scale-105 transition duration-300" alt="After mitigation" /> : <div className="w-full h-36 sm:h-40 grid place-items-center text-xs text-slate-500">ยังไม่มีภาพหลังดำเนินการ</div>}
                 </div>
               </div>
 
