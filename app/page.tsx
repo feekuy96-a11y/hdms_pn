@@ -204,7 +204,7 @@ export default function HomePage() {
       {/* =================================================================== */}
       {/* 2. MAIN LAYOUT: GIS MAP + COLLAPSIBLE SIDEBAR + DETAIL DOSSIER     */}
       {/* =================================================================== */}
-      <div className="flex-1 flex flex-col lg:flex-row relative lg:overflow-hidden min-h-[calc(100vh-104px)] lg:h-[calc(100vh-104px)]">
+      <div className="flex flex-col lg:flex-row relative lg:overflow-hidden" style={{ height: "calc(100dvh - 64px)", minHeight: 450 }}>
         {/* ================================================================= */}
         {/* A. LEFT SIDEBAR: ROUTE LIST (DESKTOP COLLAPSIBLE)                 */}
         {/* ================================================================= */}
@@ -371,7 +371,7 @@ export default function HomePage() {
                     ? "ยังไม่มีรายงานในระบบ ข้อมูลนี้ไม่ยืนยันว่าทุกเส้นทางปลอดภัย โปรดตรวจสอบกับสายด่วน 1586 ก่อนเดินทาง"
                     : "กรุณาลองเปลี่ยนคำค้นหา หรือกดปุ่มด้านล่างเพื่อล้างตัวกรอง"}
                 </p>
-                {systemData.floodRoutes.length > 0 && (
+                {(searchQuery || selectedRouteFilter !== "ALL") && (
                   <button
                     type="button"
                     onClick={() => {
