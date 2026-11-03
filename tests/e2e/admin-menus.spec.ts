@@ -9,10 +9,11 @@ const menus = [
   ["สไตล์เส้นทาง", "สตูดิโอปรับแต่งสไตล์เส้น"],
   ["โครงการผู้ว่าฯ", "แผนงานโครงการแก้ไขปัญหาน้ำท่วม"],
 ] as const;
+const base = process.env.BASE_PATH || "";
 
 test("admin menus open real workspaces without UI errors", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Full menu audit is desktop-first; mobile smoke is covered separately");
-  await page.goto("/admin/");
+  await page.goto(`${base}/admin/`);
   await expect(page).toHaveURL(/\/admin\/?$/);
 
   for (const [menu, landmark] of menus) {
@@ -25,7 +26,7 @@ test("admin menus open real workspaces without UI errors", async ({ page }) => {
 
 test("admin workspaces expose their primary controls", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Full menu audit is desktop-first; mobile smoke is covered separately");
-  await page.goto("/admin/");
+  await page.goto(`${base}/admin/`);
   const checks = [
     ["จัดการระบบ", "บันทึกข้อมูลระบบ"],
     ["รายการเหตุการณ์", "เพิ่มเหตุการณ์"],
