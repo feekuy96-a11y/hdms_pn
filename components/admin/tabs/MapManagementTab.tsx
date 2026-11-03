@@ -422,14 +422,16 @@ export function MapManagementTab({
       if (res.success) {
         onDataRefresh(res.systemData);
         showSuccessModal(
-          routeEditId ? "แก้ไขข้อมูลเส้นทางสำเร็จ" : "บันทึกเหตุการณ์น้ำท่วมสำเร็จ",
-          `ข้อมูล ทล.${routeNo} ${sectionName} ถูกจัดเก็บและแสดงบนแผนที่ประชาชนเรียบร้อยแล้ว`
+          routeEditId ? "แก้ไขข้อมูลสำเร็จ" : routeMode === "DETOUR" ? "บันทึกทางเลี่ยงสำเร็จ" : "บันทึกเหตุการณ์น้ำท่วมสำเร็จ",
+          routeMode === "DETOUR"
+            ? `ทางเลี่ยง ${detourName || "รายการใหม่"} ถูกจัดเก็บและแสดงในรายการทางเลี่ยงแล้ว`
+            : `ข้อมูล ทล.${routeNo} ${sectionName} ถูกจัดเก็บและแสดงบนแผนที่ประชาชนเรียบร้อยแล้ว`
         );
         setRouteEditId("");
         setFieldImages([]);
         handleClearRoute();
         if (onClearEditingRoute) onClearEditingRoute();
-        if (onNavigateToIncidents) onNavigateToIncidents();
+        if (routeMode === "FLOOD" && onNavigateToIncidents) onNavigateToIncidents();
       }
     } catch (err: any) {
       if (showErrorModal) {
