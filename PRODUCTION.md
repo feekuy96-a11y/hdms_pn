@@ -12,4 +12,6 @@ Release verification still requires a staging account and configured Supabase se
 
 ESLint uses Next's configuration with explicit legacy GIS exclusions. Passing lint does not establish that the excluded hook and dynamic typing rules have been remediated. Production dependency audit passed; development dependencies include known moderate advisories and ESLint 9 is retained because bundled Next lint plugins do not support ESLint 10 yet.
 
-Rollback: restore the previous application image and environment configuration. No database migrations were applied by this stabilization change.
+Rollback: restore the previous application image and environment configuration. Applied migrations add deleted_at columns, strengthen admin policies, and add metadata plus doh_import_routes_rpc. Preserve these additive database changes during application rollback.
+
+GitHub Pages cannot run Server Actions, middleware or server-only Supabase credentials. Production requires a Node.js 24 or Docker host; do not re-enable static export for the admin application.

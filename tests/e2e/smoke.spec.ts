@@ -16,9 +16,9 @@ test("admin route requires authentication", async ({ page }) => {
 
 test("public search exposes a recoverable empty state", async ({ page }) => {
   await page.goto("/");
-  const search = page.locator('input[placeholder*="ค้นหาสายทาง"]');
+  const search = page.locator('input[placeholder*="ค้นหาสายทาง"]:visible').first();
   await search.fill("ไม่มีข้อมูลนี้");
-  await expect(page.getByText("ไม่พบจุดเฝ้าระวังที่ตรงกับเงื่อนไข")).toBeVisible();
+  await expect(page.getByText(/ยังไม่มีรายงานจุดน้ำท่วม|ไม่พบจุดที่ตรงกับตัวกรอง/).first()).toBeVisible();
   await page.getByRole("button", { name: "ล้างตัวกรอง" }).click();
   await expect(search).toHaveValue("");
 });

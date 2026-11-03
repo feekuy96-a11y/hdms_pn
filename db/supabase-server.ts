@@ -12,30 +12,19 @@ import {
   SystemSettingsConfig,
 } from "./default-data";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-const supabaseKey =
-  process.env.SUPABASE_SECRET_KEY ||
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-const isSupabaseConfigured = Boolean(supabaseUrl && supabaseKey);
-
-export const supabaseServer = createClient(
-  supabaseUrl || "http://127.0.0.1:54321",
-  supabaseKey || "configuration-required",
-  {
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://127.0.0.1:54321";
+const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "configuration-required";
+export const supabaseServer = createClient(supabaseUrl, supabaseKey, {
   auth: {
     persistSession: false,
     autoRefreshToken: false,
   },
-  }
-);
+});
 
 /**
  * ดึงข้อมูลทั้งระบบ 5 โครงสร้างหลักจาก Supabase RPC doh_get_system_data_rpc()
  */
 export async function getSystemDataFromSupabase(): Promise<SystemDataPayload | null> {
-  if (!isSupabaseConfigured) return null;
   try {
     const { data, error } = await supabaseServer.rpc("doh_get_system_data_rpc");
     if (error) {
@@ -66,7 +55,6 @@ export async function recordTimelineUpdateSupabase(payload: {
   reporterName: string;
   remark: string;
 }): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
   try {
     const { error } = await supabaseServer.rpc("doh_update_timeline_rpc", { payload });
     if (error) {
@@ -84,7 +72,6 @@ export async function recordTimelineUpdateSupabase(payload: {
  * บันทึกหรืออัปเดตเส้นทางน้ำท่วม (doh_flood_routes)
  */
 export async function upsertFloodRouteSupabase(route: FloodRoute): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
   try {
     const { error } = await supabaseServer.from("doh_flood_routes").upsert({
       id: route.id,
@@ -100,6 +87,9 @@ export async function upsertFloodRouteSupabase(route: FloodRoute): Promise<boole
       water_level_cm: route.water_level_cm,
       traffic_status: route.traffic_status,
       latest_photo_url: route.latest_photo_url || "",
+      district: route.district || "",
+      subdistrict: route.subdistrict || "",
+      detour_advice: route.detour_advice || "",
       is_active: route.is_active ?? true,
       updated_at: new Date().toISOString(),
     });
@@ -118,7 +108,6 @@ export async function upsertFloodRouteSupabase(route: FloodRoute): Promise<boole
  * บันทึกหรืออัปเดตเส้นทางเลี่ยง (doh_detour_routes)
  */
 export async function upsertDetourRouteSupabase(route: DetourRoute): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
   try {
     const { error } = await supabaseServer.from("doh_detour_routes").upsert({
       id: route.id,
@@ -151,7 +140,6 @@ export async function deleteRouteSupabase(
   table: "doh_flood_routes" | "doh_detour_routes",
   id: string
 ): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
   try {
     const { error } = await supabaseServer.from(table).update({ deleted_at: new Date().toISOString() }).eq("id", id);
     if (error) {
@@ -169,7 +157,6 @@ export async function deleteRouteSupabase(
  * บันทึกหรืออัปเดตโครงการผู้ว่าฯ (doh_mitigation_projects)
  */
 export async function upsertMitigationProjectSupabase(proj: MitigationProject): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
   try {
     const { error } = await supabaseServer.from("doh_mitigation_projects").upsert({
       project_id: proj.project_id,
@@ -198,7 +185,6 @@ export async function upsertMitigationProjectSupabase(proj: MitigationProject): 
  * ลบโครงการผู้ว่าฯ
  */
 export async function deleteMitigationProjectSupabase(projectId: string): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
   try {
     const { error } = await supabaseServer
       .from("doh_mitigation_projects")
@@ -224,22 +210,17 @@ export async function updateHighwayLayerSupabase(payload: {
   colorHex?: string;
   lineWidth?: number;
   geojsonData?: any;
+  metadata?: Record<string, any>;
 }): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
   try {
     const updateData: Record<string, any> = { updated_at: new Date().toISOString() };
     if (payload.layerName !== undefined) updateData.layer_name = payload.layerName;
     if (payload.colorHex !== undefined) updateData.color_hex = payload.colorHex;
     if (payload.lineWidth !== undefined) updateData.line_width = payload.lineWidth;
     if (payload.geojsonData !== undefined) updateData.geojson_data = payload.geojsonData;
+    if (payload.metadata !== undefined) updateData.metadata = payload.metadata;
 
-    const { error } = await supabaseServer
-      .from("doh_highway_layers")
-      .upsert({
-        layer_id: payload.layerId,
-        layer_name: payload.layerName || payload.layerId,
-        ...updateData,
-      });
+    const { error } = await supabaseServer.rpc("doh_import_routes_rpc", { payload });
 
     if (error) {
       console.warn("[Supabase Server] updateHighwayLayer error:", error.message);
@@ -252,11 +233,24 @@ export async function updateHighwayLayerSupabase(payload: {
   }
 }
 
+export async function deleteHighwayLayerSupabase(layerId: string): Promise<boolean> {
+  try {
+    const { error } = await supabaseServer.from("doh_highway_layers").delete().eq("layer_id", layerId);
+    if (error) {
+      console.warn("[Supabase Server] deleteHighwayLayer error:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("[Supabase Server] Network error in deleteHighwayLayer:", (err as Error).message);
+    return false;
+  }
+}
+
 /**
  * สลับสถานะเหตุการณ์น้ำท่วม (is_active)
  */
 export async function setIncidentStatusSupabase(id: string, isActive: boolean): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
   try {
     const { error } = await supabaseServer
       .from("doh_flood_routes")
@@ -274,21 +268,39 @@ export async function setIncidentStatusSupabase(id: string, isActive: boolean): 
 }
 
 /**
+ * ปรับสถานะเส้นทางเลี่ยง (is_active)
+ */
+export async function setDetourStatusSupabase(id: string, isActive: boolean): Promise<boolean> {
+  try {
+    const { error } = await supabaseServer
+      .from("doh_detour_routes")
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) {
+      console.warn("[Supabase Server] setDetourStatus error:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("[Supabase Server] Network error in setDetourStatus:", (err as Error).message);
+    return false;
+  }
+}
+
+/**
  * บันทึกสไตล์เส้นแผนที่ (doh_map_styles)
  */
 export async function updateMapStylesSupabase(
   styles: Record<"flood" | "detour" | "primary" | "secondary", MapLineStyleItem>
 ): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
   try {
-    const { error } = await supabaseServer.from("doh_map_styles").upsert(
-      Object.entries(styles).map(([key, val]) => ({
+    for (const [key, val] of Object.entries(styles)) {
+      await supabaseServer.from("doh_map_styles").upsert({
         style_key: key,
         style_data: val,
         updated_at: new Date().toISOString(),
-      }))
-    );
-    if (error) return false;
+      });
+    }
     return true;
   } catch (err) {
     console.warn("[Supabase Server] Network error in updateMapStyles:", (err as Error).message);
@@ -300,7 +312,6 @@ export async function updateMapStylesSupabase(
  * บันทึกหรืออัปเดตหมุดสำนักงาน/หมวดทางหลวง (doh_offices)
  */
 export async function upsertOfficeSupabase(office: DohOfficeLocation): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
   try {
     const { error } = await supabaseServer.from("doh_offices").upsert({
       id: office.id,
@@ -328,7 +339,6 @@ export async function upsertOfficeSupabase(office: DohOfficeLocation): Promise<b
  * ลบหมุดสำนักงาน
  */
 export async function deleteOfficeSupabase(id: string): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
   try {
     const { error } = await supabaseServer.from("doh_offices").delete().eq("id", id);
     if (error) {
@@ -346,7 +356,6 @@ export async function deleteOfficeSupabase(id: string): Promise<boolean> {
  * บันทึกการตั้งค่าระบบและหน่วยงาน (doh_system_settings)
  */
 export async function updateSystemSettingsSupabase(settings: SystemSettingsConfig): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
   try {
     const { error } = await supabaseServer.from("doh_system_settings").upsert({
       setting_key: "main",

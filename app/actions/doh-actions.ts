@@ -1,7 +1,6 @@
 "use server";
-
-import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/db/supabase-server";
+import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/supabase/require-admin";
 import {
   INITIAL_SYSTEM_DATA,
@@ -24,15 +23,16 @@ import {
   deleteMitigationProjectSupabase,
   updateHighwayLayerSupabase,
   setIncidentStatusSupabase,
+  setDetourStatusSupabase,
   updateMapStylesSupabase,
   upsertOfficeSupabase,
   deleteOfficeSupabase,
   updateSystemSettingsSupabase,
 } from "@/db/supabase-server";
 
+
 // Persistent in-memory cache for development resilience, fast rendering and offline fallback
 let runtimeState: SystemDataPayload = JSON.parse(JSON.stringify(INITIAL_SYSTEM_DATA));
-
 export async function restoreRouteAction(recordType: "FLOOD" | "DETOUR", id: string) {
   await requireAdmin();
   const table = recordType === "FLOOD" ? "doh_flood_routes" : "doh_detour_routes";
@@ -55,12 +55,6 @@ export async function snapRouteAction(start: [number, number], end: [number, num
   const { data, error } = await supabaseServer.rpc("doh_snap_line_rpc", { p_a_lng: start[0], p_a_lat: start[1], p_b_lng: end[0], p_b_lat: end[1], p_max_m: 250 });
   if (error) return null;
   return data?.found && data.geojson?.type === "LineString" ? data.geojson.coordinates as [number, number][] : null;
-}
-
-function assertPersisted(ok: boolean) {
-  if (!ok) {
-    throw new Error("ไม่สามารถบันทึกข้อมูลลงฐานข้อมูลได้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่");
-  }
 }
 
 /**
@@ -107,7 +101,7 @@ export async function saveTimelineUpdateAction(payload: {
   const nowIso = new Date().toISOString();
 
   // 1. Persist to Supabase Database via Atomic RPC
-  assertPersisted(await recordTimelineUpdateSupabase({
+  if (!(await recordTimelineUpdateSupabase({
     timelineId,
     floodId: payload.floodId,
     waterLevelCm: payload.waterLevelCm,
@@ -117,7 +111,7 @@ export async function saveTimelineUpdateAction(payload: {
     photoUrl: payload.photoUrl || "",
     reporterName: payload.reporterName,
     remark: payload.remark,
-  }));
+  }))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
 
   // 2. Update runtime memory state
   const newTimeline: TimelineUpdate = {
@@ -164,14 +158,15 @@ export async function upsertRouteAction(payload: {
   sectionName?: string;
   kmStart?: string;
   kmEnd?: string;
-  latStart: number;
-  lonStart: number;
-  latEnd: number;
-  lonEnd: number;
-  coordinates: [number, number][];
+  latStart?: number;
+  lonStart?: number;
+  latEnd?: number;
+  lonEnd?: number;
+  coordinates?: [number, number][];
   waterLevelCm?: number;
   trafficStatus?: "CLOSED" | "WARNING" | "PASSABLE";
   latestPhotoUrl?: string;
+  photoUrl?: string;
   detourAdvice?: string;
   detourRefId?: string;
   detourName?: string;
@@ -185,52 +180,73 @@ export async function upsertRouteAction(payload: {
   if (payload.recordType === "FLOOD") {
     const id = payload.id || "F-" + Date.now().toString().slice(-4);
     const existingIdx = runtimeState.floodRoutes.findIndex((r) => r.id === id);
+    const existing = existingIdx > -1 ? runtimeState.floodRoutes[existingIdx] : null;
 
     const floodRecord: FloodRoute = {
       id,
-      route_no: payload.routeNo || "42",
-      section_name: payload.sectionName || "สายทางทั่วไป",
-      km_start: payload.kmStart || "0+000",
-      km_end: payload.kmEnd || "1+000",
-      lat_start: payload.latStart,
-      lon_start: payload.lonStart,
-      lat_end: payload.latEnd,
-      lon_end: payload.lonEnd,
-      coordinates_json: payload.coordinates,
-      water_level_cm: payload.waterLevelCm ?? 30,
-      traffic_status: payload.trafficStatus || "WARNING",
-      latest_photo_url: payload.latestPhotoUrl || "",
-      detour_advice: payload.detourAdvice,
+      route_no: payload.routeNo || existing?.route_no || "42",
+      section_name: payload.sectionName || existing?.section_name || "สายทางทั่วไป",
+      km_start: payload.kmStart || existing?.km_start || "0+000",
+      km_end: payload.kmEnd || existing?.km_end || "1+000",
+      lat_start: payload.latStart ?? existing?.lat_start ?? 6.842,
+      lon_start: payload.lonStart ?? existing?.lon_start ?? 101.242,
+      lat_end: payload.latEnd ?? existing?.lat_end ?? 6.8485,
+      lon_end: payload.lonEnd ?? existing?.lon_end ?? 101.268,
+      coordinates_json: payload.coordinates ?? existing?.coordinates_json ?? [],
+      water_level_cm: payload.waterLevelCm ?? existing?.water_level_cm ?? 30,
+      traffic_status: payload.trafficStatus || existing?.traffic_status || "WARNING",
+      latest_photo_url: payload.photoUrl || payload.latestPhotoUrl || existing?.latest_photo_url || "",
       is_active: true,
       updated_at: nowIso,
-      district: payload.district,
-      subdistrict: payload.subdistrict,
+      district: payload.district || existing?.district,
+      subdistrict: payload.subdistrict || existing?.subdistrict,
+      detour_advice: payload.detourAdvice || existing?.detour_advice,
     };
 
-    assertPersisted(await upsertFloodRouteSupabase(floodRecord));
-    if (existingIdx > -1) runtimeState.floodRoutes[existingIdx] = floodRecord;
-    else runtimeState.floodRoutes.push(floodRecord);
+    if (existingIdx > -1) {
+      runtimeState.floodRoutes[existingIdx] = floodRecord;
+    } else {
+      runtimeState.floodRoutes.push(floodRecord);
+    }
+
+    // Persist to Supabase
+    if (!(await upsertFloodRouteSupabase(floodRecord))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
   } else {
     const id = payload.id || "D-" + Date.now().toString().slice(-4);
     const existingIdx = runtimeState.detourRoutes.findIndex((d) => d.id === id);
+    const existing = existingIdx > -1 ? runtimeState.detourRoutes[existingIdx] : null;
 
     const detourRecord: DetourRoute = {
       id,
-      flood_id_ref: payload.detourRefId || runtimeState.floodRoutes[0]?.id || "F-001",
-      route_name: payload.detourName || "เส้นทางเลี่ยงน้ำท่วม",
-      lat_start: payload.latStart,
-      lon_start: payload.lonStart,
-      lat_end: payload.latEnd,
-      lon_end: payload.lonEnd,
-      coordinates_json: payload.coordinates,
-      description: payload.detourDesc || "",
+      flood_id_ref: payload.detourRefId || existing?.flood_id_ref || runtimeState.floodRoutes[0]?.id || "",
+      route_name: payload.detourName || existing?.route_name || "เส้นทางเลี่ยงน้ำท่วม",
+      lat_start: payload.latStart ?? existing?.lat_start ?? 6.7845,
+      lon_start: payload.lonStart ?? existing?.lon_start ?? 101.178,
+      lat_end: payload.latEnd ?? existing?.lat_end ?? 6.779,
+      lon_end: payload.lonEnd ?? existing?.lon_end ?? 101.205,
+      coordinates_json: payload.coordinates ?? existing?.coordinates_json ?? [],
+      description: payload.detourDesc || existing?.description || "",
       is_active: true,
       updated_at: nowIso,
     };
 
-    assertPersisted(await upsertDetourRouteSupabase(detourRecord));
-    if (existingIdx > -1) runtimeState.detourRoutes[existingIdx] = detourRecord;
-    else runtimeState.detourRoutes.push(detourRecord);
+    if (existingIdx > -1) {
+      runtimeState.detourRoutes[existingIdx] = detourRecord;
+    } else {
+      runtimeState.detourRoutes.push(detourRecord);
+    }
+
+    // Persist to Supabase
+    if (!(await upsertDetourRouteSupabase(detourRecord))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
+
+    // ซิงก์คำแนะนำเส้นทางเลี่ยงไปยังจุดน้ำท่วมอ้างอิงอัตโนมัติ (เพื่อให้หน้าประชาชนแสดงผลทันที)
+    if (detourRecord.flood_id_ref && detourRecord.description) {
+      const linkedFlood = runtimeState.floodRoutes.find((f) => f.id === detourRecord.flood_id_ref);
+      if (linkedFlood) {
+        linkedFlood.detour_advice = detourRecord.description;
+        if (!(await upsertFloodRouteSupabase(linkedFlood))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
+      }
+    }
   }
 
   runtimeState.updatedAt = nowIso;
@@ -248,11 +264,11 @@ export async function deleteRouteAction(
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
   await requireAdmin();
   if (recordType === "FLOOD") {
-    assertPersisted(await deleteRouteSupabase("doh_flood_routes", id));
     runtimeState.floodRoutes = runtimeState.floodRoutes.filter((r) => r.id !== id);
+    if (!(await deleteRouteSupabase("doh_flood_routes", id))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
   } else {
-    assertPersisted(await deleteRouteSupabase("doh_detour_routes", id));
     runtimeState.detourRoutes = runtimeState.detourRoutes.filter((d) => d.id !== id);
+    if (!(await deleteRouteSupabase("doh_detour_routes", id))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
   }
 
   runtimeState.updatedAt = new Date().toISOString();
@@ -292,9 +308,13 @@ export async function upsertMitigationProjectAction(payload: {
     updated_at: new Date().toISOString(),
   };
 
-  assertPersisted(await upsertMitigationProjectSupabase(proj));
-  if (existingIdx > -1) runtimeState.mitigationProjects[existingIdx] = proj;
-  else runtimeState.mitigationProjects.push(proj);
+  if (existingIdx > -1) {
+    runtimeState.mitigationProjects[existingIdx] = proj;
+  } else {
+    runtimeState.mitigationProjects.push(proj);
+  }
+
+  if (!(await upsertMitigationProjectSupabase(proj))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
 
   runtimeState.updatedAt = new Date().toISOString();
   revalidatePath("/");
@@ -309,8 +329,8 @@ export async function deleteMitigationProjectAction(
   projectId: string
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
   await requireAdmin();
-  assertPersisted(await deleteMitigationProjectSupabase(projectId));
   runtimeState.mitigationProjects = runtimeState.mitigationProjects.filter((p) => p.project_id !== projectId);
+  if (!(await deleteMitigationProjectSupabase(projectId))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
 
   runtimeState.updatedAt = new Date().toISOString();
   revalidatePath("/");
@@ -327,16 +347,43 @@ export async function updateHighwayLayerAction(payload: {
   colorHex?: string;
   lineWidth?: number;
   geojsonData?: any;
+  metadata?: Record<string, any>;
 }): Promise<{ success: boolean; systemData: SystemDataPayload }> {
   await requireAdmin();
-  assertPersisted(await updateHighwayLayerSupabase(payload));
-  const layer = runtimeState.highwayLayers.find((l) => l.layer_id === payload.layerId);
-  if (layer) {
+  if (!(await updateHighwayLayerSupabase(payload))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
+  let layer = runtimeState.highwayLayers.find((l) => l.layer_id === payload.layerId);
+  if (!layer) {
+    layer = {
+      layer_id: payload.layerId,
+      layer_name: payload.layerName || payload.layerId,
+      color_hex: payload.colorHex || "#1B5E20",
+      line_width: payload.lineWidth || 4,
+      geojson_data: payload.geojsonData || null,
+      is_visible: true,
+      metadata: payload.metadata || {},
+    };
+    runtimeState.highwayLayers.push(layer);
+  } else {
     if (payload.layerName) layer.layer_name = payload.layerName;
     if (payload.colorHex) layer.color_hex = payload.colorHex;
     if (payload.lineWidth) layer.line_width = payload.lineWidth;
     if (payload.geojsonData) layer.geojson_data = payload.geojsonData;
+    if (payload.metadata) layer.metadata = { ...(layer.metadata || {}), ...payload.metadata };
   }
+
+  runtimeState.updatedAt = new Date().toISOString();
+  revalidatePath("/");
+  revalidatePath("/admin");
+  return { success: true, systemData: runtimeState };
+}
+
+export async function deleteHighwayLayerAction(
+  layerId: string
+): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  await requireAdmin();
+  runtimeState.highwayLayers = runtimeState.highwayLayers.filter((l) => l.layer_id !== layerId);
+  const { deleteHighwayLayerSupabase } = await import("@/db/supabase-server");
+  if (!(await deleteHighwayLayerSupabase(layerId))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
 
   runtimeState.updatedAt = new Date().toISOString();
   revalidatePath("/");
@@ -352,12 +399,35 @@ export async function setIncidentStatusAction(
   isActive: boolean
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
   await requireAdmin();
-  assertPersisted(await setIncidentStatusSupabase(id, isActive));
   const flood = runtimeState.floodRoutes.find((r) => r.id === id);
   if (flood) {
     flood.is_active = isActive;
     flood.updated_at = new Date().toISOString();
   }
+
+  if (!(await setIncidentStatusSupabase(id, isActive))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
+
+  runtimeState.updatedAt = new Date().toISOString();
+  revalidatePath("/");
+  revalidatePath("/admin");
+  return { success: true, systemData: runtimeState };
+}
+
+/**
+ * เปลี่ยนสถานะเส้นทางเลี่ยง: เปิดใช้งาน / ปิดใช้งานชั่วคราว
+ */
+export async function toggleDetourStatusAction(
+  id: string,
+  isActive: boolean
+): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  await requireAdmin();
+  const detour = runtimeState.detourRoutes.find((d) => d.id === id);
+  if (detour) {
+    detour.is_active = isActive;
+    detour.updated_at = new Date().toISOString();
+  }
+
+  if (!(await setDetourStatusSupabase(id, isActive))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
 
   runtimeState.updatedAt = new Date().toISOString();
   revalidatePath("/");
@@ -372,9 +442,10 @@ export async function updateMapStyleAction(
   styles: Record<"flood" | "detour" | "primary" | "secondary", MapLineStyleItem>
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
   await requireAdmin();
-  assertPersisted(await updateMapStylesSupabase(styles));
   runtimeState.mapStyles = styles;
   runtimeState.updatedAt = new Date().toISOString();
+
+  if (!(await updateMapStylesSupabase(styles))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
 
   revalidatePath("/");
   revalidatePath("/admin");
@@ -388,7 +459,6 @@ export async function saveOfficeAction(
   office: DohOfficeLocation
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
   await requireAdmin();
-  assertPersisted(await upsertOfficeSupabase(office));
   if (!runtimeState.offices) runtimeState.offices = [];
   const idx = runtimeState.offices.findIndex((o) => o.id === office.id);
   if (idx !== -1) {
@@ -397,6 +467,8 @@ export async function saveOfficeAction(
     runtimeState.offices.push(office);
   }
   runtimeState.updatedAt = new Date().toISOString();
+
+  if (!(await upsertOfficeSupabase(office))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
 
   revalidatePath("/");
   revalidatePath("/admin");
@@ -410,11 +482,12 @@ export async function deleteOfficeAction(
   officeId: string
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
   await requireAdmin();
-  assertPersisted(await deleteOfficeSupabase(officeId));
   if (runtimeState.offices) {
     runtimeState.offices = runtimeState.offices.filter((o) => o.id !== officeId);
   }
   runtimeState.updatedAt = new Date().toISOString();
+
+  if (!(await deleteOfficeSupabase(officeId))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
 
   revalidatePath("/");
   revalidatePath("/admin");
@@ -428,9 +501,10 @@ export async function updateSystemSettingsAction(
   settings: SystemSettingsConfig
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
   await requireAdmin();
-  assertPersisted(await updateSystemSettingsSupabase(settings));
   runtimeState.systemSettings = settings;
   runtimeState.updatedAt = new Date().toISOString();
+
+  if (!(await updateSystemSettingsSupabase(settings))) throw new Error("บันทึกข้อมูลไม่สำเร็จ");
 
   revalidatePath("/");
   revalidatePath("/admin");
