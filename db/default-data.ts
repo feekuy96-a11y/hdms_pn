@@ -34,6 +34,7 @@ export interface FloodRoute {
   trend?: "RISING" | "FALLING" | "STEADY";
   diff_cm?: number;
   detour_note?: string;
+  detour_advice?: string;
 }
 
 export interface DetourRoute {

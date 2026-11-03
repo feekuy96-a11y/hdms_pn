@@ -436,12 +436,14 @@ export function extractFeaturesFromGeoJson(geojsonObj: any): ExtractedGisFeature
   try {
     const collections = Array.isArray(geojsonObj) ? geojsonObj : [geojsonObj];
     collections.forEach((col) => {
-      const features = col.features || (col.type === "Feature" ? [col] : []);
+      const features = col.features || [col];
       features.forEach((f: any) => {
         const geom = f.geometry || f;
         const props = f.properties || {};
         if (!geom) return;
-        if (geom.type === "LineString" && Array.isArray(geom.coordinates)) {
+        if (geom.type === "GeometryCollection" && Array.isArray(geom.geometries)) {
+          result.push(...extractFeaturesFromGeoJson(geom.geometries.map((geometry: any) => ({ type: "Feature", geometry, properties: props }))));
+        } else if (geom.type === "LineString" && Array.isArray(geom.coordinates)) {
           result.push({
             coords: geom.coordinates,
             properties: props,

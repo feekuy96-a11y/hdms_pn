@@ -126,10 +126,17 @@ export default function HomePage() {
         sectionName: editForm.sectionName,
         kmStart: editForm.kmStart,
         kmEnd: editForm.kmEnd,
+        latStart: selectedFlood.lat_start,
+        lonStart: selectedFlood.lon_start,
+        latEnd: selectedFlood.lat_end,
+        lonEnd: selectedFlood.lon_end,
+        coordinates: Array.isArray(selectedFlood.coordinates_json)
+          ? selectedFlood.coordinates_json
+          : JSON.parse(selectedFlood.coordinates_json || "[]"),
         waterLevelCm: Number(editForm.waterLevelCm),
         trafficStatus: editForm.trafficStatus,
         detourAdvice: editForm.detourAdvice,
-        photoUrl: editForm.photoUrl,
+        latestPhotoUrl: editForm.photoUrl,
       });
 
       // 2. Also record a new timeline update entry
@@ -221,7 +228,7 @@ export default function HomePage() {
       {/* =================================================================== */}
       {/* 2. MAIN LAYOUT: GIS MAP + COLLAPSIBLE SIDEBAR + DETAIL DOSSIER     */}
       {/* =================================================================== */}
-      <div className="flex-1 flex flex-col-reverse lg:flex-row relative overflow-hidden h-[calc(100vh-64px)]">
+      <div className="flex-none lg:flex-1 flex flex-col-reverse lg:flex-row relative overflow-visible lg:overflow-hidden h-auto lg:h-[calc(100vh-64px)]">
         {/* ================================================================= */}
         {/* A. LEFT SIDEBAR: ROUTE LIST (COLLAPSIBLE)                        */}
         {/* ================================================================= */}
@@ -368,6 +375,22 @@ export default function HomePage() {
                 </div>
               );
             })}
+            {filteredFloods.length === 0 && (
+              <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5 text-center">
+                <p className="font-heading text-sm font-bold text-white">ไม่พบจุดเฝ้าระวังที่ตรงกับเงื่อนไข</p>
+                <p className="mt-1 text-xs text-slate-400">ลองค้นหาด้วยชื่อสายทางหรือเลือกตัวกรองทั้งหมด</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedRouteFilter("ALL");
+                  }}
+                  className="mt-3 min-h-11 rounded-xl bg-amber-400 px-4 py-2 text-xs font-heading font-bold text-slate-950 hover:bg-amber-300"
+                >
+                  ล้างตัวกรอง
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Sidebar Bottom Footer: Call Contact */}
@@ -390,7 +413,7 @@ export default function HomePage() {
         {/* ================================================================= */}
         {/* B. MAIN GIS MAP VIEWPORT                                          */}
         {/* ================================================================= */}
-        <div className="flex-1 relative h-[55vh] lg:h-full min-h-[460px] lg:min-h-0 w-full overflow-hidden">
+        <div className="flex-none lg:flex-1 shrink-0 relative h-[55vh] min-h-[460px] lg:h-[calc(100vh-64px)] lg:min-h-[calc(100vh-64px)] w-full overflow-hidden">
           {/* Floating Expand Sidebar Button (when collapsed) */}
           {isSidebarCollapsed && (
             <button
@@ -414,7 +437,7 @@ export default function HomePage() {
               }
             }}
             focusCoordinates={focusCoordinates}
-            className="h-full w-full min-h-[460px] lg:min-h-0"
+            className="h-full w-full min-h-[460px] lg:min-h-full"
           />
 
           {/* =============================================================== */}

@@ -6,6 +6,8 @@
 
 # Testing & Scratch
 /coverage
+/test-results
+/playwright-report
 /work
 /outputs
 
@@ -23,6 +25,7 @@
 # Environment variables
 .env*.local
 .env*
+!.env.example
 *- Copy.env
 *.env
 

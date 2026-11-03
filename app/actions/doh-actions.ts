@@ -1,3 +1,8 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { supabaseServer } from "@/db/supabase-server";
+import { requireAdmin } from "@/lib/supabase/require-admin";
 import {
   INITIAL_SYSTEM_DATA,
   SystemDataPayload,
@@ -25,11 +30,38 @@ import {
   updateSystemSettingsSupabase,
 } from "@/db/supabase-server";
 
-// Static Export friendly cache & revalidation
-const revalidatePath = (_path: string) => {};
-
 // Persistent in-memory cache for development resilience, fast rendering and offline fallback
 let runtimeState: SystemDataPayload = JSON.parse(JSON.stringify(INITIAL_SYSTEM_DATA));
+
+export async function restoreRouteAction(recordType: "FLOOD" | "DETOUR", id: string) {
+  await requireAdmin();
+  const table = recordType === "FLOOD" ? "doh_flood_routes" : "doh_detour_routes";
+  const { data, error } = await supabaseServer.from(table).update({ deleted_at: null }).eq("id", id).select("id").single();
+  if (error || !data) throw new Error("ไม่สามารถกู้คืนรายการได้");
+  revalidatePath("/"); revalidatePath("/admin");
+  return { success: true, systemData: await getSystemDataAction() };
+}
+
+export async function getDeletedRoutesAction() {
+  await requireAdmin();
+  const { data, error } = await supabaseServer.from("doh_flood_routes").select("id,route_no,section_name,deleted_at").not("deleted_at", "is", null).order("deleted_at", { ascending: false });
+  if (error) throw new Error("โหลดรายการที่ลบไม่สำเร็จ");
+  return data || [];
+}
+
+export async function snapRouteAction(start: [number, number], end: [number, number]) {
+  await requireAdmin();
+  if ([start, end].some(([lon, lat]) => !Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lon) > 180 || Math.abs(lat) > 90)) throw new Error("พิกัดไม่ถูกต้อง");
+  const { data, error } = await supabaseServer.rpc("doh_snap_line_rpc", { p_a_lng: start[0], p_a_lat: start[1], p_b_lng: end[0], p_b_lat: end[1], p_max_m: 250 });
+  if (error) return null;
+  return data?.found && data.geojson?.type === "LineString" ? data.geojson.coordinates as [number, number][] : null;
+}
+
+function assertPersisted(ok: boolean) {
+  if (!ok) {
+    throw new Error("ไม่สามารถบันทึกข้อมูลลงฐานข้อมูลได้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่");
+  }
+}
 
 /**
  * ดึงข้อมูลทั้งระบบ 5 โครงสร้าง: จุดน้ำท่วม, ทางเลี่ยง, ไทม์ไลน์ระดับน้ำ, โครงการผู้ว่าฯ, เลเยอร์ทางหลวง
@@ -37,7 +69,7 @@ let runtimeState: SystemDataPayload = JSON.parse(JSON.stringify(INITIAL_SYSTEM_D
 export async function getSystemDataAction(): Promise<SystemDataPayload> {
   try {
     const cloudData = await getSystemDataFromSupabase();
-    if (cloudData && Array.isArray(cloudData.floodRoutes) && cloudData.floodRoutes.length > 0) {
+    if (cloudData && Array.isArray(cloudData.floodRoutes)) {
       // Merge cloud data into runtimeState
       runtimeState = {
         ...cloudData,
@@ -70,11 +102,12 @@ export async function saveTimelineUpdateAction(payload: {
   remark: string;
   photoUrl?: string;
 }): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  await requireAdmin();
   const timelineId = "TL-" + Date.now();
   const nowIso = new Date().toISOString();
 
   // 1. Persist to Supabase Database via Atomic RPC
-  await recordTimelineUpdateSupabase({
+  assertPersisted(await recordTimelineUpdateSupabase({
     timelineId,
     floodId: payload.floodId,
     waterLevelCm: payload.waterLevelCm,
@@ -84,7 +117,7 @@ export async function saveTimelineUpdateAction(payload: {
     photoUrl: payload.photoUrl || "",
     reporterName: payload.reporterName,
     remark: payload.remark,
-  });
+  }));
 
   // 2. Update runtime memory state
   const newTimeline: TimelineUpdate = {
@@ -139,12 +172,14 @@ export async function upsertRouteAction(payload: {
   waterLevelCm?: number;
   trafficStatus?: "CLOSED" | "WARNING" | "PASSABLE";
   latestPhotoUrl?: string;
+  detourAdvice?: string;
   detourRefId?: string;
   detourName?: string;
   detourDesc?: string;
   district?: string;
   subdistrict?: string;
 }): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  await requireAdmin();
   const nowIso = new Date().toISOString();
 
   if (payload.recordType === "FLOOD") {
@@ -162,23 +197,19 @@ export async function upsertRouteAction(payload: {
       lat_end: payload.latEnd,
       lon_end: payload.lonEnd,
       coordinates_json: payload.coordinates,
-      water_level_cm: payload.waterLevelCm || 30,
+      water_level_cm: payload.waterLevelCm ?? 30,
       traffic_status: payload.trafficStatus || "WARNING",
       latest_photo_url: payload.latestPhotoUrl || "",
+      detour_advice: payload.detourAdvice,
       is_active: true,
       updated_at: nowIso,
       district: payload.district,
       subdistrict: payload.subdistrict,
     };
 
-    if (existingIdx > -1) {
-      runtimeState.floodRoutes[existingIdx] = floodRecord;
-    } else {
-      runtimeState.floodRoutes.push(floodRecord);
-    }
-
-    // Persist to Supabase
-    await upsertFloodRouteSupabase(floodRecord);
+    assertPersisted(await upsertFloodRouteSupabase(floodRecord));
+    if (existingIdx > -1) runtimeState.floodRoutes[existingIdx] = floodRecord;
+    else runtimeState.floodRoutes.push(floodRecord);
   } else {
     const id = payload.id || "D-" + Date.now().toString().slice(-4);
     const existingIdx = runtimeState.detourRoutes.findIndex((d) => d.id === id);
@@ -197,14 +228,9 @@ export async function upsertRouteAction(payload: {
       updated_at: nowIso,
     };
 
-    if (existingIdx > -1) {
-      runtimeState.detourRoutes[existingIdx] = detourRecord;
-    } else {
-      runtimeState.detourRoutes.push(detourRecord);
-    }
-
-    // Persist to Supabase
-    await upsertDetourRouteSupabase(detourRecord);
+    assertPersisted(await upsertDetourRouteSupabase(detourRecord));
+    if (existingIdx > -1) runtimeState.detourRoutes[existingIdx] = detourRecord;
+    else runtimeState.detourRoutes.push(detourRecord);
   }
 
   runtimeState.updatedAt = nowIso;
@@ -220,12 +246,13 @@ export async function deleteRouteAction(
   recordType: "FLOOD" | "DETOUR",
   id: string
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  await requireAdmin();
   if (recordType === "FLOOD") {
+    assertPersisted(await deleteRouteSupabase("doh_flood_routes", id));
     runtimeState.floodRoutes = runtimeState.floodRoutes.filter((r) => r.id !== id);
-    await deleteRouteSupabase("doh_flood_routes", id);
   } else {
+    assertPersisted(await deleteRouteSupabase("doh_detour_routes", id));
     runtimeState.detourRoutes = runtimeState.detourRoutes.filter((d) => d.id !== id);
-    await deleteRouteSupabase("doh_detour_routes", id);
   }
 
   runtimeState.updatedAt = new Date().toISOString();
@@ -248,6 +275,7 @@ export async function upsertMitigationProjectAction(payload: {
   beforeImageUrl?: string;
   afterImageUrl?: string;
 }): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  await requireAdmin();
   const projectId = payload.projectId || "P-" + Date.now().toString().slice(-3);
   const existingIdx = runtimeState.mitigationProjects.findIndex((p) => p.project_id === projectId);
 
@@ -264,13 +292,9 @@ export async function upsertMitigationProjectAction(payload: {
     updated_at: new Date().toISOString(),
   };
 
-  if (existingIdx > -1) {
-    runtimeState.mitigationProjects[existingIdx] = proj;
-  } else {
-    runtimeState.mitigationProjects.push(proj);
-  }
-
-  await upsertMitigationProjectSupabase(proj);
+  assertPersisted(await upsertMitigationProjectSupabase(proj));
+  if (existingIdx > -1) runtimeState.mitigationProjects[existingIdx] = proj;
+  else runtimeState.mitigationProjects.push(proj);
 
   runtimeState.updatedAt = new Date().toISOString();
   revalidatePath("/");
@@ -284,8 +308,9 @@ export async function upsertMitigationProjectAction(payload: {
 export async function deleteMitigationProjectAction(
   projectId: string
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  await requireAdmin();
+  assertPersisted(await deleteMitigationProjectSupabase(projectId));
   runtimeState.mitigationProjects = runtimeState.mitigationProjects.filter((p) => p.project_id !== projectId);
-  await deleteMitigationProjectSupabase(projectId);
 
   runtimeState.updatedAt = new Date().toISOString();
   revalidatePath("/");
@@ -303,6 +328,8 @@ export async function updateHighwayLayerAction(payload: {
   lineWidth?: number;
   geojsonData?: any;
 }): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  await requireAdmin();
+  assertPersisted(await updateHighwayLayerSupabase(payload));
   const layer = runtimeState.highwayLayers.find((l) => l.layer_id === payload.layerId);
   if (layer) {
     if (payload.layerName) layer.layer_name = payload.layerName;
@@ -310,8 +337,6 @@ export async function updateHighwayLayerAction(payload: {
     if (payload.lineWidth) layer.line_width = payload.lineWidth;
     if (payload.geojsonData) layer.geojson_data = payload.geojsonData;
   }
-
-  await updateHighwayLayerSupabase(payload);
 
   runtimeState.updatedAt = new Date().toISOString();
   revalidatePath("/");
@@ -326,13 +351,13 @@ export async function setIncidentStatusAction(
   id: string,
   isActive: boolean
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  await requireAdmin();
+  assertPersisted(await setIncidentStatusSupabase(id, isActive));
   const flood = runtimeState.floodRoutes.find((r) => r.id === id);
   if (flood) {
     flood.is_active = isActive;
     flood.updated_at = new Date().toISOString();
   }
-
-  await setIncidentStatusSupabase(id, isActive);
 
   runtimeState.updatedAt = new Date().toISOString();
   revalidatePath("/");
@@ -346,10 +371,10 @@ export async function setIncidentStatusAction(
 export async function updateMapStyleAction(
   styles: Record<"flood" | "detour" | "primary" | "secondary", MapLineStyleItem>
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  await requireAdmin();
+  assertPersisted(await updateMapStylesSupabase(styles));
   runtimeState.mapStyles = styles;
   runtimeState.updatedAt = new Date().toISOString();
-
-  await updateMapStylesSupabase(styles);
 
   revalidatePath("/");
   revalidatePath("/admin");
@@ -362,6 +387,8 @@ export async function updateMapStyleAction(
 export async function saveOfficeAction(
   office: DohOfficeLocation
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  await requireAdmin();
+  assertPersisted(await upsertOfficeSupabase(office));
   if (!runtimeState.offices) runtimeState.offices = [];
   const idx = runtimeState.offices.findIndex((o) => o.id === office.id);
   if (idx !== -1) {
@@ -370,8 +397,6 @@ export async function saveOfficeAction(
     runtimeState.offices.push(office);
   }
   runtimeState.updatedAt = new Date().toISOString();
-
-  await upsertOfficeSupabase(office);
 
   revalidatePath("/");
   revalidatePath("/admin");
@@ -384,12 +409,12 @@ export async function saveOfficeAction(
 export async function deleteOfficeAction(
   officeId: string
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  await requireAdmin();
+  assertPersisted(await deleteOfficeSupabase(officeId));
   if (runtimeState.offices) {
     runtimeState.offices = runtimeState.offices.filter((o) => o.id !== officeId);
   }
   runtimeState.updatedAt = new Date().toISOString();
-
-  await deleteOfficeSupabase(officeId);
 
   revalidatePath("/");
   revalidatePath("/admin");
@@ -402,10 +427,10 @@ export async function deleteOfficeAction(
 export async function updateSystemSettingsAction(
   settings: SystemSettingsConfig
 ): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+  await requireAdmin();
+  assertPersisted(await updateSystemSettingsSupabase(settings));
   runtimeState.systemSettings = settings;
   runtimeState.updatedAt = new Date().toISOString();
-
-  await updateSystemSettingsSupabase(settings);
 
   revalidatePath("/");
   revalidatePath("/admin");

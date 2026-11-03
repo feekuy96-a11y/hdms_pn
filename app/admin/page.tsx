@@ -56,19 +56,19 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-body">
       {/* Official Thai Government Protected Top Header */}
-      <header className="bg-[#0f2347] border-b-2 border-amber-500 sticky top-0 z-50 h-16 px-4 sm:px-6 flex items-center justify-between shadow-xl">
-        <div className="flex items-center gap-3">
+      <header className="bg-[#0f2347] border-b-2 border-amber-500 sticky top-0 z-50 min-h-16 px-3 sm:px-6 py-2 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 shadow-xl">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <Link
             href="/"
-            className="flex items-center gap-1.5 text-xs text-amber-300 hover:text-white bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-700 transition font-heading font-bold"
+            className="flex shrink-0 items-center gap-1.5 text-xs text-amber-300 hover:text-white bg-slate-900/90 px-2 sm:px-3 py-1.5 rounded-lg border border-slate-700 transition font-heading font-bold"
           >
             <ArrowLeft className="w-3.5 h-3.5" /> หน้าประชาชน
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <span className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-heading font-black text-xs shadow">
               ขท.
             </span>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="bg-amber-400 text-slate-950 text-[10px] font-heading font-black px-1.5 py-0.2 rounded uppercase">
                   ส่วนราชการ
@@ -77,7 +77,7 @@ export default function AdminPage() {
                   สำนักงานทางหลวงที่ ๑๘ กรมทางหลวง
                 </span>
               </div>
-              <h1 className="font-heading text-xs sm:text-sm font-bold text-white">
+              <h1 className="truncate font-heading text-xs sm:text-sm font-bold text-white">
                 ศูนย์ปฏิบัติการและรายงานข้อมูลอุทกภัย แขวงทางหลวงปัตตานี
               </h1>
             </div>
@@ -85,7 +85,7 @@ export default function AdminPage() {
         </div>
 
         {/* View Switcher: Matching Image 1 (สำหรับประชาชน, รายงานผู้ว่าฯ / KPI, ระบบหลังบ้าน Admin) */}
-        <div className="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-700">
+        <div className="order-3 lg:order-none flex w-full lg:w-auto items-center gap-1.5 overflow-x-auto bg-slate-950/80 p-1 rounded-xl border border-slate-700">
           <Link
             href="/"
             className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-heading font-bold text-slate-300 hover:text-white transition flex items-center gap-1.5"
@@ -119,7 +119,7 @@ export default function AdminPage() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={() => setIsDispatchModalOpen(true)}
@@ -151,9 +151,9 @@ export default function AdminPage() {
         </main>
       ) : (
         /* Main Split Layout: Admin Console on Left (ฝั่งซ้ายมือ), GIS Map on Right */
-        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        <div className="flex-1 min-w-0 flex flex-col lg:flex-row overflow-hidden">
           {/* Left: Full Government Administrative Console (ฝั่งซ้ายมือ) */}
-          <div className="w-full lg:w-[680px] xl:w-[720px] flex flex-col overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0">
+          <div className="w-full min-w-0 lg:w-[680px] xl:w-[720px] flex flex-col overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0">
             <AdminConsole
               systemData={systemData}
               onDataRefresh={(newData) => {
@@ -173,7 +173,7 @@ export default function AdminPage() {
           </div>
 
           {/* Right: Interactive GIS Map */}
-          <div className="h-[48vh] lg:h-[calc(100vh-64px)] lg:flex-1 relative">
+          <div className="h-[48vh] min-w-0 lg:h-[calc(100vh-64px)] lg:flex-1 relative">
             <LongdoGisMap
               systemData={systemData}
               selectedFloodId={selectedFloodId}

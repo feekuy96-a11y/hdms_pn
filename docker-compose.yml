@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL 16 with PostGIS extension for GIS calculations
   postgres:
@@ -8,7 +6,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: doh_admin
-      POSTGRES_PASSWORD: doh_secure_pass
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: doh_pattani_flood
     ports:
       - "5432:5432"
@@ -27,15 +25,23 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?NEXT_PUBLIC_SUPABASE_URL is required}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is required}
+        NEXT_PUBLIC_LONGDO_MAP_KEY: ${NEXT_PUBLIC_LONGDO_MAP_KEY:-}
+        NEXT_PUBLIC_OSRM_ROUTING_URL: ${NEXT_PUBLIC_OSRM_ROUTING_URL:-https://router.project-osrm.org}
     container_name: doh_pattani_app
     restart: always
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://doh_admin:doh_secure_pass@postgres:5432/doh_pattani_flood
-      - NEXT_PUBLIC_LONGDO_MAP_KEY=${NEXT_PUBLIC_LONGDO_MAP_KEY:-demokey}
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-doh_pattani_flood_dev_secret_key_892348719234}
-      - BETTER_AUTH_URL=http://localhost:3000
+      - DATABASE_URL=postgresql://doh_admin:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/doh_pattani_flood
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:?NEXT_PUBLIC_SUPABASE_URL is required}
+      - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is required}
+      - SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY:?SUPABASE_SECRET_KEY is required}
+      - NEXT_PUBLIC_LONGDO_MAP_KEY=${NEXT_PUBLIC_LONGDO_MAP_KEY:-}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy

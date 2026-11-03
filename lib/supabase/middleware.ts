@@ -6,13 +6,21 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    "https://ebyobrtvisylwawxiurx.supabase.co";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    "";
+    undefined;
+
+  if (!supabaseUrl || !supabaseKey) {
+    if (request.nextUrl.pathname.startsWith("/admin")) {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = "/login";
+      loginUrl.searchParams.set("error", "configuration");
+      return NextResponse.redirect(loginUrl);
+    }
+    return supabaseResponse;
+  }
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
@@ -49,11 +57,8 @@ export async function updateSession(request: NextRequest) {
   // Protected route checking:
   // Protect /admin and any sub-routes
   if (pathname.startsWith("/admin")) {
-    const hasAdminBypass =
-      request.nextUrl.searchParams.get("demo") === "admin" ||
-      request.cookies.get("doh_admin_role")?.value === "doh_admin";
-
-    if (!user && !hasAdminBypass) {
+    const role = user?.app_metadata?.role;
+    if (!user || (role !== "admin" && role !== "doh_admin")) {
       const loginUrl = request.nextUrl.clone();
       loginUrl.pathname = "/login";
       loginUrl.searchParams.set("next", pathname);

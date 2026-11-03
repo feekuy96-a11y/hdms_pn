@@ -1,7 +1,12 @@
 import { betterAuth } from "better-auth";
 
+const betterAuthSecret = process.env.BETTER_AUTH_SECRET;
+if (!betterAuthSecret) {
+  throw new Error("BETTER_AUTH_SECRET is required");
+}
+
 export const auth = betterAuth({
-  secret: process.env.BETTER_AUTH_SECRET || "doh_pattani_flood_dev_secret_key_892348719234",
+  secret: betterAuthSecret,
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
   emailAndPassword: {
     enabled: true,

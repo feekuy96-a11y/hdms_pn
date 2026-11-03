@@ -13,6 +13,9 @@ import {
   saveTimelineUpdateAction,
   upsertRouteAction,
   deleteRouteAction,
+  snapRouteAction,
+  getDeletedRoutesAction,
+  restoreRouteAction,
   upsertMitigationProjectAction,
   deleteMitigationProjectAction,
   updateHighwayLayerAction,
@@ -23,6 +26,7 @@ import {
   updateSystemSettingsAction,
 } from "@/app/actions/doh-actions";
 import { saveOfflineReport } from "@/lib/offline-db";
+import { readRouteFile } from "@/lib/route-import";
 import {
   latLonToUtm47N,
   extractExifGps,
@@ -198,6 +202,7 @@ export function AdminConsole({
   // 3. INCIDENT REGISTRY & FILTER STATE
   // =========================================================================
   const [incidentSearch, setIncidentSearch] = useState("");
+  const [deletedRoutes, setDeletedRoutes] = useState<{id: string; route_no: string; section_name: string}[] | null>(null);
   const [incidentFilter, setIncidentFilter] = useState<"ALL" | "ACTIVE" | "RESOLVED">("ACTIVE");
 
   // Quick water update dialog
@@ -243,6 +248,38 @@ export function AdminConsole({
   const [projSolution, setProjSolution] = useState("");
   const [projBeforeImg, setProjBeforeImg] = useState("");
   const [projAfterImg, setProjAfterImg] = useState("");
+  const [viewIncident, setViewIncident] = useState<FloodRoute | null>(null);
+  const [projectModal, setProjectModal] = useState<MitigationProject | null>(null);
+  const [projectEditorOpen, setProjectEditorOpen] = useState(false);
+
+  const duplicateProjectIds = new Set(
+    (systemData.mitigationProjects || []).map((p) => p.project_id).filter((id, i, a) => a.indexOf(id) !== i)
+  );
+  const duplicateIncidentKeys = new Set(
+    (systemData.floodRoutes || [])
+      .map((r) => `${r.route_no}|${r.km_start}|${r.km_end}`)
+      .filter((key, i, a) => a.indexOf(key) !== i)
+  );
+
+  const openProjectEditor = (p?: MitigationProject) => {
+    setProjectEditorOpen(true);
+    setProjectModal(p || null);
+    setProjId(p?.project_id || ""); setProjRouteNo(p?.route_no || "42"); setProjKmRange(p?.km_range || "");
+    setProjLocation(p?.location_name || ""); setProjStatus(p?.status_group || "COMPLETED"); setProjBudget(p?.budget_mb || 0);
+    setProjSolution(p?.solution_detail || ""); setProjBeforeImg(p?.before_image_url || ""); setProjAfterImg(p?.after_image_url || "");
+  };
+  const handleSaveProject = async () => {
+    if (!projLocation.trim() || !projKmRange.trim() || !projSolution.trim()) { onToast("กรอกชื่อพื้นที่ ช่วง กม. และรายละเอียดให้ครบ"); return; }
+    try {
+      const res = await upsertMitigationProjectAction({ projectId: projId || undefined, routeNo: projRouteNo, locationName: projLocation, kmRange: projKmRange, statusGroup: projStatus, solutionDetail: projSolution, budgetMb: Number(projBudget), beforeImageUrl: projBeforeImg, afterImageUrl: projAfterImg });
+      onDataRefresh(res.systemData); setProjectModal(null); setProjectEditorOpen(false); onToast("บันทึกโครงการสำเร็จ");
+    } catch (e: any) { onToast(`บันทึกโครงการไม่สำเร็จ: ${e?.message || "ข้อผิดพลาด"}`); }
+  };
+  const handleDeleteProject = async (id: string) => {
+    if (!window.confirm(`ยืนยันลบโครงการ ${id} หรือไม่`)) return;
+    try { const res = await deleteMitigationProjectAction(id); onDataRefresh(res.systemData); onToast("ลบโครงการสำเร็จ"); }
+    catch (e: any) { onToast(`ลบโครงการไม่สำเร็จ: ${e?.message || "ข้อผิดพลาด"}`); }
+  };
 
   // =========================================================================
   // REACTIVE MAP COORDINATE LISTENER
@@ -284,7 +321,8 @@ export function AdminConsole({
   ) => {
     if (!sLat || !sLon || !eLat || !eLon) return;
     setSnappingStatusText("กำลังประมวลผลดัดเส้นทางเกาะถนน (Dual-Source Snapping)...");
-    const result = await calculateRoadSnappedDualSource(
+    const snapped = waypoints.length === 0 ? await snapRouteAction([sLon, sLat], [eLon, eLat]).catch(() => null) : null;
+    const result = snapped && snapped.length >= 2 ? { coords: snapped, message: "เกาะตามโครงข่ายถนนด้วย PostGIS สำเร็จ" } : await calculateRoadSnappedDualSource(
       [sLon, sLat],
       [eLon, eLat],
       waypoints,
@@ -535,7 +573,7 @@ export function AdminConsole({
   const handleDeleteRoute = (type: "FLOOD" | "DETOUR", id: string) => {
     showConfirmModal(
       "ยืนยันการลบข้อมูลเส้นทาง?",
-      `ท่านกำลังจะลบรายการ [${id}] ออกจากฐานข้อมูลระบบอย่างถาวร ข้อมูลจะไม่สามารถกู้คืนได้`,
+      `ซ่อนรายการ [${id}] จากระบบ โดยยังเก็บข้อมูลไว้สำหรับกู้คืน`,
       async () => {
         try {
           const res = await deleteRouteAction(type, id);
@@ -736,20 +774,10 @@ export function AdminConsole({
       let extractedFeatures: ExtractedGisFeature[] = [];
       const lower = file.name.toLowerCase();
 
-      if (lower.endsWith(".kmz")) {
-        extractedFeatures = await extractFeaturesFromKmz(file);
-      } else if (lower.endsWith(".kml")) {
-        const text = await file.text();
-        extractedFeatures = extractFeaturesFromKml(text);
-      } else if (lower.endsWith(".zip")) {
-        const shp = (await import("shpjs")).default;
-        const buf = await file.arrayBuffer();
-        const geojson = await shp(buf);
-        extractedFeatures = extractFeaturesFromGeoJson(geojson);
+      if ([".kmz", ".kml", ".gpx", ".zip", ".json", ".geojson"].some((ext) => lower.endsWith(ext))) {
+        extractedFeatures = await readRouteFile(file);
       } else {
-        const text = await file.text();
-        const geojson = JSON.parse(text);
-        extractedFeatures = extractFeaturesFromGeoJson(geojson);
+        throw new Error("ชนิดไฟล์ไม่รองรับ");
       }
 
       if (extractedFeatures.length === 0) {
@@ -819,6 +847,7 @@ export function AdminConsole({
     }
     const isSec = targetLayerCategory === "SECOND_HIGHWAY";
     const layerId = isSec ? "SECOND_HIGHWAY" : "MAIN_HIGHWAY";
+    if (systemData.highwayLayers.some((layer) => layer.layer_id === layerId && layer.geojson_data) && !window.confirm("การนำเข้านี้จะแทนที่โครงข่ายในเลเยอร์ที่เลือก ยืนยันบันทึกหรือไม่?")) return;
     const colorHex = isSec ? (lineStyles.secondary?.color || "#0284c7") : (lineStyles.primary?.color || "#1B5E20");
     const lineWidth = isSec ? (lineStyles.secondary?.weight || 3.5) : (lineStyles.primary?.weight || 5);
 
@@ -1783,6 +1812,8 @@ export function AdminConsole({
           {/* ================================================================= */}
           {activeTab === "incidents" && (
             <div className="space-y-5 max-w-4xl">
+              <button type="button" className="text-sky-300 text-sm" onClick={async () => { try { setDeletedRoutes(await getDeletedRoutesAction()); } catch { onToast("โหลดรายการที่ลบไม่สำเร็จ"); } }}>รายการที่ลบ / กู้คืน</button>
+              {deletedRoutes && <div className="rounded-xl border border-slate-700 p-3 text-sm text-slate-300"><button type="button" onClick={() => setDeletedRoutes(null)}>ปิดรายการ</button>{deletedRoutes.length === 0 && <p>ไม่มีรายการที่ลบ</p>}{deletedRoutes.map((r) => <div key={r.id} className="flex justify-between gap-3 py-2"><span>ทล.{r.route_no} {r.section_name}</span><button type="button" className="text-emerald-300" onClick={async () => { try { const result = await restoreRouteAction("FLOOD", r.id); onDataRefresh(result.systemData); setDeletedRoutes(await getDeletedRoutesAction()); } catch { onToast("กู้คืนไม่สำเร็จ"); } }}>กู้คืน</button></div>)}</div>}
               {/* Incident Header Stats */}
               <div className="border-b border-slate-800 pb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -1796,6 +1827,7 @@ export function AdminConsole({
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  <button type="button" onClick={() => openProjectEditor()} className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs px-3.5 py-2 rounded-xl"><Plus className="w-4 h-4 inline" /> เพิ่มโครงการ</button>
                   <button
                     type="button"
                     onClick={() => {
@@ -1934,6 +1966,7 @@ export function AdminConsole({
 
                           {/* Quick Action Buttons */}
                           <div className="flex items-center gap-1.5 shrink-0">
+                            <button type="button" onClick={() => setViewIncident(r)} className="bg-slate-800 hover:bg-sky-700 text-sky-300 px-2.5 py-1 rounded-xl text-xs font-heading transition">ดู</button>
                             <button
                               type="button"
                               onClick={() => {
@@ -2353,6 +2386,7 @@ export function AdminConsole({
                   </button>
                 </div>
               </div>
+              {(duplicateIncidentKeys.size > 0) && <div className="rounded-xl border border-red-700/60 bg-red-950/30 px-3 py-2 text-xs text-red-200">พบเหตุการณ์ซ้ำ {duplicateIncidentKeys.size} กลุ่ม (สายทางและช่วง กม. เดียวกัน) กรุณาตรวจสอบก่อนแก้ไข/ลบ</div>}
 
               {/* Preset Style Themes Bar */}
               <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2">
@@ -2780,6 +2814,12 @@ export function AdminConsole({
                       </span>
                       <span className="text-slate-400 font-mono">ช่วง กม. {p.km_range}</span>
                     </div>
+                    <div className="flex justify-end gap-1.5 pt-1">
+                      <button type="button" onClick={() => showSuccessModal(`รายละเอียดโครงการ ${p.project_id}`, `${p.location_name} · ทล.${p.route_no} · กม.${p.km_range}\n${p.solution_detail}`)} className="bg-slate-800 hover:bg-sky-700 text-sky-300 px-2.5 py-1 rounded-lg text-xs">ดู</button>
+                      <button type="button" onClick={() => openProjectEditor(p)} className="bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-300 px-2.5 py-1 rounded-lg text-xs">แก้ไข</button>
+                      <button type="button" onClick={() => handleDeleteProject(p.project_id)} className="bg-red-950 hover:bg-red-800 text-red-300 px-2 py-1 rounded-lg text-xs"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                    {duplicateProjectIds.has(p.project_id) && <span className="text-[10px] text-red-300">รหัสโครงการซ้ำ</span>}
                   </div>
                 ))}
               </div>
@@ -2798,6 +2838,10 @@ export function AdminConsole({
         onClose={() => setIsDispatchModalOpen(false)}
         systemData={systemData}
       />
+
+      {viewIncident && <div className="fixed inset-0 z-[9980] flex items-center justify-center p-4 bg-slate-950/80"><div className="bg-slate-900 border border-sky-600 rounded-2xl p-5 max-w-lg w-full space-y-3"><h3 className="text-white font-bold">รายละเอียดเหตุการณ์ · ทล.{viewIncident.route_no}</h3><p className="text-sm text-slate-300">{viewIncident.section_name} · กม. {viewIncident.km_start}-{viewIncident.km_end}</p><p className="text-sm text-slate-300">ระดับน้ำ {viewIncident.water_level_cm} ซม. · สถานะ {viewIncident.is_active ? "กำลังเกิดเหตุ" : "คืนสภาพปกติ"}</p><button type="button" onClick={() => setViewIncident(null)} className="bg-slate-700 text-white px-4 py-2 rounded-xl text-sm">ปิด</button></div></div>}
+
+      {projectEditorOpen && <div className="fixed inset-0 z-[9980] flex items-center justify-center p-4 bg-slate-950/80"><div className="bg-slate-900 border border-amber-500 rounded-2xl p-5 max-w-xl w-full space-y-3"><h3 className="text-white font-bold">{projId ? "แก้ไขโครงการ" : "เพิ่มโครงการ"}</h3><div className="grid grid-cols-2 gap-2">{[["เลขโครงการ",projId,setProjId],["สายทาง",projRouteNo,setProjRouteNo],["ช่วง กม.",projKmRange,setProjKmRange],["พื้นที่",projLocation,setProjLocation],["รายละเอียด",projSolution,setProjSolution]].map(([label,value,setter]: any)=><label key={label as string} className="text-xs text-slate-300">{label as string}<input value={value as string} onChange={(e)=>setter(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-white" /></label>)}<label className="text-xs text-slate-300">งบประมาณ (ลบ.)<input type="number" value={projBudget} onChange={(e)=>setProjBudget(Number(e.target.value))} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-white" /></label></div><div className="flex justify-end gap-2"><button type="button" onClick={()=>setProjectEditorOpen(false)} className="bg-slate-700 text-white px-3 py-2 rounded-lg text-sm">ยกเลิก</button><button type="button" onClick={handleSaveProject} className="bg-amber-500 text-slate-950 font-bold px-3 py-2 rounded-lg text-sm">บันทึก</button></div></div></div>}
 
       {/* Animated Status Modal for Save / Edit / Delete Feedback */}
       <AnimatedStatusModal
