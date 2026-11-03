@@ -514,6 +514,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+                  {filteredFloods.length === 0 && <div className="rounded-xl border border-slate-700 p-4 text-slate-300 text-sm"><p>{systemData.floodRoutes.length === 0 ? "ยังไม่มีรายงานจุดน้ำท่วม" : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p><button type="button" className="mt-3 min-h-11 text-amber-300" onClick={() => { setSearchQuery(""); setSelectedRouteFilter("ALL"); }}>ล้างตัวกรอง</button></div>}
                   {filteredFloods.map((flood) => {
                     const isSelected = flood.id === selectedFloodId;
                     const isClosed = flood.traffic_status === "CLOSED";
