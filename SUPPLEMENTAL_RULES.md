@@ -34,6 +34,7 @@
 - เปลี่ยนแปลง: ย้าย mutation ไป Edge Function ตรวจ session และ app_metadata.role ใช้ user-scoped RLS; บันทึกเหตุการณ์/ทางเลี่ยงพร้อมคำแนะนำผ่าน RPC transaction; ป้องกันข้อมูล soft-delete จาก public; รองรับ snapping MultiLineString
 - Build: build:server และ build:pages แยกกัน พร้อมทดสอบ base path /hdms_pn และ workflow Pages
 - ตรวจสอบ: public Edge API 200, unauthenticated mutation 401, SQL transaction rollback และ public visibility 0 rows ผ่าน; ตรวจ build และ browser smoke ทั้งสองรูปแบบก่อนเผยแพร่
+- แก้ spatial trigger ให้อ่าน FeatureCollection และคำนวณ geom เดิมใหม่; ทดสอบ snapping ไป/กลับผ่านทั้งสองทิศทาง
 - ข้อยกเว้นสถาปัตยกรรม: คำสั่งผู้ใช้ให้รองรับ Pages ทำให้เปลี่ยนจาก Server Actions ไป API adapters ร่วมกัน โดยคง Next.js/React Query/Supabase/PostGIS
 
 ### [UPDATE-013] 2026-11-03: รวมโครงสร้างแท็บใหม่และแก้ transaction นำเข้า
