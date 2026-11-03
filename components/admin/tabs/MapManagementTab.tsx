@@ -583,7 +583,7 @@ export function MapManagementTab({
                     : "bg-slate-800 text-amber-300 border-slate-700 hover:bg-slate-700"
                 }`}
               >
-                {adminPickMode === "PICK_START" ? "คลิกจุด A..." : "จิ้มจุด A"}
+                {adminPickMode === "PICK_START" ? "เลือกจุด A..." : "เลือกจุด A"}
               </button>
               <button
                 type="button"
@@ -594,7 +594,7 @@ export function MapManagementTab({
                     : "bg-slate-800 text-amber-300 border-slate-700 hover:bg-slate-700"
                 }`}
               >
-                {adminPickMode === "PICK_END" ? "คลิกจุด B..." : "จิ้มจุด B"}
+                {adminPickMode === "PICK_END" ? "เลือกจุด B..." : "เลือกจุด B"}
               </button>
               <button
                 type="button"
