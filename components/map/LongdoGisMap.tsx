@@ -10,6 +10,17 @@ const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[character] || character));
 
+const formatKmPost = (value: unknown) => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  if (raw.includes("+")) return raw;
+  const meters = Number(raw.replace(/,/g, ""));
+  if (!Number.isFinite(meters)) return raw;
+  const km = Math.floor(meters / 1000);
+  const post = Math.round(meters % 1000).toString().padStart(3, "0");
+  return `${km}+${post}`;
+};
+
 /**
  * ปรับพิกัดให้เป็น [Latitude, Longitude] สำหรับ Leaflet เสมอ
  * ป้องกันพิกัดสลับที่ทำให้ละติจูดพุ่งขึ้นไป 101 องศาลงทะเล
@@ -385,7 +396,7 @@ export function LongdoGisMap({
               onEachFeature: (feature: any, geoFeatureLayer: any) => {
                 const props = feature.properties || {};
                 const code = props.route_no || props.route_code || props.ROAD_NO || props.route || props.code || "";
-                const name = props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || layer.layer_name;
+                const name = props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || "ทางหลวง";
                 const desc = props.description || props.remarks || "";
                 const lengthKm = props.length_km || "";
                 const ptsCount = props.points_count || (feature.geometry?.coordinates?.length || "");
@@ -424,8 +435,8 @@ export function LongdoGisMap({
                 geoFeatureLayer.bindPopup(`
                   <div class="text-xs p-2.5 min-w-[270px] font-body bg-slate-950 text-white rounded-xl border-2 shadow-2xl" style="border-color: ${color}">
                     <div class="flex items-center justify-between pb-1.5 border-b border-slate-800 gap-2">
-                      <span class="text-white text-[11px] font-bold px-2 py-0.5 rounded font-heading shadow flex items-center gap-1" style="background-color: ${color}">
-                        ${code ? `ทล.${code}` : "ทางหลวง"}
+                      <span class="text-white text-base font-black font-heading tracking-wide">
+                        ${code ? `ทอ.${escapeHtml(code)}` : "ทางหลวง"}
                       </span>
                       <span class="text-[10px] text-amber-300 font-heading font-semibold">
                         ${isMain ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"}
@@ -433,7 +444,7 @@ export function LongdoGisMap({
                     </div>
                     <div class="mt-2">
                       <h4 class="font-bold text-white text-sm font-heading">${name}</h4>
-                      ${props.km_start ? `<p class="text-amber-300 text-[11px] mt-0.5 font-mono">กม.${props.km_start} ถึง ${props.km_end || ""}</p>` : ""}
+                      ${props.km_start ? `<p class="text-amber-300 text-[11px] mt-0.5 font-mono">ก.ม. ${escapeHtml(formatKmPost(props.km_start))} ถึง ก.ม. ${escapeHtml(formatKmPost(props.km_end))}</p>` : ""}
                       ${desc ? `<p class="text-slate-300 text-[11px] mt-0.5">${desc}</p>` : ""}
                     </div>
                     <div class="grid grid-cols-2 gap-1.5 mt-2.5 pt-2 border-t border-slate-800 text-[11px]">
@@ -817,21 +828,8 @@ export function LongdoGisMap({
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block shadow-sm" />
-                <span>หมุดระดับน้ำและภาพถ่าย</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={showRoadLabels}
-                onChange={(e) => setShowRoadLabels(e.target.checked)}
-                className="accent-amber-400 rounded"
-              />
-            </label>
-
-            <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
-              <span className="flex items-center gap-2">
                 <Building2 className="w-3 h-3 text-sky-400 inline-block" />
-                <span>หมุดสำนักงานและหมวดทางหลวง</span>
+                <span>สำนักงาน/หมวดทางหลวง</span>
               </span>
               <input
                 type="checkbox"
@@ -842,7 +840,7 @@ export function LongdoGisMap({
             </label>
           </div>
 
-          {/* Base Map Switcher: Restored Longdo Map + Street + Satellite (Issues #2 & #4) */}
+          {/* Base Map Switcher */}
           <div className="mt-2.5 pt-2 border-t border-slate-800 grid grid-cols-3 gap-1 text-[10px] font-heading font-bold">
             <button
               type="button"
@@ -874,6 +872,17 @@ export function LongdoGisMap({
           </div>
         </div>
       )}
+
+      <div className="absolute top-4 left-4 z-[400] flex flex-wrap gap-2 pointer-events-none" aria-label="สรุปสถานการณ์บนแผนที่">
+        <div className="rounded-xl border border-red-400/40 bg-slate-950/90 px-3 py-2 text-xs text-white shadow-xl backdrop-blur">
+          <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-red-400" />
+          น้ำท่วม <strong className="text-red-300">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => item.is_active).length : 0}</strong> จุด
+        </div>
+        <div className="rounded-xl border border-amber-400/40 bg-slate-950/90 px-3 py-2 text-xs text-white shadow-xl backdrop-blur">
+          <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-amber-300" />
+          ทางเลี่ยง <strong className="text-amber-300">{showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</strong> เส้นทาง
+        </div>
+      </div>
     </div>
   );
 }
