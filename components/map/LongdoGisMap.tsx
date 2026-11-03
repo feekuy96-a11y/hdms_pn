@@ -260,7 +260,8 @@ export function LongdoGisMap({
 
       // A. Draw Official Highway Route Shields (ไอคอนแสดงหมายเลขทางหลวงบนแผนที่ในรูปแบบทางการ)
       if (showHighwayShields) {
-        OFFICIAL_PATTANI_HIGHWAYS.forEach((hwy) => {
+        // Highway labels are drawn from imported route geometry below, so every sign sits on its actual road.
+        OFFICIAL_PATTANI_HIGHWAYS.slice(0, 0).forEach((hwy) => {
           const isRural = hwy.type === "RURAL_ROAD";
           const code = hwy.code;
           const is4Digits = code.length >= 4;
@@ -388,6 +389,25 @@ export function LongdoGisMap({
                 const ptsCount = props.points_count || (feature.geometry?.coordinates?.length || "");
 
                 // Tooltip showing highway name on hover
+                if (showHighwayShields && feature.geometry && ["LineString", "MultiLineString"].includes(feature.geometry.type)) {
+                  const line = feature.geometry.type === "LineString"
+                    ? feature.geometry.coordinates
+                    : feature.geometry.coordinates.flat(1);
+                  const midpoint = line[Math.floor(line.length / 2)];
+                  if (midpoint && code) {
+                    const signColor = props.color || color;
+                    const signIcon = L.divIcon({
+                      html: `<div style="width:34px;height:38px;transform:translate(-50%,-50%);background:#fff;border:2px solid ${escapeHtml(signColor)};border-radius:4px;box-shadow:0 1px 3px #0008;color:#111827;text-align:center;line-height:1.05;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Sarabun,sans-serif"><span style="font-size:7px;line-height:9px">ครุฑ</span><span style="font-size:12px;font-weight:900;letter-spacing:-.4px">${escapeHtml(code)}</span></div>`,
+                      className: "doh-highway-sign",
+                      iconSize: [34, 38],
+                      iconAnchor: [17, 19],
+                    });
+                    const sign = L.marker(toLeafletLatLng(midpoint), { icon: signIcon, interactive: true }).addTo(group);
+                    sign.bindTooltip(`ทล.${escapeHtml(code)} · ${escapeHtml(name)}`, { direction: "top", offset: [0, -18] });
+                    sign.bindPopup(`<div style="border-top:3px solid ${escapeHtml(signColor)};padding-top:5px"><strong>ทล.${escapeHtml(code)}</strong><br/>${escapeHtml(name)}</div>`);
+                  }
+                }
+
                 if (showRoadLabels) {
                   geoFeatureLayer.bindTooltip(
                     code ? `ทล.${code} • ${name}` : name,
@@ -444,6 +464,7 @@ export function LongdoGisMap({
       // D. Draw Detour Routes (Yellow Lines)
       if (showDetourLayer) {
         (systemData.detourRoutes || []).forEach((detour) => {
+          if (!detour.is_active) return;
           let coords: [number, number][] = [];
           if (Array.isArray(detour.coordinates_json)) {
             coords = detour.coordinates_json;
@@ -499,9 +520,9 @@ export function LongdoGisMap({
 
           const isSelected = flood.id === selectedFloodId;
           const floodStyle = mapStyles.flood;
-          const fColor = isSelected ? "#ff2222" : (floodStyle?.color || LAYER_CONFIG.FLOOD_RED_LINE.color);
-          const fWeight = isSelected ? 8 : (floodStyle?.weight || LAYER_CONFIG.FLOOD_RED_LINE.weight);
-          const fOpacity = isSelected ? 1 : (floodStyle?.opacity ?? LAYER_CONFIG.FLOOD_RED_LINE.opacity);
+          const fColor = floodStyle?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
+          const fWeight = (floodStyle?.weight || LAYER_CONFIG.FLOOD_RED_LINE.weight) + (isSelected ? 1.5 : 0);
+          const fOpacity = floodStyle?.opacity ?? LAYER_CONFIG.FLOOD_RED_LINE.opacity;
           const fDash = floodStyle?.pattern === "dash" ? (floodStyle.dashArray || "8, 6") : undefined;
           const fAnim = floodStyle?.animation === "pulse" ? "doh-line-pulse" : floodStyle?.animation === "chaser" ? "doh-line-chaser" : floodStyle?.animation === "blink" ? "doh-line-blink" : floodStyle?.animation === "arrows" ? "doh-line-arrows" : "";
           const fSpeed = floodStyle?.animationSpeed === "slow" ? "doh-anim-slow" : floodStyle?.animationSpeed === "fast" ? "doh-anim-fast" : "";
@@ -556,6 +577,24 @@ export function LongdoGisMap({
           });
 
           const marker = L.marker([midLat, midLon], { icon: pinIcon }).addTo(group);
+          const updates = (systemData.timelineUpdates || [])
+            .filter((update) => update.flood_id_ref === flood.id)
+            .sort((a, b) => new Date(a.reported_at).getTime() - new Date(b.reported_at).getTime());
+          const levels = updates.map((update) => update.water_level_cm);
+          const minLevel = Math.min(...levels);
+          const maxLevel = Math.max(...levels);
+          const chartPoints = updates.map((update, index) => {
+            const y = 48 - (maxLevel === minLevel ? 24 : ((update.water_level_cm - minLevel) / (maxLevel - minLevel)) * 40);
+            const x = updates.length < 2 ? 10 : 8 + (index * 104) / (updates.length - 1);
+            const time = new Date(update.reported_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
+            return `<circle cx="${x}" cy="${y}" r="2.5" fill="#f59e0b"><title>${escapeHtml(time)} · ${update.water_level_cm} ซม.</title></circle>`;
+          }).join("");
+          const linePoints = updates.map((update, index) => {
+            const y = 48 - (maxLevel === minLevel ? 24 : ((update.water_level_cm - minLevel) / (maxLevel - minLevel)) * 40);
+            const x = updates.length < 2 ? 10 : 8 + (index * 104) / (updates.length - 1);
+            return `${x},${y}`;
+          }).join(" ");
+          marker.bindPopup(`<div style="width:250px;color:#0f172a;font-family:Sarabun,sans-serif"><strong>ทล.${escapeHtml(flood.route_no)} · ${escapeHtml(flood.section_name)}</strong><div style="font-size:12px;margin-top:3px">กม.${escapeHtml(flood.km_start)}–${escapeHtml(flood.km_end)}</div>${flood.latest_photo_url ? `<img src="${escapeHtml(flood.latest_photo_url)}" alt="ภาพสถานการณ์" style="width:100%;height:108px;object-fit:cover;border-radius:8px;margin-top:7px"/>` : ""}<div style="margin-top:7px;font-size:13px"><b>ระดับน้ำล่าสุด ${flood.water_level_cm} ซม.</b> · ${escapeHtml(flood.traffic_status === "CLOSED" ? "ปิดการจราจร" : flood.traffic_status === "WARNING" ? "เฝ้าระวัง" : "ผ่านได้")}</div>${updates.length ? `<svg viewBox="0 0 120 56" style="width:100%;height:80px;margin-top:4px"><line x1="8" y1="48" x2="112" y2="48" stroke="#cbd5e1"/><polyline points="${linePoints}" fill="none" stroke="#f59e0b" stroke-width="2"/>${chartPoints}</svg><div style="font-size:10px;color:#64748b">ชี้ที่จุดกราฟเพื่อดูเวลาและระดับน้ำ</div>` : `<div style="font-size:11px;color:#64748b;margin-top:3px">ยังไม่มีข้อมูลระดับน้ำย้อนหลัง</div>`}</div>`, { maxWidth: 280 });
           marker.on("click", (e: any) => {
             L.DomEvent.stopPropagation(e);
             onSelectFlood(flood.id);
@@ -601,7 +640,7 @@ export function LongdoGisMap({
           const officeIcon = L.divIcon({
             html: `
               <div class="relative cursor-pointer" style="transform: translate(-50%, -50%);">
-                <div class="w-7 h-7 rounded-lg ${isHq ? "bg-[#0B2A5B]" : "bg-sky-800"} border-2 border-amber-400 flex items-center justify-center shadow-lg text-white">
+                <div class="w-7 h-7 rounded-full bg-slate-100 border border-slate-500 flex items-center justify-center shadow-md text-slate-600">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>
                     <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/>
@@ -674,14 +713,14 @@ export function LongdoGisMap({
           title="เปิดแถบควบคุมเลเยอร์แผนที่"
         >
           <Layers className="w-3.5 h-3.5 text-amber-400" />
-          <span>เลเยอร์แผนที่</span>
+          <span>สัญลักษณ์บนแผนที่</span>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
         </button>
       ) : (
         <div className="absolute top-4 right-4 z-[400] bg-[#0b162c]/95 backdrop-blur border border-slate-700/80 rounded-2xl p-3 sm:p-3.5 shadow-2xl min-w-[215px] sm:min-w-[240px] text-xs pointer-events-auto animate-fade-in">
           <div className="font-heading font-bold text-amber-400 flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
             <span className="flex items-center gap-1.5 text-xs text-white">
-              <Layers className="w-3.5 h-3.5 text-amber-400" /> เลเยอร์แผนที่ <span className="text-[10px] bg-amber-400/20 text-amber-300 px-1 rounded font-mono">GIS</span>
+              <Layers className="w-3.5 h-3.5 text-amber-400" /> สัญลักษณ์บนแผนที่
             </span>
             <div className="flex items-center gap-2">
               <button type="button" onClick={resetCamera} className="text-[10px] text-sky-400 hover:text-sky-300 hover:underline">
@@ -715,6 +754,14 @@ export function LongdoGisMap({
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
+                <span className="flex h-4 w-4 items-center justify-center rounded-sm border border-slate-800 bg-white text-[6px] font-black text-slate-900">๛</span>
+                <span>ป้ายหมายเลขทางหลวง</span>
+              </span>
+              <input type="checkbox" checked={showHighwayShields} onChange={(e) => setShowHighwayShields(e.target.checked)} className="accent-slate-400 rounded" />
+            </label>
+
+            <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
+              <span className="flex items-center gap-2">
                 <span className="w-4 h-1.5 inline-block rounded bg-[#0284c7]" />
                 <span>ทางหลวงสายรอง</span>
               </span>
@@ -729,7 +776,7 @@ export function LongdoGisMap({
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
                 <span className="w-4 h-1.5 inline-block rounded bg-red-600 animate-pulse" />
-                <span>เส้นทางน้ำท่วม (Red)</span>
+                <span>เส้นน้ำท่วม <span className="ml-1 rounded-full bg-red-950 px-1.5 py-0.5 text-[10px] text-red-300">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
               </span>
               <input
                 type="checkbox"
@@ -742,7 +789,7 @@ export function LongdoGisMap({
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
                 <span className="w-4 h-1.5 inline-block rounded bg-yellow-400 border-b border-dashed border-slate-900" />
-                <span>ทางเลี่ยงแนะนำ (Yellow)</span>
+                <span>ทางเลี่ยงแนะนำ <span className="ml-1 rounded-full bg-amber-950 px-1.5 py-0.5 text-[10px] text-amber-300">{showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
               </span>
               <input
                 type="checkbox"
@@ -755,7 +802,7 @@ export function LongdoGisMap({
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block shadow-sm" />
-                <span>หมุดระดับน้ำ & ภาพถ่าย</span>
+                <span>หมุดระดับน้ำและภาพถ่าย</span>
               </span>
               <input
                 type="checkbox"
@@ -768,7 +815,7 @@ export function LongdoGisMap({
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
                 <Building2 className="w-3 h-3 text-sky-400 inline-block" />
-                <span>หมุดแขวงฯ & หมวดทางหลวง</span>
+                <span>หมุดสำนักงานและหมวดทางหลวง</span>
               </span>
               <input
                 type="checkbox"

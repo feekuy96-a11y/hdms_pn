@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { MitigationProject, SystemDataPayload } from "@/db/default-data";
 import { HIGHWAY_ROUTES } from "@/lib/constants";
 import { Briefcase, Plus, Printer, Save, Edit, Trash2, Image as ImageIcon } from "lucide-react";
 import { upsertMitigationProjectAction, deleteMitigationProjectAction } from "@/app/actions/doh-actions";
+import { createClient } from "@/lib/supabase/client";
 
 interface GovernorProjectsTabProps {
   systemData: SystemDataPayload;
@@ -33,14 +34,51 @@ export function GovernorProjectsTab({
   const [projSolution, setProjSolution] = useState("");
   const [projBeforeImg, setProjBeforeImg] = useState("");
   const [projAfterImg, setProjAfterImg] = useState("");
+  const [projBeforeFile, setProjBeforeFile] = useState<File | null>(null);
+  const [projAfterFile, setProjAfterFile] = useState<File | null>(null);
+  const [beforeFilePreview, setBeforeFilePreview] = useState("");
+  const [afterFilePreview, setAfterFilePreview] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!projBeforeFile) { setBeforeFilePreview(""); return; }
+    const url = URL.createObjectURL(projBeforeFile);
+    setBeforeFilePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [projBeforeFile]);
+
+  useEffect(() => {
+    if (!projAfterFile) { setAfterFilePreview(""); return; }
+    const url = URL.createObjectURL(projAfterFile);
+    setAfterFilePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [projAfterFile]);
+
+  const uploadProjectImage = async (file: File, side: "before" | "after", projectId: string) => {
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error("เลือกรูป JPG, PNG หรือ WebP เท่านั้น");
+    if (file.size > 500 * 1024) throw new Error("ขนาดรูปต้องไม่เกิน 500 KB");
+    const extension = file.type === "image/jpeg" ? "jpg" : file.type.split("/")[1];
+    const path = `projects/${projectId}/${side}-${crypto.randomUUID()}.${extension}`;
+    const client = createClient();
+    const { error } = await client.storage.from("flood-images").upload(path, file, {
+      contentType: file.type,
+      cacheControl: "3600",
+      upsert: false,
+    });
+    if (error) throw error;
+    return client.storage.from("flood-images").getPublicUrl(path).data.publicUrl;
+  };
 
   const handleSaveProject = async () => {
     if (!projLocation || !projSolution) {
       onToast("กรุณาระบุสถานที่และแนวทางการแก้ไขปัญหา");
       return;
     }
-    const id = projId || "P-" + Date.now().toString().slice(-4);
+    const id = projId || `P-${Date.now()}`;
+    setIsSaving(true);
     try {
+      const beforeImageUrl = projBeforeFile ? await uploadProjectImage(projBeforeFile, "before", id) : projBeforeImg;
+      const afterImageUrl = projAfterFile ? await uploadProjectImage(projAfterFile, "after", id) : projAfterImg;
       const res = await upsertMitigationProjectAction({
         projectId: id,
         routeNo: projRouteNo,
@@ -49,8 +87,8 @@ export function GovernorProjectsTab({
         statusGroup: projStatus,
         solutionDetail: projSolution,
         budgetMb: Number(projBudget) || 0,
-        beforeImageUrl: projBeforeImg,
-        afterImageUrl: projAfterImg,
+        beforeImageUrl,
+        afterImageUrl,
       });
 
       if (res.success) {
@@ -60,6 +98,8 @@ export function GovernorProjectsTab({
       }
     } catch (e: any) {
       onToast("เกิดข้อผิดพลาด: " + e.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -101,6 +141,8 @@ export function GovernorProjectsTab({
               setProjSolution("");
               setProjBeforeImg("");
               setProjAfterImg("");
+              setProjBeforeFile(null);
+              setProjAfterFile(null);
               setIsProjectFormOpen(true);
             }}
             className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow"
@@ -112,7 +154,7 @@ export function GovernorProjectsTab({
             onClick={() => setIsDispatchModalOpen(true)}
             className="bg-slate-800 hover:bg-slate-700 text-amber-300 font-heading font-semibold text-xs px-3.5 py-2 rounded-xl border border-slate-700 flex items-center gap-1.5 shadow"
           >
-            <Printer className="w-4 h-4" /> พิมพ์รายงานด่วน (รง.ทล.๐๑)
+            <Printer className="w-4 h-4" /> พิมพ์
           </button>
         </div>
       </div>
@@ -207,39 +249,41 @@ export function GovernorProjectsTab({
             />
           </div>
 
-          {/* Before & After Image URL Fields */}
+          {/* Before & After image uploads */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
             <div>
               <label className="text-xs text-rose-300 block mb-1 flex items-center gap-1">
-                <ImageIcon className="w-3.5 h-3.5" /> ลิงก์รูปถ่ายก่อนแก้ไข (Before Image URL)
+                <ImageIcon className="w-3.5 h-3.5" /> รูปถ่ายก่อนแก้ไข
               </label>
               <input
-                type="url"
-                value={projBeforeImg}
-                onChange={(e) => setProjBeforeImg(e.target.value)}
-                placeholder="https://... หรือแนบลิงก์รูปถ่ายสภาพน้ำท่วมเดิม"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(e) => setProjBeforeFile(e.target.files?.[0] || null)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white file:mr-2 file:rounded-lg file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-white"
               />
-              {projBeforeImg && (
+              <p className="mt-1 text-[10px] text-slate-500">JPG, PNG หรือ WebP · ไม่เกิน 500 KB</p>
+              {projBeforeFile && <p className="text-[10px] text-amber-300">เลือกรูป: {projBeforeFile.name}</p>}
+              {(beforeFilePreview || projBeforeImg) && (
                 <div className="mt-1.5 rounded-lg overflow-hidden h-24 border border-slate-800 bg-slate-900">
-                  <img src={projBeforeImg} alt="Before Preview" className="w-full h-full object-cover" />
+                  <img src={beforeFilePreview || projBeforeImg} alt="ภาพก่อนดำเนินงาน" className="w-full h-full object-cover" />
                 </div>
               )}
             </div>
             <div>
               <label className="text-xs text-emerald-300 block mb-1 flex items-center gap-1">
-                <ImageIcon className="w-3.5 h-3.5" /> ลิงก์รูปถ่ายหลังแก้ไขแล้วเสร็จ (After Image URL)
+                <ImageIcon className="w-3.5 h-3.5" /> รูปถ่ายหลังแก้ไข
               </label>
               <input
-                type="url"
-                value={projAfterImg}
-                onChange={(e) => setProjAfterImg(e.target.value)}
-                placeholder="https://... หรือแนบลิงก์รูปถ่ายโครงการที่เสร็จแล้ว"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(e) => setProjAfterFile(e.target.files?.[0] || null)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white file:mr-2 file:rounded-lg file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-white"
               />
-              {projAfterImg && (
+              <p className="mt-1 text-[10px] text-slate-500">JPG, PNG หรือ WebP · ไม่เกิน 500 KB</p>
+              {projAfterFile && <p className="text-[10px] text-amber-300">เลือกรูป: {projAfterFile.name}</p>}
+              {(afterFilePreview || projAfterImg) && (
                 <div className="mt-1.5 rounded-lg overflow-hidden h-24 border border-slate-800 bg-slate-900">
-                  <img src={projAfterImg} alt="After Preview" className="w-full h-full object-cover" />
+                  <img src={afterFilePreview || projAfterImg} alt="ภาพหลังดำเนินงาน" className="w-full h-full object-cover" />
                 </div>
               )}
             </div>
@@ -256,9 +300,10 @@ export function GovernorProjectsTab({
             <button
               type="button"
               onClick={handleSaveProject}
+              disabled={isSaving}
               className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-heading font-bold px-5 py-2 rounded-xl text-xs shadow-lg transition flex items-center gap-1.5"
             >
-              <Save className="w-4 h-4" /> บันทึกโครงการ
+              <Save className="w-4 h-4" /> {isSaving ? "กำลังอัปโหลดและบันทึก" : "บันทึกโครงการ"}
             </button>
           </div>
         </div>
@@ -297,6 +342,8 @@ export function GovernorProjectsTab({
                     setProjSolution(p.solution_detail);
                     setProjBeforeImg(p.before_image_url || "");
                     setProjAfterImg(p.after_image_url || "");
+                    setProjBeforeFile(null);
+                    setProjAfterFile(null);
                     setIsProjectFormOpen(true);
                   }}
                   title="แก้ไขโครงการ"

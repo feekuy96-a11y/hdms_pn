@@ -272,3 +272,11 @@
   2. กำหนดนโยบายความปลอดภัยฐานข้อมูล Row Level Security (RLS)
 - **สถานะ:** ใช้งานได้จริง (ACTIVE)
 
+### [UPDATE-019] 2026-11-03: ปรับการจัดการเส้นทาง แผนที่ และประสบการณ์ใช้งาน
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** ปรับปรุงข้อมูลทางหลวงและสัญลักษณ์ให้ใช้ง่าย ลดการโหลดข้อมูลซ้ำ และรองรับภาพโครงการอย่างปลอดภัยขึ้น
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `app/admin/page.tsx`, `app/layout.tsx`, `app/page.tsx`, `components/admin/AdminConsole.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `components/admin/tabs/GovernorProjectsTab.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/SystemSettingsTab.tsx`, `components/executive/ExecutiveDashboard.tsx`, `components/map/LongdoGisMap.tsx`, `lib/use-polling-activity.ts`, `playwright.config.ts`, `tests/e2e/admin-menus.spec.ts`, `supabase/migrations/20261104000100_scope_public_storage_project_uploads.sql`
+- **รายละเอียดการทำงาน (Technical Changes):** เพิ่มรูปแบบ กม. และคำนวณระยะทางอัตโนมัติ; เพิ่มตัวเลือกช่องจราจร/ผิวทางและดึงสำนักงานจากข้อมูลจริง; เพิ่มเครื่องมือปรับแนวเส้นทางและส่งออก GeoJSON/KML; ปรับหมุด ป้ายทางหลวง ตัวนับ และรายละเอียดจุดน้ำท่วมบนแผนที่; เปลี่ยนการอัปโหลดภาพโครงการเป็นไฟล์ภาพโดยจำกัดชนิด/ขนาดและโฟลเดอร์ Storage; ปรับการดึงข้อมูลเป็นทุก 30 นาทีและพักเมื่อแท็บไม่ทำงาน; ปรับข้อความบนเว็บตามข้อเสนอ
+- **การทดสอบและผลลัพธ์ (Verification):** `npm run check` ผ่าน; GitHub Pages static build ผ่าน; `git diff --check` ผ่าน; E2E บน static preview กำลังทดสอบ; trace แสดงว่าคำขอ Supabase จาก executor ไม่มี HTTP response จึงต้องตรวจยืนยันการเชื่อมต่อข้อมูลอีกครั้งบนโดเมน production หลัง deploy
+- **สถานะ:** พร้อมเผยแพร่หลัง E2E และตรวจปลายทาง
+

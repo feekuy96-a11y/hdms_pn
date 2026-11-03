@@ -232,7 +232,7 @@ export function SystemSettingsTab({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-heading font-bold text-sm text-white flex items-center gap-2">
-              <Building className="w-4 h-4 text-sky-400" /> หมุดสำนักงาน / จุดบริการ (Offices & Service Points)
+              <Building className="w-4 h-4 text-sky-400" /> หมุดสำนักงานและจุดบริการ
             </h3>
             <p className="text-xs text-slate-400">
               แสดงเป็นไอคอนอาคารบนแผนที่ประชาชน (แตะดูที่อยู่ เบอร์โทรตรง และปุ่มนำทาง GPS)

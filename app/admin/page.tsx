@@ -29,8 +29,10 @@ import { createClient } from "@/lib/supabase/client";
 import { ArrowLeft, RotateCw, LogOut, FileText, PieChart, Settings, Smartphone } from "lucide-react";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 import { ExecutiveDashboard } from "@/components/executive/ExecutiveDashboard";
+import { usePollingActivity } from "@/lib/use-polling-activity";
 
 export default function AdminPage() {
+  const isPollingActive = usePollingActivity();
   const [selectedFloodId, setSelectedFloodId] = useState<string>("");
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
   const [adminViewMode, setAdminViewMode] = useState<"console" | "executive">("console");
@@ -42,15 +44,15 @@ export default function AdminPage() {
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const { data: systemData = INITIAL_SYSTEM_DATA, refetch, isFetching } = useQuery<SystemDataPayload>({
+  const { data: systemData = INITIAL_SYSTEM_DATA, refetch, isFetching, isError } = useQuery<SystemDataPayload>({
     queryKey: ["dohAdminSystemData"],
     queryFn: async () => {
       return await getSystemDataAction();
     },
     staleTime: 0,
     refetchOnMount: "always",
-    refetchInterval: 10000,
-    refetchIntervalInBackground: true,
+    refetchInterval: isPollingActive ? 30 * 60 * 1000 : false,
+    refetchIntervalInBackground: false,
   });
 
   const showToast = (msg: string) => {
@@ -136,7 +138,7 @@ export default function AdminPage() {
             }`}
             title="ระบบจัดการข้อมูลหลังบ้าน Admin"
           >
-            <Settings className="w-3.5 h-3.5" /> <span className="hidden sm:inline">ระบบหลังบ้าน (Admin)</span>
+            <Settings className="w-3.5 h-3.5" /> <span className="hidden sm:inline">ระบบหลังบ้าน</span>
           </button>
         </div>
 
@@ -152,6 +154,7 @@ export default function AdminPage() {
             <span className="hidden sm:inline">รายงานผู้ว่าฯ ด่วน</span>
           </button>
           <OfflineSyncStatus onSyncComplete={() => refetch()} />
+          {isError && <span role="status" className="rounded-lg border border-red-700/70 bg-red-950/80 px-2 py-1 text-[10px] text-red-200">โหลดข้อมูลฐานข้อมูลไม่สำเร็จ</span>}
           <button
             type="button"
             onClick={() => {
@@ -234,6 +237,10 @@ export default function AdminPage() {
                         ? "คลิกบนแผนที่เพื่อกำหนดจุดเริ่มต้น..."
                         : adminPickMode === "PICK_END"
                           ? "คลิกบนแผนที่เพื่อกำหนดจุดสิ้นสุด..."
+                          : adminPickMode === "PICK_HIGHWAY_START"
+                            ? "คลิกบนแผนที่เพื่อกำหนดพิกัด กม.เริ่มต้น..."
+                            : adminPickMode === "PICK_HIGHWAY_END"
+                              ? "คลิกบนแผนที่เพื่อกำหนดพิกัด กม.สิ้นสุด..."
                           : "คลิกบนถนนเพื่อเพิ่มจุดดัดแนวเส้นทาง (หรือลากหมุดสีส้ม)..."}
                   </span>
                 </div>

@@ -1,7 +1,7 @@
 "use client";
 import { readRouteFile } from "@/lib/route-import";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { SystemDataPayload } from "@/db/default-data";
 type LineStylesMap = Record<string, import("@/db/default-data").MapLineStyleItem>;
 import {
@@ -32,8 +32,57 @@ import {
   extractFeaturesFromKmz,
   extractAvailableGisFields,
   detectSmartFieldMapping,
+  calculateRoadSnappedRoute,
   ExtractedGisFeature,
 } from "@/lib/gis-utils";
+
+function kilometerPostMeters(value: unknown): number | null {
+  const raw = String(value ?? "").replace(/กม\.?/gi, "").replace(/,/g, "").trim();
+  if (!raw) return null;
+  const match = raw.match(/^(\d+)\s*\+\s*(\d{1,3})$/);
+  if (match) return Number(match[1]) * 1000 + Number(match[2]);
+  const numeric = Number(raw);
+  return Number.isFinite(numeric) ? Math.round(Number.isInteger(numeric) && numeric >= 1000 ? numeric : numeric * 1000) : null;
+}
+
+function formatKilometerPost(value: unknown): string {
+  const meters = kilometerPostMeters(value);
+  if (meters === null) return "";
+  return `${Math.floor(meters / 1000)}+${String(meters % 1000).padStart(3, "0")}`;
+}
+
+function normalizeSurface(value: unknown): string {
+  const surface = String(value ?? "").toLowerCase();
+  if (surface.includes("conc") || surface.includes("pcc") || surface.includes("concrete")) return "Conc.";
+  if (surface.includes("dst")) return "DST.";
+  return "AC.";
+}
+
+function normalizeLanes(value: unknown): string {
+  const match = String(value ?? "").match(/[2-8๒-๘]/)?.[0];
+  const digit = match && /[๒-๘]/.test(match) ? String("๒๓๔๕๖๗๘".indexOf(match) + 2) : match;
+  return ["2", "3", "4", "6", "8"].includes(digit || "") ? `${digit} ช่องจราจร` : "4 ช่องจราจร";
+}
+
+function calculateDistanceKm(start: unknown, end: unknown): string {
+  const startMeters = kilometerPostMeters(start);
+  const endMeters = kilometerPostMeters(end);
+  return startMeters === null || endMeters === null
+    ? ""
+    : (Math.abs(endMeters - startMeters) / 1000).toFixed(3);
+}
+
+function lineCoordinates(geometry: any): [number, number][] {
+  const coordinates = geometry?.type === "LineString"
+    ? geometry.coordinates
+    : geometry?.type === "MultiLineString"
+      ? geometry.coordinates.flat(1)
+      : [];
+  return Array.isArray(coordinates)
+    ? coordinates.filter((point: any) => Array.isArray(point) && Number.isFinite(Number(point[0])) && Number.isFinite(Number(point[1])))
+      .map((point: any) => [Number(point[0]), Number(point[1])] as [number, number])
+    : [];
+}
 
 interface GisDataImportTabProps {
   systemData: SystemDataPayload;
@@ -44,6 +93,13 @@ interface GisDataImportTabProps {
   showSuccessModal: (title: string, message: string) => void;
   showErrorModal?: (title: string, message: string) => void;
   setIncomingGisLines?: (lines: [number, number][][]) => void;
+  adminPickMode: string | null;
+  setAdminPickMode: (mode: string | null) => void;
+  pickedCoordinate?: { lat: number; lon: number; mode: string; ts?: number } | null;
+  draftCoordinates: [number, number][];
+  setDraftCoordinates: (coords: [number, number][]) => void;
+  draftWaypoints: [number, number][];
+  setDraftWaypoints: React.Dispatch<React.SetStateAction<[number, number][]>>;
 }
 
 export function GisDataImportTab({
@@ -55,7 +111,15 @@ export function GisDataImportTab({
   showSuccessModal,
   showErrorModal,
   setIncomingGisLines,
+  adminPickMode,
+  setAdminPickMode,
+  pickedCoordinate,
+  draftCoordinates,
+  setDraftCoordinates,
+  draftWaypoints,
+  setDraftWaypoints,
 }: GisDataImportTabProps) {
+  const offices = useMemo(() => (systemData.offices || []).filter((office) => office.is_active), [systemData.offices]);
   const [importedGisFeatures, setImportedGisFeatures] = useState<ExtractedGisFeature[]>([]);
   const [, setImportedPreviewLines] = useState<[number, number][][]>([]);
   const [importedLayerName, setImportedLayerName] = useState("");
@@ -70,14 +134,28 @@ export function GisDataImportTab({
   const [labelDisplayMode, setLabelDisplayMode] = useState<"hover" | "permanent" | "click">("hover");
 
   // Specifications
-  const [layerLanes, setLayerLanes] = useState("๔ ช่องจราจร (มีเกาะกลาง/มาตรฐานชั้น ๑)");
-  const [layerSurface, setLayerSurface] = useState("ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)");
-  const [layerResponsibleOffice, setLayerResponsibleOffice] = useState("หมวดทางหลวงปัตตานี");
+  const [layerLanes, setLayerLanes] = useState("4 ช่องจราจร");
+  const [layerSurface, setLayerSurface] = useState("AC.");
+  const [layerResponsibleOffice, setLayerResponsibleOffice] = useState(systemData.offices?.find((office) => office.is_active)?.name || "");
   const [layerSpeedLimit, setLayerSpeedLimit] = useState("๙๐ กม./ชม. (ทางหลวงแผ่นดินทั่วไป)");
   const [layerRoadStatus, setLayerRoadStatus] = useState("สัญจรได้ตามปกติ");
   const [layerRemarks, setLayerRemarks] = useState("");
   const [simplifyTolerance, setSimplifyTolerance] = useState(0.00008);
   const [isCommitting, setIsCommitting] = useState(false);
+  const [editingGeometry, setEditingGeometry] = useState<{ layerId: string; featureIdx: number; start: [number, number]; end: [number, number] } | null>(null);
+  const [isSnappingGeometry, setIsSnappingGeometry] = useState(false);
+
+  useEffect(() => {
+    if (!editingGeometry || !pickedCoordinate) return;
+    if (pickedCoordinate.mode === "PICK_HIGHWAY_START") setEditingGeometry((current) => current ? { ...current, start: [pickedCoordinate.lon, pickedCoordinate.lat] } : current);
+    if (pickedCoordinate.mode === "PICK_HIGHWAY_END") setEditingGeometry((current) => current ? { ...current, end: [pickedCoordinate.lon, pickedCoordinate.lat] } : current);
+    if (pickedCoordinate.mode === "ADD_HIGHWAY_BEND") setDraftWaypoints((current) => [...current, [pickedCoordinate.lon, pickedCoordinate.lat]]);
+  }, [pickedCoordinate?.ts, pickedCoordinate?.mode]);
+
+  useEffect(() => {
+    if (editingGeometry) setIncomingGisLines?.([draftCoordinates]);
+    else setIncomingGisLines?.([]);
+  }, [editingGeometry, draftCoordinates, setIncomingGisLines]);
 
   // Individual Highway Specifications Modal State (Issue #13)
   const [editingRouteSpecs, setEditingRouteSpecs] = useState<{
@@ -145,8 +223,8 @@ export function GisDataImportTab({
         route_code: specs.routeNo.trim(),
         section_name: specs.sectionName.trim(),
         route_name: specs.sectionName.trim(),
-        km_start: specs.kmStart.trim(),
-        km_end: specs.kmEnd.trim(),
+        km_start: formatKilometerPost(specs.kmStart),
+        km_end: formatKilometerPost(specs.kmEnd),
         length_km: Number(specs.lengthKm) || 0,
         responsible_office: specs.responsibleOffice,
         highway_type: specs.highwayType,
@@ -192,6 +270,72 @@ export function GisDataImportTab({
     } catch (e: any) {
       onToast("เกิดข้อผิดพลาด: " + e.message);
     }
+  };
+
+  const openGeometryEditor = (layerId: string, featureIdx: number) => {
+    const feature = (systemData.highwayLayers || []).find((layer) => layer.layer_id === layerId)?.geojson_data?.features?.[featureIdx];
+    const coords = lineCoordinates(feature?.geometry);
+    if (coords.length < 2) {
+      onToast("สายทางนี้ไม่มีข้อมูลเส้นที่แก้ไขได้ กรุณานำเข้าไฟล์เส้นทางก่อน");
+      return;
+    }
+    const start = coords[0];
+    const end = coords[coords.length - 1];
+    setDraftCoordinates(coords);
+    setDraftWaypoints([]);
+    setEditingGeometry({ layerId, featureIdx, start, end });
+    onToast("เปิดตัวแก้ไขแนวถนนแล้ว เลือกพิกัดบนแผนที่หรือกรอกพิกัดเองได้");
+  };
+
+  const snapEditedGeometry = async () => {
+    if (!editingGeometry) return;
+    setIsSnappingGeometry(true);
+    try {
+      const coords = await calculateRoadSnappedRoute(editingGeometry.start, editingGeometry.end, draftWaypoints);
+      if (coords.length < 2) throw new Error("ไม่พบแนวถนนสำหรับเชื่อมต่อพิกัดที่เลือก");
+      setDraftCoordinates(coords);
+      onToast("สร้างแนวเชื่อมต่อเกาะตามถนนแล้ว คุณสามารถลากจุดสีส้มเพื่อดัดแนวได้");
+    } catch (error: any) {
+      onToast(`สร้างแนวถนนไม่สำเร็จ: ${error.message}`);
+    } finally {
+      setIsSnappingGeometry(false);
+    }
+  };
+
+  const saveEditedGeometry = async () => {
+    if (!editingGeometry || draftCoordinates.length < 2) return;
+    const layer = (systemData.highwayLayers || []).find((item) => item.layer_id === editingGeometry.layerId);
+    if (!layer?.geojson_data?.features?.[editingGeometry.featureIdx]) return;
+    const geojson = JSON.parse(JSON.stringify(layer.geojson_data));
+    geojson.features[editingGeometry.featureIdx].geometry = { type: "LineString", coordinates: draftCoordinates };
+    try {
+      const result = await updateHighwayLayerAction({ layerId: layer.layer_id, geojsonData: geojson });
+      if (!result.success) throw new Error("ฐานข้อมูลไม่ยืนยันการบันทึกแนวถนน");
+      onDataRefresh(result.systemData);
+      setEditingGeometry(null);
+      setAdminPickMode(null);
+      setDraftWaypoints([]);
+      setDraftCoordinates([]);
+      showSuccessModal("บันทึกแนวถนนสำเร็จ", "อัปเดตเส้นทางในฐานข้อมูลและบนแผนที่แล้ว");
+    } catch (error: any) {
+      onToast(`บันทึกแนวถนนไม่สำเร็จ: ${error.message}`);
+    }
+  };
+
+  const exportEditedGeometry = (format: "geojson" | "kml") => {
+    if (!editingGeometry || draftCoordinates.length < 2) return;
+    const feature = (systemData.highwayLayers || []).find((layer) => layer.layer_id === editingGeometry.layerId)?.geojson_data?.features?.[editingGeometry.featureIdx];
+    const props = feature?.properties || {};
+    const data = format === "geojson"
+      ? JSON.stringify({ type: "FeatureCollection", features: [{ ...feature, geometry: { type: "LineString", coordinates: draftCoordinates } }] }, null, 2)
+      : `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>${String(props.section_name || props.route_no || "ทางหลวง").replace(/[&<>]/g, "")}</name><LineString><coordinates>${draftCoordinates.map(([lon, lat]) => `${lon},${lat},0`).join(" ")}</coordinates></LineString></Placemark></Document></kml>`;
+    const blob = new Blob([data], { type: format === "geojson" ? "application/geo+json" : "application/vnd.google-earth.kml+xml" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `highway-route.${format}`;
+    link.click();
+    URL.revokeObjectURL(href);
   };
 
   // Delete a single highway feature
@@ -299,13 +443,13 @@ export function GisDataImportTab({
             featureIdx: idx,
             routeNo: props.route_no || props.route_code || props.ROAD_NO || props.route || props.code || `${idx + 1}`,
             sectionName: props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || layer.layer_name,
-            kmStart: props.km_start || "-",
-            kmEnd: props.km_end || "-",
-            lengthKm: props.length_km || "-",
-            responsibleOffice: props.responsible_office || layer.metadata?.responsibleOffice || "หมวดทางหลวงปัตตานี",
+            kmStart: formatKilometerPost(props.km_start) || "-",
+            kmEnd: formatKilometerPost(props.km_end) || "-",
+            lengthKm: calculateDistanceKm(props.km_start, props.km_end) || props.length_km || "-",
+            responsibleOffice: props.responsible_office || layer.metadata?.responsibleOffice || offices[0]?.name || "",
             highwayType: isSec ? "SECOND_HIGHWAY" : "MAIN_HIGHWAY",
-            lanes: props.lanes || layer.metadata?.lanes || "๔ ช่องจราจร (มีเกาะกลาง/มาตรฐานชั้น ๑)",
-            surface: props.surface || layer.metadata?.surface || "ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)",
+            lanes: normalizeLanes(props.lanes || layer.metadata?.lanes || "4"),
+            surface: normalizeSurface(props.surface || layer.metadata?.surface || "AC."),
             remarks: props.remarks || layer.metadata?.remarks || "-",
             isVisible: props.is_visible !== false,
             pointsCount: feature.geometry?.coordinates?.length || 0,
@@ -485,10 +629,10 @@ export function GisDataImportTab({
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 w-full max-w-none min-w-0">
       <div className="border-b border-slate-800 pb-3">
         <h2 className="font-heading font-black text-lg text-white flex items-center gap-2">
-          <FileSpreadsheet className="w-5 h-5 text-amber-400" /> นำเข้าโครงข่ายสายทาง GIS & กำหนดฟิลด์แสดงผล
+          <FileSpreadsheet className="w-5 h-5 text-amber-400" /> นำเข้าโครงข่ายสายทางและกำหนดฟิลด์แสดงผล
         </h2>
         <p className="text-xs text-slate-400 mt-0.5">
           รองรับ KML, KMZ, Shapefile (.zip), GeoJSON, GPX พร้อมแผนที่ตรวจสอบ Dual-Color, การจับคู่ฟิลด์ชื่อสายทางเพื่อแสดงป้ายกำกับ/Popup และตัวตัดจุดความหนาแน่นเกิน (Douglas-Peucker)
@@ -652,52 +796,48 @@ export function GisDataImportTab({
             <div className="mt-3 p-3 bg-slate-950/80 rounded-xl border border-sky-950/60 space-y-3">
               <div className="flex items-center gap-2 text-sky-400 font-heading font-semibold text-xs border-b border-sky-950 pb-1.5">
                 <Building className="w-4 h-4 text-sky-400" />
-                <span>กำหนดรายละเอียดและคุณสมบัติทางวิศวกรรมของเส้นทาง (Highway Specifications)</span>
+                <span>กำหนดรายละเอียดและคุณสมบัติทางวิศวกรรมของเส้นทาง</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
                 {/* Lanes */}
                 <div>
-                  <label className="text-slate-300 block mb-1">จำนวนช่องจราจร (Lanes)</label>
+                  <label className="text-slate-300 block mb-1">จำนวนช่องจราจร</label>
                   <select
                     value={layerLanes}
                     onChange={(e) => setLayerLanes(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                   >
-                    <option value="๒ ช่องจราจร (สวนทาง)">๒ ช่องจราจร (สวนทาง)</option>
-                    <option value="๔ ช่องจราจร (มีเกาะกลาง/มาตรฐานชั้น ๑)">๔ ช่องจราจร (มีเกาะกลาง/มาตรฐานชั้น ๑)</option>
-                    <option value="๖ ช่องจราจร (สายหลักหนาแน่น)">๖ ช่องจราจร (สายหลักหนาแน่น)</option>
-                    <option value="๘ ช่องจราจร ขึ้นไป">๘ ช่องจราจร ขึ้นไป</option>
+                    <option value="2 ช่องจราจร">2 ช่องจราจร</option>
+                    <option value="3 ช่องจราจร">3 ช่องจราจร</option>
+                    <option value="4 ช่องจราจร">4 ช่องจราจร</option>
+                    <option value="6 ช่องจราจร">6 ช่องจราจร</option>
+                    <option value="8 ช่องจราจร">8 ช่องจราจร</option>
                   </select>
                 </div>
 
                 {/* Surface Type */}
                 <div>
-                  <label className="text-slate-300 block mb-1">ชนิดผิวจราจร (Pavement Surface)</label>
+                  <label className="text-slate-300 block mb-1">ชนิดผิวจราจร</label>
                   <select
                     value={layerSurface}
                     onChange={(e) => setLayerSurface(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                   >
-                    <option value="ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)">ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)</option>
-                    <option value="คอนกรีตเสริมเหล็ก (Rigid Pavement / Concrete)">คอนกรีตเสริมเหล็ก (Rigid Concrete)</option>
-                    <option value="ผิวทางลาดยาง (Surface Treatment / AC)">ผิวทางลาดยาง (Surface Treatment)</option>
+                    <option value="AC.">AC.</option>
+                    <option value="Conc.">Conc.</option>
+                    <option value="DST.">DST.</option>
                   </select>
                 </div>
 
                 {/* Responsible Subdivision */}
                 <div>
-                  <label className="text-slate-300 block mb-1">หน่วยงานรับผิดชอบ (Subdivision)</label>
+                  <label className="text-slate-300 block mb-1">หน่วยงานรับผิดชอบ</label>
                   <select
                     value={layerResponsibleOffice}
                     onChange={(e) => setLayerResponsibleOffice(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-amber-300 font-heading font-medium"
                   >
-                    <option value="หมวดทางหลวงปัตตานี">หมวดทางหลวงปัตตานี</option>
-                    <option value="หมวดทางหลวงหนองจิก">หมวดทางหลวงหนองจิก</option>
-                    <option value="หมวดทางหลวงยะรัง">หมวดทางหลวงยะรัง</option>
-                    <option value="หมวดทางหลวงโคกโพธิ์">หมวดทางหลวงโคกโพธิ์</option>
-                    <option value="หมวดทางหลวงสายบุรี">หมวดทางหลวงสายบุรี</option>
-                    <option value="แขวงทางหลวงชนบทปัตตานี">แขวงทางหลวงชนบทปัตตานี</option>
+                    {offices.map((office) => <option key={office.id} value={office.name}>{office.name}</option>)}
                   </select>
                 </div>
 
@@ -881,7 +1021,7 @@ export function GisDataImportTab({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h3 className="font-heading font-bold text-sm text-white flex items-center gap-2">
-              <Building className="w-4 h-4 text-amber-400" /> ตารางรายการทางหลวงและคุณสมบัติทางวิศวกรรม (Highway Specifications)
+              <Building className="w-4 h-4 text-amber-400" /> ตารางรายการทางหลวงและคุณสมบัติทางวิศวกรรม
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
               คลิกไอคอนรูปดวงตาเพื่อ เปิด/ปิด การแสดงผลเส้นทาง หรือคลิก &quot;ตั้งค่า&quot; เพื่อปรับแต่งช่องจราจร (มีผลต่อความหนาเส้นบนแผนที่) ผิวจราจร และข้อมูลเฉพาะสายทาง
@@ -911,10 +1051,10 @@ export function GisDataImportTab({
                   kmStart: "",
                   kmEnd: "",
                   lengthKm: "",
-                  responsibleOffice: "หมวดทางหลวงปัตตานี",
+                  responsibleOffice: offices[0]?.name || "",
                   highwayType: "MAIN_HIGHWAY",
-                  lanes: "๔ ช่องจราจร (มีเกาะกลาง/มาตรฐานชั้น ๑)",
-                  surface: "AC - ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)",
+                  lanes: "4 ช่องจราจร",
+                  surface: "AC.",
                   remarks: "",
                   isVisible: true,
                 })
@@ -932,8 +1072,8 @@ export function GisDataImportTab({
             ยังไม่มีรายการเส้นทางในระบบ กรุณาอัปโหลดไฟล์ KML, KMZ หรือ Shapefile ด้านบน
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950">
-            <table className="w-full text-left text-xs text-slate-300">
+          <div className="w-full min-w-0 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950">
+            <table className="w-full min-w-[1120px] text-left text-xs text-slate-300">
               <thead className="bg-[#091122] text-slate-400 font-heading border-b border-slate-800">
                 <tr>
                   <th className="p-3 w-10 text-center">#</th>
@@ -1003,6 +1143,14 @@ export function GisDataImportTab({
                         <div className="inline-flex items-center gap-1.5">
                           <button
                             type="button"
+                            onClick={() => openGeometryEditor(item.layerId, item.featureIdx)}
+                            className="bg-slate-900 hover:bg-slate-800 text-sky-300 border border-slate-700 hover:border-sky-400 px-2.5 py-1.5 rounded-xl font-heading text-xs font-bold transition inline-flex items-center gap-1 shadow-sm"
+                            title="แก้แนวถนน ปักจุดและเกาะแนวถนน"
+                          >
+                            <MapPin className="w-3.5 h-3.5" /> แนวถนน
+                          </button>
+                          <button
+                            type="button"
                             onClick={() =>
                               setEditingRouteSpecs({
                                 layerId: item.layerId,
@@ -1058,7 +1206,7 @@ export function GisDataImportTab({
               <div>
                 <h4 className="font-heading font-black text-base text-white flex items-center gap-2">
                   <Sliders className="w-5 h-5 text-amber-400" />
-                  <span>ตั้งค่าคุณสมบัติทางวิศวกรรม (Highway Specifications)</span>
+                  <span>ตั้งค่าคุณสมบัติทางวิศวกรรม</span>
                 </h4>
                 <p className="text-xs text-slate-400 mt-0.5">
                   ทล.{editingRouteSpecs.routeNo} {editingRouteSpecs.sectionName}
@@ -1097,76 +1245,53 @@ export function GisDataImportTab({
               </div>
 
               {/* Row 2: KM Range & Distance */}
-              <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-slate-300 block mb-1">ช่วง กม. เริ่มต้น</label>
+                  <label className="text-slate-300 block mb-1">กม.เริ่มต้น</label>
                   <input
                     type="text"
+                    aria-label="กม.เริ่มต้น"
                     value={editingRouteSpecs.kmStart}
                     onChange={(e) => {
                       const val = e.target.value;
-                      const parse = (kp: string) => {
-                        const cl = kp.replace(/กม\.?/gi, "").trim();
-                        const pts = cl.split("+");
-                        if (pts.length === 2) {
-                          const k = parseFloat(pts[0]);
-                          const m = parseFloat(pts[1]);
-                          if (!isNaN(k) && !isNaN(m)) return k + m / 1000;
-                        }
-                        const num = parseFloat(cl);
-                        return !isNaN(num) ? num : null;
-                      };
-                      const s = parse(val);
-                      const end = parse(editingRouteSpecs.kmEnd);
-                      const autoDist = s !== null && end !== null ? Math.abs(end - s).toFixed(3) : "";
                       setEditingRouteSpecs({
                         ...editingRouteSpecs,
                         kmStart: val,
-                        lengthKm: autoDist || editingRouteSpecs.lengthKm,
+                        lengthKm: calculateDistanceKm(val, editingRouteSpecs.kmEnd),
                       });
                     }}
+                    onBlur={() => setEditingRouteSpecs((current) => current ? { ...current, kmStart: formatKilometerPost(current.kmStart) } : current)}
                     placeholder="เช่น 12+500"
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-300 block mb-1">ช่วง กม. สิ้นสุด</label>
+                  <label className="text-slate-300 block mb-1">กม.สิ้นสุด</label>
                   <input
                     type="text"
+                    aria-label="กม.สิ้นสุด"
                     value={editingRouteSpecs.kmEnd}
                     onChange={(e) => {
                       const val = e.target.value;
-                      const parse = (kp: string) => {
-                        const cl = kp.replace(/กม\.?/gi, "").trim();
-                        const pts = cl.split("+");
-                        if (pts.length === 2) {
-                          const k = parseFloat(pts[0]);
-                          const m = parseFloat(pts[1]);
-                          if (!isNaN(k) && !isNaN(m)) return k + m / 1000;
-                        }
-                        const num = parseFloat(cl);
-                        return !isNaN(num) ? num : null;
-                      };
-                      const s = parse(editingRouteSpecs.kmStart);
-                      const end = parse(val);
-                      const autoDist = s !== null && end !== null ? Math.abs(end - s).toFixed(3) : "";
                       setEditingRouteSpecs({
                         ...editingRouteSpecs,
                         kmEnd: val,
-                        lengthKm: autoDist || editingRouteSpecs.lengthKm,
+                        lengthKm: calculateDistanceKm(editingRouteSpecs.kmStart, val),
                       });
                     }}
+                    onBlur={() => setEditingRouteSpecs((current) => current ? { ...current, kmEnd: formatKilometerPost(current.kmEnd) } : current)}
                     placeholder="เช่น 18+200"
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-300 block mb-1">ระยะทาง (กม.)</label>
-                  <input
+                  <label className="text-slate-300 block mb-1">ระยะทาง (กม.) · คำนวณอัตโนมัติ</label>
+                    <input
                     type="number"
                     step="any"
                     value={editingRouteSpecs.lengthKm}
-                    onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, lengthKm: e.target.value })}
+                      readOnly
+                      aria-label="ระยะทางคำนวณอัตโนมัติ"
                     placeholder="เช่น 5.7"
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-emerald-400 font-mono font-bold"
                   />
@@ -1184,23 +1309,23 @@ export function GisDataImportTab({
                     onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, lanes: e.target.value })}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sky-300 font-heading font-medium"
                   >
-                    <option value="๒ ช่องจราจร (สวนทาง)">๒ ช่องจราจร (สวนทาง) - ความหนา 3.5px</option>
-                    <option value="๔ ช่องจราจร (มีเกาะกลาง/มาตรฐานชั้น ๑)">๔ ช่องจราจร (มาตรฐานชั้น ๑) - ความหนา 5.5px</option>
-                    <option value="๖ ช่องจราจร (สายหลักหนาแน่น)">๖ ช่องจราจร (สายหลัก) - ความหนา 7.5px</option>
-                    <option value="๘ ช่องจราจร ขึ้นไป">๘ ช่องจราจร ขึ้นไป - ความหนา 8.5px</option>
+                    <option value="2 ช่องจราจร">2 ช่องจราจร</option>
+                    <option value="3 ช่องจราจร">3 ช่องจราจร</option>
+                    <option value="4 ช่องจราจร">4 ช่องจราจร</option>
+                    <option value="6 ช่องจราจร">6 ช่องจราจร</option>
+                    <option value="8 ช่องจราจร">8 ช่องจราจร</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-slate-300 block mb-1">ชนิดผิวจราจร (Pavement Surface)</label>
+                  <label className="text-slate-300 block mb-1">ชนิดผิวจราจร</label>
                   <select
                     value={editingRouteSpecs.surface}
                     onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, surface: e.target.value })}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-amber-300"
                   >
-                    <option value="AC - ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)">AC - ผิวทางแอสฟัลต์คอนกรีต (Asphalt Concrete)</option>
-                    <option value="PCC - คอนกรีตเสริมเหล็ก (Portland Cement Concrete)">PCC - คอนกรีตเสริมเหล็ก (Portland Cement Concrete)</option>
-                    <option value="DST - ผิวทางลาดยางสองชั้น (Double Surface Treatment)">DST - ผิวทางลาดยางสองชั้น (Double Surface Treatment)</option>
-                    <option value="SMA - สโตนแมสติกแอสฟัลต์ (Stone Mastic Asphalt)">SMA - สโตนแมสติกแอสฟัลต์ (Stone Mastic Asphalt)</option>
+                    <option value="AC.">AC.</option>
+                    <option value="Conc.">Conc.</option>
+                    <option value="DST.">DST.</option>
                   </select>
                 </div>
               </div>
@@ -1214,12 +1339,7 @@ export function GisDataImportTab({
                     onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, responsibleOffice: e.target.value })}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
                   >
-                    <option value="หมวดทางหลวงปัตตานี">หมวดทางหลวงปัตตานี</option>
-                    <option value="หมวดทางหลวงหนองจิก">หมวดทางหลวงหนองจิก</option>
-                    <option value="หมวดทางหลวงยะรัง">หมวดทางหลวงยะรัง</option>
-                    <option value="หมวดทางหลวงโคกโพธิ์">หมวดทางหลวงโคกโพธิ์</option>
-                    <option value="หมวดทางหลวงสายบุรี">หมวดทางหลวงสายบุรี</option>
-                    <option value="แขวงทางหลวงชนบทปัตตานี">แขวงทางหลวงชนบทปัตตานี</option>
+                    {offices.map((office) => <option key={office.id} value={office.name}>{office.name}</option>)}
                   </select>
                 </div>
                 <div>
@@ -1251,7 +1371,7 @@ export function GisDataImportTab({
               <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex items-center justify-between">
                 <div>
                   <span className="text-xs font-heading font-bold text-white block">
-                    แสดงผลบนแผนที่ (Map Layer Visibility)
+                    แสดงผลบนแผนที่
                   </span>
                   <span className="text-[11px] text-slate-400">
                     เปิดเพื่อให้เส้นทางนี้ปรากฏบนแผนที่ของทั้งประชาชนและเจ้าหน้าที่
@@ -1284,6 +1404,48 @@ export function GisDataImportTab({
               >
                 <Save className="w-4 h-4" /> บันทึกคุณสมบัติทางวิศวกรรม
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingGeometry && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-sky-500/60 bg-[#0c162c] p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="font-heading font-black text-white">ปรับแนวถนนทางหลวง</h3>
+                <p className="text-xs text-slate-400">กำหนดต้นทาง–ปลายทาง แล้วสร้างแนวเกาะถนน จากนั้นลากจุดสีส้มเพื่อปรับแนว</p>
+              </div>
+              <button type="button" aria-label="ปิดตัวแก้ไขแนวถนน" onClick={() => { setEditingGeometry(null); setAdminPickMode(null); setDraftCoordinates([]); setDraftWaypoints([]); }} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {(["start", "end"] as const).map((key) => {
+                const label = key === "start" ? "พิกัด กม.เริ่มต้น" : "พิกัด กม.สิ้นสุด";
+                return <div key={key} className="space-y-1.5">
+                  <label className="text-xs text-slate-300">{label} · ละติจูด, ลองจิจูด</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input aria-label={`${label} ละติจูด`} type="number" step="any" value={editingGeometry[key][1]} onChange={(event) => setEditingGeometry({ ...editingGeometry, [key]: [editingGeometry[key][0], Number(event.target.value)] })} className="min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-xs text-white" />
+                    <input aria-label={`${label} ลองจิจูด`} type="number" step="any" value={editingGeometry[key][0]} onChange={(event) => setEditingGeometry({ ...editingGeometry, [key]: [Number(event.target.value), editingGeometry[key][1]] })} className="min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-xs text-white" />
+                  </div>
+                  <button type="button" onClick={() => setAdminPickMode(key === "start" ? "PICK_HIGHWAY_START" : "PICK_HIGHWAY_END")} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-sky-300 hover:border-sky-400">ปักหมุดบนแผนที่</button>
+                </div>;
+              })}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-800 pt-3">
+              <button type="button" onClick={() => setAdminPickMode("ADD_HIGHWAY_BEND")} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-amber-300 hover:border-amber-400">เพิ่มจุดดัดแนวจากแผนที่</button>
+              <button type="button" disabled={isSnappingGeometry} onClick={snapEditedGeometry} className="rounded-lg bg-sky-500 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50">{isSnappingGeometry ? "กำลังหาแนวถนน" : "เกาะแนวถนน"}</button>
+              <span className="text-[11px] text-slate-400">เส้นปัจจุบัน {draftCoordinates.length} จุด · จุดดัด {draftWaypoints.length} จุด</span>
+            </div>
+            <div className="flex flex-wrap justify-between gap-2 border-t border-slate-800 pt-3">
+              <div className="flex gap-2">
+                <button type="button" onClick={() => exportEditedGeometry("geojson")} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white">ส่งออก GeoJSON</button>
+                <button type="button" onClick={() => exportEditedGeometry("kml")} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white">ส่งออก KML</button>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => { setEditingGeometry(null); setAdminPickMode(null); setDraftCoordinates([]); setDraftWaypoints([]); }} className="rounded-lg bg-slate-800 px-4 py-2 text-xs text-white">ยกเลิก</button>
+                <button type="button" onClick={saveEditedGeometry} disabled={draftCoordinates.length < 2} className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-50">บันทึกแนวถนน</button>
+              </div>
             </div>
           </div>
         </div>

@@ -38,8 +38,10 @@ import {
   ArrowRightLeft,
 } from "lucide-react";
 import { extractDirectionalAdvice } from "@/lib/gis-utils";
+import { usePollingActivity } from "@/lib/use-polling-activity";
 
 export default function HomePage() {
+  const isPollingActive = usePollingActivity();
   const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL?.startsWith("https://")
     ? process.env.NEXT_PUBLIC_ADMIN_URL
     : null;
@@ -66,8 +68,8 @@ export default function HomePage() {
     },
     staleTime: 0,
     refetchOnMount: "always",
-    refetchInterval: 10000, // Poll every 10 seconds in background
-    refetchIntervalInBackground: true,
+    refetchInterval: isPollingActive ? 30 * 60 * 1000 : false,
+    refetchIntervalInBackground: false,
   });
 
   const showToast = (msg: string) => {
@@ -185,7 +187,7 @@ export default function HomePage() {
               </span>
             </div>
             <h1 className="font-heading text-xs sm:text-sm font-semibold text-slate-300 truncate">
-              {systemData.systemSettings?.name || "ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย (HDMS Real-Time GIS)"}
+              {systemData.systemSettings?.name || "ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย"}
             </h1>
           </div>
         </div>
@@ -784,7 +786,7 @@ export default function HomePage() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 text-amber-300 text-xs font-heading font-bold">
                       <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span>คำแนะนำเส้นทางเลี่ยงน้ำท่วม (Yellow Line)</span>
+                      <span>คำแนะนำเส้นทางเลี่ยงน้ำท่วม</span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -859,7 +861,7 @@ export default function HomePage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs font-heading font-bold text-white">
                     <span className="flex items-center gap-1.5 text-red-400">
-                      <span>📈</span> ไทม์ไลน์ระดับน้ำแต่ละช่วงเวลา (Water Level Timeline)
+                      <span>📈</span> ไทม์ไลน์ระดับน้ำแต่ละช่วงเวลา
                     </span>
                     <span className="text-[10px] text-amber-300 font-normal">+ อัปเดตระดับน้ำล่าสุด</span>
                   </div>

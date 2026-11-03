@@ -442,7 +442,7 @@ export function MapManagementTab({
             <MapPinned className="w-5 h-5 text-amber-400" /> จัดการแผนที่และรายงานเหตุการณ์
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            กำหนดจุดน้ำท่วม จุดเริ่มต้น-สิ้นสุด ดัดแนวเส้นทางเกาะถนนจริง (Dual-Source Snapping)
+            กำหนดจุดน้ำท่วม จุดเริ่มต้น-สิ้นสุด และดัดแนวเส้นทางให้เกาะถนนจริง
           </p>
         </div>
         {/* Switcher: Flood vs Detour */}

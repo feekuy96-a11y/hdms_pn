@@ -1,6 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+const appPort = process.env.PORT || "3000";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${appPort}`;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -8,7 +10,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     launchOptions: executablePath ? { executablePath } : undefined,
@@ -19,7 +21,7 @@ export default defineConfig({
   ],
   webServer: {
     command: process.env.PLAYWRIGHT_STATIC ? "node scripts/serve-pages.mjs" : "npm run start",
-    url: `http://localhost:3000${process.env.BASE_PATH || ""}/`,
+    url: `${baseURL}${process.env.BASE_PATH || ""}/`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

@@ -36,7 +36,7 @@ interface AdminConsoleProps {
   draftCoordinates: [number, number][];
   setDraftCoordinates: (coords: [number, number][]) => void;
   draftWaypoints: [number, number][];
-  setDraftWaypoints: (wps: [number, number][]) => void;
+  setDraftWaypoints: React.Dispatch<React.SetStateAction<[number, number][]>>;
   pickedCoordinate?: { lat: number; lon: number; mode: string } | null;
   onFocusCoordinates?: (coords: [number, number]) => void;
   onToast: (msg: string) => void;
@@ -50,6 +50,8 @@ export function AdminConsole({
   setAdminPickMode,
   draftCoordinates,
   setDraftCoordinates,
+  draftWaypoints,
+  setDraftWaypoints,
   pickedCoordinate,
   onFocusCoordinates,
   onToast,
@@ -390,6 +392,13 @@ export function AdminConsole({
               showSuccessModal={showSuccessModal}
               showErrorModal={showErrorModal}
               setIncomingGisLines={setIncomingGisLines}
+              adminPickMode={adminPickMode}
+              setAdminPickMode={setAdminPickMode}
+              pickedCoordinate={pickedCoordinate}
+              draftCoordinates={draftCoordinates}
+              setDraftCoordinates={setDraftCoordinates}
+              draftWaypoints={draftWaypoints}
+              setDraftWaypoints={setDraftWaypoints}
             />
           )}
 

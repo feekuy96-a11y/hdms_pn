@@ -51,7 +51,7 @@ export function ExecutiveDashboard({ projects, onManageProjects }: ExecutiveDash
             onClick={handlePrint}
             className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/50 px-3.5 py-2 rounded-xl text-xs font-heading font-bold shadow"
           >
-            <Printer className="w-4 h-4" /> พิมพ์รายงาน (Print/PDF)
+            <Printer className="w-4 h-4" /> พิมพ์
           </button>
         </div>
       </div>
@@ -95,7 +95,7 @@ export function ExecutiveDashboard({ projects, onManageProjects }: ExecutiveDash
       <div className="space-y-4">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <h3 className="font-heading font-bold text-base sm:text-lg text-white flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" /> ผลการดำเนินงานแก้ไขปัญหาแล้วเสร็จ พร้อมภาพเปรียบเทียบ ก่อน-หลัง (Before & After)
+            <CheckCircle2 className="w-5 h-5 text-emerald-400" /> ผลการดำเนินงานแก้ไขปัญหาแล้วเสร็จ พร้อมภาพเปรียบเทียบก่อน-หลัง
           </h3>
           <span className="text-xs text-slate-400">{completed.length} โครงการที่เสร็จสมบูรณ์</span>
         </div>
