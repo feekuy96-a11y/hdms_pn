@@ -37,6 +37,7 @@
   - `app/login/page.tsx` (เปลี่ยนหน้าล็อกอินเป็น auto-redirect ไปยัง `/admin/`)
   - `lib/supabase/middleware.ts` (ยกเลิกการบล็อกเส้นทาง `/admin` และ redirect `/login` ตรงเข้า `/admin/`)
   - `lib/hdms-api.ts` (เพิ่ม fallback `executeDirectAction` สำหรับการทำ CRUD ทุกรายการผ่าน Supabase Client โดยตรงเมื่อไม่ได้ส่ง Token ล็อกอิน)
+  - `tests/e2e/smoke.spec.ts` (ปรับปรุงชุดทดสอบ E2E ให้ตรวจสอบการเข้าถึง /admin ได้โดยตรง และตรวจสอบการ redirect จาก /login สู่ /admin)
 - **รายละเอียดการทำงาน (Technical Changes):**
   1. ลบอุปสรรคการเข้าใช้งานหน้าควบคุม โดยเปิดให้เข้า URL `/admin` ได้โดยตรงทันที ไม่แสดงฟอร์มกรอกอีเมล/รหัสผ่าน
   2. กรณีมีการเรียกเข้าหน้า `/login` เก่า ระบบจะ redirect สลับไปที่ `/admin/` ทันที
