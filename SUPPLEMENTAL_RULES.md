@@ -28,6 +28,22 @@
 
 ## 🕒 ประวัติการอัปเดตระบบ (System Update Changelog)
 
+### [UPDATE-019] 2026-11-04: ปลดล็อก Traffic Status Constraint ใน Supabase และยืนยันการบันทึกข้อมูลจริง 100%
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** แก้ไขปัญหาการส่งข้อมูลสถานะการจราจร "รถเล็กผ่านได้" (`LIGHT_VEHICLES_ONLY`) และ "รถเล็กผ่านได้ ๑ ช่องทาง" (`ONE_LANE`) ถูกฐานข้อมูล Supabase ปฏิเสธด้วย Error 400 จาก Check Constraint เดิม (`chk_doh_flood_traffic_status`)
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):**
+  - `supabase/migrations/20261104000200_expand_traffic_statuses.sql` (แก้ไขชื่อ constraint ให้ระบุ `chk_doh_flood_traffic_status` และ `chk_doh_timeline_traffic_status` อย่างแม่นยำ)
+  - `data/backup_live/` (ส่งออกชุดข้อมูลสดล่าสุดจาก Supabase ทั้งหมดเก็บเป็น Backup ในเครื่องเรียบร้อย)
+- **รายละเอียดการทำงาน (Technical Changes):**
+  1. วิเคราะห์โครงสร้าง `pg_constraint` ใน Supabase พบว่า Constraint เดิมมีชื่อว่า `chk_doh_flood_traffic_status`
+  2. ดำเนินการปลดล็อกและติดตั้ง Constraint ใหม่ที่รองรับครบ ๕ สถานะ: `PASSABLE`, `LIGHT_VEHICLES_ONLY`, `ONE_LANE`, `CLOSED`, `WARNING`
+  3. ทำการทดสอบส่งข้อมูลจริง (E2E Mutation Simulation) ผ่าน Edge API และ Supabase Client ครบทุกฟังก์ชัน
+- **การทดสอบและผลลัพธ์ (Verification):**
+  - ทดสอบ `upsertRouteAction` ทุกสถานะ: PASSABLE (200 OK), CLOSED (200 OK), WARNING (200 OK), LIGHT_VEHICLES_ONLY (200 OK), ONE_LANE (200 OK) ผ่าน 100%
+  - ทดสอบ `saveTimelineUpdateAction` อัปเดตระดับน้ำและไทม์ไลน์: ผ่าน 200 OK
+  - ทดสอบ `deleteRouteAction` ล้างข้อมูลทดสอบ (Soft-delete): ผ่าน 200 OK และฐานข้อมูลสะอาดพร้อมใช้งานจริง
+- **สถานะ:** ใช้งานได้จริงบนฐานข้อมูลคลาวด์ Supabase (ACTIVE) / ผ่านการทดสอบ 100%
+
 ### [UPDATE-015] 2026-11-03: เปิด `/admin` โดยตรงและล้างข้อมูลตัวอย่างจากโค้ด
 - **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
 - **วัตถุประสงค์ (Objective):** ยกเลิกหน้าล็อกอินสำหรับการเข้าถึงหน้าหลังบ้านตามคำสั่ง และกำจัด seed/fallback ที่เป็นข้อมูลตัวอย่างออกจากระบบ
