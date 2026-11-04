@@ -98,6 +98,6 @@ test("map management exposes all approved traffic choices without color labels",
   for (const label of ["ผ่านได้ปกติ", "รถเล็กผ่านได้", "รถเล็กผ่านได้ ๑ ช่องทาง", "ผ่านไม่ได้"]) {
     await expect(page.getByRole("option", { name: label, exact: true })).toHaveCount(1);
   }
-  await expect(page.getByRole("button", { name: "เส้นน้ำท่วม" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "ทางเลี่ยง" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "เส้นน้ำท่วม", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "ทางเลี่ยง", exact: true })).toBeVisible();
 });

@@ -320,6 +320,14 @@
 - **การทดสอบและผลลัพธ์ (Verification):** `npm run check` และ `git diff --check` ผ่านก่อนเผยแพร่
 - **สถานะ:** พร้อมเผยแพร่
 
+### [UPDATE-027] 2026-11-04: คืนความเข้ากันได้ของชุดสร้าง GitHub Pages
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** แก้ pipeline ที่ไม่สามารถเผยแพร่รุ่นแก้คำอธิบายสัญลักษณ์และการนำเข้าเส้นทางได้ หลัง dependency อัปเดตเกินช่วงที่ Next.js 16 รองรับ
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `package.json`, `package-lock.json`, `tests/e2e/admin-menus.spec.ts`, `SUPPLEMENTAL_RULES.md`
+- **รายละเอียดการทำงาน (Technical Changes):** จำกัด TypeScript ให้อยู่ในสาย 5, ESLint ให้อยู่ในสาย 9 และ Tailwind CSS ให้อยู่ในสาย 3 ซึ่งเข้ากับ PostCSS config และ `@tailwind` directives เดิม; แก้ selector ของ regression test ให้เลือกปุ่มทางเลี่ยงในแผงจัดการแผนที่อย่างเฉพาะเจาะจง ไม่ชนกับเมนูด้านข้าง
+- **การทดสอบและผลลัพธ์ (Verification):** `npm run check`, `BASE_PATH=/hdms_pn npm run build:pages`, `git diff --check` ผ่าน; Playwright static preview ผ่าน 11 รายการ ข้าม 7 รายการที่ถูกกำหนดให้ทดสอบเฉพาะ desktop/ไม่มี geometry
+- **สถานะ:** พร้อมเผยแพร่ (รอ GitHub Actions และตรวจโดเมนจริง)
+
 ### [UPDATE-021] 2026-11-04: ปรับ Popup แผนที่ Dashboard และช่องพิกัด
 - **ไฟล์ที่เกี่ยวข้อง:** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/MapManagementTab.tsx`
 - **รายละเอียด:** Popup ถนนใช้หัวข้อรหัสและรูปแบบ `ก.ม.` พร้อมแปลงค่าระยะเมตรเป็นรูปแบบหลักกิโลเมตร; เพิ่มป้าย Dashboard สรุปจำนวนน้ำท่วม/ทางเลี่ยงบนแผนที่; นำรายการหมุดระดับน้ำและภาพถ่ายออกจากแผงสัญลักษณ์; รวมพิกัดจุด A/B เป็นช่องเดียว รองรับการวางค่าคู่พิกัดจาก Google Maps
