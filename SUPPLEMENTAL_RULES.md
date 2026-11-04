@@ -344,6 +344,14 @@
 - **การทดสอบและผลลัพธ์ (Verification):** `npm run check`, `BASE_PATH=/hdms_pn npm run build:pages`, `git diff --check` ผ่าน; Playwright static preview ผ่าน 11 รายการ ข้าม 7 รายการที่ถูกกำหนดให้ทดสอบเฉพาะ desktop/ไม่มี geometry; GitHub Actions build, test และ Pages deployment ผ่าน; ตรวจโดเมนจริงพบแผนที่, LIVE, Dashboard และคำอธิบายสัญลักษณ์ตามลำดับใหม่ โดยไม่พบ page error
 - **สถานะ:** เผยแพร่แล้ว (ACTIVE)
 
+### [UPDATE-028] 2026-11-04: ตรวจแก้การนำเข้าโครงข่าย
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์:** แก้ข้อผิดพลาดอ่านไฟล์ .shp เดี่ยวและปรับการตรวจสอบพิกัดก่อนบันทึก
+- **ไฟล์:** `lib/route-import.ts`, `components/admin/tabs/GisDataImportTab.tsx`, `supabase/functions/hdms-api/index.ts`, `supabase/migrations/20261104080856_harden_route_import_validation.sql`, `.gitignore`
+- **รายละเอียด:** เรียก parser สำหรับ .shp โดยตรง แจ้งข้อผิดพลาด ZIP ที่อ่านง่าย ตรวจพิกัดก่อนส่ง และปรับการตรวจสอบ RPC; Edge Function รุ่น 8 และ migration ถูกนำขึ้น Supabase แล้ว
+- **การทดสอบ:** lint, typecheck, build และ Pages build ผ่าน; ทดสอบ RPC ด้วยเส้นตัวอย่างภายใน transaction แล้ว rollback ผ่าน; ยังไม่ได้ทดสอบไฟล์จริงของผู้ใช้และยังไม่ยืนยันสาเหตุ 22023 ทุกกรณี
+- **สถานะ:** อยู่ระหว่างตรวจรับ
+
 ### [UPDATE-021] 2026-11-04: ปรับ Popup แผนที่ Dashboard และช่องพิกัด
 - **ไฟล์ที่เกี่ยวข้อง:** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/MapManagementTab.tsx`
 - **รายละเอียด:** Popup ถนนใช้หัวข้อรหัสและรูปแบบ `ก.ม.` พร้อมแปลงค่าระยะเมตรเป็นรูปแบบหลักกิโลเมตร; เพิ่มป้าย Dashboard สรุปจำนวนน้ำท่วม/ทางเลี่ยงบนแผนที่; นำรายการหมุดระดับน้ำและภาพถ่ายออกจากแผงสัญลักษณ์; รวมพิกัดจุด A/B เป็นช่องเดียว รองรับการวางค่าคู่พิกัดจาก Google Maps

@@ -34,7 +34,13 @@ Deno.serve(async (req) => {
     const db = createClient(url, mutation && serviceKey ? serviceKey : key, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: !mutation && authorization ? { Authorization: authorization } : {} } });
     const check = async (query: PromiseLike<{ data: any; error: any }>) => {
       const { data, error } = await query;
-      if (error) { console.error("Database operation failed", action, error.code); fail("Database operation failed", 400); }
+      if (error) {
+        console.error("Database operation failed", action, error.code, error.message);
+        if (action === "updateHighwayLayerAction") {
+          fail(`ไม่สามารถบันทึกโครงข่าย: ${error.message || "ตรวจสอบพิกัดและรูปแบบเส้นทาง"}`, 422);
+        }
+        fail("Database operation failed", 400);
+      }
       return data;
     };
     const system = async () => {

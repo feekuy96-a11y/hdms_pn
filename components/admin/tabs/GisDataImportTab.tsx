@@ -480,8 +480,14 @@ export function GisDataImportTab({
       // Simplify coordinates with Douglas-Peucker
       const decimatedFeatures = extractedFeatures.map((f) => ({
         ...f,
-        coords: simplifyCoordinates(f.coords, simplifyTolerance),
-      }));
+        coords: simplifyCoordinates(f.coords, simplifyTolerance)
+          .map(([lon, lat]) => [Number(lon), Number(lat)] as [number, number])
+          .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lon) <= 180 && Math.abs(lat) <= 90),
+      })).filter((f) => f.coords.length >= 2);
+
+      if (!decimatedFeatures.length) {
+        throw new Error("ไม่พบแนวเส้นที่มีพิกัด WGS84 ถูกต้องหลังตรวจสอบไฟล์");
+      }
 
       setImportedGisFeatures(decimatedFeatures);
       const decimatedLines = decimatedFeatures.map((f) => f.coords);
@@ -545,9 +551,19 @@ export function GisDataImportTab({
     const colorHex = isSec ? (lineStyles.secondary?.color || "#0284c7") : (lineStyles.primary?.color || "#1B5E20");
     const lineWidth = isSec ? (lineStyles.secondary?.weight || 3.5) : (lineStyles.primary?.weight || 5);
 
+    const validFeatures = importedGisFeatures.filter((feature) =>
+      feature.coords.length >= 2 && feature.coords.every(([lon, lat]) =>
+        Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lon) <= 180 && Math.abs(lat) <= 90
+      )
+    );
+    if (validFeatures.length !== importedGisFeatures.length) {
+      onToast("พบพิกัดเส้นทางไม่ถูกต้อง โปรดนำเข้าไฟล์ใหม่ในระบบพิกัด WGS84");
+      return;
+    }
+
     const geojsonData = {
       type: "FeatureCollection",
-      features: importedGisFeatures.map((f, idx) => {
+      features: validFeatures.map((f, idx) => {
         const props = f.properties || {};
         const code = selectedRouteCodeField ? (props[selectedRouteCodeField] || manualRouteCode || `สายทางที่ ${idx + 1}`) : (manualRouteCode || `สายทางที่ ${idx + 1}`);
         const name = selectedRouteNameField ? (props[selectedRouteNameField] || manualRouteName || importedLayerName) : (manualRouteName || importedLayerName);
