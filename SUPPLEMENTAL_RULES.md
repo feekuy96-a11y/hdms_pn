@@ -325,8 +325,8 @@
 - **วัตถุประสงค์ (Objective):** แก้ pipeline ที่ไม่สามารถเผยแพร่รุ่นแก้คำอธิบายสัญลักษณ์และการนำเข้าเส้นทางได้ หลัง dependency อัปเดตเกินช่วงที่ Next.js 16 รองรับ
 - **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `package.json`, `package-lock.json`, `tests/e2e/admin-menus.spec.ts`, `SUPPLEMENTAL_RULES.md`
 - **รายละเอียดการทำงาน (Technical Changes):** จำกัด TypeScript ให้อยู่ในสาย 5, ESLint ให้อยู่ในสาย 9 และ Tailwind CSS ให้อยู่ในสาย 3 ซึ่งเข้ากับ PostCSS config และ `@tailwind` directives เดิม; แก้ selector ของ regression test ให้เลือกปุ่มทางเลี่ยงในแผงจัดการแผนที่อย่างเฉพาะเจาะจง ไม่ชนกับเมนูด้านข้าง
-- **การทดสอบและผลลัพธ์ (Verification):** `npm run check`, `BASE_PATH=/hdms_pn npm run build:pages`, `git diff --check` ผ่าน; Playwright static preview ผ่าน 11 รายการ ข้าม 7 รายการที่ถูกกำหนดให้ทดสอบเฉพาะ desktop/ไม่มี geometry
-- **สถานะ:** พร้อมเผยแพร่ (รอ GitHub Actions และตรวจโดเมนจริง)
+- **การทดสอบและผลลัพธ์ (Verification):** `npm run check`, `BASE_PATH=/hdms_pn npm run build:pages`, `git diff --check` ผ่าน; Playwright static preview ผ่าน 11 รายการ ข้าม 7 รายการที่ถูกกำหนดให้ทดสอบเฉพาะ desktop/ไม่มี geometry; GitHub Actions build, test และ Pages deployment ผ่าน; ตรวจโดเมนจริงพบแผนที่, LIVE, Dashboard และคำอธิบายสัญลักษณ์ตามลำดับใหม่ โดยไม่พบ page error
+- **สถานะ:** เผยแพร่แล้ว (ACTIVE)
 
 ### [UPDATE-021] 2026-11-04: ปรับ Popup แผนที่ Dashboard และช่องพิกัด
 - **ไฟล์ที่เกี่ยวข้อง:** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/MapManagementTab.tsx`
