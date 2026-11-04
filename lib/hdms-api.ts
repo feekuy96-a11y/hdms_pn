@@ -5,7 +5,8 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
   const [p, second] = args as [any, any];
 
   const refreshSystemData = async () => {
-    const { data } = await client.rpc("doh_get_system_data_rpc");
+    const { data, error } = await client.rpc("doh_get_system_data_rpc");
+    if (error) throw error;
     if (data) {
       data.systemSettings = data.systemSettings?.main || data.systemSettings;
       return data;
@@ -18,24 +19,28 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
       return (await refreshSystemData()) as T;
 
     case "setIncidentStatusAction": {
-      await client.from("doh_flood_routes").update({ is_active: second, updated_at: now }).eq("id", p);
+      const { error } = await client.from("doh_flood_routes").update({ is_active: second, updated_at: now }).eq("id", p);
+      if (error) throw error;
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
     case "toggleDetourStatusAction": {
-      await client.from("doh_detour_routes").update({ is_active: second, updated_at: now }).eq("id", p);
+      const { error } = await client.from("doh_detour_routes").update({ is_active: second, updated_at: now }).eq("id", p);
+      if (error) throw error;
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
     case "deleteRouteAction": {
       const table = p === "FLOOD" ? "doh_flood_routes" : "doh_detour_routes";
-      await client.from(table).update({ deleted_at: now, updated_at: now }).eq("id", second);
+      const { error } = await client.from(table).update({ deleted_at: now, updated_at: now }).eq("id", second);
+      if (error) throw error;
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
     case "restoreRouteAction": {
       const table = p === "FLOOD" ? "doh_flood_routes" : "doh_detour_routes";
-      await client.from(table).update({ deleted_at: null, updated_at: now }).eq("id", second);
+      const { error } = await client.from(table).update({ deleted_at: null, updated_at: now }).eq("id", second);
+      if (error) throw error;
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
@@ -52,7 +57,7 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
     }
 
     case "saveTimelineUpdateAction": {
-      await client.rpc("doh_update_timeline_rpc", {
+      const { error } = await client.rpc("doh_update_timeline_rpc", {
         payload: {
           timelineId: `TL-${Date.now()}`,
           floodId: p.floodId,
@@ -65,13 +70,14 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
           remark: p.remark || "",
         },
       });
+      if (error) throw error;
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
     case "upsertRouteAction": {
       const id = p.id || `${p.recordType === "FLOOD" ? "F" : "D"}-${Date.now()}`;
       if (p.recordType === "FLOOD") {
-        await client.from("doh_flood_routes").upsert({
+        const { error } = await client.from("doh_flood_routes").upsert({
           id,
           route_no: p.routeNo,
           section_name: p.sectionName,
@@ -92,10 +98,11 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
           deleted_at: null,
           updated_at: now,
         });
+        if (error) throw error;
       } else {
-        await client.from("doh_detour_routes").upsert({
+        const { error } = await client.from("doh_detour_routes").upsert({
           id,
-          flood_id_ref: p.detourRefId,
+          flood_id_ref: p.detourRefId || null,
           route_name: p.detourName,
           lat_start: p.latStart,
           lon_start: p.lonStart,
@@ -107,12 +114,13 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
           deleted_at: null,
           updated_at: now,
         });
+        if (error) throw error;
       }
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
     case "saveOfficeAction": {
-      await client.from("doh_offices").upsert({
+      const { error } = await client.from("doh_offices").upsert({
         id: p.id,
         name: p.name,
         type: p.type,
@@ -123,16 +131,18 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
         is_active: p.is_active ?? true,
         updated_at: now,
       });
+      if (error) throw error;
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
     case "deleteOfficeAction": {
-      await client.from("doh_offices").delete().eq("id", p);
+      const { error } = await client.from("doh_offices").delete().eq("id", p);
+      if (error) throw error;
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
     case "upsertMitigationProjectAction": {
-      await client.from("doh_mitigation_projects").upsert({
+      const { error } = await client.from("doh_mitigation_projects").upsert({
         project_id: p.projectId || `P-${Date.now()}`,
         route_no: p.routeNo,
         location_name: p.locationName,
@@ -144,11 +154,13 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
         after_image_url: p.afterImageUrl || "",
         updated_at: now,
       });
+      if (error) throw error;
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
     case "deleteMitigationProjectAction": {
-      await client.from("doh_mitigation_projects").delete().eq("project_id", p);
+      const { error } = await client.from("doh_mitigation_projects").delete().eq("project_id", p);
+      if (error) throw error;
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
@@ -158,26 +170,30 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
         style_data: p[style_key],
         updated_at: now,
       }));
-      await client.from("doh_map_styles").upsert(rows);
+      const { error } = await client.from("doh_map_styles").upsert(rows);
+      if (error) throw error;
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
     case "updateSystemSettingsAction": {
-      await client.from("doh_system_settings").upsert({
+      const { error } = await client.from("doh_system_settings").upsert({
         setting_key: "main",
         setting_value: { name: p.name, org: p.org || "", desc: p.desc || "", phone: p.phone || "", logoUrl: p.logoUrl || "" },
         updated_at: now,
       });
+      if (error) throw error;
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
     case "updateHighwayLayerAction": {
-      await client.rpc("doh_import_routes_rpc", { payload: p });
+      const { error } = await client.rpc("doh_import_routes_rpc", { payload: p });
+      if (error) throw error;
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
     case "deleteHighwayLayerAction": {
-      await client.from("doh_highway_layers").delete().eq("layer_id", p);
+      const { error } = await client.from("doh_highway_layers").delete().eq("layer_id", p);
+      if (error) throw error;
       return { success: true, systemData: await refreshSystemData() } as T;
     }
 
@@ -193,8 +209,9 @@ export async function invokeHdms<T = any>(action: string, args: unknown[]): Prom
   const client = createClient();
   const { data: { session } } = await client.auth.getSession();
 
+  let response: Response;
   try {
-    const response = await fetch(`${url}/functions/v1/hdms-api`, {
+    response = await fetch(`${url}/functions/v1/hdms-api`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -205,13 +222,19 @@ export async function invokeHdms<T = any>(action: string, args: unknown[]): Prom
       signal: AbortSignal.timeout(15000),
     });
 
-    if (response.ok) {
-      return (await response.json()) as T;
-    }
   } catch {
-    // Edge function failed or timed out, fallback to direct client action
+    // Reads can fall back to the public RPC when the Edge endpoint is briefly
+    // unavailable. Mutations must not be retried through a second transport:
+    // a timeout can otherwise create a duplicate route while reporting an
+    // ambiguous result to the administrator.
+    if (action === "getSystemDataAction" || action === "snapRouteAction" || action === "getDeletedRoutesAction") {
+      return executeDirectAction<T>(client, action, args);
+    }
+    throw new Error("ไม่สามารถเชื่อมต่อบริการบันทึกข้อมูลได้ โปรดลองอีกครั้ง");
   }
-
-  // Direct client execution when accessing /admin directly without login
-  return executeDirectAction<T>(client, action, args);
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}));
+    throw new Error(result.error || `ไม่สามารถดำเนินการได้ (${response.status})`);
+  }
+  return (await response.json()) as T;
 }

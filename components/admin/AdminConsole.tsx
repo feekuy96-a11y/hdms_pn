@@ -41,6 +41,7 @@ interface AdminConsoleProps {
   onFocusCoordinates?: (coords: [number, number]) => void;
   onToast: (msg: string) => void;
   setIncomingGisLines?: (lines: [number, number][][]) => void;
+  setDraftPickMarkers?: React.Dispatch<React.SetStateAction<Array<{ lat: number; lon: number; label: string; mode: string }>>>;
 }
 
 export function AdminConsole({
@@ -56,6 +57,7 @@ export function AdminConsole({
   onFocusCoordinates,
   onToast,
   setIncomingGisLines,
+  setDraftPickMarkers,
 }: AdminConsoleProps) {
   // Navigation & View
   const [activeTab, setActiveTab] = useState<
@@ -336,6 +338,15 @@ export function AdminConsole({
               pickedCoordinate={pickedCoordinate}
               draftCoordinates={draftCoordinates}
               setDraftCoordinates={setDraftCoordinates}
+              draftWaypoints={draftWaypoints}
+              setDraftWaypoints={setDraftWaypoints}
+              onDraftPickMarkersChange={(markers) => setDraftPickMarkers?.((previous) => {
+                const unchanged = previous.length === markers.length && previous.every((item, index) => {
+                  const next = markers[index];
+                  return item.lat === next?.lat && item.lon === next?.lon && item.label === next?.label && item.mode === next?.mode;
+                });
+                return unchanged ? previous : markers;
+              })}
               editingRoute={editingRoute}
               onClearEditingRoute={() => setEditingRoute(null)}
             />

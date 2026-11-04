@@ -20,7 +20,7 @@ export async function getSystemDataAction(): Promise<SystemDataPayload> {
 export async function saveTimelineUpdateAction(payload: {
   floodId: string;
   waterLevelCm: number;
-  trafficStatus: "CLOSED" | "WARNING" | "PASSABLE";
+  trafficStatus: "CLOSED" | "WARNING" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE";
   latitude: number;
   longitude: number;
   reporterName: string;
@@ -43,7 +43,7 @@ export async function upsertRouteAction(payload: {
   lonEnd?: number;
   coordinates?: [number, number][];
   waterLevelCm?: number;
-  trafficStatus?: "CLOSED" | "WARNING" | "PASSABLE";
+  trafficStatus?: "CLOSED" | "WARNING" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE";
   latestPhotoUrl?: string;
   photoUrl?: string;
   detourAdvice?: string;

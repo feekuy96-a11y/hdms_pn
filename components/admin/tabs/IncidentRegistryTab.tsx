@@ -28,6 +28,7 @@ export function IncidentRegistryTab({
   const [incidentSearch, setIncidentSearch] = useState("");
   const [deleted, setDeleted] = useState<{id: string; route_no: string; section_name: string}[] | null>(null);
   const [updateModalIncident, setUpdateModalIncident] = useState<FloodRoute | null>(null);
+  const [viewingIncident, setViewingIncident] = useState<FloodRoute | null>(null);
   const [newWaterLevel, setNewWaterLevel] = useState<number>(0);
   const [updateNote, setUpdateNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -244,7 +245,11 @@ export function IncidentRegistryTab({
             return (
               <div
                 key={r.id}
-                className={`p-4 rounded-2xl border transition shadow-lg ${
+                role="button"
+                tabIndex={0}
+                onClick={() => setViewingIncident(r)}
+                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setViewingIncident(r); } }}
+                className={`cursor-pointer p-4 rounded-2xl border transition shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
                   r.is_active
                     ? "bg-slate-950 border-slate-800 hover:border-slate-700"
                     : "bg-slate-950/60 border-slate-900 opacity-70"
@@ -301,7 +306,8 @@ export function IncidentRegistryTab({
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.stopPropagation();
                         setUpdateModalIncident(r);
                         setNewWaterLevel(r.water_level_cm);
                       }}
@@ -311,7 +317,7 @@ export function IncidentRegistryTab({
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleToggleIncidentStatus(r.id, r.is_active)}
+                      onClick={(event) => { event.stopPropagation(); handleToggleIncidentStatus(r.id, r.is_active); }}
                       className={`px-3 py-1 rounded-xl text-xs font-heading font-medium transition border ${
                         r.is_active
                           ? "bg-emerald-950 hover:bg-emerald-800 text-emerald-300 border-emerald-700"
@@ -322,14 +328,14 @@ export function IncidentRegistryTab({
                     </button>
                     <button
                       type="button"
-                      onClick={() => onEditFlood(r.id)}
+                      onClick={(event) => { event.stopPropagation(); onEditFlood(r.id); }}
                       className="bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-300 px-2.5 py-1 rounded-xl text-xs font-heading transition"
                     >
                       แก้ไข
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDeleteRoute(r.id)}
+                      onClick={(event) => { event.stopPropagation(); handleDeleteRoute(r.id); }}
                       className="bg-red-950 hover:bg-red-800 text-red-300 px-2 py-1 rounded-xl text-xs transition"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -341,6 +347,19 @@ export function IncidentRegistryTab({
           })
         )}
       </div>
+
+      {viewingIncident && (
+        <div className="fixed inset-0 z-[9990] flex items-center justify-center bg-slate-950/80 p-3 backdrop-blur-sm" onClick={() => setViewingIncident(null)}>
+          <section role="dialog" aria-modal="true" aria-label="รายละเอียดเหตุการณ์" className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 border-b border-slate-700 pb-3">
+              <div><p className="text-xs font-semibold text-amber-300">ทล.{viewingIncident.route_no}</p><h3 className="text-lg font-semibold text-white">{viewingIncident.section_name}</h3></div>
+              <button type="button" onClick={() => setViewingIncident(null)} className="rounded-lg p-2 text-slate-300 hover:bg-slate-800 hover:text-white" aria-label="ปิดรายละเอียด">×</button>
+            </div>
+            <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2"><div><dt className="text-slate-400">ก.ม.</dt><dd className="text-white">{viewingIncident.km_start} ถึง {viewingIncident.km_end}</dd></div><div><dt className="text-slate-400">สถานะการจราจร</dt><dd className="text-white">{viewingIncident.traffic_status}</dd></div><div><dt className="text-slate-400">ระดับน้ำล่าสุด</dt><dd className="text-white">{viewingIncident.water_level_cm} ซม.</dd></div><div><dt className="text-slate-400">สถานะรายการ</dt><dd className="text-white">{viewingIncident.is_active ? "กำลังใช้งาน" : "คืนสภาพปกติ"}</dd></div></dl>
+            <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => { setViewingIncident(null); onEditFlood(viewingIncident.id); }} className="rounded-xl bg-amber-500 px-3 py-2 text-sm font-semibold text-slate-950">แก้ไข</button><button type="button" onClick={() => { setViewingIncident(null); handleDeleteRoute(viewingIncident.id); }} className="rounded-xl bg-red-700 px-3 py-2 text-sm font-semibold text-white">ลบ</button></div>
+          </section>
+        </div>
+      )}
 
       {/* Quick Water Level Update Modal */}
       {updateModalIncident && (

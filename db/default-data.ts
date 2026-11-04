@@ -25,7 +25,7 @@ export interface FloodRoute {
   lon_end: number;
   coordinates_json: string | [number, number][];
   water_level_cm: number;
-  traffic_status: "CLOSED" | "WARNING" | "PASSABLE";
+  traffic_status: "CLOSED" | "WARNING" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE";
   latest_photo_url: string;
   is_active: boolean;
   updated_at: string;
@@ -56,7 +56,7 @@ export interface TimelineUpdate {
   flood_id_ref: string;
   reported_at: string;
   water_level_cm: number;
-  traffic_status: "CLOSED" | "WARNING" | "PASSABLE";
+  traffic_status: "CLOSED" | "WARNING" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE";
   latitude: number;
   longitude: number;
   photo_url: string;

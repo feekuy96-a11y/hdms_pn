@@ -11,7 +11,7 @@ const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body)
 const fail = (message: string, status = 400): never => { throw Object.assign(new Error(message), { status }); };
 const text = (value: unknown, label: string) => typeof value === "string" && value.trim() ? value.trim() : fail(`${label} required`);
 const number = (value: unknown, min: number, max: number) => typeof value === "number" && Number.isFinite(value) && value >= min && value <= max ? value : fail("Invalid numeric value");
-const traffic = (value: unknown) => ["CLOSED", "WARNING", "PASSABLE"].includes(String(value)) ? value : fail("Invalid traffic status");
+const traffic = (value: unknown) => ["CLOSED", "WARNING", "PASSABLE", "LIGHT_VEHICLES_ONLY", "ONE_LANE"].includes(String(value)) ? value : fail("Invalid traffic status");
 const typeTable = (type: unknown) => type === "FLOOD" ? "doh_flood_routes" : type === "DETOUR" ? "doh_detour_routes" : fail("Invalid record type");
 
 Deno.serve(async (req) => {

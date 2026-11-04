@@ -18,7 +18,15 @@ export function usePollingActivity() {
     ["pointerdown", "keydown", "touchstart", "scroll"].forEach((eventName) =>
       window.addEventListener(eventName, markActive, { passive: true })
     );
-    document.addEventListener("visibilitychange", markActive);
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        clearTimeout(idleTimer);
+        setIsActive(false);
+        return;
+      }
+      markActive();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     markActive();
 
     return () => {
@@ -26,7 +34,7 @@ export function usePollingActivity() {
       ["pointerdown", "keydown", "touchstart", "scroll"].forEach((eventName) =>
         window.removeEventListener(eventName, markActive)
       );
-      document.removeEventListener("visibilitychange", markActive);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 

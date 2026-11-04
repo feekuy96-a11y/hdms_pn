@@ -1369,8 +1369,8 @@ export function GisDataImportTab({
       )}
 
       {editingGeometry && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-sky-500/60 bg-[#0c162c] p-5 shadow-2xl space-y-4">
+        <div className="pointer-events-none fixed inset-x-2 bottom-2 z-[1000] flex justify-start lg:inset-y-20 lg:left-3 lg:right-auto">
+          <div className="pointer-events-auto w-full lg:w-[min(38vw,520px)] max-h-[38vh] lg:max-h-full overflow-y-auto rounded-2xl border border-sky-500/60 bg-[#0c162c] p-4 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
                 <h3 className="font-heading font-black text-white">ปรับแนวถนนทางหลวง</h3>

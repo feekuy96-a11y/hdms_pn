@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import { SystemDataPayload } from "@/db/default-data";
-import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES, OFFICIAL_PATTANI_HIGHWAYS } from "@/lib/constants";
+import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { Layers, Navigation, Building2, Map, ChevronUp, ChevronDown } from "lucide-react";
 
 const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -14,12 +14,21 @@ const formatKmPost = (value: unknown) => {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
   if (raw.includes("+")) return raw;
-  const meters = Number(raw.replace(/,/g, ""));
-  if (!Number.isFinite(meters)) return raw;
+  const numeric = Number(raw.replace(/,/g, ""));
+  if (!Number.isFinite(numeric) || numeric < 0) return raw;
+  const meters = Math.round(Number.isInteger(numeric) && numeric >= 1000 ? numeric : numeric * 1000);
   const km = Math.floor(meters / 1000);
   const post = Math.round(meters % 1000).toString().padStart(3, "0");
   return `${km}+${post}`;
 };
+
+const trafficStatusLabel = (status: unknown) => ({
+  PASSABLE: "ผ่านได้ปกติ",
+  LIGHT_VEHICLES_ONLY: "รถเล็กผ่านได้",
+  ONE_LANE: "รถเล็กผ่านได้ ๑ ช่องทาง",
+  CLOSED: "ผ่านไม่ได้",
+  WARNING: "เฝ้าระวัง",
+}[String(status)] || "ไม่ระบุสถานะ");
 
 /**
  * ปรับพิกัดให้เป็น [Latitude, Longitude] สำหรับ Leaflet เสมอ
@@ -42,8 +51,9 @@ interface LongdoGisMapProps {
   onCoordinatePicked?: (lat: number, lon: number, mode: string) => void;
   draftCoordinates?: [number, number][];
   draftWaypoints?: [number, number][];
-  draftPickMarkers?: { lat: number; lon: number; label: string }[];
+  draftPickMarkers?: { lat: number; lon: number; label: string; mode: string }[];
   onWaypointDragged?: (index: number, newCoord: [number, number]) => void;
+  onOfficeDragged?: (officeId: string, newPosition: { lat: number; lon: number }) => void;
   draftMode?: "FLOOD" | "DETOUR";
   focusCoordinates?: [number, number] | null;
   incomingGisLines?: [number, number][][];
@@ -62,6 +72,7 @@ export function LongdoGisMap({
   draftWaypoints = [],
   draftPickMarkers = [],
   onWaypointDragged,
+  onOfficeDragged,
   draftMode = "FLOOD",
   focusCoordinates = null,
   incomingGisLines = [],
@@ -107,6 +118,8 @@ export function LongdoGisMap({
   onCoordinatePickedRef.current = onCoordinatePicked;
   const onWaypointDraggedRef = useRef(onWaypointDragged);
   onWaypointDraggedRef.current = onWaypointDragged;
+  const onOfficeDraggedRef = useRef(onOfficeDragged);
+  onOfficeDraggedRef.current = onOfficeDragged;
 
   // 1. Initialize Leaflet Map Instance
   useEffect(() => {
@@ -271,69 +284,7 @@ export function LongdoGisMap({
       // Hardware-accelerated canvas renderer for 60fps vector rendering with click tolerance
       const vectorCanvas = L.canvas ? (L.canvas as any)({ padding: 0.5, tolerance: 10 }) : undefined;
 
-      // A. Draw Official Highway Route Shields (ไอคอนแสดงหมายเลขทางหลวงบนแผนที่ในรูปแบบทางการ)
-      if (showHighwayShields) {
-        // Highway labels are drawn from imported route geometry below, so every sign sits on its actual road.
-        OFFICIAL_PATTANI_HIGHWAYS.slice(0, 0).forEach((hwy) => {
-          const isRural = hwy.type === "RURAL_ROAD";
-          const code = hwy.code;
-          const is4Digits = code.length >= 4;
-
-          const shieldSvg = isRural
-            ? `
-              <div class="doh-drr-shield group relative cursor-pointer flex flex-col items-center justify-center transition-transform hover:scale-125" style="transform: translate(-50%, -50%);">
-                <svg width="36" height="40" viewBox="0 0 38 42" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));">
-                  <path d="M19 1 C30 1 37 6 37 17 C37 28 24 37 19 40 C14 37 1 28 1 17 C1 6 8 1 19 1 Z" fill="#0284c7" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round"/>
-                  <path d="M19 3 C28 3 34.5 7.5 34.5 17 C34.5 26.5 23 34.5 19 37.5 C15 34.5 3.5 26.5 3.5 17 C3.5 7.5 10 3 19 3 Z" fill="#0284c7" stroke="#facc15" stroke-width="1"/>
-                  <text x="19" y="12" text-anchor="middle" font-family="'Sarabun', sans-serif" font-weight="800" font-size="7.5" fill="#fef08a">ทช.</text>
-                  <text x="19" y="26" text-anchor="middle" font-family="'Sarabun', sans-serif" font-weight="900" font-size="${is4Digits ? 9.5 : 11.5}" fill="#ffffff" letter-spacing="-0.3">${escapeHtml(code)}</text>
-                </svg>
-              </div>
-            `
-            : `
-              <div class="doh-hwy-shield group relative cursor-pointer flex flex-col items-center justify-center transition-transform hover:scale-125" style="transform: translate(-50%, -50%);">
-                <svg width="34" height="40" viewBox="0 0 34 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 5px rgba(0,0,0,0.65));">
-                  <path d="M17 1 C28 1 33 6 33 17 C33 28 21 36 17 39 C13 36 1 28 1 17 C1 6 6 1 17 1 Z" fill="#ffffff" stroke="#0f172a" stroke-width="2.5" stroke-linejoin="round"/>
-                  <path d="M17 3.5 C26 3.5 30.5 7.5 30.5 17 C30.5 26 19.5 33.5 17 36 C14.5 33.5 3.5 26 3.5 17 C3.5 7.5 8 3.5 17 3.5 Z" fill="#ffffff" stroke="#475569" stroke-width="0.9"/>
-                  <text x="17" y="11" text-anchor="middle" font-family="'Sarabun', sans-serif" font-weight="800" font-size="7.5" fill="#64748b">ทล.</text>
-                  <text x="17" y="26" text-anchor="middle" font-family="'Sarabun', sans-serif" font-weight="900" font-size="${is4Digits ? 10.5 : 13.5}" fill="#0f172a" letter-spacing="-0.5">${escapeHtml(code)}</text>
-                </svg>
-              </div>
-            `;
-
-          const shieldIcon = L.divIcon({
-            html: shieldSvg,
-            className: "doh-shield-marker",
-            iconSize: [34, 40],
-            iconAnchor: [17, 20],
-          });
-
-          const marker = L.marker([hwy.lat, hwy.lon], { icon: shieldIcon }).addTo(group);
-          marker.bindTooltip(`<strong>ทล.${hwy.code}</strong> ${hwy.name}`, { direction: "top", offset: [0, -20] });
-          marker.bindPopup(`
-            <div class="text-xs p-1 min-w-[270px] font-body text-slate-100">
-              <div class="flex items-center gap-1.5 mb-1.5">
-                <span class="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded font-heading">
-                  ${isRural ? `ทางหลวงชนบท ${hwy.code}` : `ทางหลวงแผ่นดิน ทล.${hwy.code}`}
-                </span>
-                <span class="text-[10px] text-emerald-400 font-bold ml-auto flex items-center gap-1">
-                  <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse"></span> สัญจรปกติ
-                </span>
-              </div>
-              <h4 class="font-bold text-white text-sm font-heading leading-tight">${escapeHtml(hwy.name)}</h4>
-              <div class="mt-2 space-y-1 text-[11px] text-slate-300 bg-slate-900/90 p-2.5 rounded-xl border border-slate-700/80">
-                <div class="flex items-center justify-between"><span class="text-slate-400">จุดสังเกต:</span> <strong class="text-white">${escapeHtml(hwy.locationName)}</strong></div>
-                <div class="flex items-center justify-between"><span class="text-slate-400">มาตรฐานช่องจราจร:</span> <span class="text-sky-300 font-medium">${escapeHtml(hwy.lanes)}</span></div>
-                <div class="flex items-center justify-between"><span class="text-slate-400">ประเภทผิวทาง:</span> <span class="text-amber-200">${escapeHtml(hwy.surface)}</span></div>
-                <div class="flex items-center justify-between"><span class="text-slate-400">หมวดทางหลวงรับผิดชอบ:</span> <span class="text-white font-medium">${escapeHtml(hwy.responsibleOffice)}</span></div>
-                <div class="flex items-center justify-between"><span class="text-slate-400">ความเร็วจำกัด:</span> <span class="text-slate-200">${escapeHtml(hwy.speedLimit)}</span></div>
-              </div>
-            </div>
-          `);
-        });
-      }
-
-      // B. Draw Dual-Color GIS File Preview (เส้นสีน้ำเงิน = ข้อมูลที่กำลังนำเข้า)
+      // A. Draw Dual-Color GIS File Preview (เส้นสีน้ำเงิน = ข้อมูลที่กำลังนำเข้า)
       if (incomingGisLines && incomingGisLines.length > 0) {
         incomingGisLines.forEach((line) => {
           if (line.length >= 2) {
@@ -384,7 +335,7 @@ export function LongdoGisMap({
                   else if (lanesStr.includes("๔") || lanesStr.includes("4")) featureWeight = 5.5;
                   else if (lanesStr.includes("๒") || lanesStr.includes("2")) featureWeight = 3.5;
                 }
-                const featureColor = props.color || color;
+                const featureColor = color;
                 return {
                   color: featureColor,
                   weight: featureWeight,
@@ -408,16 +359,15 @@ export function LongdoGisMap({
                     : feature.geometry.coordinates.flat(1);
                   const midpoint = line[Math.floor(line.length / 2)];
                   if (midpoint && code) {
-                    const signColor = props.color || color;
                     const signIcon = L.divIcon({
-                      html: `<div style="width:34px;height:38px;transform:translate(-50%,-50%);background:#fff;border:2px solid ${escapeHtml(signColor)};border-radius:4px;box-shadow:0 1px 3px #0008;color:#111827;text-align:center;line-height:1.05;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Sarabun,sans-serif"><span style="font-size:7px;line-height:9px">ครุฑ</span><span style="font-size:12px;font-weight:900;letter-spacing:-.4px">${escapeHtml(code)}</span></div>`,
+                      html: `<div style="min-width:26px;height:20px;padding:0 4px;transform:translate(-50%,-50%);background:#fff;border:1.5px solid #111827;border-radius:2px;box-shadow:0 1px 2px #0007;color:#111827;text-align:center;line-height:17px;font-family:Sarabun,sans-serif;font-size:11px;font-weight:700">${escapeHtml(code)}</div>`,
                       className: "doh-highway-sign",
-                      iconSize: [34, 38],
-                      iconAnchor: [17, 19],
+                      iconSize: [34, 20],
+                      iconAnchor: [17, 10],
                     });
                     const sign = L.marker(toLeafletLatLng(midpoint), { icon: signIcon, interactive: true }).addTo(group);
                     sign.bindTooltip(`ทล.${escapeHtml(code)} · ${escapeHtml(name)}`, { direction: "top", offset: [0, -18] });
-                    sign.bindPopup(`<div style="border-top:3px solid ${escapeHtml(signColor)};padding-top:5px"><strong>ทล.${escapeHtml(code)}</strong><br/>${escapeHtml(name)}</div>`);
+                    sign.bindPopup(`<div style="padding-top:5px"><strong>ทล.${escapeHtml(code)}</strong><br/>${escapeHtml(name)}</div>`);
                   }
                 }
 
@@ -436,16 +386,16 @@ export function LongdoGisMap({
                   <div class="text-xs p-2.5 min-w-[270px] font-body bg-slate-950 text-white rounded-xl border-2 shadow-2xl" style="border-color: ${color}">
                     <div class="flex items-center justify-between pb-1.5 border-b border-slate-800 gap-2">
                       <span class="text-white text-base font-black font-heading tracking-wide">
-                        ${code ? `ทอ.${escapeHtml(code)}` : "ทางหลวง"}
+                        ${code ? `ทล.${escapeHtml(code)}` : "ทางหลวง"}
                       </span>
                       <span class="text-[10px] text-amber-300 font-heading font-semibold">
                         ${isMain ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"}
                       </span>
                     </div>
                     <div class="mt-2">
-                      <h4 class="font-bold text-white text-sm font-heading">${name}</h4>
-                      ${props.km_start ? `<p class="text-amber-300 text-[11px] mt-0.5 font-mono">ก.ม. ${escapeHtml(formatKmPost(props.km_start))} ถึง ก.ม. ${escapeHtml(formatKmPost(props.km_end))}</p>` : ""}
-                      ${desc ? `<p class="text-slate-300 text-[11px] mt-0.5">${desc}</p>` : ""}
+                      <h4 class="font-bold text-white text-sm font-heading">${escapeHtml(name)}</h4>
+                      ${props.km_start !== undefined && props.km_start !== null && String(props.km_start).trim() !== "" ? `<p class="text-amber-300 text-[11px] mt-0.5 font-mono">ก.ม. ${escapeHtml(formatKmPost(props.km_start))}${props.km_end !== undefined && props.km_end !== null && String(props.km_end).trim() !== "" ? ` ถึง ก.ม. ${escapeHtml(formatKmPost(props.km_end))}` : ""}</p>` : ""}
+                      ${desc ? `<p class="text-slate-300 text-[11px] mt-0.5">${escapeHtml(desc)}</p>` : ""}
                     </div>
                     <div class="grid grid-cols-2 gap-1.5 mt-2.5 pt-2 border-t border-slate-800 text-[11px]">
                       <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
@@ -568,7 +518,7 @@ export function LongdoGisMap({
           if (flood.traffic_status === "CLOSED" || flood.water_level_cm >= 40) {
             capsuleClass = "doh-capsule-tag doh-capsule-red";
             statusIcon = "⛔";
-          } else if (flood.water_level_cm === 0 || flood.traffic_status === "PASSABLE") {
+          } else if (flood.water_level_cm === 0 || ["PASSABLE", "LIGHT_VEHICLES_ONLY"].includes(flood.traffic_status)) {
             capsuleClass = "doh-capsule-tag doh-capsule-green";
             statusIcon = "✅";
             levelText = "ปกติ";
@@ -607,7 +557,7 @@ export function LongdoGisMap({
             const x = updates.length < 2 ? 10 : 8 + (index * 104) / (updates.length - 1);
             return `${x},${y}`;
           }).join(" ");
-          marker.bindPopup(`<div style="width:250px;color:#0f172a;font-family:Sarabun,sans-serif"><strong>ทล.${escapeHtml(flood.route_no)} · ${escapeHtml(flood.section_name)}</strong><div style="font-size:12px;margin-top:3px">กม.${escapeHtml(flood.km_start)}–${escapeHtml(flood.km_end)}</div>${flood.latest_photo_url ? `<img src="${escapeHtml(flood.latest_photo_url)}" alt="ภาพสถานการณ์" style="width:100%;height:108px;object-fit:cover;border-radius:8px;margin-top:7px"/>` : ""}<div style="margin-top:7px;font-size:13px"><b>ระดับน้ำล่าสุด ${flood.water_level_cm} ซม.</b> · ${escapeHtml(flood.traffic_status === "CLOSED" ? "ปิดการจราจร" : flood.traffic_status === "WARNING" ? "เฝ้าระวัง" : "ผ่านได้")}</div>${updates.length ? `<svg viewBox="0 0 120 56" style="width:100%;height:80px;margin-top:4px"><line x1="8" y1="48" x2="112" y2="48" stroke="#cbd5e1"/><polyline points="${linePoints}" fill="none" stroke="#f59e0b" stroke-width="2"/>${chartPoints}</svg><div style="font-size:10px;color:#64748b">ชี้ที่จุดกราฟเพื่อดูเวลาและระดับน้ำ</div>` : `<div style="font-size:11px;color:#64748b;margin-top:3px">ยังไม่มีข้อมูลระดับน้ำย้อนหลัง</div>`}</div>`, { maxWidth: 280 });
+          marker.bindPopup(`<div style="width:250px;color:#0f172a;font-family:Sarabun,sans-serif"><strong>ทล.${escapeHtml(flood.route_no)} · ${escapeHtml(flood.section_name)}</strong><div style="font-size:12px;margin-top:3px">ก.ม. ${escapeHtml(formatKmPost(flood.km_start))} ถึง ก.ม. ${escapeHtml(formatKmPost(flood.km_end))}</div>${flood.latest_photo_url ? `<img src="${escapeHtml(flood.latest_photo_url)}" alt="ภาพสถานการณ์" style="width:100%;height:108px;object-fit:cover;border-radius:8px;margin-top:7px"/>` : ""}<div style="margin-top:7px;font-size:13px"><b>ระดับน้ำล่าสุด ${flood.water_level_cm} ซม.</b> · ${escapeHtml(trafficStatusLabel(flood.traffic_status))}</div>${updates.length ? `<svg viewBox="0 0 120 56" style="width:100%;height:80px;margin-top:4px"><line x1="8" y1="48" x2="112" y2="48" stroke="#cbd5e1"/><polyline points="${linePoints}" fill="none" stroke="#f59e0b" stroke-width="2"/>${chartPoints}</svg><div style="font-size:10px;color:#64748b">ชี้ที่จุดกราฟเพื่อดูเวลาและระดับน้ำ</div>` : `<div style="font-size:11px;color:#64748b;margin-top:3px">ยังไม่มีข้อมูลระดับน้ำย้อนหลัง</div>`}</div>`, { maxWidth: 280 });
           marker.on("click", (e: any) => {
             L.DomEvent.stopPropagation(e);
             onSelectFlood(flood.id);
@@ -621,13 +571,21 @@ export function LongdoGisMap({
         const draftColor = draftMode === "FLOOD"
           ? (mapStyles.flood?.color || "#ef4444")
           : (mapStyles.detour?.color || "#f59e0b");
-        L.polyline(draftLatLngs as any, {
+        const draftLine = L.polyline(draftLatLngs as any, {
           color: draftColor,
           weight: 6,
-          dashArray: draftMode === "DETOUR" ? "6, 6" : undefined,
+          dashArray: draftMode === "FLOOD"
+            ? (mapStyles.flood?.pattern === "dash" ? (mapStyles.flood.dashArray || "8, 6") : undefined)
+            : (mapStyles.detour?.pattern === "solid" ? undefined : (mapStyles.detour?.dashArray || "8, 6")),
           opacity: 0.95,
           renderer: vectorCanvas,
         }).addTo(group);
+        draftLine.on("click", (event: any) => {
+          if (adminPickModeRef.current !== "ADD_WAYPOINT") return;
+          L.DomEvent.stopPropagation(event);
+          const point = event.latlng;
+          onCoordinatePickedRef.current?.(Number(point.lat.toFixed(6)), Number(point.lng.toFixed(6)), "ADD_WAYPOINT");
+        });
       }
 
       // E. Draw Numbered Draggable Waypoints for Bending Paths (ดัดเส้น)
@@ -638,7 +596,11 @@ export function LongdoGisMap({
           iconSize: [28, 28],
           iconAnchor: [14, 14],
         });
-        L.marker([point.lat, point.lon], { icon, zIndexOffset: 1200 }).bindTooltip(`จุด${point.label}`, { direction: "top" }).addTo(group);
+        const marker = L.marker([point.lat, point.lon], { icon, zIndexOffset: 1200, draggable: true }).bindTooltip(`จุด${point.label}`, { direction: "top" }).addTo(group);
+        marker.on("dragend", (event: any) => {
+          const position = event.target.getLatLng();
+          onCoordinatePickedRef.current?.(Number(position.lat.toFixed(6)), Number(position.lng.toFixed(6)), point.mode);
+        });
       });
 
       // E. Draw Numbered Draggable Waypoints for Bending Paths (ดัดเส้น)
@@ -681,7 +643,13 @@ export function LongdoGisMap({
             iconAnchor: [14, 14],
           });
 
-          const marker = L.marker([office.lat, office.lon], { icon: officeIcon }).addTo(group);
+          const marker = L.marker([office.lat, office.lon], { icon: officeIcon, draggable: !publicMode && Boolean(onOfficeDraggedRef.current) }).addTo(group);
+          if (!publicMode && onOfficeDraggedRef.current) {
+            marker.on("dragend", (event: any) => {
+              const position = event.target.getLatLng();
+              onOfficeDraggedRef.current?.(office.id, { lat: Number(position.lat.toFixed(6)), lon: Number(position.lng.toFixed(6)) });
+            });
+          }
           marker.bindPopup(`
             <div class="text-xs p-1 min-w-[220px] font-body text-slate-100">
               <div class="flex items-center gap-1.5 mb-1">
@@ -721,6 +689,7 @@ export function LongdoGisMap({
     draftPickMarkers,
     draftMode,
     incomingGisLines,
+    publicMode,
   ]);
 
   return (
@@ -768,7 +737,7 @@ export function LongdoGisMap({
           <div className="space-y-1.5">
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
-                <span className="w-4 h-1.5 inline-block rounded bg-[#1B5E20]" />
+                <span className="w-4 h-1.5 inline-block rounded" style={{ backgroundColor: mapStyles.primary?.color }} />
                 <span>ทางหลวงสายหลัก</span>
               </span>
               <input
@@ -781,15 +750,7 @@ export function LongdoGisMap({
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
-                <span className="flex h-4 w-4 items-center justify-center rounded-sm border border-slate-800 bg-white text-[6px] font-black text-slate-900">๛</span>
-                <span>ป้ายหมายเลขทางหลวง</span>
-              </span>
-              <input type="checkbox" checked={showHighwayShields} onChange={(e) => setShowHighwayShields(e.target.checked)} className="accent-slate-400 rounded" />
-            </label>
-
-            <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
-              <span className="flex items-center gap-2">
-                <span className="w-4 h-1.5 inline-block rounded bg-[#0284c7]" />
+                <span className="w-4 h-1.5 inline-block rounded" style={{ backgroundColor: mapStyles.secondary?.color }} />
                 <span>ทางหลวงสายรอง</span>
               </span>
               <input
@@ -802,7 +763,15 @@ export function LongdoGisMap({
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
-                <span className="w-4 h-1.5 inline-block rounded bg-red-600 animate-pulse" />
+                <span className="flex h-4 min-w-5 items-center justify-center rounded-sm border border-slate-800 bg-white px-0.5 text-[8px] font-bold text-slate-900">42</span>
+                <span>หมายเลขทางหลวง</span>
+              </span>
+              <input type="checkbox" checked={showHighwayShields} onChange={(e) => setShowHighwayShields(e.target.checked)} className="accent-slate-400 rounded" />
+            </label>
+
+            <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-1.5 inline-block rounded" style={{ backgroundColor: mapStyles.flood?.color }} />
                 <span>เส้นน้ำท่วม <span className="ml-1 rounded-full bg-red-950 px-1.5 py-0.5 text-[10px] text-red-300">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
               </span>
               <input
@@ -815,7 +784,7 @@ export function LongdoGisMap({
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
-                <span className="w-4 h-1.5 inline-block rounded bg-yellow-400 border-b border-dashed border-slate-900" />
+                <span className="w-4 h-1.5 inline-block rounded" style={{ backgroundColor: mapStyles.detour?.color }} />
                 <span>ทางเลี่ยง <span className="ml-1 rounded-full bg-amber-950 px-1.5 py-0.5 text-[10px] text-amber-300">{showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
               </span>
               <input

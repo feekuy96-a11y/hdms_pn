@@ -56,6 +56,7 @@ export function DetourManagementTab({
   const [detourFilter, setDetourFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
   const [floodFilter, setFloodFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewingDetour, setViewingDetour] = useState<DetourRoute | null>(null);
 
   // Quick In-Modal Editor State
   const [editingDetour, setEditingDetour] = useState<DetourRoute | null>(null);
@@ -389,6 +390,7 @@ export function DetourManagementTab({
                 return (
                   <tr
                     key={item.id}
+                    onClick={() => setViewingDetour(item)}
                     className={`hover:bg-slate-900/60 transition ${
                       !item.is_active ? "opacity-50 bg-slate-950/40" : ""
                     }`}
@@ -396,7 +398,7 @@ export function DetourManagementTab({
                     <td className="p-3 text-center font-mono text-slate-400">{idx + 1}</td>
 
                     {/* Status Toggle Switch */}
-                    <td className="p-3 text-center">
+                    <td className="p-3 text-center" onClick={(event) => event.stopPropagation()}>
                       <button
                         type="button"
                         onClick={() => handleToggleStatus(item.id, item.is_active)}
@@ -474,7 +476,7 @@ export function DetourManagementTab({
                     </td>
 
                     {/* Actions */}
-                    <td className="p-3 text-right whitespace-nowrap">
+                    <td className="p-3 text-right whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
                       <div className="inline-flex items-center gap-1">
                         {/* Focus on map */}
                         {item.lat_start && item.lon_start && onFocusCoordinates && (
@@ -514,6 +516,16 @@ export function DetourManagementTab({
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {viewingDetour && (
+        <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/70 p-2 sm:items-center sm:p-4" onClick={() => setViewingDetour(null)}>
+          <section role="dialog" aria-modal="true" aria-label="รายละเอียดเส้นทางเลี่ยง" className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5 text-slate-100 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">{viewingDetour.route_name}</h2><p className="mt-1 text-sm text-slate-400">รายละเอียดเส้นทางเลี่ยง</p></div><button type="button" aria-label="ปิดรายละเอียด" onClick={() => setViewingDetour(null)} className="rounded-lg p-2 hover:bg-slate-800"><X className="h-5 w-5" /></button></div>
+            <dl className="mt-4 space-y-3 text-sm"><div><dt className="text-slate-400">สถานะ</dt><dd>{viewingDetour.is_active ? "เปิดใช้งาน" : "ปิดชั่วคราว"}</dd></div><div><dt className="text-slate-400">จุดน้ำท่วมที่เกี่ยวข้อง</dt><dd>{(() => { const flood = floodList.find((item) => item.id === viewingDetour.flood_id_ref); return flood ? `ทล.${flood.route_no} - ${flood.section_name}` : "ไม่ได้ผูก"; })()}</dd></div><div><dt className="text-slate-400">คำแนะนำการเดินทาง</dt><dd className="whitespace-pre-wrap">{viewingDetour.description || "ไม่มีคำแนะนำ"}</dd></div></dl>
+            <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => { const item = viewingDetour; setViewingDetour(null); handleOpenEditModal(item); }} className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950">แก้ไข</button><button type="button" onClick={() => { const item = viewingDetour; setViewingDetour(null); handleDeleteDetour(item); }} className="rounded-lg border border-rose-500 px-4 py-2 text-sm text-rose-300">ลบ</button></div>
+          </section>
         </div>
       )}
 

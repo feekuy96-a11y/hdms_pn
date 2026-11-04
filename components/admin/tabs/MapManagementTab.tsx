@@ -49,6 +49,9 @@ interface MapManagementTabProps {
   pickedCoordinate?: { lat: number; lon: number; mode: string } | null;
   draftCoordinates: [number, number][];
   setDraftCoordinates: (coords: [number, number][]) => void;
+  draftWaypoints: [number, number][];
+  setDraftWaypoints: React.Dispatch<React.SetStateAction<[number, number][]>>;
+  onDraftPickMarkersChange?: (markers: { lat: number; lon: number; label: string; mode: string }[]) => void;
 
   // Editing state passed from parent
   editingRoute?: { type: "FLOOD" | "DETOUR"; id: string } | null;
@@ -67,6 +70,9 @@ export function MapManagementTab({
   pickedCoordinate,
   draftCoordinates,
   setDraftCoordinates,
+  draftWaypoints,
+  setDraftWaypoints,
+  onDraftPickMarkersChange,
   editingRoute,
   onClearEditingRoute,
 }: MapManagementTabProps) {
@@ -91,7 +97,29 @@ export function MapManagementTab({
   const [startLon, setStartLon] = useState<number | string>("");
   const [endLat, setEndLat] = useState<number | string>("");
   const [endLon, setEndLon] = useState<number | string>("");
-  const [draftWaypoints, setDraftWaypoints] = useState<[number, number][]>([]);
+  const [startCoordinateText, setStartCoordinateText] = useState("");
+  const [endCoordinateText, setEndCoordinateText] = useState("");
+  useEffect(() => {
+    setStartCoordinateText(startLat !== "" && startLon !== "" ? `${startLat}, ${startLon}` : "");
+  }, [startLat, startLon]);
+  useEffect(() => {
+    setEndCoordinateText(endLat !== "" && endLon !== "" ? `${endLat}, ${endLon}` : "");
+  }, [endLat, endLon]);
+
+  useEffect(() => {
+    const markers: { lat: number; lon: number; label: string; mode: string }[] = [];
+    const startLatNumber = Number(startLat);
+    const startLonNumber = Number(startLon);
+    const endLatNumber = Number(endLat);
+    const endLonNumber = Number(endLon);
+    if (Number.isFinite(startLatNumber) && Number.isFinite(startLonNumber) && startLatNumber !== 0 && startLonNumber !== 0) {
+      markers.push({ lat: startLatNumber, lon: startLonNumber, label: "A", mode: "PICK_START" });
+    }
+    if (Number.isFinite(endLatNumber) && Number.isFinite(endLonNumber) && endLatNumber !== 0 && endLonNumber !== 0) {
+      markers.push({ lat: endLatNumber, lon: endLonNumber, label: "B", mode: "PICK_END" });
+    }
+    onDraftPickMarkersChange?.(markers);
+  }, [startLat, startLon, endLat, endLon, onDraftPickMarkersChange]);
 
   // Snapping & Geocoding State
   const [snappingStatusText, setSnappingStatusText] = useState("");
@@ -99,7 +127,7 @@ export function MapManagementTab({
 
   // Flood Severity & Traffic Status - Start empty for clean input
   const [routeWaterLevel, setRouteWaterLevel] = useState<number | string>("");
-  const [routeStatus, setRouteStatus] = useState<"WARNING" | "CLOSED" | "PASSABLE">("WARNING");
+  const [routeStatus, setRouteStatus] = useState<"WARNING" | "CLOSED" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE">("WARNING");
   const [selectedMeasure, setSelectedMeasure] = useState<string>(SAFETY_MEASURES[0]);
 
   // Images & Submitting
@@ -197,6 +225,9 @@ export function MapManagementTab({
       setAdminPickMode(null);
       onToast(`กำหนดจุดเริ่มต้น (A): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
       handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat);
+      if (endLat && endLon) {
+        triggerDualRoadSnapping(pickedCoordinate.lat, pickedCoordinate.lon, endLat, endLon);
+      }
     } else if (pickedCoordinate.mode === "PICK_END") {
       setEndLat(pickedCoordinate.lat);
       setEndLon(pickedCoordinate.lon);
@@ -332,6 +363,7 @@ export function MapManagementTab({
     setDetourName("");
     setDetourDesc("");
     setFieldImages([]);
+    onDraftPickMarkersChange?.([]);
     onToast("ล้างเส้นทางร่างและแบบฟอร์มแล้ว");
   };
 
@@ -375,14 +407,20 @@ export function MapManagementTab({
       return;
     }
 
-    const numSLat = Number(startLat);
-    const numSLon = Number(startLon);
-    const numELat = Number(endLat);
-    const numELon = Number(endLon);
+    const startPair = parseCoordinatePair(startCoordinateText);
+    const endPair = parseCoordinatePair(endCoordinateText);
+    const numSLat = startPair?.[0] ?? Number(startLat);
+    const numSLon = startPair?.[1] ?? Number(startLon);
+    const numELat = endPair?.[0] ?? Number(endLat);
+    const numELon = endPair?.[1] ?? Number(endLon);
     const numWaterLevel = Number(routeWaterLevel) || 0;
 
     if (draftCoordinates.length < 2 && (!numSLat || !numELat || isNaN(numSLat) || isNaN(numELat))) {
       onToast("กรุณากำหนดจุดพิกัดเริ่มต้นและสิ้นสุดบนแผนที่");
+      return;
+    }
+    if (routeMode === "DETOUR" && !detourRefId) {
+      onToast("กรุณาเลือกจุดน้ำท่วมที่เกี่ยวข้องก่อนบันทึกทางเลี่ยง");
       return;
     }
 
@@ -464,7 +502,7 @@ export function MapManagementTab({
               routeMode === "FLOOD" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"
             }`}
           >
-            เส้นน้ำท่วม (แดง)
+            เส้นน้ำท่วม
           </button>
           <button
             type="button"
@@ -473,7 +511,7 @@ export function MapManagementTab({
               routeMode === "DETOUR" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
             }`}
           >
-            ทางเลี่ยง (เหลือง)
+            ทางเลี่ยง
           </button>
         </div>
       </div>
@@ -533,7 +571,7 @@ export function MapManagementTab({
                 ) : (
                   systemData.floodRoutes.map((f) => (
                     <option key={f.id} value={f.id}>
-                      ทอรอ{f.id.replace(/^F[-_]?/i, "").slice(0, 2)} - {f.section_name}
+                      ทล.{f.route_no} - {f.section_name}
                     </option>
                   ))
                 )}
@@ -624,8 +662,10 @@ export function MapManagementTab({
               <span className="text-[10px] text-slate-400">พิกัดจุด A</span>
               <input
                 type="text"
-                value={startLat !== "" && startLon !== "" ? `${startLat}, ${startLon}` : ""}
-                onChange={(e) => { const pair = parseCoordinatePair(e.target.value); if (pair) { setStartLat(pair[0]); setStartLon(pair[1]); } else if (!e.target.value) { setStartLat(""); setStartLon(""); } }}
+                aria-label="พิกัดจุด A"
+                value={startCoordinateText}
+                onChange={(e) => setStartCoordinateText(e.target.value)}
+                onBlur={() => { const pair = parseCoordinatePair(startCoordinateText); if (pair) { setStartLat(pair[0]); setStartLon(pair[1]); } else { setStartLat(""); setStartLon(""); } }}
                 placeholder="วางจาก Google Maps เช่น 6.8340, 101.1860"
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px] placeholder:text-slate-600"
               />
@@ -634,8 +674,10 @@ export function MapManagementTab({
               <span className="text-[10px] text-slate-400">พิกัดจุด B</span>
               <input
                 type="text"
-                value={endLat !== "" && endLon !== "" ? `${endLat}, ${endLon}` : ""}
-                onChange={(e) => { const pair = parseCoordinatePair(e.target.value); if (pair) { setEndLat(pair[0]); setEndLon(pair[1]); } else if (!e.target.value) { setEndLat(""); setEndLon(""); } }}
+                aria-label="พิกัดจุด B"
+                value={endCoordinateText}
+                onChange={(e) => setEndCoordinateText(e.target.value)}
+                onBlur={() => { const pair = parseCoordinatePair(endCoordinateText); if (pair) { setEndLat(pair[0]); setEndLon(pair[1]); } else { setEndLat(""); setEndLon(""); } }}
                 placeholder="วางจาก Google Maps เช่น 6.8390, 101.1920"
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px] placeholder:text-slate-600"
               />
@@ -809,9 +851,11 @@ export function MapManagementTab({
                   onChange={(e: any) => setRouteStatus(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                 >
-                  <option value="WARNING">เฝ้าระวัง / รถเล็กผ่านได้ ๑ ช่องทาง</option>
-                  <option value="CLOSED">รถเล็กผ่านไม่ได้ / ปิดการจราจรเด็ดขาด</option>
-                  <option value="PASSABLE">สถานการณ์คลี่คลาย / ผ่านได้ปกติ</option>
+                  <option value="PASSABLE">ผ่านได้ปกติ</option>
+                  <option value="LIGHT_VEHICLES_ONLY">รถเล็กผ่านได้</option>
+                  <option value="ONE_LANE">รถเล็กผ่านได้ ๑ ช่องทาง</option>
+                  <option value="CLOSED">ผ่านไม่ได้</option>
+                  <option value="WARNING">เฝ้าระวัง</option>
                 </select>
               </div>
             </div>

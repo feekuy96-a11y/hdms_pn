@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
-import { getSystemDataAction } from "@/app/actions/doh-actions";
+import { getSystemDataAction, saveOfficeAction } from "@/app/actions/doh-actions";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload } from "@/db/default-data";
 import { AdminConsole } from "@/components/admin/AdminConsole";
 
@@ -41,7 +41,7 @@ export default function AdminPage() {
   const [draftWaypoints, setDraftWaypoints] = useState<[number, number][]>([]);
   const [incomingGisLines, setIncomingGisLines] = useState<[number, number][][]>([]);
   const [pickedCoordinate, setPickedCoordinate] = useState<{ lat: number; lon: number; mode: string; ts: number } | null>(null);
-  const [draftPickMarkers, setDraftPickMarkers] = useState<Array<{ lat: number; lon: number; label: string }>>([]);
+  const [draftPickMarkers, setDraftPickMarkers] = useState<Array<{ lat: number; lon: number; label: string; mode: string }>>([]);
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -198,6 +198,7 @@ export default function AdminPage() {
               onFocusCoordinates={(coords) => setFocusCoordinates(coords)}
               onToast={showToast}
               setIncomingGisLines={setIncomingGisLines}
+              setDraftPickMarkers={setDraftPickMarkers}
             />
           </div>
 
@@ -216,10 +217,11 @@ export default function AdminPage() {
               adminPickMode={adminPickMode}
               onCoordinatePicked={(lat, lon, mode) => {
                 setPickedCoordinate({ lat, lon, mode, ts: Date.now() });
-                if (mode === "PICK_START" || mode === "PICK_END") {
+                if (["PICK_START", "PICK_END", "PICK_HIGHWAY_START", "PICK_HIGHWAY_END"].includes(mode)) {
+                  const label = mode === "PICK_START" || mode === "PICK_HIGHWAY_START" ? "A" : "B";
                   setDraftPickMarkers((prev) => [
-                    ...prev.filter((item) => item.label !== (mode === "PICK_START" ? "A" : "B")),
-                    { lat, lon, label: mode === "PICK_START" ? "A" : "B" },
+                    ...prev.filter((item) => item.label !== label),
+                    { lat, lon, label, mode },
                   ]);
                 }
                 if (mode !== "ADD_WAYPOINT") {
@@ -232,6 +234,18 @@ export default function AdminPage() {
               onWaypointDragged={handleWaypointDragged}
               focusCoordinates={focusCoordinates}
               incomingGisLines={incomingGisLines}
+              onOfficeDragged={async (officeId, position) => {
+                const office = systemData.offices.find((item) => item.id === officeId);
+                if (!office) return;
+                try {
+                  const result = await saveOfficeAction({ ...office, lat: position.lat, lon: position.lon });
+                  if (!result.success) throw new Error("ไม่สามารถบันทึกตำแหน่งสำนักงานได้");
+                  await refetch();
+                  showToast(`บันทึกตำแหน่ง ${office.name} แล้ว`);
+                } catch (error: any) {
+                  showToast(`บันทึกตำแหน่งไม่สำเร็จ: ${error?.message || "โปรดลองอีกครั้ง"}`);
+                }
+              }}
             />
 
             {adminPickMode && (

@@ -75,3 +75,29 @@ test("admin workspaces expose their primary controls", async ({ page }) => {
     await expect(page.getByText(control, { exact: false }).first()).toBeVisible({ timeout: 10_000 });
   }
 });
+
+test("route editor keeps A and B markers visible and permits a map bend point", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Map editing is verified in the desktop workspace");
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "จัดการแผนที่");
+  const pointA = page.getByLabel("พิกัดจุด A");
+  const pointB = page.getByLabel("พิกัดจุด B");
+  await pointA.fill("6.8340, 101.1860");
+  await pointA.blur();
+  await pointB.fill("6.8390, 101.1920");
+  await pointB.blur();
+  await expect(page.locator(".doh-draft-endpoint")).toHaveCount(2);
+  await page.getByRole("button", { name: /เพิ่มจุดดัดเส้น/ }).click();
+  await expect(page.getByRole("button", { name: /คลิกถนนเพื่อดัด/ })).toBeVisible();
+});
+
+test("map management exposes all approved traffic choices without color labels", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop sidebar navigation is covered here; mobile smoke is separate");
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "จัดการแผนที่");
+  for (const label of ["ผ่านได้ปกติ", "รถเล็กผ่านได้", "รถเล็กผ่านได้ ๑ ช่องทาง", "ผ่านไม่ได้"]) {
+    await expect(page.getByRole("option", { name: label, exact: true })).toHaveCount(1);
+  }
+  await expect(page.getByRole("button", { name: "เส้นน้ำท่วม" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "ทางเลี่ยง" })).toBeVisible();
+});
