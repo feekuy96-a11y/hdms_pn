@@ -22,13 +22,13 @@ export async function readRouteFile(file: File): Promise<ExtractedGisFeature[]> 
       features.push(...parseXml(text, "kml").features);
     }
     data = { type: "FeatureCollection", features };
-  } else if (extension === "zip") {
+  } else if (extension === "zip" || extension === "shp") {
     data = await (await import("shpjs")).default(await file.arrayBuffer());
   } else if (extension === "kml" || extension === "gpx") {
     data = parseXml(await file.text(), extension);
   } else if (extension === "json" || extension === "geojson") {
     data = JSON.parse(await file.text());
-  } else throw new Error("ชนิดไฟล์ไม่รองรับ");
+  } else throw new Error("รองรับ KML, KMZ, Shapefile (.zip หรือ .shp), GeoJSON และ GPX เท่านั้น");
   const features = extractFeaturesFromGeoJson(data);
   if (!features.length) throw new Error("ไม่พบเส้นทางในไฟล์");
   const seen = new Set<string>();

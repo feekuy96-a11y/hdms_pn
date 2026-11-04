@@ -96,6 +96,7 @@ export function LongdoGisMap({
   const [showHighwayShields, setShowHighwayShields] = useState(false);
   const [showOffices, setShowOffices] = useState(true);
   const [showRoadLabels, setShowRoadLabels] = useState(true);
+  const [mapZoom, setMapZoom] = useState(APP_CONFIG.DEFAULT_ZOOM);
 
   const mapStyles = systemData.mapStyles || DEFAULT_MAP_STYLES;
 
@@ -148,6 +149,7 @@ export function LongdoGisMap({
           zoomControl: true,
           fadeAnimation: false,
         });
+        map.on("zoomend", () => setMapZoom(map.getZoom()));
 
         const longdoKey = process.env.NEXT_PUBLIC_LONGDO_MAP_KEY;
 
@@ -283,6 +285,8 @@ export function LongdoGisMap({
 
       // Hardware-accelerated canvas renderer for 60fps vector rendering with click tolerance
       const vectorCanvas = L.canvas ? (L.canvas as any)({ padding: 0.5, tolerance: 10 }) : undefined;
+      const highwayFeatureCount = (systemData.highwayLayers || []).reduce((count, layer) => count + (Array.isArray(layer.geojson_data?.features) ? layer.geojson_data.features.length : 0), 0);
+      const allowLineAnimation = highwayFeatureCount <= 250;
 
       // A. Draw Dual-Color GIS File Preview (เส้นสีน้ำเงิน = ข้อมูลที่กำลังนำเข้า)
       if (incomingGisLines && incomingGisLines.length > 0) {
@@ -314,7 +318,7 @@ export function LongdoGisMap({
         const weight = style?.weight || (isMain ? 5 : 3.5);
         const opacity = style?.opacity ?? 0.85;
         const dashArray = style?.pattern === "dash" ? (style.dashArray || "8, 6") : style?.pattern === "dot" ? "2, 6" : style?.pattern === "long-dash-dot" ? "14, 6, 3, 6" : undefined;
-        const animClass = style?.animation === "chaser" ? "doh-line-chaser" : style?.animation === "pulse" ? "doh-line-pulse" : style?.animation === "blink" ? "doh-line-blink" : style?.animation === "arrows" ? "doh-line-arrows" : "";
+        const animClass = allowLineAnimation && style?.animation === "chaser" ? "doh-line-chaser" : allowLineAnimation && style?.animation === "pulse" ? "doh-line-pulse" : allowLineAnimation && style?.animation === "blink" ? "doh-line-blink" : allowLineAnimation && style?.animation === "arrows" ? "doh-line-arrows" : "";
         const speedClass = style?.animationSpeed === "slow" ? "doh-anim-slow" : style?.animationSpeed === "fast" ? "doh-anim-fast" : "";
 
         if (layer.geojson_data) {
@@ -353,7 +357,7 @@ export function LongdoGisMap({
                 const ptsCount = props.points_count || (feature.geometry?.coordinates?.length || "");
 
                 // Tooltip showing highway name on hover
-                if (showHighwayShields && feature.geometry && ["LineString", "MultiLineString"].includes(feature.geometry.type)) {
+                if (showHighwayShields && mapZoom >= 11 && feature.geometry && ["LineString", "MultiLineString"].includes(feature.geometry.type)) {
                   const line = feature.geometry.type === "LineString"
                     ? feature.geometry.coordinates
                     : feature.geometry.coordinates.flat(1);
@@ -683,6 +687,7 @@ export function LongdoGisMap({
     showMainHwy,
     showSecHwy,
     showHighwayShields,
+    mapZoom,
     showOffices,
     draftCoordinates,
     draftWaypoints,
@@ -763,14 +768,6 @@ export function LongdoGisMap({
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
-                <span className="flex h-4 min-w-5 items-center justify-center rounded-sm border border-slate-800 bg-white px-0.5 text-[8px] font-bold text-slate-900">42</span>
-                <span>หมายเลขทางหลวง</span>
-              </span>
-              <input type="checkbox" checked={showHighwayShields} onChange={(e) => setShowHighwayShields(e.target.checked)} className="accent-slate-400 rounded" />
-            </label>
-
-            <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
-              <span className="flex items-center gap-2">
                 <span className="w-4 h-1.5 inline-block rounded" style={{ backgroundColor: mapStyles.flood?.color }} />
                 <span>เส้นน้ำท่วม <span className="ml-1 rounded-full bg-red-950 px-1.5 py-0.5 text-[10px] text-red-300">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
               </span>
@@ -806,6 +803,13 @@ export function LongdoGisMap({
                 onChange={(e) => setShowOffices(e.target.checked)}
                 className="accent-sky-400 rounded"
               />
+            </label>
+            <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
+              <span className="flex items-center gap-2">
+                <span className="flex h-4 min-w-5 items-center justify-center rounded-sm border border-slate-800 bg-white px-0.5 text-[8px] font-bold text-slate-900">42</span>
+                <span>หมายเลขทางหลวง</span>
+              </span>
+              <input type="checkbox" checked={showHighwayShields} onChange={(e) => setShowHighwayShields(e.target.checked)} className="accent-slate-400 rounded" />
             </label>
           </div>
 

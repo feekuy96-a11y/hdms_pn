@@ -312,6 +312,14 @@
 - **การทดสอบและผลลัพธ์ (Verification):** `npm run check` ผ่าน lint, typecheck และ production build; build แบบ static GitHub Pages ผ่าน; ตรวจ schema production และ deploy Edge Function `hdms-api` version 7 สำเร็จ; หลัง deploy ทดสอบเบราว์เซอร์บนโดเมนจริง พบแผนที่, LIVE, dashboard, ป้ายหมายเลขทางหลวง และหมุด A/B ครบโดยไม่มี page error; ทดสอบจริงผ่าน Edge API โดยสร้างทางเลี่ยงชั่วคราว, ยืนยันว่ารายการปรากฏหลังอ่านซ้ำ, soft-delete และยืนยันว่าไม่ปรากฏใน public payload แล้ว
 - **สถานะ:** ใช้งานจริง (ACTIVE)
 
+### [UPDATE-026] 2026-11-04: แก้ตำแหน่งสัญลักษณ์ นำเข้า Shapefile และลดภาระแผนที่
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** ปิดข้อบกพร่องที่พบหลังทดสอบหน้าเว็บจริง: ลำดับคำอธิบายสัญลักษณ์, ชนิดไฟล์ Shapefile และการใช้ทรัพยากรแผนที่
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `lib/route-import.ts`
+- **รายละเอียดการทำงาน (Technical Changes):** ย้ายตัวเลือกหมายเลขทางหลวงให้อยู่ใต้สำนักงาน/หมวดทางหลวงจริง; ป้ายจะแสดงเฉพาะเมื่อซูมถึงระดับอ่านข้อมูลได้เพื่อลดการบังข้อมูลและจำนวน DOM marker; ปิด animation ของเส้นทางอัตโนมัติเมื่อมีเส้นนำเข้ามากกว่า 250 เส้น; รับไฟล์ `.shp` เพิ่มจาก KML, KMZ, Shapefile `.zip`, GeoJSON/JSON และ GPX พร้อมข้อความข้อผิดพลาดที่ระบุชนิดไฟล์ที่รองรับ
+- **การทดสอบและผลลัพธ์ (Verification):** `npm run check` และ `git diff --check` ผ่านก่อนเผยแพร่
+- **สถานะ:** พร้อมเผยแพร่
+
 ### [UPDATE-021] 2026-11-04: ปรับ Popup แผนที่ Dashboard และช่องพิกัด
 - **ไฟล์ที่เกี่ยวข้อง:** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/MapManagementTab.tsx`
 - **รายละเอียด:** Popup ถนนใช้หัวข้อรหัสและรูปแบบ `ก.ม.` พร้อมแปลงค่าระยะเมตรเป็นรูปแบบหลักกิโลเมตร; เพิ่มป้าย Dashboard สรุปจำนวนน้ำท่วม/ทางเลี่ยงบนแผนที่; นำรายการหมุดระดับน้ำและภาพถ่ายออกจากแผงสัญลักษณ์; รวมพิกัดจุด A/B เป็นช่องเดียว รองรับการวางค่าคู่พิกัดจาก Google Maps

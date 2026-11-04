@@ -645,14 +645,14 @@ export function GisDataImportTab({
         <div>
           <h4 className="font-heading font-bold text-sm text-white">เลือกไฟล์โครงข่ายเส้นทางหลวง</h4>
           <p className="text-xs text-slate-400 mt-1">
-            รองรับ .kml, .kmz, .zip (Shapefile รวม .shp .dbf .prj), .geojson, .gpx (พิกัด EPSG:4326)
+            รองรับ .kml, .kmz, .zip หรือ .shp (Shapefile), .geojson, .json, .gpx (พิกัด EPSG:4326)
           </p>
         </div>
         <label className="inline-block bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-lg transition">
           เปิดเลือกไฟล์จากคอมพิวเตอร์
           <input
             type="file"
-            accept=".kml,.kmz,.zip,.geojson,.json,.gpx"
+            accept=".kml,.kmz,.zip,.shp,.geojson,.json,.gpx,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,application/geo+json,application/json"
             onChange={handleGisUpload}
             className="hidden"
           />
