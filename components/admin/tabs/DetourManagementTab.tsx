@@ -419,9 +419,6 @@ export function DetourManagementTab({
                         <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
                         <span>{item.route_name}</span>
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                        รหัส: {item.id}
-                      </div>
                     </td>
 
                     {/* Linked Flood Incident */}
@@ -540,9 +537,6 @@ export function DetourManagementTab({
                   <Signpost className="w-5 h-5 text-amber-400" />
                   <span>แก้ไขข้อมูลเส้นทางเลี่ยงน้ำท่วม</span>
                 </h4>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  รหัส: {editingDetour.id}
-                </p>
               </div>
               <button
                 type="button"
