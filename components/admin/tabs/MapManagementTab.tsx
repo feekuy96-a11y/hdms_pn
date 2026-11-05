@@ -12,6 +12,7 @@ import {
   Undo2,
   Camera,
   Save,
+  FileUp,
 } from "lucide-react";
 import { upsertRouteAction, snapRouteAction } from "@/app/actions/doh-actions";
 import {
@@ -25,6 +26,7 @@ import {
   HIGHWAY_ROUTES,
   SAFETY_MEASURES,
 } from "@/lib/constants";
+import { readRouteFile } from "@/lib/route-import";
 
 function parseCoordinatePair(value: string): [number, number] | null {
   const numbers = value.match(/-?\d+(?:\.\d+)?/g)?.map(Number) || [];
@@ -63,6 +65,7 @@ export function MapManagementTab({
   systemData,
   onDataRefresh,
   onToast,
+  showConfirmModal,
   showSuccessModal,
   showErrorModal,
   onNavigateToIncidents,
@@ -89,6 +92,9 @@ export function MapManagementTab({
   const [kmStart, setKmStart] = useState("");
   const [kmEnd, setKmEnd] = useState("");
   const [sectionName, setSectionName] = useState("");
+  const [startArea, setStartArea] = useState<{ subdistrict: string; district: string } | null>(null);
+  const [endArea, setEndArea] = useState<{ subdistrict: string; district: string } | null>(null);
+  const sectionNameManuallyEdited = useRef(false);
 
   // Detour Specific
   const [detourRefId, setDetourRefId] = useState("");
@@ -189,6 +195,7 @@ export function MapManagementTab({
       setKmStart(flood.km_start);
       setKmEnd(flood.km_end);
       setSectionName(flood.section_name);
+      sectionNameManuallyEdited.current = true;
       setRouteWaterLevel(flood.water_level_cm);
       setRouteStatus(flood.traffic_status);
       setStartLat(flood.lat_start);
@@ -228,18 +235,15 @@ export function MapManagementTab({
       setStartLon(pickedCoordinate.lon);
       setAdminPickMode(null);
       onToast(`กำหนดจุดเริ่มต้น (A): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
-      handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat);
-      if (endLat && endLon) {
-        triggerDualRoadSnapping(pickedCoordinate.lat, pickedCoordinate.lon, endLat, endLon);
-      }
+      handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat, "START");
+      if (endLat && endLon) setDraftCoordinates([[pickedCoordinate.lon, pickedCoordinate.lat], [Number(endLon), Number(endLat)]]);
     } else if (pickedCoordinate.mode === "PICK_END") {
       setEndLat(pickedCoordinate.lat);
       setEndLon(pickedCoordinate.lon);
       setAdminPickMode(null);
       onToast(`กำหนดจุดสิ้นสุด (B): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
-      if (startLat && startLon) {
-        triggerDualRoadSnapping(startLat, startLon, pickedCoordinate.lat, pickedCoordinate.lon);
-      }
+      handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat, "END");
+      if (startLat && startLon) setDraftCoordinates([[Number(startLon), Number(startLat)], [pickedCoordinate.lon, pickedCoordinate.lat]]);
     } else if (pickedCoordinate.mode === "ADD_WAYPOINT") {
       const newWp: [number, number] = [pickedCoordinate.lon, pickedCoordinate.lat];
       setDraftWaypoints((prev) => [...prev, newWp]);
@@ -317,13 +321,15 @@ export function MapManagementTab({
   };
 
   // Auto Geocode
-  const handleAutoGeocode = async (lon: number, lat: number) => {
+  const handleAutoGeocode = async (lon: number, lat: number, endpoint: "START" | "END") => {
     setIsGeocoding(true);
     try {
       const location = await reverseGeocodeTambonAmphoe(lon, lat);
       if (location) {
-        setSectionName(`ต.${location.subdistrict} อ.${location.district} จ.${location.province}`);
-        onToast(`ระบุพื้นที่อัตโนมัติ: ${location}`);
+        const area = { subdistrict: location.subdistrict, district: location.district };
+        if (endpoint === "START") setStartArea(area);
+        else setEndArea(area);
+        onToast(`ระบุพื้นที่อัตโนมัติ: ต.${location.subdistrict} อ.${location.district}`);
       }
     } catch {
       onToast("ไม่สามารถดึงข้อมูลตำบล/อำเภออัตโนมัติได้");
@@ -331,6 +337,12 @@ export function MapManagementTab({
       setIsGeocoding(false);
     }
   };
+
+  useEffect(() => {
+    if (sectionNameManuallyEdited.current || !startArea || !endArea) return;
+    const highway = routeNo ? `ทล.${routeNo} ` : "";
+    setSectionName(`${highway}(ต.${startArea.subdistrict} อ.${startArea.district} → ต.${endArea.subdistrict} อ.${endArea.district})`);
+  }, [routeNo, startArea, endArea]);
 
   // Swap Endpoints
   const handleSwapEndpoints = () => {
@@ -390,12 +402,31 @@ export function MapManagementTab({
     setKmStart("");
     setKmEnd("");
     setSectionName("");
+    setStartArea(null);
+    setEndArea(null);
+    sectionNameManuallyEdited.current = false;
     setRouteWaterLevel("");
     setDetourName("");
     setDetourDesc("");
     setFieldImages([]);
     onDraftPickMarkersChange?.([]);
     onToast("ล้างเส้นทางร่างและแบบฟอร์มแล้ว");
+  };
+
+  const requestClearRoute = () => {
+    const isDirty = Boolean(
+      routeNo || sectionName || detourName || detourDesc || startLat || startLon || endLat || endLon ||
+      draftCoordinates.length || draftWaypoints.length || fieldImages.length
+    );
+    if (isDirty && showConfirmModal) {
+      showConfirmModal(
+        "ล้างข้อมูลทั้งหมด?",
+        "ข้อมูลที่ยังไม่ได้บันทึก จุด A/B จุดดัด เส้นพรีวิว และรูปภาพในแบบฟอร์มนี้จะถูกล้าง โดยไม่กระทบข้อมูลที่บันทึกแล้ว",
+        handleClearRoute
+      );
+      return;
+    }
+    handleClearRoute();
   };
 
   // Generate Detour Advice
@@ -429,6 +460,38 @@ export function MapManagementTab({
 
     setFieldImages((prev) => [...prev, ...newBase64s].slice(0, 10));
     onToast(`เพิ่มภาพถ่ายหน้างานสำเร็จ (${newBase64s.length} รูป)`);
+  };
+
+  const handleRouteFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const features = await readRouteFile(file);
+      const feature = features[0];
+      const coordinates = feature?.coords || [];
+      if (coordinates.length < 2) throw new Error("ไม่พบแนวเส้นที่ใช้งานได้");
+      setDraftCoordinates(coordinates);
+      setDraftWaypoints([]);
+      const [firstLon, firstLat] = coordinates[0];
+      const [lastLon, lastLat] = coordinates[coordinates.length - 1];
+      setStartLat(firstLat); setStartLon(firstLon); setEndLat(lastLat); setEndLon(lastLon);
+      const properties = feature.properties || {};
+      const importedRouteNo = String(properties.route_no || properties.route || properties.ROAD_NO || "").replace(/^ทล\.?/i, "").trim();
+      const importedName = String(properties.section_name || properties.name || properties.route_name || file.name.replace(/\.[^.]+$/, ""));
+      if (routeMode === "FLOOD") {
+        if (importedRouteNo) setRouteNo(importedRouteNo);
+        sectionNameManuallyEdited.current = false;
+        setSectionName(importedName);
+      } else {
+        setDetourName(importedName);
+      }
+      onToast(`นำเข้าแนวเส้นจาก ${file.name} แล้ว (${coordinates.length} จุด) กรุณาตรวจรายละเอียดก่อนบันทึก`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "ไม่สามารถอ่านไฟล์ได้";
+      showErrorModal?.("นำเข้าไฟล์ไม่สำเร็จ", message);
+      if (!showErrorModal) onToast(message);
+    }
   };
 
   // Submit Flood or Detour Route
@@ -551,6 +614,11 @@ export function MapManagementTab({
         </div>
       </div>
 
+      <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-sky-700 bg-sky-950/30 px-3 py-2 text-xs font-semibold text-sky-300 hover:bg-sky-950/50">
+        <FileUp className="h-4 w-4" /> นำเข้าแนวเส้นเพื่อแก้รายละเอียดภายหลัง
+        <input type="file" className="sr-only" accept=".kml,.kmz,.zip,.shp,.geojson,.json,.gpx" onChange={handleRouteFileImport} />
+      </label>
+
       {/* Main Map Form Container */}
       <div className="bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-4">
         {/* 1. Highway Identification */}
@@ -630,7 +698,10 @@ export function MapManagementTab({
               <button
                 type="button"
                 disabled={isGeocoding}
-                onClick={() => handleAutoGeocode(Number(startLon), Number(startLat))}
+                onClick={async () => {
+                  await handleAutoGeocode(Number(startLon), Number(startLat), "START");
+                  if (endLon && endLat) await handleAutoGeocode(Number(endLon), Number(endLat), "END");
+                }}
                 className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1 bg-sky-950/60 border border-sky-800 px-2 py-0.5 rounded-lg font-heading transition"
               >
                 <Navigation className="w-3 h-3" />
@@ -640,7 +711,7 @@ export function MapManagementTab({
             <input
               type="text"
               value={sectionName}
-              onChange={(e) => setSectionName(e.target.value)}
+              onChange={(e) => { sectionNameManuallyEdited.current = true; setSectionName(e.target.value); }}
               placeholder="เช่น ตอน ดอนยาง - บานา (ต.ดอนยาง อ.หนองจิก)"
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
             />
@@ -764,10 +835,10 @@ export function MapManagementTab({
               </button>
               <button
                 type="button"
-                onClick={handleClearRoute}
+                onClick={requestClearRoute}
                 className="text-red-400 hover:underline font-heading"
               >
-                ล้างเส้นร่าง
+                ล้างข้อมูลทั้งหมด
               </button>
             </div>
           </div>

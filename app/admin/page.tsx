@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
-import { getSystemDataAction, saveOfficeAction, snapRouteAction } from "@/app/actions/doh-actions";
+import { getSystemDataAction, snapRouteAction } from "@/app/actions/doh-actions";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload } from "@/db/default-data";
 import { AdminConsole } from "@/components/admin/AdminConsole";
 
@@ -57,7 +57,7 @@ export default function AdminPage() {
     refetchInterval: isPollingActive ? 30 * 60 * 1000 : false,
     refetchIntervalInBackground: false,
   });
-  useSystemFavicon(systemData.systemSettings?.logoUrl);
+  useSystemFavicon(systemData.systemSettings?.logoUrl, systemData.systemSettings?.name, systemData.systemSettings?.org);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -121,11 +121,11 @@ export default function AdminPage() {
                   ส่วนราชการ
                 </span>
                 <span className="text-[11px] text-amber-300 font-heading font-medium hidden md:inline truncate">
-                  สำนักงานทางหลวงที่ ๑๘ กรมทางหลวง
+                  {systemData.systemSettings?.org || "แขวงทางหลวงปัตตานี กรมทางหลวง"}
                 </span>
               </div>
               <h1 className="font-heading text-xs sm:text-sm font-bold text-white whitespace-nowrap truncate">
-                ศูนย์ปฏิบัติการและรายงานข้อมูลอุทกภัย แขวงทางหลวงปัตตานี
+                {systemData.systemSettings?.name || "ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย"}
               </h1>
             </div>
           </div>
@@ -252,18 +252,6 @@ export default function AdminPage() {
               draftMode={draftMode}
               focusCoordinates={focusCoordinates}
               incomingGisLines={incomingGisLines}
-              onOfficeDragged={async (officeId, position) => {
-                const office = systemData.offices.find((item) => item.id === officeId);
-                if (!office) return;
-                try {
-                  const result = await saveOfficeAction({ ...office, lat: position.lat, lon: position.lon });
-                  if (!result.success) throw new Error("ไม่สามารถบันทึกตำแหน่งสำนักงานได้");
-                  await refetch();
-                  showToast(`บันทึกตำแหน่ง ${office.name} แล้ว`);
-                } catch (error: any) {
-                  showToast(`บันทึกตำแหน่งไม่สำเร็จ: ${error?.message || "โปรดลองอีกครั้ง"}`);
-                }
-              }}
             />
 
             {adminPickMode && (

@@ -29,6 +29,7 @@ import {
   extractDirectionalAdvice,
   generateAutoDetourAdvice,
 } from "@/lib/gis-utils";
+import { exportLineFeatures, GisExportFormat, parseLineCoordinates } from "@/lib/gis-export";
 
 interface DetourManagementTabProps {
   systemData: SystemDataPayload;
@@ -254,6 +255,23 @@ export function DetourManagementTab({
     onToast("ส่งออกข้อมูลเส้นทางเลี่ยง CSV เรียบร้อยแล้ว");
   };
 
+  const handleExport = async (format: GisExportFormat) => {
+    if (!filteredDetours.length) return onToast("ไม่มีข้อมูลเส้นทางเลี่ยงตามตัวกรองสำหรับส่งออก");
+    if (format === "csv") return handleExportCSV();
+    const features = filteredDetours.map((route) => ({
+      type: "Feature" as const,
+      properties: {
+        id: route.id, name: route.route_name, route_name: route.route_name,
+        description: route.description, flood_id_ref: route.flood_id_ref || "",
+        active: route.is_active, updated_at: route.updated_at,
+      },
+      geometry: { type: "LineString" as const, coordinates: parseLineCoordinates(route.coordinates_json) },
+    })).filter((feature) => feature.geometry.coordinates.length >= 2);
+    if (!features.length) return onToast("รายการตามตัวกรองไม่มีแนวเส้นสำหรับส่งออก GIS");
+    await exportLineFeatures(features, format, `detours-${new Date().toISOString().slice(0, 10)}`);
+    onToast(`ส่งออก ${format.toUpperCase()} สำเร็จ`);
+  };
+
   return (
     <div className="space-y-4">
       {/* 1. Header & Summary Metric Cards */}
@@ -334,14 +352,13 @@ export function DetourManagementTab({
 
         {/* Primary Action Buttons */}
         <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
-          <button
-            type="button"
-            onClick={handleExportCSV}
-            className="bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-slate-600 px-3 py-1.5 rounded-xl font-heading text-xs flex items-center gap-1.5 transition shadow-sm"
-          >
+          <label className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-2 text-xs text-slate-200">
             <FileText className="w-3.5 h-3.5 text-sky-400" />
-            <span>ส่งออก CSV</span>
-          </button>
+            <select aria-label="ส่งออกทางเลี่ยงตามตัวกรอง" defaultValue="" onChange={(e) => { if (e.target.value) void handleExport(e.target.value as GisExportFormat); e.target.value = ""; }} className="min-h-10 bg-transparent font-heading outline-none">
+              <option value="" disabled>ส่งออกตามตัวกรอง…</option>
+              <option value="csv">CSV</option><option value="geojson">GeoJSON</option><option value="kml">KML</option><option value="kmz">KMZ</option><option value="shapefile">Shapefile ZIP</option>
+            </select>
+          </label>
           <button
             type="button"
             onClick={onAddDetour}

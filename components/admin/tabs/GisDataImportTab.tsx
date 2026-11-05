@@ -1,5 +1,6 @@
 "use client";
 import { readRouteFile } from "@/lib/route-import";
+import { exportLineFeatures, GisExportFormat } from "@/lib/gis-export";
 
 import React, { useEffect, useMemo, useState } from "react";
 import { SystemDataPayload } from "@/db/default-data";
@@ -492,6 +493,26 @@ export function GisDataImportTab({
       return aNumber - bNumber || String(a.routeNo).localeCompare(String(b.routeNo), "th", { numeric: true }) || (kilometerPostMeters(a.kmStart) ?? Infinity) - (kilometerPostMeters(b.kmStart) ?? Infinity);
     });
   })();
+
+  const handleExportHighwayGis = async (format: GisExportFormat) => {
+    if (format === "csv") return handleExportHighwaySpecsCSV();
+    const features = matchingHighwayFeatures.flatMap((item) => {
+      const layer = (systemData.highwayLayers || []).find((candidate) => candidate.layer_id === item.layerId);
+      const feature = layer?.geojson_data?.features?.[item.featureIdx];
+      if (!feature?.geometry || feature.geometry.type !== "LineString") return [];
+      return [{
+        type: "Feature" as const,
+        properties: {
+          ...(feature.properties || {}), route_no: item.routeNo, section_name: item.sectionName,
+          highway_type: item.highwayType, km_start: item.kmStart, km_end: item.kmEnd,
+        },
+        geometry: { type: "LineString" as const, coordinates: feature.geometry.coordinates },
+      }];
+    });
+    if (!features.length) return onToast("ไม่มีแนวเส้นตามผลการค้นหาสำหรับส่งออก GIS");
+    await exportLineFeatures(features, format, `highway-network-${new Date().toISOString().slice(0, 10)}`);
+    onToast(`ส่งออก ${format.toUpperCase()} สำเร็จ`);
+  };
   const matchingHighwayFeatures = allHighwayFeatures.filter((item) =>
     [item.routeNo, item.sectionName, item.kmStart, item.kmEnd, item.responsibleOffice, item.highwayType === "MAIN_HIGHWAY" ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"]
       .some((value) => String(value).toLocaleLowerCase("th").includes(routeSearch.trim().toLocaleLowerCase("th")))
@@ -1036,15 +1057,13 @@ export function GisDataImportTab({
             <span className="text-[11px] bg-slate-900 border border-slate-700 px-2.5 py-1.5 rounded-xl text-amber-300 font-mono">
               {allHighwayFeatures.length} เส้นทาง
             </span>
-            <button
-              type="button"
-              onClick={handleExportHighwaySpecsCSV}
-              className="bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 px-2.5 py-1.5 rounded-xl text-xs font-heading flex items-center gap-1.5 transition shadow-sm"
-              title="ส่งออกรายการทางหลวงทั้งหมดเป็น CSV"
-            >
+            <label className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-2 text-xs text-slate-200 shadow-sm">
               <FileSpreadsheet className="w-3.5 h-3.5 text-sky-400" />
-              <span>ส่งออก CSV</span>
-            </button>
+              <select aria-label="ส่งออกโครงข่ายตามผลการค้นหา" defaultValue="" onChange={(e) => { if (e.target.value) void handleExportHighwayGis(e.target.value as GisExportFormat); e.target.value = ""; }} className="min-h-10 bg-transparent font-heading outline-none">
+                <option value="" disabled>ส่งออกตามผลค้นหา…</option>
+                <option value="csv">CSV</option><option value="geojson">GeoJSON</option><option value="kml">KML</option><option value="kmz">KMZ</option><option value="shapefile">Shapefile ZIP</option>
+              </select>
+            </label>
             <button
               type="button"
               onClick={() =>

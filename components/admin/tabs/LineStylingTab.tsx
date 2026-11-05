@@ -293,12 +293,22 @@ export function LineStylingTab({
                 </div>
                 <input
                   type="range"
-                  min="2"
+                  min="0.1"
                   max="16"
-                  step="1"
+                  step="0.1"
                   value={currentItem.weight}
                   onChange={(e) => handleUpdateCurrentStyle({ weight: Number(e.target.value) })}
                   className="w-full accent-amber-500 cursor-pointer"
+                />
+                <input
+                  type="number"
+                  aria-label="ความหนาเส้นเป็นพิกเซล"
+                  min="0.1"
+                  max="16"
+                  step="0.1"
+                  value={currentItem.weight}
+                  onChange={(e) => handleUpdateCurrentStyle({ weight: Math.min(16, Math.max(0.1, Number(e.target.value) || 0.1)) })}
+                  className="mt-2 w-28 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white font-mono"
                 />
               </div>
 
@@ -362,6 +372,54 @@ export function LineStylingTab({
                 <option value="normal">ปานกลาง เหมาะสม (Normal)</option>
                 <option value="fast">เร็ว ฉุกเฉิน (Fast)</option>
               </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 border-t border-slate-800 pt-4 sm:grid-cols-3">
+            <label className="flex min-h-11 items-center gap-2 text-xs text-slate-200">
+              <input
+                type="checkbox"
+                checked={Boolean(currentItem.borderActive)}
+                onChange={(e) => handleUpdateCurrentStyle({ borderActive: e.target.checked })}
+                className="h-4 w-4 accent-amber-500"
+              />
+              เปิดเส้นขอบ (Stroke/Casing)
+            </label>
+            <div>
+              <label className="mb-1 block text-xs text-slate-300">สีเส้นขอบ</label>
+              <input
+                type="color"
+                value={currentItem.borderColor || "#ffffff"}
+                disabled={!currentItem.borderActive}
+                onChange={(e) => handleUpdateCurrentStyle({ borderColor: e.target.value })}
+                className="h-10 w-full rounded-lg border border-slate-700 bg-slate-900 disabled:opacity-40"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-300">ความหนาเส้นขอบ (px)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min="0.1"
+                  max="8"
+                  step="0.1"
+                  value={currentItem.borderWidth || 0.1}
+                  disabled={!currentItem.borderActive}
+                  onChange={(e) => handleUpdateCurrentStyle({ borderWidth: Number(e.target.value) })}
+                  className="min-w-0 flex-1 accent-amber-500 disabled:opacity-40"
+                />
+                <input
+                  type="number"
+                  aria-label="ความหนาเส้นขอบเป็นพิกเซล"
+                  min="0.1"
+                  max="8"
+                  step="0.1"
+                  value={currentItem.borderWidth || 0.1}
+                  disabled={!currentItem.borderActive}
+                  onChange={(e) => handleUpdateCurrentStyle({ borderWidth: Math.min(8, Math.max(0.1, Number(e.target.value) || 0.1)) })}
+                  className="w-20 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-white disabled:opacity-40"
+                />
+              </div>
             </div>
           </div>
         </div>

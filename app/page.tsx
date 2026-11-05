@@ -89,7 +89,7 @@ export default function HomePage() {
     refetchInterval: isPollingActive ? 30 * 60 * 1000 : false,
     refetchIntervalInBackground: false,
   });
-  useSystemFavicon(systemData.systemSettings?.logoUrl);
+  useSystemFavicon(systemData.systemSettings?.logoUrl, systemData.systemSettings?.name, systemData.systemSettings?.org);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -207,7 +207,7 @@ export default function HomePage() {
           <div className="truncate">
             <div className="flex items-center gap-2">
               <span className="font-heading font-black text-amber-400 text-xs sm:text-sm tracking-wide">
-                {systemData.systemSettings?.org || "แขวงทางหลวงปัตตานี กรมทางหลวง"}
+                {systemData.systemSettings?.name || "ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย"}
               </span>
               <span className="bg-amber-400 text-slate-950 text-[10px] font-heading font-extrabold px-1.5 py-0.2 rounded uppercase">
                 ศูนย์ปฏิบัติการฉุกเฉิน 24 ชม.
@@ -217,7 +217,7 @@ export default function HomePage() {
               </span>
             </div>
             <h1 className="font-heading text-xs sm:text-sm font-semibold text-slate-300 truncate">
-              {systemData.systemSettings?.name || "ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย"}
+              {systemData.systemSettings?.org || "แขวงทางหลวงปัตตานี กรมทางหลวง"}
             </h1>
           </div>
         </div>

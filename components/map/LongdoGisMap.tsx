@@ -98,20 +98,26 @@ export function LongdoGisMap({
   const [showRoadLabels, setShowRoadLabels] = useState(true);
   const [legendRouteList, setLegendRouteList] = useState<"MAIN_HIGHWAY" | "SECOND_HIGHWAY" | null>(null);
   const [mapZoom, setMapZoom] = useState(APP_CONFIG.DEFAULT_ZOOM);
+  const [animationsEnabled, setAnimationsEnabled] = useState(true);
 
   const mapStyles = systemData.mapStyles || DEFAULT_MAP_STYLES;
   const legendRoutes = (type: "MAIN_HIGHWAY" | "SECOND_HIGHWAY") => {
-    const numbers = new Set<string>();
+    const routes = new globalThis.Map<string, string>();
     (systemData.highwayLayers || []).forEach((layer) => {
       if (!layer.is_visible) return;
       (layer.geojson_data?.features || []).forEach((feature: any) => {
         const props = feature.properties || {};
         const featureType = props.highway_type || (layer.layer_id === "SECOND_HIGHWAY" ? "SECOND_HIGHWAY" : "MAIN_HIGHWAY");
         const code = props.route_no || props.route_code || props.ROAD_NO || props.route || props.code;
-        if (featureType === type && props.is_visible !== false && code) numbers.add(String(code));
+        const name = props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || "ไม่ระบุชื่อตอน";
+        if (featureType === type && props.is_visible !== false && code) {
+          routes.set(`${String(code)}::${String(name)}`, String(name));
+        }
       });
     });
-    return [...numbers].sort((a, b) => a.localeCompare(b, "th", { numeric: true }));
+    return [...routes.entries()]
+      .map(([key, name]) => ({ code: key.split("::")[0], name }))
+      .sort((a, b) => a.code.localeCompare(b.code, "th", { numeric: true }) || a.name.localeCompare(b.name, "th"));
   };
 
   // Sync dynamic CSS variables on root when mapStyles update
@@ -125,6 +131,18 @@ export function LongdoGisMap({
       if (styles.secondary?.color) root.style.setProperty("--doh-color-secondary", styles.secondary.color);
     }
   }, [systemData.mapStyles]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const syncAnimationState = () => setAnimationsEnabled(!document.hidden && !media.matches);
+    syncAnimationState();
+    document.addEventListener("visibilitychange", syncAnimationState);
+    media.addEventListener?.("change", syncAnimationState);
+    return () => {
+      document.removeEventListener("visibilitychange", syncAnimationState);
+      media.removeEventListener?.("change", syncAnimationState);
+    };
+  }, []);
 
   // Sync refs to avoid stale closures in Leaflet events
   const adminPickModeRef = useRef(adminPickMode);
@@ -172,9 +190,9 @@ export function LongdoGisMap({
             maxZoom: 19,
             attribution: "© OpenStreetMap • ขท.ปัตตานี",
           }),
-          sat: L.tileLayer("https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
-            maxZoom: 20,
-            attribution: "© Google Hybrid Satellite • ขท.ปัตตานี",
+          sat: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+            maxZoom: 19,
+            attribution: "Tiles © Esri • ขท.ปัตตานี",
           }),
           longdo: L.tileLayer(
             `https://ms.longdo.com/mmmap/tile.php?zoom={z}&x={x}&y={y}&key=${longdoKey}&proj=epsg3857&mode=icons`,
@@ -267,6 +285,16 @@ export function LongdoGisMap({
     }
   }, [focusCoordinates]);
 
+  // Coordinate editing has priority over feature inspection. The cursor is also
+  // restored reliably when the operator exits the edit command.
+  useEffect(() => {
+    const container = leafletMapRef.current?.getContainer?.();
+    if (!container) return;
+    container.style.cursor = adminPickMode ? "crosshair" : "";
+    if (adminPickMode) leafletMapRef.current?.closePopup?.();
+    return () => { container.style.cursor = ""; };
+  }, [adminPickMode]);
+
   // 3. Switch Base Map Tile
   const switchBaseMap = (key: "road" | "sat" | "longdo") => {
     const map = leafletMapRef.current;
@@ -300,7 +328,8 @@ export function LongdoGisMap({
       // Hardware-accelerated canvas renderer for 60fps vector rendering with click tolerance
       const vectorCanvas = L.canvas ? (L.canvas as any)({ padding: 0.5, tolerance: 10 }) : undefined;
       const highwayFeatureCount = (systemData.highwayLayers || []).reduce((count, layer) => count + (Array.isArray(layer.geojson_data?.features) ? layer.geojson_data.features.length : 0), 0);
-      const allowLineAnimation = highwayFeatureCount <= 250;
+      const animatedRouteCount = (systemData.floodRoutes || []).filter((route) => route.is_active).length + (systemData.detourRoutes || []).filter((route) => route.is_active).length;
+      const allowLineAnimation = animationsEnabled && !adminPickModeRef.current && highwayFeatureCount <= 250 && animatedRouteCount <= 80;
       const highwaySignPositions: Array<{ x: number; y: number }> = [];
 
       // A. Draw Dual-Color GIS File Preview (เส้นสีน้ำเงิน = ข้อมูลที่กำลังนำเข้า)
@@ -404,19 +433,30 @@ export function LongdoGisMap({
                   );
                 }
 
+                // Editing commands take precedence over the normal road popup.
+                geoFeatureLayer.on("click", (event: any) => {
+                  const mode = adminPickModeRef.current;
+                  if (!mode) return;
+                  L.DomEvent.stopPropagation(event);
+                  geoFeatureLayer.closePopup?.();
+                  const point = event.latlng;
+                  onCoordinatePickedRef.current?.(
+                    Number(point.lat.toFixed(6)),
+                    Number(point.lng.toFixed(6)),
+                    mode
+                  );
+                });
+
                 // Detailed dossier popup when clicked
                 geoFeatureLayer.bindPopup(`
                   <div class="text-xs p-2.5 min-w-[270px] font-body bg-slate-950 text-white rounded-xl border-2 shadow-2xl" style="border-color: ${color}">
                     <div class="flex items-center justify-between pb-1.5 border-b border-slate-800 gap-2">
                       <span class="text-white text-base font-bold font-heading tracking-wide">
-                        ${code ? `ทล.${escapeHtml(code)} | ` : ""}${escapeHtml(name)}
-                      </span>
-                      <span class="text-[10px] text-amber-300 font-heading font-semibold">
-                        ${featureIsMain ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"}
+                        ${code ? `ทล.${escapeHtml(code)} ` : ""}${escapeHtml(name)}
                       </span>
                     </div>
                     <div class="mt-2">
-                      ${props.km_start !== undefined && props.km_start !== null && String(props.km_start).trim() !== "" ? `<p class="text-amber-300 text-[11px] mt-0.5 font-mono">ระหว่าง ก.ม. ${escapeHtml(formatKmPost(props.km_start))}${props.km_end !== undefined && props.km_end !== null && String(props.km_end).trim() !== "" ? ` ถึง ก.ม. ${escapeHtml(formatKmPost(props.km_end))}` : ""}</p>` : ""}
+                      ${props.km_start !== undefined && props.km_start !== null && String(props.km_start).trim() !== "" ? `<p class="text-amber-300 text-[11px] mt-0.5 font-mono">ระหว่าง กม.${escapeHtml(formatKmPost(props.km_start))}${props.km_end !== undefined && props.km_end !== null && String(props.km_end).trim() !== "" ? ` ถึง กม.${escapeHtml(formatKmPost(props.km_end))}` : ""}</p>` : ""}
                     </div>
                     <div class="grid grid-cols-2 gap-1.5 mt-2.5 pt-2 border-t border-slate-800 text-[11px]">
                       <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
@@ -426,6 +466,9 @@ export function LongdoGisMap({
                       <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
                         <span class="text-slate-400 block text-[10px]">ช่องจราจร</span>
                         <strong class="text-sky-400 font-mono text-[10px]">${props.lanes || "๔ ช่องจราจร"}</strong>
+                      </div>
+                      <div class="col-span-2 mt-0.5 rounded-lg border border-slate-700 bg-slate-900/90 px-2 py-1.5 text-center text-[10px] font-semibold text-amber-300">
+                        ${featureIsMain ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"}
                       </div>
                     </div>
                   </div>
@@ -454,7 +497,7 @@ export function LongdoGisMap({
             const detourStyle = mapStyles.detour;
             const dColor = detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
             const dDash = detourStyle?.pattern === "solid" ? undefined : (detourStyle?.dashArray || LAYER_CONFIG.DETOUR_YELLOW_LINE.dashArray);
-            const dAnim = detourStyle?.animation === "chaser" ? "doh-line-chaser" : detourStyle?.animation === "pulse" ? "doh-line-pulse" : detourStyle?.animation === "blink" ? "doh-line-blink" : detourStyle?.animation === "arrows" ? "doh-line-arrows" : "";
+            const dAnim = allowLineAnimation && detourStyle?.animation === "chaser" ? "doh-line-chaser" : allowLineAnimation && detourStyle?.animation === "pulse" ? "doh-line-pulse" : allowLineAnimation && detourStyle?.animation === "blink" ? "doh-line-blink" : allowLineAnimation && detourStyle?.animation === "arrows" ? "doh-line-arrows" : "";
             const dSpeed = detourStyle?.animationSpeed === "slow" ? "doh-anim-slow" : detourStyle?.animationSpeed === "fast" ? "doh-anim-fast" : "";
 
             const polyline = L.polyline(latLngs as any, {
@@ -499,7 +542,7 @@ export function LongdoGisMap({
           const fWeight = (floodStyle?.weight || LAYER_CONFIG.FLOOD_RED_LINE.weight) + (isSelected ? 1.5 : 0);
           const fOpacity = floodStyle?.opacity ?? LAYER_CONFIG.FLOOD_RED_LINE.opacity;
           const fDash = floodStyle?.pattern === "dash" ? (floodStyle.dashArray || "8, 6") : undefined;
-          const fAnim = floodStyle?.animation === "pulse" ? "doh-line-pulse" : floodStyle?.animation === "chaser" ? "doh-line-chaser" : floodStyle?.animation === "blink" ? "doh-line-blink" : floodStyle?.animation === "arrows" ? "doh-line-arrows" : "";
+          const fAnim = allowLineAnimation && floodStyle?.animation === "pulse" ? "doh-line-pulse" : allowLineAnimation && floodStyle?.animation === "chaser" ? "doh-line-chaser" : allowLineAnimation && floodStyle?.animation === "blink" ? "doh-line-blink" : allowLineAnimation && floodStyle?.animation === "arrows" ? "doh-line-arrows" : "";
           const fSpeed = floodStyle?.animationSpeed === "slow" ? "doh-anim-slow" : floodStyle?.animationSpeed === "fast" ? "doh-anim-fast" : "";
 
           if (coords.length >= 2) {
@@ -569,7 +612,7 @@ export function LongdoGisMap({
             const x = updates.length < 2 ? 10 : 8 + (index * 104) / (updates.length - 1);
             return `${x},${y}`;
           }).join(" ");
-          marker.bindPopup(`<div style="width:250px;color:#0f172a;font-family:Sarabun,sans-serif"><strong>ทล.${escapeHtml(flood.route_no)} · ${escapeHtml(flood.section_name)}</strong><div style="font-size:12px;margin-top:3px">ก.ม. ${escapeHtml(formatKmPost(flood.km_start))} ถึง ก.ม. ${escapeHtml(formatKmPost(flood.km_end))}</div>${flood.latest_photo_url ? `<img src="${escapeHtml(flood.latest_photo_url)}" alt="ภาพสถานการณ์" style="width:100%;height:108px;object-fit:cover;border-radius:8px;margin-top:7px"/>` : ""}<div style="margin-top:7px;font-size:13px"><b>ระดับน้ำล่าสุด ${flood.water_level_cm} ซม.</b> · ${escapeHtml(trafficStatusLabel(flood.traffic_status))}</div>${updates.length ? `<svg viewBox="0 0 120 56" style="width:100%;height:80px;margin-top:4px"><line x1="8" y1="48" x2="112" y2="48" stroke="#cbd5e1"/><polyline points="${linePoints}" fill="none" stroke="#f59e0b" stroke-width="2"/>${chartPoints}</svg><div style="font-size:10px;color:#64748b">ชี้ที่จุดกราฟเพื่อดูเวลาและระดับน้ำ</div>` : `<div style="font-size:11px;color:#64748b;margin-top:3px">ยังไม่มีข้อมูลระดับน้ำย้อนหลัง</div>`}</div>`, { maxWidth: 280 });
+          marker.bindPopup(`<div style="width:250px;color:#0f172a;font-family:Sarabun,sans-serif"><strong>ทล.${escapeHtml(flood.route_no)} ${escapeHtml(flood.section_name)}</strong><div style="font-size:12px;margin-top:3px">ระหว่าง กม.${escapeHtml(formatKmPost(flood.km_start))} ถึง กม.${escapeHtml(formatKmPost(flood.km_end))}</div>${flood.latest_photo_url ? `<img src="${escapeHtml(flood.latest_photo_url)}" alt="ภาพสถานการณ์" style="width:100%;height:108px;object-fit:cover;border-radius:8px;margin-top:7px"/>` : ""}<div style="margin-top:7px;font-size:13px"><b>ระดับน้ำล่าสุด ${flood.water_level_cm} ซม.</b> · ${escapeHtml(trafficStatusLabel(flood.traffic_status))}</div>${updates.length ? `<svg viewBox="0 0 120 56" style="width:100%;height:80px;margin-top:4px"><line x1="8" y1="48" x2="112" y2="48" stroke="#cbd5e1"/><polyline points="${linePoints}" fill="none" stroke="#f59e0b" stroke-width="2"/>${chartPoints}</svg><div style="font-size:10px;color:#64748b">ชี้ที่จุดกราฟเพื่อดูเวลาและระดับน้ำ</div>` : `<div style="font-size:11px;color:#64748b;margin-top:3px">ยังไม่มีข้อมูลระดับน้ำย้อนหลัง</div>`}</div>`, { maxWidth: 280 });
           marker.on("click", (e: any) => {
             L.DomEvent.stopPropagation(e);
             onSelectFlood(flood.id);
@@ -703,6 +746,8 @@ export function LongdoGisMap({
     draftMode,
     incomingGisLines,
     publicMode,
+    animationsEnabled,
+    adminPickMode,
   ]);
 
   return (
@@ -748,7 +793,7 @@ export function LongdoGisMap({
           </div>
 
           <div className="space-y-1.5">
-            <div onPointerEnter={(event) => { if (event.pointerType === "mouse") setLegendRouteList("MAIN_HIGHWAY"); }} onPointerLeave={(event) => { if (event.pointerType === "mouse") setLegendRouteList(null); }}>
+            <div tabIndex={0} aria-label="แสดงรายการทางหลวงสายหลัก" onFocus={() => setLegendRouteList("MAIN_HIGHWAY")} onBlur={() => setLegendRouteList(null)} onPointerEnter={(event) => { if (event.pointerType === "mouse") setLegendRouteList("MAIN_HIGHWAY"); }} onPointerLeave={(event) => { if (event.pointerType === "mouse") setLegendRouteList(null); }}>
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
                 <span className="w-4 h-1.5 inline-block rounded" style={{ backgroundColor: mapStyles.primary?.color }} />
@@ -761,11 +806,10 @@ export function LongdoGisMap({
                 className="accent-emerald-500 rounded"
               />
             </label>
-            <button type="button" aria-expanded={legendRouteList === "MAIN_HIGHWAY"} onClick={() => setLegendRouteList((current) => current === "MAIN_HIGHWAY" ? null : "MAIN_HIGHWAY")} className="ml-6 text-xs text-sky-300 underline">ดูหมายเลขสายหลัก</button>
-            {legendRouteList === "MAIN_HIGHWAY" && <div className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white">{legendRoutes("MAIN_HIGHWAY").join(", ") || "ไม่มีสายทางที่แสดง"}</div>}
+            {legendRouteList === "MAIN_HIGHWAY" && <div role="tooltip" className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white shadow-xl">{legendRoutes("MAIN_HIGHWAY").length ? legendRoutes("MAIN_HIGHWAY").map((route) => <div key={`${route.code}-${route.name}`} className="border-b border-slate-800 py-1 last:border-0"><strong className="text-emerald-300">ทล.{route.code}</strong> — {route.name}</div>) : "ไม่มีสายทางที่แสดง"}</div>}
             </div>
 
-            <div onPointerEnter={(event) => { if (event.pointerType === "mouse") setLegendRouteList("SECOND_HIGHWAY"); }} onPointerLeave={(event) => { if (event.pointerType === "mouse") setLegendRouteList(null); }}>
+            <div tabIndex={0} aria-label="แสดงรายการทางหลวงสายรอง" onFocus={() => setLegendRouteList("SECOND_HIGHWAY")} onBlur={() => setLegendRouteList(null)} onPointerEnter={(event) => { if (event.pointerType === "mouse") setLegendRouteList("SECOND_HIGHWAY"); }} onPointerLeave={(event) => { if (event.pointerType === "mouse") setLegendRouteList(null); }}>
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
                 <span className="w-4 h-1.5 inline-block rounded" style={{ backgroundColor: mapStyles.secondary?.color }} />
@@ -778,8 +822,7 @@ export function LongdoGisMap({
                 className="accent-sky-400 rounded"
               />
             </label>
-            <button type="button" aria-expanded={legendRouteList === "SECOND_HIGHWAY"} onClick={() => setLegendRouteList((current) => current === "SECOND_HIGHWAY" ? null : "SECOND_HIGHWAY")} className="ml-6 text-xs text-sky-300 underline">ดูหมายเลขสายรอง</button>
-            {legendRouteList === "SECOND_HIGHWAY" && <div className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white">{legendRoutes("SECOND_HIGHWAY").join(", ") || "ไม่มีสายทางที่แสดง"}</div>}
+            {legendRouteList === "SECOND_HIGHWAY" && <div role="tooltip" className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white shadow-xl">{legendRoutes("SECOND_HIGHWAY").length ? legendRoutes("SECOND_HIGHWAY").map((route) => <div key={`${route.code}-${route.name}`} className="border-b border-slate-800 py-1 last:border-0"><strong className="text-sky-300">ทล.{route.code}</strong> — {route.name}</div>) : "ไม่มีสายทางที่แสดง"}</div>}
             </div>
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">

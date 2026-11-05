@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { FloodRoute, SystemDataPayload } from "@/db/default-data";
 import { ClipboardList, Plus, FileText, Search, Trash2, Edit, CheckCircle2 } from "lucide-react";
 import { deleteRouteAction, setIncidentStatusAction, saveTimelineUpdateAction, getDeletedRoutesAction, restoreRouteAction } from "@/app/actions/doh-actions";
+import { exportLineFeatures, GisExportFormat, parseLineCoordinates } from "@/lib/gis-export";
 
 interface IncidentRegistryTabProps {
   systemData: SystemDataPayload;
@@ -118,9 +119,9 @@ export function IncidentRegistryTab({
     });
   };
 
-  const handleExportCsv = () => {
+  const handleExportCsv = (records = filteredIncidents) => {
     const headers = ["ID", "RouteNo", "Section", "KmStart", "KmEnd", "Lat", "Lon", "WaterCm", "Status", "IsActive", "UpdatedAt"];
-    const rows = (systemData.floodRoutes || []).map((r) => [
+    const rows = records.map((r) => [
       r.id,
       r.route_no,
       `"${r.section_name.replace(/"/g, '""')}"`,
@@ -144,6 +145,24 @@ export function IncidentRegistryTab({
     link.click();
     document.body.removeChild(link);
     onToast("ส่งออกข้อมูล CSV สำเร็จ");
+  };
+
+  const handleExport = async (format: GisExportFormat) => {
+    if (!filteredIncidents.length) return onToast("ไม่มีเหตุการณ์ตามตัวกรองสำหรับส่งออก");
+    if (format === "csv") return handleExportCsv();
+    const features = filteredIncidents.map((route) => ({
+      type: "Feature" as const,
+      properties: {
+        id: route.id, name: `ทล.${route.route_no} ${route.section_name}`, route_no: route.route_no,
+        section_name: route.section_name, km_start: route.km_start, km_end: route.km_end,
+        water_cm: route.water_level_cm, status: route.traffic_status, active: route.is_active,
+        updated_at: route.updated_at,
+      },
+      geometry: { type: "LineString" as const, coordinates: parseLineCoordinates(route.coordinates_json) },
+    })).filter((feature) => feature.geometry.coordinates.length >= 2);
+    if (!features.length) return onToast("รายการตามตัวกรองไม่มีแนวเส้นสำหรับส่งออก GIS");
+    await exportLineFeatures(features, format, `flood-incidents-${new Date().toISOString().slice(0, 10)}`);
+    onToast(`ส่งออก ${format.toUpperCase()} สำเร็จ`);
   };
 
   const floodColor = systemData.mapStyles?.flood?.color || "#D32F2F";
@@ -173,13 +192,13 @@ export function IncidentRegistryTab({
           >
             <Plus className="w-4 h-4" /> เพิ่มเหตุการณ์
           </button>
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            className="bg-slate-800 hover:bg-slate-700 text-amber-300 font-heading font-semibold text-xs px-3.5 py-2 rounded-xl border border-slate-700 flex items-center gap-1.5 shadow"
-          >
-            <FileText className="w-4 h-4" /> ส่งออก CSV
-          </button>
+          <label className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-2 text-xs text-amber-300">
+            <FileText className="w-4 h-4" />
+            <select aria-label="ส่งออกเหตุการณ์ตามตัวกรอง" defaultValue="" onChange={(e) => { if (e.target.value) void handleExport(e.target.value as GisExportFormat); e.target.value = ""; }} className="min-h-10 bg-transparent font-heading font-semibold outline-none">
+              <option value="" disabled>ส่งออกตามตัวกรอง…</option>
+              <option value="csv">CSV</option><option value="geojson">GeoJSON</option><option value="kml">KML</option><option value="kmz">KMZ</option><option value="shapefile">Shapefile ZIP</option>
+            </select>
+          </label>
         </div>
       </div>
 

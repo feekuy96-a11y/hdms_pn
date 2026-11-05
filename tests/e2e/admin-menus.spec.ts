@@ -101,3 +101,29 @@ test("map management exposes all approved traffic choices without color labels",
   await expect(page.getByRole("button", { name: "เส้นน้ำท่วม", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "ทางเลี่ยง", exact: true })).toBeVisible();
 });
+
+test("map workflows expose import, safe reset, and multi-format exports", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop administration workflow");
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "จัดการแผนที่");
+  await expect(page.getByText("นำเข้าแนวเส้นเพื่อแก้รายละเอียดภายหลัง", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "ล้างข้อมูลทั้งหมด" })).toBeVisible();
+
+  await openMenu(page, "รายการเหตุการณ์");
+  const incidentExport = page.getByLabel("ส่งออกเหตุการณ์ตามตัวกรอง");
+  for (const value of ["csv", "geojson", "kml", "kmz", "shapefile"]) await expect(incidentExport.locator(`option[value="${value}"]`)).toHaveCount(1);
+
+  await openMenu(page, "รายการทางเลี่ยง");
+  const detourExport = page.getByLabel("ส่งออกทางเลี่ยงตามตัวกรอง");
+  for (const value of ["csv", "geojson", "kml", "kmz", "shapefile"]) await expect(detourExport.locator(`option[value="${value}"]`)).toHaveCount(1);
+});
+
+test("line styling accepts precise low-resource line widths and casing", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop style studio");
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "สไตล์เส้นทาง");
+  const weight = page.getByLabel("ความหนาเส้นเป็นพิกเซล");
+  await weight.fill("0.1");
+  await expect(weight).toHaveValue("0.1");
+  await expect(page.getByText("เปิดเส้นขอบ (Stroke/Casing)", { exact: true })).toBeVisible();
+});

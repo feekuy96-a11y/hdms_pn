@@ -536,3 +536,11 @@
 - **การทดสอบ:** รอตรวจ typecheck และฟลว์บันทึกจริง
 - **สถานะ:** อยู่ระหว่างตรวจรับ
 
+### [UPDATE-047] 2026-11-05: รอบปรับปรุงแผนที่ประสิทธิภาพสูง การนำเข้า–ส่งออก และ UI ภาคสนาม
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** ลด CPU/RAM ระหว่างแก้แนวเส้น ป้องกันคำสั่งวางจุดชนกับ Popup และทำให้ข้อมูล GIS เคลื่อนย้ายได้ครบรูปแบบโดยยังรักษาผลลัพธ์ตามงานภาคสนาม
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/LineStylingTab.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `app/page.tsx`, `app/admin/page.tsx`, `lib/use-system-favicon.ts`, `lib/gis-export.ts`, `tests/e2e/admin-menus.spec.ts`, `package.json`
+- **รายละเอียดการทำงาน (Technical Changes):** โหมดวาง A/B/จุดดัดมีสิทธิ์เหนือ Popup และใช้เคอร์เซอร์กากบาท; วาง A/B แล้วแสดงเส้นร่างตรงก่อนคำนวณ; อนิเมชันหยุดเมื่อแท็บไม่ทำงาน ผู้ใช้ลดการเคลื่อนไหว อยู่ในโหมดแก้ไข หรือจำนวนเส้นเกินเพดาน; นำ Google tile แบบไม่มีคีย์ออกและใช้ Esri imagery; เพิ่มชื่อพื้นที่ A→B อัตโนมัติ; เพิ่มการนำเข้าแนวเส้นเหตุการณ์/ทางเลี่ยงเพื่อแก้รายละเอียด; ส่งออก CSV/GeoJSON/KML/KMZ/Shapefile ZIP ตามผลกรอง; ปรับ Popup เป็น `ระหว่าง กม.0+000 ถึง กม.26+775`; ปรับ Legend แบบ hover/focus; เพิ่มความหนา 0.1 px และ Stroke/Casing; โลโก้และชื่อระบบอัปเดต favicon/title/header; ปิดการลากหมุดสำนักงานนอกฟอร์มแก้ไข
+- **การทดสอบและผลลัพธ์ (Verification):** `git diff --check`, lint, typecheck และ Pages production build ผ่าน; Playwright static regression ผ่าน 17 tests บน desktop/mobile (ข้าม 9 tests ที่กำหนด desktop-only หรือไม่มี geometry fixture) ครอบคลุม KML import, A/B/จุดดัด, เมนูส่งออก, ล้างข้อมูล, line width/casing, public map และ linked/unlinked detour; รอตรวจ production หลัง deploy
+- **สถานะ:** ผ่าน local release gate รอเผยแพร่และตรวจ production
+
