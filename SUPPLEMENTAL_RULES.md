@@ -486,6 +486,14 @@
 - **การทดสอบและผลลัพธ์ (Verification):** `git diff --check`, `npm run lint`, `npm run typecheck`, `BASE_PATH=/hdms_pn npm run build:pages` ผ่าน; Playwright static preview ครบ desktop/mobile ผ่านทั้ง 20 tests รวม KML import test; ตรวจ Supabase production พบ Edge Function `hdms-api` version 9 ACTIVE และ migration `20261104191249_allow_unlinked_detour_visibility` อยู่ใน remote แล้ว
 - **สถานะ:** พร้อมนำไปรวม release candidate (รอตรวจ production หลัง deploy)
 
+### [UPDATE-045] 2026-11-05: แยกข้อความยืนยันการบันทึกทางเลี่ยง
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์ (Objective):** ป้องกันความสับสนระหว่างการบันทึกเหตุการณ์น้ำท่วมและทางเลี่ยง
+- **ไฟล์ที่เกี่ยวข้อง (Impacted Files):** `components/admin/tabs/MapManagementTab.tsx`
+- **รายละเอียดการทำงาน (Technical Changes):** ปุ่มบันทึกใช้ข้อความเฉพาะทางเลี่ยงทั้งกรณีเพิ่มและแก้ไข โดยยังคงข้อความเหตุการณ์น้ำท่วมตามเดิม
+- **การทดสอบและผลลัพธ์ (Verification):** รอตรวจรวมใน build และ Playwright ก่อนเผยแพร่รอบสุดท้าย
+- **สถานะ:** อยู่ระหว่างตรวจรับ
+
 ### [UPDATE-021] 2026-11-04: ปรับ Popup แผนที่ Dashboard และช่องพิกัด
 - **ไฟล์ที่เกี่ยวข้อง:** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/MapManagementTab.tsx`
 - **รายละเอียด:** Popup ถนนใช้หัวข้อรหัสและรูปแบบ `ก.ม.` พร้อมแปลงค่าระยะเมตรเป็นรูปแบบหลักกิโลเมตร; เพิ่มป้าย Dashboard สรุปจำนวนน้ำท่วม/ทางเลี่ยงบนแผนที่; นำรายการหมุดระดับน้ำและภาพถ่ายออกจากแผงสัญลักษณ์; รวมพิกัดจุด A/B เป็นช่องเดียว รองรับการวางค่าคู่พิกัดจาก Google Maps

@@ -956,7 +956,9 @@ export function MapManagementTab({
             className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black py-3 rounded-xl text-sm shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 transition"
           >
             <Save className="w-4 h-4" />
-            {routeEditId ? "บันทึกการแก้ไขเหตุการณ์" : "บันทึกเหตุการณ์เข้าสู่ระบบสารสนเทศ"}
+            {routeEditId
+              ? routeMode === "DETOUR" ? "บันทึกการแก้ไขทางเลี่ยง" : "บันทึกการแก้ไขเหตุการณ์"
+              : routeMode === "DETOUR" ? "บันทึกทางเลี่ยงเข้าสู่ระบบสารสนเทศ" : "บันทึกเหตุการณ์เข้าสู่ระบบสารสนเทศ"}
           </button>
           {routeEditId && (
             <button
