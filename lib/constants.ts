@@ -100,6 +100,7 @@ export const TRAFFIC_STATUS = {
 } as const;
 
 export const SAFETY_MEASURES = [
+  "–",
   "ติดตั้งป้ายเตือนน้ำท่วมทางหลวงล่วงหน้า 500 ม.",
   "ติดตั้งป้ายไฟกระพริบพลังงานแสงอาทิตย์แจ้งเตือนกลางคืน",
   "ติดตั้งเสาวัดระดับน้ำ (Water Level Staff) ขอบทาง",

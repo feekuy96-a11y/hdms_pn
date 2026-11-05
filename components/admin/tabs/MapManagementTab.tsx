@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { SystemDataPayload } from "@/db/default-data";
 import {
   MapPinned,
@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { upsertRouteAction, snapRouteAction } from "@/app/actions/doh-actions";
 import {
-  calculateRoadSnappedDualSource,
+  fetchOsrmWithFailover,
   generateAutoDetourAdvice,
   extractDirectionalAdvice,
   reverseGeocodeTambonAmphoe,
@@ -51,6 +51,7 @@ interface MapManagementTabProps {
   setDraftCoordinates: (coords: [number, number][]) => void;
   draftWaypoints: [number, number][];
   setDraftWaypoints: React.Dispatch<React.SetStateAction<[number, number][]>>;
+  onDraftModeChange?: (mode: "FLOOD" | "DETOUR") => void;
   onDraftPickMarkersChange?: (markers: { lat: number; lon: number; label: string; mode: string }[]) => void;
 
   // Editing state passed from parent
@@ -72,12 +73,15 @@ export function MapManagementTab({
   setDraftCoordinates,
   draftWaypoints,
   setDraftWaypoints,
+  onDraftModeChange,
   onDraftPickMarkersChange,
   editingRoute,
   onClearEditingRoute,
 }: MapManagementTabProps) {
   // Mode: Flood vs Detour
   const [routeMode, setRouteMode] = useState<"FLOOD" | "DETOUR">("FLOOD");
+  useEffect(() => { onDraftModeChange?.(routeMode); }, [routeMode, onDraftModeChange]);
+  const routingRequest = useRef(0);
   const [routeEditId, setRouteEditId] = useState<string>("");
 
   // Common Highway Attributes
@@ -255,6 +259,7 @@ export function MapManagementTab({
     eLon: number | string,
     waypoints: [number, number][] = draftWaypoints
   ) => {
+    const requestId = ++routingRequest.current;
     const numSLat = Number(sLat);
     const numSLon = Number(sLon);
     const numELat = Number(eLat);
@@ -267,9 +272,29 @@ export function MapManagementTab({
 
     setSnappingStatusText("กำลังคำนวณเส้นเกาะถนนจริง (Dual-Source Snapping)...");
     try {
-      const dbCoords = waypoints.length === 0 ? await snapRouteAction([numSLon, numSLat], [numELon, numELat]).catch(() => null) : null;
-      const result = dbCoords ? { coords: dbCoords } : await calculateRoadSnappedDualSource([numSLon, numSLat], [numELon, numELat], waypoints, systemData.highwayLayers);
-      const snapped = result.coords;
+      if (routeMode === "DETOUR") {
+        const points: [number, number][] = [[numSLon, numSLat], ...waypoints, [numELon, numELat]];
+        const routing = await fetchOsrmWithFailover(points.map((point) => point.join(",")).join(";"), "overview=full&geometries=geojson");
+        if (requestId !== routingRequest.current) return;
+        const coordinates = routing?.data?.routes?.[0]?.geometry?.coordinates;
+        if (!Array.isArray(coordinates) || coordinates.length < 2) {
+          setDraftCoordinates([]);
+          setSnappingStatusText("ไม่สามารถคำนวณทางเลี่ยงตามถนนได้ กรุณาเพิ่มจุดดัดหรือลองใหม่");
+          return;
+        }
+        setDraftCoordinates(coordinates);
+        setSnappingStatusText(`✓ คำนวณทางเลี่ยงตามถนนสำเร็จ (${coordinates.length} จุด)`);
+        return;
+      }
+      const points: [number, number][] = [[numSLon, numSLat], ...waypoints, [numELon, numELat]];
+      const segments = await Promise.all(points.slice(1).map((point, index) => snapRouteAction(points[index], point).catch(() => null)));
+      if (requestId !== routingRequest.current) return;
+      if (segments.some((segment) => !segment || segment.length < 2)) {
+        setDraftCoordinates([]);
+        setSnappingStatusText("ไม่พบแนวทางหลวงที่เชื่อมจุดที่เลือก กรุณาเลือกตำแหน่งบนเลเยอร์ทางหลวงอีกครั้ง");
+        return;
+      }
+      const snapped = segments.flatMap((segment, index) => index === 0 ? segment! : segment!.slice(1));
       if (snapped && snapped.length > 0) {
         setDraftCoordinates(snapped);
         setSnappingStatusText(`✓ คำนวณเส้นทางเกาะโครงข่ายถนนสำเร็จ (${snapped.length} จุด)`);
@@ -280,9 +305,14 @@ export function MapManagementTab({
         setSnappingStatusText("ไม่สามารถเชื่อมต่อโครงข่ายทางหลวงได้ จึงใช้เส้นตรงระหว่างจุด");
       }
     } catch {
-      const fallback: [number, number][] = [[numSLon, numSLat], ...waypoints, [numELon, numELat]];
-      setDraftCoordinates(fallback);
-      setSnappingStatusText("ใช้เส้นตรงระหว่างจุด (โครงข่ายอยู่นอกพื้นที่สำรวจ)");
+      if (requestId !== routingRequest.current) return;
+      if (routeMode === "DETOUR") {
+        setDraftCoordinates([]);
+        setSnappingStatusText("ไม่สามารถคำนวณทางเลี่ยงตามถนนได้ กรุณาลองใหม่");
+        return;
+      }
+      setDraftCoordinates([]);
+      setSnappingStatusText("ไม่สามารถเกาะแนวทางหลวงได้ กรุณาตรวจตำแหน่งแล้วลองใหม่");
     }
   };
 
@@ -349,6 +379,7 @@ export function MapManagementTab({
 
   // Clear Route
   const handleClearRoute = () => {
+    routingRequest.current += 1;
     setDraftCoordinates([]);
     setDraftWaypoints([]);
     setSnappingStatusText("");
@@ -419,8 +450,12 @@ export function MapManagementTab({
       onToast("กรุณากำหนดจุดพิกัดเริ่มต้นและสิ้นสุดบนแผนที่");
       return;
     }
-    if (routeMode === "DETOUR" && !detourRefId) {
-      onToast("กรุณาเลือกจุดน้ำท่วมที่เกี่ยวข้องก่อนบันทึกทางเลี่ยง");
+    if (routeMode === "DETOUR" && draftCoordinates.length < 2) {
+      onToast("กรุณาคำนวณทางเลี่ยงตามถนนให้สำเร็จก่อนบันทึก");
+      return;
+    }
+    if (routeMode === "FLOOD" && draftCoordinates.length < 2) {
+      onToast("กรุณาสร้างเส้นน้ำท่วมบนแนวทางหลวงก่อนบันทึก");
       return;
     }
 
@@ -497,7 +532,7 @@ export function MapManagementTab({
         <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
           <button
             type="button"
-            onClick={() => setRouteMode("FLOOD")}
+            onClick={() => { if (routeMode !== "FLOOD") { handleClearRoute(); setRouteMode("FLOOD"); } }}
             className={`px-3 py-1.5 rounded-lg text-xs font-heading font-bold transition ${
               routeMode === "FLOOD" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"
             }`}
@@ -506,7 +541,7 @@ export function MapManagementTab({
           </button>
           <button
             type="button"
-            onClick={() => setRouteMode("DETOUR")}
+            onClick={() => { if (routeMode !== "DETOUR") { handleClearRoute(); setRouteMode("DETOUR"); } }}
             className={`px-3 py-1.5 rounded-lg text-xs font-heading font-bold transition ${
               routeMode === "DETOUR" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
             }`}
@@ -566,15 +601,12 @@ export function MapManagementTab({
                 onChange={(e) => setDetourRefId(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
               >
-                {systemData.floodRoutes.length === 0 ? (
-                  <option value="">-- ยังไม่มีจุดน้ำท่วมอ้างอิงในระบบ --</option>
-                ) : (
-                  systemData.floodRoutes.map((f) => (
+                <option value="">ไม่ผูกกับจุดน้ำท่วม</option>
+                {systemData.floodRoutes.map((f) => (
                     <option key={f.id} value={f.id}>
                       ทล.{f.route_no} - {f.section_name}
                     </option>
-                  ))
-                )}
+                  ))}
               </select>
             </div>
             <div>

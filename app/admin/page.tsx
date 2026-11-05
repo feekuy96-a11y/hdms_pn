@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
-import { getSystemDataAction, saveOfficeAction } from "@/app/actions/doh-actions";
+import { getSystemDataAction, saveOfficeAction, snapRouteAction } from "@/app/actions/doh-actions";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload } from "@/db/default-data";
 import { AdminConsole } from "@/components/admin/AdminConsole";
 
@@ -30,6 +30,7 @@ import { ArrowLeft, RotateCw, LogOut, FileText, PieChart, Settings, Smartphone }
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 import { ExecutiveDashboard } from "@/components/executive/ExecutiveDashboard";
 import { usePollingActivity } from "@/lib/use-polling-activity";
+import { useSystemFavicon } from "@/lib/use-system-favicon";
 
 export default function AdminPage() {
   const isPollingActive = usePollingActivity();
@@ -39,6 +40,7 @@ export default function AdminPage() {
   const [adminPickMode, setAdminPickMode] = useState<string | null>(null);
   const [draftCoordinates, setDraftCoordinates] = useState<[number, number][]>([]);
   const [draftWaypoints, setDraftWaypoints] = useState<[number, number][]>([]);
+  const [draftMode, setDraftMode] = useState<"FLOOD" | "DETOUR">("FLOOD");
   const [incomingGisLines, setIncomingGisLines] = useState<[number, number][][]>([]);
   const [pickedCoordinate, setPickedCoordinate] = useState<{ lat: number; lon: number; mode: string; ts: number } | null>(null);
   const [draftPickMarkers, setDraftPickMarkers] = useState<Array<{ lat: number; lon: number; label: string; mode: string }>>([]);
@@ -55,6 +57,7 @@ export default function AdminPage() {
     refetchInterval: isPollingActive ? 30 * 60 * 1000 : false,
     refetchIntervalInBackground: false,
   });
+  useSystemFavicon(systemData.systemSettings?.logoUrl);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -70,9 +73,22 @@ export default function AdminPage() {
     if (draftCoordinates.length >= 2) {
       const startCoord = draftCoordinates[0];
       const endCoord = draftCoordinates[draftCoordinates.length - 1];
-      const snapped = await calculateRoadSnappedRoute(startCoord, endCoord, nextWaypoints);
-      setDraftCoordinates(snapped);
-      showToast(`ปรับดัดแนวเส้นทางที่จุด #${idx + 1} สำเร็จ`);
+      try {
+        let snapped: [number, number][];
+        if (draftMode === "FLOOD") {
+          const points = [startCoord, ...nextWaypoints, endCoord];
+          const segments = await Promise.all(points.slice(1).map((point, index) => snapRouteAction(points[index], point)));
+          if (segments.some((segment) => !segment || segment.length < 2)) throw new Error("ไม่พบแนวทางหลวง");
+          snapped = segments.flatMap((segment, index) => index === 0 ? segment! : segment!.slice(1));
+        } else {
+          snapped = await calculateRoadSnappedRoute(startCoord, endCoord, nextWaypoints);
+        }
+        setDraftCoordinates(snapped);
+        showToast(`ปรับดัดแนวเส้นทางที่จุด #${idx + 1} สำเร็จ`);
+      } catch {
+        setDraftCoordinates([]);
+        showToast("คำนวณเส้นทางใหม่ไม่สำเร็จ กรุณาลองอีกครั้ง");
+      }
     }
   };
 
@@ -194,6 +210,7 @@ export default function AdminPage() {
               setDraftCoordinates={setDraftCoordinates}
               draftWaypoints={draftWaypoints}
               setDraftWaypoints={setDraftWaypoints}
+              onDraftModeChange={setDraftMode}
               pickedCoordinate={pickedCoordinate}
               onFocusCoordinates={(coords) => setFocusCoordinates(coords)}
               onToast={showToast}
@@ -232,6 +249,7 @@ export default function AdminPage() {
               draftWaypoints={draftWaypoints}
               draftPickMarkers={draftPickMarkers}
               onWaypointDragged={handleWaypointDragged}
+              draftMode={draftMode}
               focusCoordinates={focusCoordinates}
               incomingGisLines={incomingGisLines}
               onOfficeDragged={async (officeId, position) => {

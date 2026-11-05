@@ -37,6 +37,7 @@ interface AdminConsoleProps {
   setDraftCoordinates: (coords: [number, number][]) => void;
   draftWaypoints: [number, number][];
   setDraftWaypoints: React.Dispatch<React.SetStateAction<[number, number][]>>;
+  onDraftModeChange?: (mode: "FLOOD" | "DETOUR") => void;
   pickedCoordinate?: { lat: number; lon: number; mode: string } | null;
   onFocusCoordinates?: (coords: [number, number]) => void;
   onToast: (msg: string) => void;
@@ -53,6 +54,7 @@ export function AdminConsole({
   setDraftCoordinates,
   draftWaypoints,
   setDraftWaypoints,
+  onDraftModeChange,
   pickedCoordinate,
   onFocusCoordinates,
   onToast,
@@ -340,6 +342,7 @@ export function AdminConsole({
               setDraftCoordinates={setDraftCoordinates}
               draftWaypoints={draftWaypoints}
               setDraftWaypoints={setDraftWaypoints}
+              onDraftModeChange={onDraftModeChange}
               onDraftPickMarkersChange={(markers) => setDraftPickMarkers?.((previous) => {
                 const unchanged = previous.length === markers.length && previous.every((item, index) => {
                   const next = markers[index];
@@ -410,6 +413,8 @@ export function AdminConsole({
               setDraftCoordinates={setDraftCoordinates}
               draftWaypoints={draftWaypoints}
               setDraftWaypoints={setDraftWaypoints}
+              onDraftModeChange={onDraftModeChange}
+              setDraftPickMarkers={setDraftPickMarkers}
             />
           )}
 

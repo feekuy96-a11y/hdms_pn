@@ -162,12 +162,12 @@ export function DetourManagementTab({
       });
 
       // Update active state if changed
-      if (editIsActive !== editingDetour.is_active) {
-        await toggleDetourStatusAction(editingDetour.id, editIsActive);
-      }
+      const finalResult = editIsActive !== editingDetour.is_active
+        ? await toggleDetourStatusAction(editingDetour.id, editIsActive)
+        : res;
 
       if (res.success) {
-        onDataRefresh(res.systemData);
+        onDataRefresh(finalResult.systemData);
         setEditingDetour(null);
         showSuccessModal(
           "บันทึกข้อมูลเส้นทางเลี่ยงสำเร็จ",
@@ -578,7 +578,7 @@ export function DetourManagementTab({
                     <option value="">-- ไม่ระบุ --</option>
                     {floodList.map((f) => (
                       <option key={f.id} value={f.id}>
-                        [{f.id}] ทล.{f.route_no} - {f.section_name}
+                        ทล.{f.route_no} - {f.section_name}
                       </option>
                     ))}
                   </select>

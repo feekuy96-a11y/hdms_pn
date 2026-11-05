@@ -96,9 +96,23 @@ export function LongdoGisMap({
   const [showHighwayShields, setShowHighwayShields] = useState(false);
   const [showOffices, setShowOffices] = useState(true);
   const [showRoadLabels, setShowRoadLabels] = useState(true);
+  const [legendRouteList, setLegendRouteList] = useState<"MAIN_HIGHWAY" | "SECOND_HIGHWAY" | null>(null);
   const [mapZoom, setMapZoom] = useState(APP_CONFIG.DEFAULT_ZOOM);
 
   const mapStyles = systemData.mapStyles || DEFAULT_MAP_STYLES;
+  const legendRoutes = (type: "MAIN_HIGHWAY" | "SECOND_HIGHWAY") => {
+    const numbers = new Set<string>();
+    (systemData.highwayLayers || []).forEach((layer) => {
+      if (!layer.is_visible) return;
+      (layer.geojson_data?.features || []).forEach((feature: any) => {
+        const props = feature.properties || {};
+        const featureType = props.highway_type || (layer.layer_id === "SECOND_HIGHWAY" ? "SECOND_HIGHWAY" : "MAIN_HIGHWAY");
+        const code = props.route_no || props.route_code || props.ROAD_NO || props.route || props.code;
+        if (featureType === type && props.is_visible !== false && code) numbers.add(String(code));
+      });
+    });
+    return [...numbers].sort((a, b) => a.localeCompare(b, "th", { numeric: true }));
+  };
 
   // Sync dynamic CSS variables on root when mapStyles update
   useEffect(() => {
@@ -287,6 +301,7 @@ export function LongdoGisMap({
       const vectorCanvas = L.canvas ? (L.canvas as any)({ padding: 0.5, tolerance: 10 }) : undefined;
       const highwayFeatureCount = (systemData.highwayLayers || []).reduce((count, layer) => count + (Array.isArray(layer.geojson_data?.features) ? layer.geojson_data.features.length : 0), 0);
       const allowLineAnimation = highwayFeatureCount <= 250;
+      const highwaySignPositions: Array<{ x: number; y: number }> = [];
 
       // A. Draw Dual-Color GIS File Preview (เส้นสีน้ำเงิน = ข้อมูลที่กำลังนำเข้า)
       if (incomingGisLines && incomingGisLines.length > 0) {
@@ -309,15 +324,11 @@ export function LongdoGisMap({
 
       (systemData.highwayLayers || []).forEach((layer) => {
         if (!layer.is_visible) return;
-        if (layer.layer_id === "MAIN_HIGHWAY" && !showMainHwy) return;
-        if (layer.layer_id === "SECOND_HIGHWAY" && !showSecHwy) return;
-
         const isMain = layer.layer_id === "MAIN_HIGHWAY";
         const style = isMain ? mapStyles.primary : mapStyles.secondary;
         const color = style?.color || (isMain ? "#1B5E20" : "#0284c7");
         const weight = style?.weight || (isMain ? 5 : 3.5);
         const opacity = style?.opacity ?? 0.85;
-        const dashArray = style?.pattern === "dash" ? (style.dashArray || "8, 6") : style?.pattern === "dot" ? "2, 6" : style?.pattern === "long-dash-dot" ? "14, 6, 3, 6" : undefined;
         const animClass = allowLineAnimation && style?.animation === "chaser" ? "doh-line-chaser" : allowLineAnimation && style?.animation === "pulse" ? "doh-line-pulse" : allowLineAnimation && style?.animation === "blink" ? "doh-line-blink" : allowLineAnimation && style?.animation === "arrows" ? "doh-line-arrows" : "";
         const speedClass = style?.animationSpeed === "slow" ? "doh-anim-slow" : style?.animationSpeed === "fast" ? "doh-anim-fast" : "";
 
@@ -327,11 +338,15 @@ export function LongdoGisMap({
               renderer: vectorCanvas,
               filter: (feature: any) => {
                 // Issue #13: Respect individual route visibility
-                return feature?.properties?.is_visible !== false;
+                const type = feature?.properties?.highway_type;
+                const featureIsMain = type === "MAIN_HIGHWAY" ? true : type === "SECOND_HIGHWAY" ? false : isMain;
+                return feature?.properties?.is_visible !== false && (featureIsMain ? showMainHwy : showSecHwy);
               },
               style: (feature: any) => {
                 const props = feature?.properties || {};
-                let featureWeight = weight;
+                const featureIsMain = props.highway_type === "MAIN_HIGHWAY" ? true : props.highway_type === "SECOND_HIGHWAY" ? false : isMain;
+                const featureStyle = featureIsMain ? mapStyles.primary : mapStyles.secondary;
+                let featureWeight = featureStyle?.weight || weight;
                 if (props.lanes) {
                   const lanesStr = String(props.lanes);
                   if (lanesStr.includes("๘") || lanesStr.includes("8")) featureWeight = 8.5;
@@ -339,22 +354,21 @@ export function LongdoGisMap({
                   else if (lanesStr.includes("๔") || lanesStr.includes("4")) featureWeight = 5.5;
                   else if (lanesStr.includes("๒") || lanesStr.includes("2")) featureWeight = 3.5;
                 }
-                const featureColor = color;
+                const featureColor = featureStyle?.color || color;
                 return {
                   color: featureColor,
                   weight: featureWeight,
-                  opacity,
-                  dashArray,
+                  opacity: featureStyle?.opacity ?? opacity,
+                  dashArray: featureStyle?.pattern === "dash" ? (featureStyle.dashArray || "8, 6") : featureStyle?.pattern === "dot" ? "2, 6" : featureStyle?.pattern === "long-dash-dot" ? "14, 6, 3, 6" : undefined,
                   className: `${animClass} ${speedClass}`.trim(),
                 };
               },
               onEachFeature: (feature: any, geoFeatureLayer: any) => {
                 const props = feature.properties || {};
+                const featureIsMain = props.highway_type === "MAIN_HIGHWAY" ? true : props.highway_type === "SECOND_HIGHWAY" ? false : isMain;
                 const code = props.route_no || props.route_code || props.ROAD_NO || props.route || props.code || "";
                 const name = props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || "ทางหลวง";
-                const desc = props.description || props.remarks || "";
                 const lengthKm = props.length_km || "";
-                const ptsCount = props.points_count || (feature.geometry?.coordinates?.length || "");
 
                 // Tooltip showing highway name on hover
                 if (showHighwayShields && mapZoom >= 11 && feature.geometry && ["LineString", "MultiLineString"].includes(feature.geometry.type)) {
@@ -363,15 +377,20 @@ export function LongdoGisMap({
                     : feature.geometry.coordinates.flat(1);
                   const midpoint = line[Math.floor(line.length / 2)];
                   if (midpoint && code) {
+                    const screenPoint = leafletMapRef.current.latLngToContainerPoint(toLeafletLatLng(midpoint));
+                    const collides = highwaySignPositions.some((position) => Math.abs(position.x - screenPoint.x) < 48 && Math.abs(position.y - screenPoint.y) < 28);
+                    if (!collides) {
+                    highwaySignPositions.push({ x: screenPoint.x, y: screenPoint.y });
                     const signIcon = L.divIcon({
-                      html: `<div style="min-width:26px;height:20px;padding:0 4px;transform:translate(-50%,-50%);background:#fff;border:1.5px solid #111827;border-radius:2px;box-shadow:0 1px 2px #0007;color:#111827;text-align:center;line-height:17px;font-family:Sarabun,sans-serif;font-size:11px;font-weight:700">${escapeHtml(code)}</div>`,
+                      html: `<div style="width:28px;height:18px;background:#fff;border:1px solid #64748b;border-radius:3px;color:#334155;text-align:center;line-height:16px;font-size:10px;font-weight:600">${escapeHtml(code)}</div>`,
                       className: "doh-highway-sign",
-                      iconSize: [34, 20],
-                      iconAnchor: [17, 10],
+                      iconSize: [28, 18],
+                      iconAnchor: [14, 9],
                     });
                     const sign = L.marker(toLeafletLatLng(midpoint), { icon: signIcon, interactive: true }).addTo(group);
                     sign.bindTooltip(`ทล.${escapeHtml(code)} · ${escapeHtml(name)}`, { direction: "top", offset: [0, -18] });
                     sign.bindPopup(`<div style="padding-top:5px"><strong>ทล.${escapeHtml(code)}</strong><br/>${escapeHtml(name)}</div>`);
+                    }
                   }
                 }
 
@@ -389,17 +408,15 @@ export function LongdoGisMap({
                 geoFeatureLayer.bindPopup(`
                   <div class="text-xs p-2.5 min-w-[270px] font-body bg-slate-950 text-white rounded-xl border-2 shadow-2xl" style="border-color: ${color}">
                     <div class="flex items-center justify-between pb-1.5 border-b border-slate-800 gap-2">
-                      <span class="text-white text-base font-black font-heading tracking-wide">
-                        ${code ? `ทล.${escapeHtml(code)}` : "ทางหลวง"}
+                      <span class="text-white text-base font-bold font-heading tracking-wide">
+                        ${code ? `ทล.${escapeHtml(code)} | ` : ""}${escapeHtml(name)}
                       </span>
                       <span class="text-[10px] text-amber-300 font-heading font-semibold">
-                        ${isMain ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"}
+                        ${featureIsMain ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"}
                       </span>
                     </div>
                     <div class="mt-2">
-                      <h4 class="font-bold text-white text-sm font-heading">${escapeHtml(name)}</h4>
-                      ${props.km_start !== undefined && props.km_start !== null && String(props.km_start).trim() !== "" ? `<p class="text-amber-300 text-[11px] mt-0.5 font-mono">ก.ม. ${escapeHtml(formatKmPost(props.km_start))}${props.km_end !== undefined && props.km_end !== null && String(props.km_end).trim() !== "" ? ` ถึง ก.ม. ${escapeHtml(formatKmPost(props.km_end))}` : ""}</p>` : ""}
-                      ${desc ? `<p class="text-slate-300 text-[11px] mt-0.5">${escapeHtml(desc)}</p>` : ""}
+                      ${props.km_start !== undefined && props.km_start !== null && String(props.km_start).trim() !== "" ? `<p class="text-amber-300 text-[11px] mt-0.5 font-mono">ระหว่าง ก.ม. ${escapeHtml(formatKmPost(props.km_start))}${props.km_end !== undefined && props.km_end !== null && String(props.km_end).trim() !== "" ? ` ถึง ก.ม. ${escapeHtml(formatKmPost(props.km_end))}` : ""}</p>` : ""}
                     </div>
                     <div class="grid grid-cols-2 gap-1.5 mt-2.5 pt-2 border-t border-slate-800 text-[11px]">
                       <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
@@ -410,15 +427,6 @@ export function LongdoGisMap({
                         <span class="text-slate-400 block text-[10px]">ช่องจราจร</span>
                         <strong class="text-sky-400 font-mono text-[10px]">${props.lanes || "๔ ช่องจราจร"}</strong>
                       </div>
-                    </div>
-                    ${props.surface ? `
-                      <div class="mt-1.5 text-[10px] text-slate-300 bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
-                        <span class="text-slate-400">ผิวจราจร:</span> <span class="text-amber-200">${escapeHtml(props.surface)}</span>
-                      </div>
-                    ` : ""}
-                    <div class="mt-2 flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-800/80 pt-1.5">
-                      <span>${escapeHtml(props.responsible_office || "ขท.ปัตตานี")}</span>
-                      <span class="text-emerald-400 font-semibold">${escapeHtml(props.road_status || "เปิดการจราจร ✓")}</span>
                     </div>
                   </div>
                 `);
@@ -740,6 +748,7 @@ export function LongdoGisMap({
           </div>
 
           <div className="space-y-1.5">
+            <div onPointerEnter={(event) => { if (event.pointerType === "mouse") setLegendRouteList("MAIN_HIGHWAY"); }} onPointerLeave={(event) => { if (event.pointerType === "mouse") setLegendRouteList(null); }}>
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
                 <span className="w-4 h-1.5 inline-block rounded" style={{ backgroundColor: mapStyles.primary?.color }} />
@@ -752,7 +761,11 @@ export function LongdoGisMap({
                 className="accent-emerald-500 rounded"
               />
             </label>
+            <button type="button" aria-expanded={legendRouteList === "MAIN_HIGHWAY"} onClick={() => setLegendRouteList((current) => current === "MAIN_HIGHWAY" ? null : "MAIN_HIGHWAY")} className="ml-6 text-xs text-sky-300 underline">ดูหมายเลขสายหลัก</button>
+            {legendRouteList === "MAIN_HIGHWAY" && <div className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white">{legendRoutes("MAIN_HIGHWAY").join(", ") || "ไม่มีสายทางที่แสดง"}</div>}
+            </div>
 
+            <div onPointerEnter={(event) => { if (event.pointerType === "mouse") setLegendRouteList("SECOND_HIGHWAY"); }} onPointerLeave={(event) => { if (event.pointerType === "mouse") setLegendRouteList(null); }}>
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
                 <span className="w-4 h-1.5 inline-block rounded" style={{ backgroundColor: mapStyles.secondary?.color }} />
@@ -765,6 +778,9 @@ export function LongdoGisMap({
                 className="accent-sky-400 rounded"
               />
             </label>
+            <button type="button" aria-expanded={legendRouteList === "SECOND_HIGHWAY"} onClick={() => setLegendRouteList((current) => current === "SECOND_HIGHWAY" ? null : "SECOND_HIGHWAY")} className="ml-6 text-xs text-sky-300 underline">ดูหมายเลขสายรอง</button>
+            {legendRouteList === "SECOND_HIGHWAY" && <div className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white">{legendRoutes("SECOND_HIGHWAY").join(", ") || "ไม่มีสายทางที่แสดง"}</div>}
+            </div>
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">

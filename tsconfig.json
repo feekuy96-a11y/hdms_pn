@@ -39,6 +39,7 @@
     "node_modules",
     "work",
     "outputs"
+    ,"out"
     ,"supabase/functions"
   ]
 }

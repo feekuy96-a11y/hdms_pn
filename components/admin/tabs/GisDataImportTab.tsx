@@ -26,7 +26,6 @@ import {
   deleteHighwayLayerAction,
 } from "@/app/actions/doh-actions";
 import {
-  simplifyCoordinates,
   extractFeaturesFromGeoJson,
   extractFeaturesFromKml,
   extractFeaturesFromKmz,
@@ -72,6 +71,29 @@ function calculateDistanceKm(start: unknown, end: unknown): string {
     : (Math.abs(endMeters - startMeters) / 1000).toFixed(3);
 }
 
+function previewLines(features: ExtractedGisFeature[]): [number, number][][] {
+  const maxLines = 500;
+  const maxPointsPerLine = 500;
+  return features.slice(0, maxLines).map(({ coords }) => {
+    if (coords.length <= maxPointsPerLine) return coords;
+    const step = (coords.length - 1) / (maxPointsPerLine - 1);
+    return Array.from({ length: maxPointsPerLine }, (_, index) => coords[Math.round(index * step)]);
+  });
+}
+
+function simplifyInWorker(features: ExtractedGisFeature[], tolerance: number): Promise<ExtractedGisFeature[]> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/route-simplify-worker.js`);
+    worker.onmessage = (event: MessageEvent<{ features?: ExtractedGisFeature[]; error?: string }>) => {
+      worker.terminate();
+      if (event.data.error || !event.data.features) reject(new Error(event.data.error || "ไม่สามารถประมวลผลเส้นทางได้"));
+      else resolve(event.data.features);
+    };
+    worker.onerror = () => { worker.terminate(); reject(new Error("ไม่สามารถประมวลผลไฟล์ในเบื้องหลังได้")); };
+    worker.postMessage({ features, tolerance });
+  });
+}
+
 function lineCoordinates(geometry: any): [number, number][] {
   const coordinates = geometry?.type === "LineString"
     ? geometry.coordinates
@@ -100,6 +122,8 @@ interface GisDataImportTabProps {
   setDraftCoordinates: (coords: [number, number][]) => void;
   draftWaypoints: [number, number][];
   setDraftWaypoints: React.Dispatch<React.SetStateAction<[number, number][]>>;
+  onDraftModeChange?: (mode: "FLOOD" | "DETOUR") => void;
+  setDraftPickMarkers?: React.Dispatch<React.SetStateAction<Array<{ lat: number; lon: number; label: string; mode: string }>>>;
 }
 
 export function GisDataImportTab({
@@ -118,12 +142,13 @@ export function GisDataImportTab({
   setDraftCoordinates,
   draftWaypoints,
   setDraftWaypoints,
+  onDraftModeChange,
+  setDraftPickMarkers,
 }: GisDataImportTabProps) {
   const offices = useMemo(() => (systemData.offices || []).filter((office) => office.is_active), [systemData.offices]);
   const [importedGisFeatures, setImportedGisFeatures] = useState<ExtractedGisFeature[]>([]);
   const [, setImportedPreviewLines] = useState<[number, number][][]>([]);
   const [importedLayerName, setImportedLayerName] = useState("");
-  const [importedLayerDesc, setImportedLayerDesc] = useState("");
   const [availableGisFields, setAvailableGisFields] = useState<string[]>([]);
   const [selectedRouteCodeField, setSelectedRouteCodeField] = useState("");
   const [manualRouteCode, setManualRouteCode] = useState("");
@@ -142,8 +167,19 @@ export function GisDataImportTab({
   const [layerRemarks, setLayerRemarks] = useState("");
   const [simplifyTolerance, setSimplifyTolerance] = useState(0.00008);
   const [isCommitting, setIsCommitting] = useState(false);
+  const [routeSearch, setRouteSearch] = useState("");
+  const [selectedRoute, setSelectedRoute] = useState<{ layerId: string; featureIdx: number } | null>(null);
   const [editingGeometry, setEditingGeometry] = useState<{ layerId: string; featureIdx: number; start: [number, number]; end: [number, number] } | null>(null);
   const [isSnappingGeometry, setIsSnappingGeometry] = useState(false);
+
+  useEffect(() => {
+    if (!editingGeometry) { setDraftPickMarkers?.([]); return; }
+    const { start, end } = editingGeometry;
+    setDraftPickMarkers?.([
+      { lat: start[1], lon: start[0], label: "A", mode: "PICK_HIGHWAY_START" },
+      { lat: end[1], lon: end[0], label: "B", mode: "PICK_HIGHWAY_END" },
+    ]);
+  }, [editingGeometry, setDraftPickMarkers]);
 
   useEffect(() => {
     if (!editingGeometry || !pickedCoordinate) return;
@@ -207,10 +243,11 @@ export function GisDataImportTab({
   const handleSaveRouteSpecsModal = async () => {
     if (!editingRouteSpecs) return;
     const { layerId, featureIdx, ...specs } = editingRouteSpecs;
-    const layer =
-      (systemData.highwayLayers || []).find((l) => l.layer_id === layerId) ||
-      (systemData.highwayLayers || [])[0];
-    if (!layer) return;
+    const layer = (systemData.highwayLayers || []).find((l) => l.layer_id === layerId);
+    if (!layer || featureIdx < 0 || !layer.geojson_data?.features?.[featureIdx]) {
+      onToast("กรุณานำเข้าแนวเส้นทางก่อนตั้งค่าข้อมูลสายทาง");
+      return;
+    }
 
     try {
       const updatedGeojson = layer.geojson_data
@@ -239,19 +276,6 @@ export function GisDataImportTab({
           ...(updatedGeojson.features[featureIdx].properties || {}),
           ...newProps,
         };
-      } else {
-        // Create new feature
-        updatedGeojson.features.push({
-          type: "Feature",
-          geometry: {
-            type: "LineString",
-            coordinates: [
-              [101.186, 6.834],
-              [101.205, 6.842],
-            ],
-          },
-          properties: newProps,
-        });
       }
 
       const res = await updateHighwayLayerAction({
@@ -283,6 +307,9 @@ export function GisDataImportTab({
     const end = coords[coords.length - 1];
     setDraftCoordinates(coords);
     setDraftWaypoints([]);
+    // The common map drag handler must use road routing for a highway editor,
+    // not the flood-only PostGIS snap rule inherited from a previous tab.
+    onDraftModeChange?.("DETOUR");
     setEditingGeometry({ layerId, featureIdx, start, end });
     onToast("เปิดตัวแก้ไขแนวถนนแล้ว เลือกพิกัดบนแผนที่หรือกรอกพิกัดเองได้");
   };
@@ -316,6 +343,7 @@ export function GisDataImportTab({
       setAdminPickMode(null);
       setDraftWaypoints([]);
       setDraftCoordinates([]);
+      onDraftModeChange?.("FLOOD");
       showSuccessModal("บันทึกแนวถนนสำเร็จ", "อัปเดตเส้นทางในฐานข้อมูลและบนแผนที่แล้ว");
     } catch (error: any) {
       onToast(`บันทึกแนวถนนไม่สำเร็จ: ${error.message}`);
@@ -447,7 +475,7 @@ export function GisDataImportTab({
             kmEnd: formatKilometerPost(props.km_end) || "-",
             lengthKm: calculateDistanceKm(props.km_start, props.km_end) || props.length_km || "-",
             responsibleOffice: props.responsible_office || layer.metadata?.responsibleOffice || offices[0]?.name || "",
-            highwayType: isSec ? "SECOND_HIGHWAY" : "MAIN_HIGHWAY",
+            highwayType: props.highway_type === "SECOND_HIGHWAY" || props.highway_type === "MAIN_HIGHWAY" ? props.highway_type : isSec ? "SECOND_HIGHWAY" : "MAIN_HIGHWAY",
             lanes: normalizeLanes(props.lanes || layer.metadata?.lanes || "4"),
             surface: normalizeSurface(props.surface || layer.metadata?.surface || "AC."),
             remarks: props.remarks || layer.metadata?.remarks || "-",
@@ -458,8 +486,16 @@ export function GisDataImportTab({
       }
     });
 
-    return list;
+    return list.sort((a, b) => {
+      const aNumber = Number(String(a.routeNo).match(/\d+/)?.[0] ?? Infinity);
+      const bNumber = Number(String(b.routeNo).match(/\d+/)?.[0] ?? Infinity);
+      return aNumber - bNumber || String(a.routeNo).localeCompare(String(b.routeNo), "th", { numeric: true }) || (kilometerPostMeters(a.kmStart) ?? Infinity) - (kilometerPostMeters(b.kmStart) ?? Infinity);
+    });
   })();
+  const matchingHighwayFeatures = allHighwayFeatures.filter((item) =>
+    [item.routeNo, item.sectionName, item.kmStart, item.kmEnd, item.responsibleOffice, item.highwayType === "MAIN_HIGHWAY" ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"]
+      .some((value) => String(value).toLocaleLowerCase("th").includes(routeSearch.trim().toLocaleLowerCase("th")))
+  );
 
   // Handle GIS File Upload (KML, KMZ, Shapefile .zip, GeoJSON, GPX)
   const handleGisUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -478,9 +514,10 @@ export function GisDataImportTab({
       }
 
       // Simplify coordinates with Douglas-Peucker
-      const decimatedFeatures = extractedFeatures.map((f) => ({
+      const simplified = await simplifyInWorker(extractedFeatures, simplifyTolerance);
+      const decimatedFeatures = simplified.map((f) => ({
         ...f,
-        coords: simplifyCoordinates(f.coords, simplifyTolerance)
+        coords: f.coords
           .map(([lon, lat]) => [Number(lon), Number(lat)] as [number, number])
           .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lon) <= 180 && Math.abs(lat) <= 90),
       })).filter((f) => f.coords.length >= 2);
@@ -490,7 +527,7 @@ export function GisDataImportTab({
       }
 
       setImportedGisFeatures(decimatedFeatures);
-      const decimatedLines = decimatedFeatures.map((f) => f.coords);
+      const decimatedLines = previewLines(decimatedFeatures);
       setImportedPreviewLines(decimatedLines);
       setIncomingGisLines?.(decimatedLines);
 
@@ -507,7 +544,6 @@ export function GisDataImportTab({
       // Auto layer name
       const cleanName = file.name.replace(/\.[^/.]+$/, "");
       setImportedLayerName(cleanName);
-      setImportedLayerDesc(`นำเข้าจากไฟล์ ${file.name} เมื่อ ${new Date().toLocaleDateString("th-TH")}`);
 
       showSuccessModal(
         "ตรวจสอบโครงข่ายสำเร็จ (Dual-Color Preview)",
@@ -526,17 +562,19 @@ export function GisDataImportTab({
   };
 
   // Re-simplify tolerance on demand
-  const handleResimplifyTolerance = (newTol: number) => {
+  const handleResimplifyTolerance = async (newTol: number) => {
     setSimplifyTolerance(newTol);
     if (importedGisFeatures.length > 0) {
-      const reDecimated = importedGisFeatures.map((f) => ({
-        ...f,
-        coords: simplifyCoordinates(f.coords, newTol),
-      }));
-      setImportedGisFeatures(reDecimated);
-      const lines = reDecimated.map((f) => f.coords);
-      setImportedPreviewLines(lines);
-      setIncomingGisLines?.(lines);
+      try {
+        // Keep potentially large re-simplification work off the UI thread too.
+        const reDecimated = await simplifyInWorker(importedGisFeatures, newTol);
+        setImportedGisFeatures(reDecimated);
+        const lines = previewLines(reDecimated);
+        setImportedPreviewLines(lines);
+        setIncomingGisLines?.(lines);
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : "ไม่สามารถลดจำนวนจุดเส้นทางได้");
+      }
     }
   };
 
@@ -547,7 +585,9 @@ export function GisDataImportTab({
       return;
     }
     const isSec = targetLayerCategory === "SECOND_HIGHWAY";
-    const layerId = isSec ? "SECOND_HIGHWAY" : "MAIN_HIGHWAY";
+    // Each import gets its own layer so uploading a second file never replaces
+    // the existing primary or secondary network.
+    const layerId = `IMPORT-${crypto.randomUUID()}`;
     const colorHex = isSec ? (lineStyles.secondary?.color || "#0284c7") : (lineStyles.primary?.color || "#1B5E20");
     const lineWidth = isSec ? (lineStyles.secondary?.weight || 3.5) : (lineStyles.primary?.weight || 5);
 
@@ -576,7 +616,7 @@ export function GisDataImportTab({
             route_code: String(code).trim(),
             route_name: String(name).trim(),
             route_type: type,
-            description: importedLayerDesc || "โครงข่ายสายทางกรมทางหลวง",
+            highway_type: targetLayerCategory,
             length_km: f.lengthKm,
             points_count: f.coords.length,
             layer_name: importedLayerName,
@@ -611,7 +651,6 @@ export function GisDataImportTab({
         setImportedGisFeatures([]);
         setIncomingGisLines?.([]);
         setImportedLayerName("");
-        setImportedLayerDesc("");
         setAvailableGisFields([]);
         showSuccessModal(
           "บันทึกโครงข่ายสายทางสำเร็จ",
@@ -701,16 +740,6 @@ export function GisDataImportTab({
                 value={importedLayerName}
                 onChange={(e) => setImportedLayerName(e.target.value)}
                 placeholder="เช่น โครงข่ายทางหลวงสาย 42"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-300 block mb-1">คำอธิบายเพื่อแสดงเมื่อคลิกเส้นบนแผนที่</label>
-              <input
-                type="text"
-                value={importedLayerDesc}
-                onChange={(e) => setImportedLayerDesc(e.target.value)}
-                placeholder="เช่น ทางหลวงแผ่นดิน 4 ช่องจราจร..."
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
               />
             </div>
@@ -953,7 +982,8 @@ export function GisDataImportTab({
         <h3 className="font-heading font-bold text-sm text-white">เลเยอร์โครงข่ายเดิมในระบบ</h3>
         <div className="space-y-2">
           {(systemData.highwayLayers || []).map((layer) => {
-            const isMain = layer.layer_id === "MAIN_HIGHWAY";
+            const firstType = layer.geojson_data?.features?.[0]?.properties?.highway_type;
+            const isMain = firstType === "MAIN_HIGHWAY" || (firstType !== "SECOND_HIGHWAY" && layer.layer_id !== "SECOND_HIGHWAY");
             const layerColor = isMain ? (lineStyles.primary?.color || "#1B5E20") : (lineStyles.secondary?.color || "#0284c7");
             return (
               <div
@@ -1042,9 +1072,12 @@ export function GisDataImportTab({
           </div>
         </div>
 
-        {allHighwayFeatures.length === 0 ? (
+        <label className="block text-xs text-slate-300">ค้นหาสายทาง
+          <input type="search" value={routeSearch} onChange={(event) => setRouteSearch(event.target.value)} placeholder="หมายเลข ชื่อตอน ก.ม. หรือหน่วยงาน" className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
+        </label>
+        {matchingHighwayFeatures.length === 0 ? (
           <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center text-xs text-slate-400">
-            ยังไม่มีรายการเส้นทางในระบบ กรุณาอัปโหลดไฟล์ KML, KMZ หรือ Shapefile ด้านบน
+            {allHighwayFeatures.length === 0 ? "ยังไม่มีรายการเส้นทางในระบบ กรุณาอัปโหลดไฟล์ด้านบน" : "ไม่พบสายทางที่ตรงกับคำค้นหา"}
           </div>
         ) : (
           <div className="w-full min-w-0 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950">
@@ -1065,11 +1098,12 @@ export function GisDataImportTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80 font-body">
-                {allHighwayFeatures.map((item, idx) => {
+                {matchingHighwayFeatures.map((item, idx) => {
                   return (
                     <tr
                       key={`${item.layerId}-${item.featureIdx}`}
-                      className={`hover:bg-slate-900/60 transition ${!item.isVisible ? "opacity-50 bg-slate-950/40" : ""}`}
+                      onClick={(event) => { if (!(event.target as HTMLElement).closest("button")) setSelectedRoute({ layerId: item.layerId, featureIdx: item.featureIdx }); }}
+                      className={`cursor-pointer hover:bg-slate-900/60 transition ${!item.isVisible ? "opacity-50 bg-slate-950/40" : ""}`}
                     >
                       <td className="p-3 text-center font-mono text-slate-400">{idx + 1}</td>
                       <td className="p-3 text-center">
@@ -1384,6 +1418,24 @@ export function GisDataImportTab({
         </div>
       )}
 
+      {selectedRoute && (() => {
+        const item = allHighwayFeatures.find((entry) => entry.layerId === selectedRoute.layerId && entry.featureIdx === selectedRoute.featureIdx);
+        if (!item) return null;
+        return <div className="fixed inset-0 z-[1001] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="รายละเอียดสายทาง">
+          <div className="w-full max-w-lg space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-6 text-white shadow-xl">
+            <div className="flex items-start justify-between gap-4"><h3 className="text-lg font-semibold">ทล.{item.routeNo} | {item.sectionName}</h3><button type="button" aria-label="ปิดรายละเอียด" onClick={() => setSelectedRoute(null)}><X className="h-5 w-5" /></button></div>
+            <p className="text-sm text-slate-300">{item.highwayType === "MAIN_HIGHWAY" ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"} · ระหว่าง ก.ม. {item.kmStart} ถึง {item.kmEnd}</p>
+            <p className="text-sm text-slate-300">ระยะทาง {item.lengthKm} กม. · {item.lanes} · {item.surface}</p>
+            <p className="text-sm text-slate-300">หน่วยงานรับผิดชอบ: {item.responsibleOffice || "ไม่ระบุ"}</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="rounded-lg bg-amber-500 px-4 py-2 text-sm text-slate-950" onClick={() => { setSelectedRoute(null); setEditingRouteSpecs({ ...item, kmStart: item.kmStart === "-" ? "" : item.kmStart, kmEnd: item.kmEnd === "-" ? "" : item.kmEnd, lengthKm: item.lengthKm === "-" ? "" : item.lengthKm }); }}>ตั้งค่า</button>
+              <button type="button" className="rounded-lg bg-slate-700 px-4 py-2 text-sm" onClick={() => { setSelectedRoute(null); openGeometryEditor(item.layerId, item.featureIdx); }}>แนวถนน</button>
+              <button type="button" className="rounded-lg bg-rose-900 px-4 py-2 text-sm" onClick={() => { setSelectedRoute(null); handleDeleteHighwayFeature(item.layerId, item.featureIdx, `ทล.${item.routeNo} ${item.sectionName}`); }}>ลบ</button>
+            </div>
+          </div>
+        </div>;
+      })()}
+
       {editingGeometry && (
         <div className="pointer-events-none fixed inset-x-2 bottom-2 z-[1000] flex justify-start lg:inset-y-20 lg:left-3 lg:right-auto">
           <div className="pointer-events-auto w-full lg:w-[min(38vw,520px)] max-h-[38vh] lg:max-h-full overflow-y-auto rounded-2xl border border-sky-500/60 bg-[#0c162c] p-4 shadow-2xl space-y-4">
@@ -1391,18 +1443,24 @@ export function GisDataImportTab({
               <div>
                 <h3 className="font-heading font-black text-white">ปรับแนวถนนทางหลวง</h3>
                 <p className="text-xs text-slate-400">กำหนดต้นทาง–ปลายทาง แล้วสร้างแนวเกาะถนน จากนั้นลากจุดสีส้มเพื่อปรับแนว</p>
+                {(() => {
+                  const item = allHighwayFeatures.find((entry) => entry.layerId === editingGeometry.layerId && entry.featureIdx === editingGeometry.featureIdx);
+                  return item ? <p className="mt-2 text-sm text-white">ทล.{item.routeNo} · {item.sectionName}<br />ก.ม. {item.kmStart} ถึง {item.kmEnd} · ระยะทาง {item.lengthKm} กม.</p> : null;
+                })()}
               </div>
-              <button type="button" aria-label="ปิดตัวแก้ไขแนวถนน" onClick={() => { setEditingGeometry(null); setAdminPickMode(null); setDraftCoordinates([]); setDraftWaypoints([]); }} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><X className="h-5 w-5" /></button>
+              <button type="button" aria-label="ปิดตัวแก้ไขแนวถนน" onClick={() => { setEditingGeometry(null); setAdminPickMode(null); setDraftCoordinates([]); setDraftWaypoints([]); onDraftModeChange?.("FLOOD"); }} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><X className="h-5 w-5" /></button>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {(["start", "end"] as const).map((key) => {
                 const label = key === "start" ? "พิกัด กม.เริ่มต้น" : "พิกัด กม.สิ้นสุด";
                 return <div key={key} className="space-y-1.5">
                   <label className="text-xs text-slate-300">{label} · ละติจูด, ลองจิจูด</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input aria-label={`${label} ละติจูด`} type="number" step="any" value={editingGeometry[key][1]} onChange={(event) => setEditingGeometry({ ...editingGeometry, [key]: [editingGeometry[key][0], Number(event.target.value)] })} className="min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-xs text-white" />
-                    <input aria-label={`${label} ลองจิจูด`} type="number" step="any" value={editingGeometry[key][0]} onChange={(event) => setEditingGeometry({ ...editingGeometry, [key]: [Number(event.target.value), editingGeometry[key][1]] })} className="min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-xs text-white" />
-                  </div>
+                  <input key={`${key}-${editingGeometry[key].join(",")}`} aria-label={label} type="text" defaultValue={`${editingGeometry[key][1]}, ${editingGeometry[key][0]}`} placeholder="เช่น 6.850000, 101.250000" onBlur={(event) => {
+                    const rawParts = event.target.value.split(",").map((value) => value.trim());
+                    const parts = rawParts.map(Number);
+                    if (rawParts.length !== 2 || rawParts.some((value) => !value) || parts.some((value) => !Number.isFinite(value)) || Math.abs(parts[0]) > 90 || Math.abs(parts[1]) > 180) { onToast("กรุณากรอกพิกัดเป็นละติจูด, ลองจิจูด"); event.target.value = `${editingGeometry[key][1]}, ${editingGeometry[key][0]}`; return; }
+                    setEditingGeometry((current) => current ? { ...current, [key]: [parts[1], parts[0]] } : current);
+                  }} className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-xs text-white" />
                   <button type="button" onClick={() => setAdminPickMode(key === "start" ? "PICK_HIGHWAY_START" : "PICK_HIGHWAY_END")} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-sky-300 hover:border-sky-400">ปักหมุดบนแผนที่</button>
                 </div>;
               })}
@@ -1418,7 +1476,7 @@ export function GisDataImportTab({
                 <button type="button" onClick={() => exportEditedGeometry("kml")} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white">ส่งออก KML</button>
               </div>
               <div className="flex gap-2">
-                <button type="button" onClick={() => { setEditingGeometry(null); setAdminPickMode(null); setDraftCoordinates([]); setDraftWaypoints([]); }} className="rounded-lg bg-slate-800 px-4 py-2 text-xs text-white">ยกเลิก</button>
+                <button type="button" onClick={() => { setEditingGeometry(null); setAdminPickMode(null); setDraftCoordinates([]); setDraftWaypoints([]); onDraftModeChange?.("FLOOD"); }} className="rounded-lg bg-slate-800 px-4 py-2 text-xs text-white">ยกเลิก</button>
                 <button type="button" onClick={saveEditedGeometry} disabled={draftCoordinates.length < 2} className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-50">บันทึกแนวถนน</button>
               </div>
             </div>

@@ -613,26 +613,23 @@ export function simplifyCoordinates(
 ): [number, number][] {
   if (points.length <= 2) return points;
 
-  let maxDist = 0;
-  let index = 0;
-  const start = points[0];
-  const end = points[points.length - 1];
-
-  for (let i = 1; i < points.length - 1; i++) {
-    const dist = perpendicularDistance(points[i], start, end);
-    if (dist > maxDist) {
-      maxDist = dist;
-      index = i;
+  const keep = new Uint8Array(points.length);
+  keep[0] = keep[points.length - 1] = 1;
+  const ranges: [number, number][] = [[0, points.length - 1]];
+  while (ranges.length) {
+    const [start, end] = ranges.pop()!;
+    let maxDist = tolerance;
+    let index = -1;
+    for (let i = start + 1; i < end; i++) {
+      const distance = perpendicularDistance(points[i], points[start], points[end]);
+      if (distance > maxDist) { maxDist = distance; index = i; }
+    }
+    if (index >= 0) {
+      keep[index] = 1;
+      ranges.push([start, index], [index, end]);
     }
   }
-
-  if (maxDist > tolerance) {
-    const left = simplifyCoordinates(points.slice(0, index + 1), tolerance);
-    const right = simplifyCoordinates(points.slice(index), tolerance);
-    return left.slice(0, -1).concat(right);
-  } else {
-    return [start, end];
-  }
+  return points.filter((_, index) => keep[index] === 1);
 }
 
 function perpendicularDistance(
@@ -703,9 +700,9 @@ export async function calculateRoadSnappedRoute(
       return result.data.routes[0].geometry.coordinates as [number, number][];
     }
   } catch (err) {
-    console.warn("OSRM routing unavailable, using direct waypoints:", err);
+    console.warn("OSRM routing unavailable:", err);
   }
-  return allPoints;
+  throw new Error("ไม่สามารถคำนวณเส้นทางตามถนนได้ กรุณาลองใหม่");
 }
 
 /**

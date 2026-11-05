@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { extractDirectionalAdvice } from "@/lib/gis-utils";
 import { usePollingActivity } from "@/lib/use-polling-activity";
+import { useSystemFavicon } from "@/lib/use-system-favicon";
 
 export default function HomePage() {
   const isPollingActive = usePollingActivity();
@@ -71,6 +72,7 @@ export default function HomePage() {
     refetchInterval: isPollingActive ? 30 * 60 * 1000 : false,
     refetchIntervalInBackground: false,
   });
+  useSystemFavicon(systemData.systemSettings?.logoUrl);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
