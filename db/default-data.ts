@@ -39,7 +39,7 @@ export interface FloodRoute {
 
 export interface DetourRoute {
   id: string;
-  flood_id_ref: string;
+  flood_id_ref: string | null;
   route_name: string;
   lat_start: number;
   lon_start: number;

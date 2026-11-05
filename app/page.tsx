@@ -41,6 +41,23 @@ import { extractDirectionalAdvice } from "@/lib/gis-utils";
 import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
 
+type TrafficStatus = "CLOSED" | "WARNING" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE";
+
+function getTrafficPresentation(status: TrafficStatus, waterLevelCm: number) {
+  switch (status) {
+    case "CLOSED":
+      return { label: "ผ่านไม่ได้", detail: "รถทุกชนิดผ่านไม่ได้", icon: "⛔", color: "red" as const };
+    case "LIGHT_VEHICLES_ONLY":
+      return { label: "รถเล็กผ่านได้", detail: "อนุญาตเฉพาะรถขนาดเล็ก", icon: "🚗", color: "sky" as const };
+    case "ONE_LANE":
+      return { label: "รถเล็กผ่านได้ ๑ ช่องทาง", detail: "เปิดการจราจรหนึ่งช่องทาง", icon: "↔️", color: "amber" as const };
+    case "WARNING":
+      return { label: "รถเล็กผ่านไม่ได้", detail: `ระดับน้ำ ${waterLevelCm} ซม.`, icon: "⚠️", color: "amber" as const };
+    default:
+      return { label: "ผ่านได้ปกติ", detail: "การจราจรผ่านได้ตามปกติ", icon: "✅", color: "emerald" as const };
+  }
+}
+
 export default function HomePage() {
   const isPollingActive = usePollingActivity();
   const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL?.startsWith("https://")
@@ -62,7 +79,7 @@ export default function HomePage() {
   const previousDataFingerprint = useRef<string>("");
 
   // TanStack Query for Data Fetching & Sync with automatic background refetch (Network-First live data)
-  const { data: systemData = INITIAL_SYSTEM_DATA, isFetching, isError } = useQuery<SystemDataPayload>({
+  const { data: systemData = INITIAL_SYSTEM_DATA, isPending, isError, refetch } = useQuery<SystemDataPayload>({
     queryKey: ["dohSystemData"],
     queryFn: async () => {
       return await getSystemDataAction();
@@ -156,6 +173,17 @@ export default function HomePage() {
 
     return matchSearch && matchChip;
   });
+  const activeDetours = (systemData.detourRoutes || []).filter((route) => route.is_active);
+  const filteredDetours = activeDetours.filter((route) => `${route.route_name} ${route.description || ""}`.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase()));
+  const selectedFloodDetours = selectedFlood
+    ? activeDetours.filter((route) => route.flood_id_ref === selectedFlood.id)
+    : [];
+  const detourList = filteredDetours.length > 0 && (
+    <section className="space-y-2 rounded-xl border border-amber-700/50 bg-slate-900 p-3" aria-label="รายการทางเลี่ยง">
+      <h3 className="font-heading font-bold text-amber-300">ทางเลี่ยง ({filteredDetours.length} เส้นทาง)</h3>
+      {filteredDetours.map((route) => <button key={route.id} type="button" className="block min-h-11 w-full rounded-lg border border-slate-700 p-3 text-left text-sm text-white hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400" onClick={() => { if (Number.isFinite(route.lon_start) && Number.isFinite(route.lat_start)) setFocusCoordinates([route.lon_start, route.lat_start]); setIsMobileDrawerOpen(false); }}><span className="flex items-center justify-between gap-2"><strong>{route.route_name}</strong><span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">{route.flood_id_ref ? "ผูกจุดน้ำท่วม" : "ทางเลี่ยงอิสระ"}</span></span><span className="mt-1 block text-xs text-slate-300">{route.description || "เลือกเพื่อดูตำแหน่งบนแผนที่"}</span></button>)}
+    </section>
+  );
 
 
   return (
@@ -275,10 +303,10 @@ export default function HomePage() {
 
           {/* Incident Cards Scrollable List */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+            {detourList}
             {filteredFloods.map((flood) => {
               const isSelected = flood.id === selectedFloodId;
-              const isClosed = flood.traffic_status === "CLOSED";
-              const isWarning = flood.traffic_status === "WARNING";
+              const status = getTrafficPresentation(flood.traffic_status, flood.water_level_cm);
 
               return (
                 <button
@@ -299,7 +327,7 @@ export default function HomePage() {
                   }`}
                   style={{
                     borderLeftWidth: "1px",
-                    borderLeftColor: isClosed ? "#ef4444" : isWarning ? "#f59e0b" : "#10b981",
+                    borderLeftColor: status.color === "red" ? "#ef4444" : status.color === "amber" ? "#f59e0b" : status.color === "sky" ? "#38bdf8" : "#10b981",
                   }}
                 >
                   {/* Top Line: Badge, Section Name, Traffic Status */}
@@ -320,18 +348,16 @@ export default function HomePage() {
 
                     <span
                       className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border shrink-0 ${
-                        isClosed
+                        status.color === "red"
                           ? "bg-red-500/20 text-red-400 border-red-500/40 alert-badge-pulse"
-                          : isWarning
+                          : status.color === "amber"
                           ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                          : status.color === "sky"
+                          ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
                           : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                       }`}
                     >
-                      {isClosed
-                        ? "⛔ ปิดทาง / ทางเบี่ยง"
-                        : isWarning
-                        ? `⚠️ รถเล็กห้ามผ่าน (${flood.water_level_cm} ซม.)`
-                        : "✅ ผ่านได้ปกติ"}
+                      {status.icon} {status.label}
                     </span>
                   </div>
 
@@ -404,6 +430,17 @@ export default function HomePage() {
         {/* B. MAIN GIS MAP VIEWPORT                                          */}
         {/* ================================================================= */}
         <div className="order-1 lg:order-2 relative h-[calc(100vh-64px)] lg:h-full flex-1 w-full overflow-hidden bg-[#0b1426]">
+          {isPending && (
+            <div role="status" aria-live="polite" className="absolute left-1/2 top-4 z-[600] -translate-x-1/2 rounded-xl border border-slate-700 bg-slate-950/95 px-4 py-3 text-sm text-white shadow-xl">
+              กำลังโหลดข้อมูลสถานการณ์ล่าสุด…
+            </div>
+          )}
+          {isError && systemData.floodRoutes.length === 0 && systemData.detourRoutes.length === 0 && (
+            <div role="alert" className="absolute left-1/2 top-4 z-[600] flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-red-500/60 bg-slate-950/95 px-4 py-3 text-sm text-white shadow-xl">
+              <span>โหลดข้อมูลสถานการณ์ไม่สำเร็จ</span>
+              <button type="button" onClick={() => void refetch()} className="min-h-11 rounded-lg bg-amber-400 px-3 font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">ลองอีกครั้ง</button>
+            </div>
+          )}
           {/* Floating Expand Sidebar Button (when collapsed on desktop) */}
           {isSidebarCollapsed && (
             <button
@@ -518,11 +555,11 @@ export default function HomePage() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+                  {detourList}
                   {filteredFloods.length === 0 && <div className="rounded-xl border border-slate-700 p-4 text-slate-300 text-sm"><p>{systemData.floodRoutes.length === 0 ? "ยังไม่มีรายงานจุดน้ำท่วม" : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p><button type="button" className="mt-3 min-h-11 text-amber-300" onClick={() => { setSearchQuery(""); setSelectedRouteFilter("ALL"); }}>ล้างตัวกรอง</button></div>}
                   {filteredFloods.map((flood) => {
                     const isSelected = flood.id === selectedFloodId;
-                    const isClosed = flood.traffic_status === "CLOSED";
-                    const isWarning = flood.traffic_status === "WARNING";
+                    const status = getTrafficPresentation(flood.traffic_status, flood.water_level_cm);
 
                     return (
                       <button
@@ -543,7 +580,7 @@ export default function HomePage() {
                         }`}
                         style={{
                           borderLeftWidth: "4px",
-                          borderLeftColor: isClosed ? "#ef4444" : isWarning ? "#f59e0b" : "#10b981",
+                          borderLeftColor: status.color === "red" ? "#ef4444" : status.color === "amber" ? "#f59e0b" : status.color === "sky" ? "#38bdf8" : "#10b981",
                         }}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -563,18 +600,16 @@ export default function HomePage() {
 
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border shrink-0 ${
-                              isClosed
+                              status.color === "red"
                                 ? "bg-red-500/20 text-red-400 border-red-500/40"
-                                : isWarning
+                                : status.color === "amber"
                                 ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                : status.color === "sky"
+                                ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
                                 : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                             }`}
                           >
-                            {isClosed
-                              ? "⛔ ปิดทาง / ทางเบี่ยง"
-                              : isWarning
-                              ? `⚠️ รถเล็กห้ามผ่าน (${flood.water_level_cm} ซม.)`
-                              : "✅ ผ่านได้ปกติ"}
+                            {status.icon} {status.label}
                           </span>
                         </div>
 
@@ -692,6 +727,7 @@ export default function HomePage() {
                     <div className="text-[11px] text-slate-300 mt-1">
                       กม.{selectedFlood.km_start} ถึง กม.{selectedFlood.km_end} ({selectedFlood.subdistrict || selectedFlood.district || "อ.หนองจิก"}) • พิกัด {selectedFlood.lat_start.toFixed(4)}, {selectedFlood.lon_start.toFixed(4)}
                     </div>
+                    <p className="mt-1 text-xs text-slate-300">อัปเดตล่าสุด: {selectedFlood.updated_at ? new Date(selectedFlood.updated_at).toLocaleString("th-TH") : "ไม่ระบุ"}</p>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -715,28 +751,20 @@ export default function HomePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
                   {/* Left: Photo with GPS overlay */}
                   <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900 group">
-                    <img
-                      src={
-                        selectedFlood.latest_photo_url || undefined
-                      }
-                      alt={selectedFlood.section_name}
-                      className="w-full h-36 object-cover"
-                    />
+                    {selectedFlood.latest_photo_url ? (
+                      <img
+                        src={selectedFlood.latest_photo_url}
+                        alt={`ภาพสถานการณ์ ${selectedFlood.section_name}`}
+                        className="w-full h-36 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-36 items-center justify-center px-4 text-center text-xs text-slate-400">ยังไม่มีภาพถ่ายสถานการณ์ล่าสุด</div>
+                    )}
                     {/* Animated Alert Badge Overlay on photo */}
                     <div className="absolute top-2 left-2 z-10">
-                      {selectedFlood.traffic_status === "CLOSED" ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-heading font-black text-white bg-red-600/95 alert-badge-pulse shadow-xl">
-                          ⛔ ผ่านไม่ได้ (รถทุกชนิด)
-                        </span>
-                      ) : selectedFlood.traffic_status === "WARNING" ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-heading font-black text-slate-950 bg-amber-400/95 warning-badge-pulse shadow-xl">
-                          ⚠️ รถเล็กห้ามผ่าน
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-heading font-black text-white bg-emerald-600/95 shadow-xl">
-                          ✅ ผ่านได้ปกติ
-                        </span>
-                      )}
+                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/95 px-2.5 py-1 text-[10px] font-heading font-black text-white shadow-xl">
+                        {getTrafficPresentation(selectedFlood.traffic_status, selectedFlood.water_level_cm).icon} {getTrafficPresentation(selectedFlood.traffic_status, selectedFlood.water_level_cm).label}
+                      </span>
                     </div>
                     <div className="p-1.5 bg-slate-950/90 text-[10px] text-slate-400 flex items-center justify-between font-mono">
                       <span>📍 ภาพถ่ายหน้างานพร้อมพิกัด GPS: {selectedFlood.lat_start.toFixed(3)}, {selectedFlood.lon_start.toFixed(3)}</span>
@@ -770,13 +798,11 @@ export default function HomePage() {
 
                     <div className="space-y-1">
                       <div className="flex items-start gap-1.5 text-xs text-slate-300">
-                        <span className="text-red-500 font-bold shrink-0">
-                          {selectedFlood.traffic_status === "CLOSED" ? "⛔" : "⚠️"}
+                        <span className="text-amber-400 font-bold shrink-0">
+                          {getTrafficPresentation(selectedFlood.traffic_status, selectedFlood.water_level_cm).icon}
                         </span>
                         <p className="text-[11px] leading-tight">
-                          {selectedFlood.traffic_status === "CLOSED"
-                            ? "รถเก๋ง/รถกระบะเตี้ยห้ามผ่านเด็ดขาด ให้ใช้ทางเบี่ยงสีเหลือง"
-                            : "รถเล็กห้ามผ่าน รถกระบะยกสูงและรถบรรทุกผ่านได้ ระมัดระวัง"}
+                          {getTrafficPresentation(selectedFlood.traffic_status, selectedFlood.water_level_cm).detail}
                         </p>
                       </div>
                     </div>
@@ -785,6 +811,15 @@ export default function HomePage() {
 
                 {/* Detour Recommendation Box (Yellow Banner) */}
                 <div className="bg-amber-500/10 border border-amber-400/50 rounded-xl p-3.5 space-y-2.5">
+                  {selectedFloodDetours.map((route) => (
+                    <div key={route.id} className="rounded-lg border border-amber-400/30 bg-slate-950/70 p-3 text-sm text-amber-100">
+                      <strong className="block text-amber-300">{route.route_name}</strong>
+                      <p className="mt-1 whitespace-pre-line">{route.description || "ยังไม่มีคำแนะนำการเดินทาง"}</p>
+                    </div>
+                  ))}
+                  {selectedFloodDetours.length === 0 && !selectedFlood.detour_advice && (
+                    <p className="text-[11px] text-amber-100/90">ยังไม่มีทางเลี่ยงที่ยืนยันและผูกกับจุดน้ำท่วมนี้ โปรดโทร 1586 ก่อนเดินทาง</p>
+                  )}
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 text-amber-300 text-xs font-heading font-bold">
                       <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
