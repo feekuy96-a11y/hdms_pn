@@ -127,3 +127,17 @@ test("line styling accepts precise low-resource line widths and casing", async (
   await expect(weight).toHaveValue("0.1");
   await expect(page.getByText("เปิดเส้นขอบ (Stroke/Casing)", { exact: true })).toBeVisible();
 });
+
+test("incident and detour records use consistent symbols and detail controls", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop record layout");
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "รายการเหตุการณ์");
+  await expect(page.getByRole("heading", { name: "ทะเบียนเหตุการณ์น้ำท่วม" })).toBeVisible();
+  await expect(page.locator('[title="จุดน้ำท่วม"]').first()).toBeVisible();
+
+  await openMenu(page, "รายการทางเลี่ยง");
+  const detourSymbol = page.locator('[title="เส้นทางเลี่ยง"]').first();
+  if (await detourSymbol.count()) await expect(detourSymbol).toBeVisible();
+  else await expect(page.getByText("ไม่พบรายการเส้นทางเลี่ยง", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: /วาดทางเลี่ยงใหม่/ })).toBeVisible();
+});

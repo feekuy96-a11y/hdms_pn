@@ -509,15 +509,24 @@ export function LongdoGisMap({
               renderer: vectorCanvas,
             }).addTo(group);
 
-            polyline.bindPopup(`
-              <div class="text-xs p-1.5 font-body bg-slate-950 text-white rounded-xl border" style="border-color: ${dColor}">
-                <span class="text-slate-950 text-[10px] font-bold px-1.5 py-0.5 rounded font-heading shadow" style="background-color: ${dColor}">
-                  เส้นทางเลี่ยงแนะนำ
-                </span>
-                <h4 class="font-bold text-white text-sm mt-1.5 font-heading">${escapeHtml(detour.route_name)}</h4>
-                <p class="text-slate-300 mt-1">${escapeHtml(detour.description || "-")}</p>
+            const detourPopup = `
+              <div class="text-xs p-2.5 min-w-[240px] font-body bg-slate-950 text-white rounded-xl border" style="border-color: ${dColor}">
+                <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
+                  <span style="color:${dColor}" aria-hidden="true">↪</span>
+                  <h4 class="font-bold text-white text-sm font-heading">${escapeHtml(detour.route_name)}</h4>
+                </div>
+                <p class="text-slate-300 mt-2 whitespace-pre-wrap">${escapeHtml(detour.description || "ยังไม่มีคำแนะนำการเดินทาง")}</p>
+                <div class="mt-2 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1.5 text-[10px] text-amber-300">${detour.flood_id_ref ? "เชื่อมโยงกับเหตุการณ์น้ำท่วม" : "ทางเลี่ยงอิสระ"}</div>
               </div>
-            `);
+            `;
+            polyline.bindPopup(detourPopup);
+            const midPoint = latLngs[Math.floor(latLngs.length / 2)];
+            const detourIcon = L.divIcon({
+              html: `<div class="doh-route-symbol" style="width:30px;height:30px;border-radius:9px;background:${dColor};color:#0f172a;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(15,23,42,.45)"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9"/><path d="m15 2 3 3-3 3"/><path d="M9 19h10"/><path d="m16 16 3 3-3 3"/></svg></div>`,
+              className: "doh-detour-symbol",
+              iconSize: [30, 30], iconAnchor: [15, 15],
+            });
+            L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(detourPopup).addTo(group);
           }
         });
       }
@@ -567,21 +576,18 @@ export function LongdoGisMap({
           const midLon = flood.lon_start || (coords[0] ? coords[0][0] : APP_CONFIG.DEFAULT_CENTER.lon);
 
           let capsuleClass = "doh-capsule-tag doh-capsule-amber";
-          let statusIcon = "⚠️";
           let levelText = `${flood.water_level_cm} ซม.`;
 
           if (flood.traffic_status === "CLOSED" || flood.water_level_cm >= 40) {
             capsuleClass = "doh-capsule-tag doh-capsule-red";
-            statusIcon = "⛔";
           } else if (flood.water_level_cm === 0 || ["PASSABLE", "LIGHT_VEHICLES_ONLY"].includes(flood.traffic_status)) {
             capsuleClass = "doh-capsule-tag doh-capsule-green";
-            statusIcon = "✅";
             levelText = "ปกติ";
           }
 
           const iconHtml = `
             <div class="${capsuleClass}">
-              <span class="text-xs">${statusIcon}</span>
+              <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-sky-700" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M12 3v2"/></svg></span>
               <span>ทล.${escapeHtml(flood.route_no)}</span>
               <span class="opacity-90">(${escapeHtml(levelText)})</span>
             </div>
@@ -827,7 +833,7 @@ export function LongdoGisMap({
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
-                <span className="w-4 h-1.5 inline-block rounded" style={{ backgroundColor: mapStyles.flood?.color }} />
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-sky-100 text-sky-700"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/></svg></span>
                 <span>เส้นน้ำท่วม <span className="ml-1 rounded-full bg-red-950 px-1.5 py-0.5 text-[10px] text-red-300">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
               </span>
               <input
@@ -840,7 +846,7 @@ export function LongdoGisMap({
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
-                <span className="w-4 h-1.5 inline-block rounded" style={{ backgroundColor: mapStyles.detour?.color }} />
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-amber-400 text-slate-950"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9"/><path d="m15 2 3 3-3 3"/><path d="M9 19h10"/></svg></span>
                 <span>ทางเลี่ยง <span className="ml-1 rounded-full bg-amber-950 px-1.5 py-0.5 text-[10px] text-amber-300">{showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
               </span>
               <input

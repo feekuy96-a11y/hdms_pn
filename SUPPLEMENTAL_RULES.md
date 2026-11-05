@@ -544,3 +544,11 @@
 - **การทดสอบและผลลัพธ์ (Verification):** `git diff --check`, lint, typecheck และ Pages production build ผ่าน; CI และ GitHub Pages deploy ผ่าน; Playwright static และเว็บจริงผ่านอย่างละ 17 tests บน desktop/mobile (ข้าม 9 tests ที่กำหนด desktop-only หรือไม่มี geometry fixture) ครอบคลุม KML import, A/B/จุดดัด, เมนูส่งออก, ล้างข้อมูล, line width/casing, public map และ linked/unlinked detour
 - **สถานะ:** เผยแพร่และตรวจ production ผ่าน
 
+### [UPDATE-048] 2026-11-05: สัญลักษณ์และรูปแบบรายการข้อมูลมาตรฐานเดียวกัน
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์:** ใช้หน้ารายละเอียดเหตุการณ์น้ำท่วมเป็นแม่แบบให้ตาราง รายการ Popup หัวข้อ ป้ายสถานะ และปุ่มของน้ำท่วม ทางเลี่ยง และสายทางอ่านง่ายและสม่ำเสมอ
+- **ไฟล์:** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `tests/e2e/admin-menus.spec.ts`
+- **รายละเอียด:** เพิ่มไอคอนคลื่นน้ำและไอคอนลูกศรทางเลี่ยงให้ตรงกันบนแผนที่ Legend และรายการ; เพิ่มหมุดกลางทางเลี่ยงพร้อม Popup; จัด Popup ทางเลี่ยงเป็นหัวข้อ คำแนะนำ และสถานะการเชื่อมเหตุการณ์; จัดรายการและหน้าต่างรายละเอียดให้ใช้ชื่อสถานะภาษาไทย ช่วง `กม.` พิกัด A/B เวลาอัปเดต และปุ่มจัดการในลำดับเดียวกัน
+- **การทดสอบ:** `git diff --check`, lint, typecheck และ Pages build ผ่าน; Playwright desktop ของเมนู Admin ผ่าน 8 tests และข้าม 1 test ที่ไม่มี geometry fixture; test เฉพาะสัญลักษณ์/รูปแบบรายการผ่าน โดยรองรับทั้งกรณีมีข้อมูลและ Empty State; รอตรวจ production
+- **สถานะ:** ผ่าน local release gate รอเผยแพร่
+

@@ -19,6 +19,7 @@ import {
   X,
   Save,
   Compass,
+  Route,
 } from "lucide-react";
 import {
   deleteRouteAction,
@@ -433,7 +434,7 @@ export function DetourManagementTab({
                     {/* Detour Name */}
                     <td className="p-3">
                       <div className="font-heading font-bold text-white text-xs flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-slate-950" title="เส้นทางเลี่ยง"><Route className="h-4 w-4" /></span>
                         <span>{item.route_name}</span>
                       </div>
                     </td>
@@ -537,7 +538,7 @@ export function DetourManagementTab({
         <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/70 p-2 sm:items-center sm:p-4" onClick={() => setViewingDetour(null)}>
           <section role="dialog" aria-modal="true" aria-label="รายละเอียดเส้นทางเลี่ยง" className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5 text-slate-100 shadow-xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">{viewingDetour.route_name}</h2><p className="mt-1 text-sm text-slate-400">รายละเอียดเส้นทางเลี่ยง</p></div><button type="button" aria-label="ปิดรายละเอียด" onClick={() => setViewingDetour(null)} className="rounded-lg p-2 hover:bg-slate-800"><X className="h-5 w-5" /></button></div>
-            <dl className="mt-4 space-y-3 text-sm"><div><dt className="text-slate-400">สถานะ</dt><dd>{viewingDetour.is_active ? "เปิดใช้งาน" : "ปิดชั่วคราว"}</dd></div><div><dt className="text-slate-400">จุดน้ำท่วมที่เกี่ยวข้อง</dt><dd>{(() => { const flood = floodList.find((item) => item.id === viewingDetour.flood_id_ref); return flood ? `ทล.${flood.route_no} - ${flood.section_name}` : "ไม่ได้ผูก"; })()}</dd></div><div><dt className="text-slate-400">คำแนะนำการเดินทาง</dt><dd className="whitespace-pre-wrap">{viewingDetour.description || "ไม่มีคำแนะนำ"}</dd></div></dl>
+            <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2"><div><dt className="text-slate-400">สถานะ</dt><dd>{viewingDetour.is_active ? "เปิดใช้งาน" : "ปิดชั่วคราว"}</dd></div><div><dt className="text-slate-400">จุดน้ำท่วมที่เกี่ยวข้อง</dt><dd>{(() => { const flood = floodList.find((item) => item.id === viewingDetour.flood_id_ref); return flood ? `ทล.${flood.route_no} ${flood.section_name}` : "ทางเลี่ยงอิสระ"; })()}</dd></div><div><dt className="text-slate-400">พิกัดจุด A</dt><dd>{viewingDetour.lat_start}, {viewingDetour.lon_start}</dd></div><div><dt className="text-slate-400">พิกัดจุด B</dt><dd>{viewingDetour.lat_end}, {viewingDetour.lon_end}</dd></div><div className="sm:col-span-2"><dt className="text-slate-400">คำแนะนำการเดินทาง</dt><dd className="whitespace-pre-wrap">{viewingDetour.description || "ยังไม่มีคำแนะนำการเดินทาง"}</dd></div><div className="sm:col-span-2"><dt className="text-slate-400">อัปเดตล่าสุด</dt><dd>{new Date(viewingDetour.updated_at).toLocaleString("th-TH")}</dd></div></dl>
             <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => { const item = viewingDetour; setViewingDetour(null); handleOpenEditModal(item); }} className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950">แก้ไข</button><button type="button" onClick={() => { const item = viewingDetour; setViewingDetour(null); handleDeleteDetour(item); }} className="rounded-lg border border-rose-500 px-4 py-2 text-sm text-rose-300">ลบ</button></div>
           </section>
         </div>

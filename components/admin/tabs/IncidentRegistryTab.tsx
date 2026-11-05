@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { FloodRoute, SystemDataPayload } from "@/db/default-data";
-import { ClipboardList, Plus, FileText, Search, Trash2, Edit, CheckCircle2 } from "lucide-react";
+import { ClipboardList, Plus, FileText, Search, Trash2, Edit, CheckCircle2, Waves } from "lucide-react";
 import { deleteRouteAction, setIncidentStatusAction, saveTimelineUpdateAction, getDeletedRoutesAction, restoreRouteAction } from "@/app/actions/doh-actions";
 import { exportLineFeatures, GisExportFormat, parseLineCoordinates } from "@/lib/gis-export";
 
@@ -15,6 +15,11 @@ interface IncidentRegistryTabProps {
   onEditFlood: (floodId: string) => void;
   onAddFlood: () => void;
 }
+
+const trafficLabel = (status: FloodRoute["traffic_status"]) => ({
+  CLOSED: "ผ่านไม่ได้", WARNING: "เฝ้าระวัง", PASSABLE: "ผ่านได้ปกติ",
+  LIGHT_VEHICLES_ONLY: "รถเล็กผ่านได้", ONE_LANE: "ผ่านได้ 1 ช่องทาง",
+}[status]);
 
 export function IncidentRegistryTab({
   systemData,
@@ -282,6 +287,7 @@ export function IncidentRegistryTab({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
+                      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700" title="จุดน้ำท่วม"><Waves className="h-4 w-4" /></span>
                       <span
                         className="font-heading font-black text-xs px-2 py-0.5 rounded shadow-sm"
                         style={
@@ -300,7 +306,7 @@ export function IncidentRegistryTab({
                       <span className="text-xs text-white font-medium">{r.section_name}</span>
                     </div>
                     <div className="text-xs text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
-                      <span>ช่วง กม. {r.km_start} - {r.km_end}</span>
+                      <span>ระหว่าง กม.{r.km_start} ถึง กม.{r.km_end}</span>
                       <span>
                         ระดับน้ำ:{" "}
                         <strong className="text-white font-mono">{r.water_level_cm} ซม.</strong>
@@ -374,7 +380,7 @@ export function IncidentRegistryTab({
               <div><p className="text-xs font-semibold text-amber-300">ทล.{viewingIncident.route_no}</p><h3 className="text-lg font-semibold text-white">{viewingIncident.section_name}</h3></div>
               <button type="button" onClick={() => setViewingIncident(null)} className="rounded-lg p-2 text-slate-300 hover:bg-slate-800 hover:text-white" aria-label="ปิดรายละเอียด">×</button>
             </div>
-            <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2"><div><dt className="text-slate-400">ก.ม.</dt><dd className="text-white">{viewingIncident.km_start} ถึง {viewingIncident.km_end}</dd></div><div><dt className="text-slate-400">สถานะการจราจร</dt><dd className="text-white">{viewingIncident.traffic_status}</dd></div><div><dt className="text-slate-400">ระดับน้ำล่าสุด</dt><dd className="text-white">{viewingIncident.water_level_cm} ซม.</dd></div><div><dt className="text-slate-400">สถานะรายการ</dt><dd className="text-white">{viewingIncident.is_active ? "กำลังใช้งาน" : "คืนสภาพปกติ"}</dd></div></dl>
+            <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2"><div><dt className="text-slate-400">ช่วงสายทาง</dt><dd className="text-white">ระหว่าง กม.{viewingIncident.km_start} ถึง กม.{viewingIncident.km_end}</dd></div><div><dt className="text-slate-400">สถานะการจราจร</dt><dd className="text-white">{trafficLabel(viewingIncident.traffic_status)}</dd></div><div><dt className="text-slate-400">ระดับน้ำล่าสุด</dt><dd className="text-white">{viewingIncident.water_level_cm} ซม.</dd></div><div><dt className="text-slate-400">อัปเดตล่าสุด</dt><dd className="text-white">{new Date(viewingIncident.updated_at).toLocaleString("th-TH")}</dd></div></dl>
             <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => { setViewingIncident(null); onEditFlood(viewingIncident.id); }} className="rounded-xl bg-amber-500 px-3 py-2 text-sm font-semibold text-slate-950">แก้ไข</button><button type="button" onClick={() => { setViewingIncident(null); handleDeleteRoute(viewingIncident.id); }} className="rounded-xl bg-red-700 px-3 py-2 text-sm font-semibold text-white">ลบ</button></div>
           </section>
         </div>
