@@ -51,6 +51,7 @@ const EMPTY_LINES: [number, number][][] = [];
 const EMPTY_PICK_MARKERS: { lat: number; lon: number; label: string; mode: string }[] = [];
 
 const MAX_VISIBLE_SHIELDS = 200;
+const MAX_VERTEX_HANDLES = 400;
 
 interface ShieldCandidate {
   code: string;
@@ -206,6 +207,11 @@ interface LongdoGisMapProps {
   draftWaypoints?: [number, number][];
   draftPickMarkers?: { lat: number; lon: number; label: string; mode: string }[];
   onWaypointDragged?: (index: number, newCoord: [number, number]) => void;
+  /** Freeform line editor (Google My Maps style): show draggable handles on every vertex of the draft line. */
+  vertexEditable?: boolean;
+  onVertexMoved?: (index: number, newCoord: [number, number]) => void;
+  onVertexInserted?: (index: number, coord: [number, number]) => void;
+  onVertexClicked?: (index: number, via: "click" | "contextmenu") => void;
   onOfficeDragged?: (officeId: string, newPosition: { lat: number; lon: number }) => void;
   editableOfficeId?: string | null;
   draftMode?: "FLOOD" | "DETOUR";
@@ -226,6 +232,10 @@ export function LongdoGisMap({
   draftWaypoints = EMPTY_COORDS,
   draftPickMarkers = EMPTY_PICK_MARKERS,
   onWaypointDragged,
+  vertexEditable = false,
+  onVertexMoved,
+  onVertexInserted,
+  onVertexClicked,
   onOfficeDragged,
   editableOfficeId = null,
   draftMode = "FLOOD",
@@ -244,6 +254,8 @@ export function LongdoGisMap({
   const detourGroupRef = useRef<any>(null);
   const floodGroupRef = useRef<any>(null);
   const draftGroupRef = useRef<any>(null);
+  const draftLineRef = useRef<any>(null);
+  const vertexGroupRef = useRef<any>(null);
   const officeGroupRef = useRef<any>(null);
   const floodLinesRef = useRef<Record<string, FloodLineEntry>>({});
   const baseLayersRef = useRef<Record<string, any>>({});
@@ -315,6 +327,12 @@ export function LongdoGisMap({
   onWaypointDraggedRef.current = onWaypointDragged;
   const onOfficeDraggedRef = useRef(onOfficeDragged);
   onOfficeDraggedRef.current = onOfficeDragged;
+  const onVertexMovedRef = useRef(onVertexMoved);
+  onVertexMovedRef.current = onVertexMoved;
+  const onVertexInsertedRef = useRef(onVertexInserted);
+  onVertexInsertedRef.current = onVertexInserted;
+  const onVertexClickedRef = useRef(onVertexClicked);
+  onVertexClickedRef.current = onVertexClicked;
   const onSelectFloodRef = useRef(onSelectFlood);
   onSelectFloodRef.current = onSelectFlood;
   const selectedFloodIdRef = useRef(selectedFloodId);
@@ -382,6 +400,7 @@ export function LongdoGisMap({
         detourGroupRef.current = L.layerGroup().addTo(map);
         floodGroupRef.current = L.layerGroup().addTo(map);
         draftGroupRef.current = L.layerGroup().addTo(map);
+        vertexGroupRef.current = L.layerGroup().addTo(map);
         officeGroupRef.current = L.layerGroup().addTo(map);
         shieldGroupRef.current = L.layerGroup().addTo(map);
 
@@ -423,6 +442,8 @@ export function LongdoGisMap({
       detourGroupRef.current = null;
       floodGroupRef.current = null;
       draftGroupRef.current = null;
+      draftLineRef.current = null;
+      vertexGroupRef.current = null;
       officeGroupRef.current = null;
       shieldGroupRef.current = null;
       floodLinesRef.current = {};
@@ -827,6 +848,7 @@ export function LongdoGisMap({
     const group = draftGroupRef.current;
     if (!mapReady || !L || !group) return;
     group.clearLayers();
+    draftLineRef.current = null;
     const renderer = rendererRef.current;
 
     // Blue dashed preview of the GIS file being imported / geometry being edited
@@ -855,6 +877,7 @@ export function LongdoGisMap({
         opacity: 0.95,
         renderer,
       }).addTo(group);
+      draftLineRef.current = draftLine;
       draftLine.on("click", (event: any) => {
         if (adminPickModeRef.current !== "ADD_WAYPOINT") return;
         L.DomEvent.stopPropagation(event);
@@ -896,9 +919,103 @@ export function LongdoGisMap({
 
     raisePathLayers(group);
     return () => {
+      draftLineRef.current = null;
       group.clearLayers();
     };
   }, [mapReady, incomingGisLines, draftCoordinates, draftWaypoints, draftPickMarkers, draftMode, mapStyles]);
+
+  // 4h. Freeform vertex editor: draggable handle on every vertex + "+" handle on every segment middle.
+  // Only vertices inside the viewport are drawn (at most MAX_VERTEX_HANDLES), so long lines stay fast.
+  useEffect(() => {
+    const L = leafletRef.current;
+    const map = leafletMapRef.current;
+    const group = vertexGroupRef.current;
+    if (!mapReady || !L || !map || !group) return;
+    group.clearLayers();
+    if (!vertexEditable || draftCoordinates.length < 2) return;
+
+    const working: [number, number][] = draftCoordinates.map(toLeafletLatLng);
+    const lastIndex = working.length - 1;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const draw = () => {
+      group.clearLayers();
+      const view = map.getBounds().pad(0.15);
+      const visible: number[] = [];
+      for (let i = 0; i < working.length; i++) {
+        if (view.contains(working[i])) visible.push(i);
+      }
+      const step = Math.max(1, Math.ceil(visible.length / MAX_VERTEX_HANDLES));
+
+      visible.forEach((index, order) => {
+        const isEnd = index === 0 || index === lastIndex;
+        if (step > 1 && order % step !== 0 && !isEnd) return;
+        const borderColor = index === 0 ? "#22c55e" : index === lastIndex ? "#ef4444" : "#0284c7";
+        const icon = L.divIcon({
+          html: `<div style="width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid ${borderColor};box-shadow:0 1px 4px rgba(15,23,42,.6);cursor:grab"></div>`,
+          className: "doh-vertex-handle",
+          iconSize: [14, 14],
+          iconAnchor: [7, 7],
+        });
+        const handle = L.marker(working[index], { icon, draggable: true, zIndexOffset: 1100, keyboard: false }).addTo(group);
+        handle.bindTooltip(`จุดที่ ${index + 1} · ลากเพื่อย้าย · คลิกขวา/กดค้างเพื่อลบ`, { direction: "top", offset: [0, -8] });
+        handle.on("drag", (event: any) => {
+          const position = event.target.getLatLng();
+          working[index] = [position.lat, position.lng];
+          draftLineRef.current?.setLatLngs(working);
+        });
+        handle.on("dragend", (event: any) => {
+          const position = event.target.getLatLng();
+          onVertexMovedRef.current?.(index, [Number(position.lng.toFixed(6)), Number(position.lat.toFixed(6))]);
+        });
+        handle.on("click", (event: any) => {
+          L.DomEvent.stopPropagation(event);
+          onVertexClickedRef.current?.(index, "click");
+        });
+        handle.on("contextmenu", (event: any) => {
+          L.DomEvent.stopPropagation(event);
+          L.DomEvent.preventDefault(event);
+          onVertexClickedRef.current?.(index, "contextmenu");
+        });
+      });
+
+      // Midpoint handles are only shown when every vertex in view has its own handle.
+      if (step === 1) {
+        for (let i = 0; i < lastIndex; i++) {
+          if (!view.contains(working[i]) && !view.contains(working[i + 1])) continue;
+          const mid: [number, number] = [(working[i][0] + working[i + 1][0]) / 2, (working[i][1] + working[i + 1][1]) / 2];
+          const icon = L.divIcon({
+            html: `<div style="width:10px;height:10px;border-radius:50%;background:rgba(2,132,199,.55);border:1px solid #fff;cursor:copy"></div>`,
+            className: "doh-vertex-mid",
+            iconSize: [10, 10],
+            iconAnchor: [5, 5],
+          });
+          const midHandle = L.marker(mid, { icon, draggable: true, zIndexOffset: 900, keyboard: false }).addTo(group);
+          midHandle.bindTooltip("คลิกหรือลากเพื่อเพิ่มจุด", { direction: "top", offset: [0, -6] });
+          midHandle.on("click", (event: any) => {
+            L.DomEvent.stopPropagation(event);
+            onVertexInsertedRef.current?.(i + 1, [Number(mid[1].toFixed(6)), Number(mid[0].toFixed(6))]);
+          });
+          midHandle.on("dragend", (event: any) => {
+            const position = event.target.getLatLng();
+            onVertexInsertedRef.current?.(i + 1, [Number(position.lng.toFixed(6)), Number(position.lat.toFixed(6))]);
+          });
+        }
+      }
+    };
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(draw, 150);
+    };
+
+    draw();
+    map.on("moveend", schedule);
+    return () => {
+      if (timer) clearTimeout(timer);
+      map.off("moveend", schedule);
+      group.clearLayers();
+    };
+  }, [mapReady, vertexEditable, draftCoordinates]);
 
   // 4g. DOH offices & highway stations
   useEffect(() => {
