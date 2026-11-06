@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { SystemDataPayload } from "@/db/default-data";
 import { DEFAULT_MAP_STYLES } from "@/lib/constants";
 import {
@@ -25,6 +25,7 @@ import { MapManagementTab } from "@/components/admin/tabs/MapManagementTab";
 import { IncidentRegistryTab } from "@/components/admin/tabs/IncidentRegistryTab";
 import { DetourManagementTab } from "@/components/admin/tabs/DetourManagementTab";
 import { GisDataImportTab } from "@/components/admin/tabs/GisDataImportTab";
+import type { VertexEditEvent } from "@/lib/line-edit";
 import { LineStylingTab } from "@/components/admin/tabs/LineStylingTab";
 import { GovernorProjectsTab } from "@/components/admin/tabs/GovernorProjectsTab";
 
@@ -44,6 +45,8 @@ interface AdminConsoleProps {
   setIncomingGisLines?: (lines: [number, number][][]) => void;
   setDraftPickMarkers?: React.Dispatch<React.SetStateAction<Array<{ lat: number; lon: number; label: string; mode: string }>>>;
   onOfficeEditModeChange?: (officeId: string | null) => void;
+  vertexEvent?: VertexEditEvent | null;
+  onVertexEditChange?: (active: boolean) => void;
 }
 
 export function AdminConsole({
@@ -62,6 +65,8 @@ export function AdminConsole({
   setIncomingGisLines,
   setDraftPickMarkers,
   onOfficeEditModeChange,
+  vertexEvent,
+  onVertexEditChange,
 }: AdminConsoleProps) {
   // Navigation & View
   const [activeTab, setActiveTab] = useState<
@@ -75,6 +80,21 @@ export function AdminConsole({
     type: "FLOOD" | "DETOUR";
     id: string;
   } | null>(null);
+
+  // Stable callback: an inline arrow here changed identity on every render and re-fired the
+  // MapManagementTab effect that depends on it. It also skips the state update when nothing changed.
+  const handleDraftPickMarkersChange = useCallback(
+    (markers: { lat: number; lon: number; label: string; mode: string }[]) => {
+      setDraftPickMarkers?.((previous) => {
+        const unchanged = previous.length === markers.length && previous.every((item, index) => {
+          const next = markers[index];
+          return item.lat === next?.lat && item.lon === next?.lon && item.label === next?.label && item.mode === next?.mode;
+        });
+        return unchanged ? previous : markers;
+      });
+    },
+    [setDraftPickMarkers]
+  );
 
   // Status Modal State
   const [modalState, setModalState] = useState<{
@@ -348,13 +368,7 @@ export function AdminConsole({
               draftWaypoints={draftWaypoints}
               setDraftWaypoints={setDraftWaypoints}
               onDraftModeChange={onDraftModeChange}
-              onDraftPickMarkersChange={(markers) => setDraftPickMarkers?.((previous) => {
-                const unchanged = previous.length === markers.length && previous.every((item, index) => {
-                  const next = markers[index];
-                  return item.lat === next?.lat && item.lon === next?.lon && item.label === next?.label && item.mode === next?.mode;
-                });
-                return unchanged ? previous : markers;
-              })}
+              onDraftPickMarkersChange={handleDraftPickMarkersChange}
               editingRoute={editingRoute}
               onClearEditingRoute={() => setEditingRoute(null)}
             />
@@ -420,6 +434,8 @@ export function AdminConsole({
               setDraftWaypoints={setDraftWaypoints}
               onDraftModeChange={onDraftModeChange}
               setDraftPickMarkers={setDraftPickMarkers}
+              vertexEvent={vertexEvent}
+              onVertexEditChange={onVertexEditChange}
             />
           )}
 
