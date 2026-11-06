@@ -1,9 +1,8 @@
 "use client";
 import { readRouteFile } from "@/lib/route-import";
-import { haversineMeters, insertVertex, joinLines, LonLat, moveVertex, nearestInsertIndex, removeVertex, roundCoord, splitLine, VertexEditEvent } from "@/lib/line-edit";
 import { exportLineFeatures, GisExportFormat } from "@/lib/gis-export";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { SystemDataPayload } from "@/db/default-data";
 type LineStylesMap = Record<string, import("@/db/default-data").MapLineStyleItem>;
 import {
@@ -126,16 +125,6 @@ interface GisDataImportTabProps {
   setDraftWaypoints: React.Dispatch<React.SetStateAction<[number, number][]>>;
   onDraftModeChange?: (mode: "FLOOD" | "DETOUR") => void;
   setDraftPickMarkers?: React.Dispatch<React.SetStateAction<Array<{ lat: number; lon: number; label: string; mode: string }>>>;
-  vertexEvent?: VertexEditEvent | null;
-  onVertexEditChange?: (active: boolean) => void;
-}
-
-// One undo/redo step of the freeform editor. Split/join results are part of the snapshot so
-// undo also reverts them.
-interface EditSnapshot {
-  coords: LonLat[];
-  remainder: LonLat[] | null;
-  absorbed: number[];
 }
 
 export function GisDataImportTab({
@@ -156,8 +145,6 @@ export function GisDataImportTab({
   setDraftWaypoints,
   onDraftModeChange,
   setDraftPickMarkers,
-  vertexEvent,
-  onVertexEditChange,
 }: GisDataImportTabProps) {
   const offices = useMemo(() => (systemData.offices || []).filter((office) => office.is_active), [systemData.offices]);
   const [importedGisFeatures, setImportedGisFeatures] = useState<ExtractedGisFeature[]>([]);
@@ -186,145 +173,26 @@ export function GisDataImportTab({
   const [editingGeometry, setEditingGeometry] = useState<{ layerId: string; featureIdx: number; start: [number, number]; end: [number, number]; originalCoordinates: [number, number][] } | null>(null);
   const [isSnappingGeometry, setIsSnappingGeometry] = useState(false);
 
-  // Freeform editor state (Google My Maps style)
-  const [editorMode, setEditorMode] = useState<"free" | "road">("free");
-  const [vertexTool, setVertexTool] = useState<"move" | "delete" | "split">("move");
-  const [splitRemainder, setSplitRemainder] = useState<LonLat[] | null>(null);
-  const [absorbedFeatureIdxs, setAbsorbedFeatureIdxs] = useState<number[]>([]);
-  const [joinTargetIdx, setJoinTargetIdx] = useState("");
-  const historyRef = useRef<{ past: EditSnapshot[]; future: EditSnapshot[] }>({ past: [], future: [] });
-  const [historySize, setHistorySize] = useState({ undo: 0, redo: 0 });
-  const isEditingGeometry = Boolean(editingGeometry);
-
-  const snapshotNow = (): EditSnapshot => ({ coords: draftCoordinates, remainder: splitRemainder, absorbed: absorbedFeatureIdxs });
-  const applySnapshot = (snapshot: EditSnapshot) => {
-    setDraftCoordinates(snapshot.coords);
-    setSplitRemainder(snapshot.remainder);
-    setAbsorbedFeatureIdxs(snapshot.absorbed);
-  };
-  const resetEditHistory = () => {
-    historyRef.current = { past: [], future: [] };
-    setHistorySize({ undo: 0, redo: 0 });
-  };
-  const commitEdit = (next: EditSnapshot) => {
-    const history = historyRef.current;
-    history.past.push(snapshotNow());
-    if (history.past.length > 100) history.past.shift();
-    history.future = [];
-    applySnapshot(next);
-    setHistorySize({ undo: history.past.length, redo: 0 });
-  };
-  const undoEdit = () => {
-    const history = historyRef.current;
-    const previous = history.past.pop();
-    if (!previous) return;
-    history.future.push(snapshotNow());
-    applySnapshot(previous);
-    setHistorySize({ undo: history.past.length, redo: history.future.length });
-  };
-  const redoEdit = () => {
-    const history = historyRef.current;
-    const next = history.future.pop();
-    if (!next) return;
-    history.past.push(snapshotNow());
-    applySnapshot(next);
-    setHistorySize({ undo: history.past.length, redo: history.future.length });
-  };
-  const closeGeometryEditor = () => {
-    setEditingGeometry(null);
-    setAdminPickMode(null);
-    setDraftCoordinates([]);
-    setDraftWaypoints([]);
-    setSplitRemainder(null);
-    setAbsorbedFeatureIdxs([]);
-    setJoinTargetIdx("");
-    setVertexTool("move");
-    resetEditHistory();
-    onDraftModeChange?.("FLOOD");
-  };
-
   useEffect(() => {
-    if (!editingGeometry || editorMode === "free") { setDraftPickMarkers?.([]); return; }
+    if (!editingGeometry) { setDraftPickMarkers?.([]); return; }
     const { start, end } = editingGeometry;
     setDraftPickMarkers?.([
       { lat: start[1], lon: start[0], label: "A", mode: "PICK_HIGHWAY_START" },
       { lat: end[1], lon: end[0], label: "B", mode: "PICK_HIGHWAY_END" },
     ]);
-  }, [editingGeometry, editorMode, setDraftPickMarkers]);
-
-  // Tell the map to show vertex handles only while the freeform editor is open.
-  useEffect(() => {
-    onVertexEditChange?.(isEditingGeometry && editorMode === "free");
-    return () => onVertexEditChange?.(false);
-  }, [isEditingGeometry, editorMode, onVertexEditChange]);
+  }, [editingGeometry, setDraftPickMarkers]);
 
   useEffect(() => {
     if (!editingGeometry || !pickedCoordinate) return;
     if (pickedCoordinate.mode === "PICK_HIGHWAY_START") setEditingGeometry((current) => current ? { ...current, start: [pickedCoordinate.lon, pickedCoordinate.lat] } : current);
     if (pickedCoordinate.mode === "PICK_HIGHWAY_END") setEditingGeometry((current) => current ? { ...current, end: [pickedCoordinate.lon, pickedCoordinate.lat] } : current);
     if (pickedCoordinate.mode === "ADD_HIGHWAY_BEND") setDraftWaypoints((current) => [...current, [pickedCoordinate.lon, pickedCoordinate.lat]]);
-    if (pickedCoordinate.mode === "ADD_LINE_VERTEX" && editorMode === "free") {
-      const point: LonLat = [pickedCoordinate.lon, pickedCoordinate.lat];
-      const { index } = nearestInsertIndex(draftCoordinates, point);
-      commitEdit({ ...snapshotNow(), coords: insertVertex(draftCoordinates, index, point) });
-    }
   }, [pickedCoordinate?.ts, pickedCoordinate?.mode]);
 
-  // Events from the vertex handles drawn on the map (drag / click "+" / click vertex / right-click vertex)
   useEffect(() => {
-    if (!editingGeometry || editorMode !== "free" || !vertexEvent) return;
-    const { type, index, coord } = vertexEvent;
-    if (type === "move" && coord) {
-      commitEdit({ ...snapshotNow(), coords: moveVertex(draftCoordinates, index, coord) });
-      return;
-    }
-    if (type === "insert" && coord) {
-      commitEdit({ ...snapshotNow(), coords: insertVertex(draftCoordinates, index, coord) });
-      return;
-    }
-    if (type === "contextmenu" || (type === "click" && vertexTool === "delete")) {
-      if (draftCoordinates.length <= 2) { onToast("เส้นต้องมีอย่างน้อย 2 จุด ไม่สามารถลบจุดเพิ่มได้"); return; }
-      commitEdit({ ...snapshotNow(), coords: removeVertex(draftCoordinates, index) });
-      return;
-    }
-    if (type === "click" && vertexTool === "split") {
-      if (splitRemainder) { onToast("ตัดเส้นได้ครั้งละ 1 ครั้ง กรุณาบันทึก หรือกดย้อนกลับก่อน"); return; }
-      const parts = splitLine(draftCoordinates, index);
-      if (!parts) { onToast("เลือกจุดตรงกลางเส้นเพื่อตัด (ไม่ใช่จุดปลายเส้น)"); return; }
-      commitEdit({ ...snapshotNow(), coords: parts[0], remainder: parts[1] });
-      setVertexTool("move");
-      onToast("ตัดเส้นแล้ว ส่วนที่ 2 (เส้นประสีฟ้า) จะถูกบันทึกเป็นสายทางใหม่เมื่อกดบันทึก");
-    }
-  }, [vertexEvent?.seq]);
-
-  useEffect(() => {
-    if (editingGeometry) setIncomingGisLines?.(splitRemainder ? [draftCoordinates, splitRemainder] : [draftCoordinates]);
+    if (editingGeometry) setIncomingGisLines?.([draftCoordinates]);
     else setIncomingGisLines?.([]);
-  }, [editingGeometry, draftCoordinates, splitRemainder, setIncomingGisLines]);
-
-  // Nearest other routes of the same layer (by distance between line ends) that can be joined.
-  const joinCandidates = useMemo(() => {
-    if (!editingGeometry || editorMode !== "free" || draftCoordinates.length < 2) return [];
-    const layer = (systemData.highwayLayers || []).find((item) => item.layer_id === editingGeometry.layerId);
-    const features = layer?.geojson_data?.features;
-    if (!Array.isArray(features)) return [];
-    const first = draftCoordinates[0];
-    const last = draftCoordinates[draftCoordinates.length - 1];
-    const rows: Array<{ idx: number; label: string; gap: number }> = [];
-    features.forEach((feature: any, idx: number) => {
-      if (idx === editingGeometry.featureIdx || absorbedFeatureIdxs.includes(idx)) return;
-      const geometry = feature?.geometry;
-      const coords: any[] = geometry?.type === "LineString" ? geometry.coordinates : geometry?.type === "MultiLineString" ? geometry.coordinates.flat(1) : [];
-      if (!Array.isArray(coords) || coords.length < 2) return;
-      const a = coords[0] as LonLat;
-      const b = coords[coords.length - 1] as LonLat;
-      const gap = Math.min(haversineMeters(last, a), haversineMeters(last, b), haversineMeters(first, a), haversineMeters(first, b));
-      const props = feature?.properties || {};
-      rows.push({ idx, gap, label: `ทล.${props.route_no ?? ""} · ${props.section_name ?? ""}` });
-    });
-    rows.sort((x, y) => x.gap - y.gap);
-    return rows.slice(0, 50);
-  }, [editingGeometry, editorMode, draftCoordinates, absorbedFeatureIdxs, systemData.highwayLayers]);
+  }, [editingGeometry, draftCoordinates, setIncomingGisLines]);
 
   // Individual Highway Specifications Modal State (Issue #13)
   const [editingRouteSpecs, setEditingRouteSpecs] = useState<{
@@ -444,13 +312,7 @@ export function GisDataImportTab({
     // not the flood-only PostGIS snap rule inherited from a previous tab.
     onDraftModeChange?.("DETOUR");
     setEditingGeometry({ layerId, featureIdx, start, end, originalCoordinates: coords.map((coordinate) => [...coordinate] as [number, number]) });
-    setEditorMode("free");
-    setVertexTool("move");
-    setSplitRemainder(null);
-    setAbsorbedFeatureIdxs([]);
-    setJoinTargetIdx("");
-    resetEditHistory();
-    onToast("เปิดตัวแก้ไขแนวถนนแล้ว ลากหมุดบนเส้นเพื่อย้ายจุด คลิกหมุด + เพื่อเพิ่มจุด");
+    onToast("เปิดตัวแก้ไขแนวถนนแล้ว เลือกพิกัดบนแผนที่หรือกรอกพิกัดเองได้");
   };
 
   const snapEditedGeometry = async () => {
@@ -488,43 +350,8 @@ export function GisDataImportTab({
   const restoreOriginalGeometry = () => {
     if (!editingGeometry) return;
     setDraftWaypoints([]);
-    commitEdit({ coords: editingGeometry.originalCoordinates.map((coordinate) => [...coordinate] as LonLat), remainder: null, absorbed: [] });
-    onToast("คืนค่าแนวถนนเดิมแล้ว กดบันทึกเพื่อยืนยัน (กดย้อนกลับเพื่อยกเลิกการคืนค่า)");
-  };
-
-  const switchEditorMode = (mode: "free" | "road") => {
-    if (!editingGeometry || mode === editorMode) return;
-    if (mode === "road") {
-      if (splitRemainder || absorbedFeatureIdxs.length > 0) {
-        onToast("กรุณาบันทึก หรือกดย้อนกลับการตัด/เชื่อมเส้นก่อนสลับไปโหมดเกาะแนวถนน");
-        return;
-      }
-      const first = draftCoordinates[0];
-      const last = draftCoordinates[draftCoordinates.length - 1];
-      if (first && last) setEditingGeometry((current) => current ? { ...current, start: first, end: last } : current);
-    } else {
-      setDraftWaypoints([]);
-    }
-    setAdminPickMode(null);
-    setVertexTool("move");
-    resetEditHistory();
-    setEditorMode(mode);
-  };
-
-  const handleJoinSelected = () => {
-    if (!editingGeometry) return;
-    const targetIdx = Number(joinTargetIdx);
-    if (!joinTargetIdx || !Number.isInteger(targetIdx)) return;
-    if (splitRemainder) { onToast("กรุณาบันทึก หรือกดย้อนกลับการตัดเส้นก่อนเชื่อมเส้น"); return; }
-    const layer = (systemData.highwayLayers || []).find((item) => item.layer_id === editingGeometry.layerId);
-    const otherCoords = lineCoordinates(layer?.geojson_data?.features?.[targetIdx]?.geometry);
-    if (otherCoords.length < 2) { onToast("สายทางที่เลือกไม่มีข้อมูลเส้นที่เชื่อมได้"); return; }
-    const { coords, gapMeters } = joinLines(draftCoordinates, otherCoords);
-    commitEdit({ coords: coords.map((point) => roundCoord(point)), remainder: null, absorbed: [...absorbedFeatureIdxs, targetIdx] });
-    setJoinTargetIdx("");
-    onToast(gapMeters > 1
-      ? `เชื่อมเส้นแล้ว (ปลายเส้นห่างกัน ${Math.round(gapMeters)} ม. ต่อด้วยเส้นตรง) สายทางที่เลือกจะถูกรวมเมื่อกดบันทึก`
-      : "เชื่อมเส้นแล้ว สายทางที่เลือกจะถูกรวมเข้ากับเส้นนี้เมื่อกดบันทึก");
+    setDraftCoordinates(editingGeometry.originalCoordinates.map((coordinate) => [...coordinate] as [number, number]));
+    onToast("คืนค่าแนวถนนเดิมแล้ว กดบันทึกเพื่อยืนยัน");
   };
 
   const saveEditedGeometry = async () => {
@@ -533,23 +360,16 @@ export function GisDataImportTab({
     if (!layer?.geojson_data?.features?.[editingGeometry.featureIdx]) return;
     const geojson = JSON.parse(JSON.stringify(layer.geojson_data));
     geojson.features[editingGeometry.featureIdx].geometry = { type: "LineString", coordinates: draftCoordinates };
-    if (splitRemainder && splitRemainder.length >= 2) {
-      // Second half of a split becomes a new feature. Copy the properties but clear km values that
-      // no longer describe it, so they can be re-entered from the route specs editor.
-      const sourceProps = JSON.parse(JSON.stringify(geojson.features[editingGeometry.featureIdx].properties || {}));
-      const newProps = { ...sourceProps, km_start: "", km_end: "", length_km: "" };
-      if (sourceProps.section_name) newProps.section_name = `${sourceProps.section_name} (ส่วนที่ 2)`;
-      geojson.features.push({ type: "Feature", properties: newProps, geometry: { type: "LineString", coordinates: splitRemainder } });
-    }
-    if (absorbedFeatureIdxs.length > 0) {
-      geojson.features = geojson.features.filter((_: unknown, index: number) => !absorbedFeatureIdxs.includes(index));
-    }
     try {
       const result = await updateHighwayLayerAction({ layerId: layer.layer_id, geojsonData: geojson });
       if (!result.success) throw new Error("ฐานข้อมูลไม่ยืนยันการบันทึกแนวถนน");
       onDataRefresh(result.systemData);
-      closeGeometryEditor();
-      showSuccessModal("บันทึกแนวถนนสำเร็จ", splitRemainder || absorbedFeatureIdxs.length > 0 ? "อัปเดตเส้นทางในฐานข้อมูลและบนแผนที่แล้ว กรุณาตรวจสอบ กม.เริ่มต้น/สิ้นสุดของสายทางที่ตัดหรือรวมในหน้ารายละเอียด" : "อัปเดตเส้นทางในฐานข้อมูลและบนแผนที่แล้ว");
+      setEditingGeometry(null);
+      setAdminPickMode(null);
+      setDraftWaypoints([]);
+      setDraftCoordinates([]);
+      onDraftModeChange?.("FLOOD");
+      showSuccessModal("บันทึกแนวถนนสำเร็จ", "อัปเดตเส้นทางในฐานข้อมูลและบนแผนที่แล้ว");
     } catch (error: any) {
       onToast(`บันทึกแนวถนนไม่สำเร็จ: ${error.message}`);
     }
@@ -1665,64 +1485,14 @@ export function GisDataImportTab({
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
                 <h3 className="font-heading font-black text-white">ปรับแนวถนนทางหลวง</h3>
-                <p className="text-xs text-slate-400">{editorMode === "free" ? "ลากหมุดบนเส้นเพื่อย้ายจุด เพิ่ม/ลบจุด ตัดหรือเชื่อมเส้นได้อิสระเหมือน Google My Maps" : "กำหนดต้นทาง–ปลายทาง แล้วสร้างแนวเกาะถนน จากนั้นลากจุดสีส้มเพื่อปรับแนว"}</p>
+                <p className="text-xs text-slate-400">กำหนดต้นทาง–ปลายทาง แล้วสร้างแนวเกาะถนน จากนั้นลากจุดสีส้มเพื่อปรับแนว</p>
                 {(() => {
                   const item = allHighwayFeatures.find((entry) => entry.layerId === editingGeometry.layerId && entry.featureIdx === editingGeometry.featureIdx);
                   return item ? <p className="mt-2 text-sm text-white">ทล.{item.routeNo} · {item.sectionName}<br />ก.ม. {item.kmStart} ถึง {item.kmEnd} · ระยะทาง {item.lengthKm} กม.</p> : null;
                 })()}
               </div>
-              <button type="button" aria-label="ปิดตัวแก้ไขแนวถนน" onClick={closeGeometryEditor} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><X className="h-5 w-5" /></button>
+              <button type="button" aria-label="ปิดตัวแก้ไขแนวถนน" onClick={() => { setEditingGeometry(null); setAdminPickMode(null); setDraftCoordinates([]); setDraftWaypoints([]); onDraftModeChange?.("FLOOD"); }} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><X className="h-5 w-5" /></button>
             </div>
-            <div className="flex rounded-xl border border-slate-700 bg-slate-900 p-1 text-xs" role="group" aria-label="โหมดแก้ไขแนวถนน">
-              <button type="button" aria-pressed={editorMode === "free"} onClick={() => switchEditorMode("free")} className={`flex-1 rounded-lg px-3 py-2 font-bold ${editorMode === "free" ? "bg-sky-500 text-slate-950" : "text-slate-300 hover:text-white"}`}>วาด/แก้ไขอิสระ</button>
-              <button type="button" aria-pressed={editorMode === "road"} onClick={() => switchEditorMode("road")} className={`flex-1 rounded-lg px-3 py-2 font-bold ${editorMode === "road" ? "bg-sky-500 text-slate-950" : "text-slate-300 hover:text-white"}`}>เกาะแนวถนน (OSRM)</button>
-            </div>
-            {editorMode === "free" && (
-              <>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {([
-                    { key: "move", label: "ลากจุด", active: vertexTool === "move" && adminPickMode !== "ADD_LINE_VERTEX", onClick: () => { setVertexTool("move"); setAdminPickMode(null); } },
-                    { key: "add", label: "เพิ่มจุด", active: adminPickMode === "ADD_LINE_VERTEX", onClick: () => { setVertexTool("move"); setAdminPickMode(adminPickMode === "ADD_LINE_VERTEX" ? null : "ADD_LINE_VERTEX"); } },
-                    { key: "delete", label: "ลบจุด", active: vertexTool === "delete", onClick: () => { setAdminPickMode(null); setVertexTool(vertexTool === "delete" ? "move" : "delete"); } },
-                    { key: "split", label: "ตัดเส้น", active: vertexTool === "split", onClick: () => { setAdminPickMode(null); setVertexTool(vertexTool === "split" ? "move" : "split"); } },
-                  ] as const).map((tool) => (
-                    <button key={tool.key} type="button" aria-pressed={tool.active} onClick={tool.onClick} className={`rounded-lg border px-3 py-2 text-xs font-bold ${tool.active ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-900 text-slate-200 hover:border-sky-400"}`}>{tool.label}</button>
-                  ))}
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  {adminPickMode === "ADD_LINE_VERTEX"
-                    ? "คลิกบนแผนที่เพื่อเพิ่มจุด (คลิกใกล้ปลายเส้นเพื่อต่อเส้นออกไป)"
-                    : vertexTool === "delete"
-                      ? "คลิกที่หมุดจุดที่ต้องการลบ"
-                      : vertexTool === "split"
-                        ? "คลิกที่หมุดจุดกลางเส้นที่ต้องการตัดเส้นเป็น 2 ส่วน"
-                        : "ลากหมุดเพื่อย้ายจุด · คลิกหมุด + กลางช่วงเส้นเพื่อเพิ่มจุด · คลิกขวา/กดค้างที่หมุดเพื่อลบจุด"}
-                </p>
-                {draftCoordinates.length > 400 && (
-                  <p className="rounded-lg border border-amber-700/60 bg-amber-950/40 px-2 py-1.5 text-[11px] text-amber-200">เส้นนี้มี {draftCoordinates.length} จุด ซูมเข้าเพื่อให้เห็นหมุดทุกจุดและหมุด + ของช่วงที่ต้องการแก้</p>
-                )}
-                <div className="flex flex-wrap items-center gap-2 border-t border-slate-800 pt-3">
-                  <button type="button" disabled={historySize.undo === 0} onClick={undoEdit} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white disabled:opacity-40">ย้อนกลับ</button>
-                  <button type="button" disabled={historySize.redo === 0} onClick={redoEdit} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white disabled:opacity-40">ทำซ้ำ</button>
-                  <span className="text-[11px] text-slate-400">เส้นปัจจุบัน {draftCoordinates.length} จุด{splitRemainder ? ` · ส่วนที่ 2 ${splitRemainder.length} จุด (เส้นประสีฟ้า)` : ""}{absorbedFeatureIdxs.length > 0 ? ` · รวมสายทางอื่น ${absorbedFeatureIdxs.length} เส้น` : ""}</span>
-                </div>
-                <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                  <p className="text-xs font-semibold text-slate-200">เชื่อมกับสายทางอื่นในเลเยอร์เดียวกัน</p>
-                  <div className="flex flex-wrap gap-2">
-                    <select aria-label="เลือกสายทางที่จะเชื่อม" value={joinTargetIdx} onChange={(event) => setJoinTargetIdx(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-xs text-white">
-                      <option value="">เลือกสายทางที่ปลายเส้นอยู่ใกล้ที่สุด...</option>
-                      {joinCandidates.map((item) => (
-                        <option key={item.idx} value={String(item.idx)}>{item.label} · ห่าง {item.gap < 1000 ? `${Math.round(item.gap)} ม.` : `${(item.gap / 1000).toFixed(1)} กม.`}</option>
-                      ))}
-                    </select>
-                    <button type="button" disabled={!joinTargetIdx} onClick={handleJoinSelected} className="rounded-lg bg-sky-500 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-40">เชื่อมเส้น</button>
-                  </div>
-                  <p className="text-[11px] text-slate-500">แสดง 50 สายทางที่ปลายเส้นใกล้ที่สุด · ระบบต่อปลายเส้นที่ใกล้กันที่สุดและกลับทิศให้อัตโนมัติ</p>
-                </div>
-              </>
-            )}
-            {editorMode === "road" && (
-              <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {(["start", "end"] as const).map((key) => {
                 const label = key === "start" ? "พิกัด กม.เริ่มต้น" : "พิกัด กม.สิ้นสุด";
@@ -1758,8 +1528,6 @@ export function GisDataImportTab({
                 </div>
               </div>
             )}
-              </>
-            )}
             <div className="flex flex-wrap justify-between gap-2 border-t border-slate-800 pt-3">
               <div className="flex gap-2">
                 <button type="button" onClick={() => exportEditedGeometry("geojson")} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white">ส่งออก GeoJSON</button>
@@ -1767,7 +1535,7 @@ export function GisDataImportTab({
                 <button type="button" onClick={restoreOriginalGeometry} className="rounded-lg border border-sky-700 bg-sky-950/40 px-3 py-2 text-xs text-sky-200">คืนค่าแนวเดิม</button>
               </div>
               <div className="flex gap-2">
-                <button type="button" onClick={closeGeometryEditor} className="rounded-lg bg-slate-800 px-4 py-2 text-xs text-white">ยกเลิก</button>
+                <button type="button" onClick={() => { setEditingGeometry(null); setAdminPickMode(null); setDraftCoordinates([]); setDraftWaypoints([]); onDraftModeChange?.("FLOOD"); }} className="rounded-lg bg-slate-800 px-4 py-2 text-xs text-white">ยกเลิก</button>
                 <button type="button" onClick={saveEditedGeometry} disabled={draftCoordinates.length < 2} className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-50">บันทึกแนวถนน</button>
               </div>
             </div>

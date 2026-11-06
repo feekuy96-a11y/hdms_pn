@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
-import type { LonLat, VertexEditEvent } from "@/lib/line-edit";
+import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { getSystemDataAction, snapRouteAction } from "@/app/actions/doh-actions";
@@ -48,21 +47,7 @@ export default function AdminPage() {
   const [draftCoordinates, setDraftCoordinates] = useState<[number, number][]>([]);
   const [draftWaypoints, setDraftWaypoints] = useState<[number, number][]>([]);
   const [draftMode, setDraftMode] = useState<"FLOOD" | "DETOUR">("FLOOD");
-  const [incomingGisLines, setIncomingGisLinesState] = useState<[number, number][][]>([]);
-  // Stable setter that ignores "clear" requests when the preview is already empty, so child tabs
-  // that call setIncomingGisLines([]) from effects no longer trigger a re-render + map redraw.
-  const setIncomingGisLines = useCallback((lines: [number, number][][]) => {
-    setIncomingGisLinesState((previous) => (previous.length === 0 && lines.length === 0 ? previous : lines));
-  }, []);
-  const waypointRequestRef = useRef(0);
-  // Freeform line editor (vertex handles) - events travel map -> page -> AdminConsole -> GisDataImportTab
-  const [vertexEditable, setVertexEditable] = useState(false);
-  const [vertexEvent, setVertexEvent] = useState<VertexEditEvent | null>(null);
-  const vertexSeqRef = useRef(0);
-  const emitVertexEvent = useCallback((event: Omit<VertexEditEvent, "seq">) => {
-    vertexSeqRef.current += 1;
-    setVertexEvent({ ...event, seq: vertexSeqRef.current });
-  }, []);
+  const [incomingGisLines, setIncomingGisLines] = useState<[number, number][][]>([]);
   const [pickedCoordinate, setPickedCoordinate] = useState<{ lat: number; lon: number; mode: string; ts: number } | null>(null);
   const [draftPickMarkers, setDraftPickMarkers] = useState<Array<{ lat: number; lon: number; label: string; mode: string }>>([]);
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
@@ -91,8 +76,6 @@ export default function AdminPage() {
     const nextWaypoints = [...draftWaypoints];
     nextWaypoints[idx] = newCoord;
     setDraftWaypoints(nextWaypoints);
-    // Only the latest drag may write its result; older (slower) routing responses are dropped.
-    const requestId = ++waypointRequestRef.current;
 
     if (draftCoordinates.length >= 2) {
       const startCoord = draftCoordinates[0];
@@ -107,11 +90,9 @@ export default function AdminPage() {
         } else {
           snapped = await calculateRoadSnappedRoute(startCoord, endCoord, nextWaypoints);
         }
-        if (requestId !== waypointRequestRef.current) return;
         setDraftCoordinates(snapped);
         showToast(`ปรับดัดแนวเส้นทางที่จุด #${idx + 1} สำเร็จ`);
       } catch {
-        if (requestId !== waypointRequestRef.current) return;
         setDraftCoordinates([]);
         showToast("คำนวณเส้นทางใหม่ไม่สำเร็จ กรุณาลองอีกครั้ง");
       }
@@ -242,8 +223,6 @@ export default function AdminPage() {
               onToast={showToast}
               setIncomingGisLines={setIncomingGisLines}
               setDraftPickMarkers={setDraftPickMarkers}
-              vertexEvent={vertexEvent}
-              onVertexEditChange={setVertexEditable}
               onOfficeEditModeChange={setEditableOfficeId}
             />
           </div>
@@ -270,7 +249,7 @@ export default function AdminPage() {
                     { lat, lon, label, mode },
                   ]);
                 }
-                if (mode !== "ADD_WAYPOINT" && mode !== "ADD_LINE_VERTEX") {
+                if (mode !== "ADD_WAYPOINT") {
                   setAdminPickMode(null);
                 }
               }}
@@ -278,10 +257,6 @@ export default function AdminPage() {
               draftWaypoints={draftWaypoints}
               draftPickMarkers={draftPickMarkers}
               onWaypointDragged={handleWaypointDragged}
-              vertexEditable={vertexEditable}
-              onVertexMoved={(index, coord: LonLat) => emitVertexEvent({ type: "move", index, coord })}
-              onVertexInserted={(index, coord: LonLat) => emitVertexEvent({ type: "insert", index, coord })}
-              onVertexClicked={(index, via) => emitVertexEvent({ type: via, index })}
               editableOfficeId={editableOfficeId}
               onOfficeDragged={editableOfficeId ? (officeId, position) => {
                 if (officeId !== editableOfficeId) return;
@@ -308,9 +283,7 @@ export default function AdminPage() {
                             ? "คลิกบนแผนที่เพื่อกำหนดพิกัด กม.เริ่มต้น..."
                             : adminPickMode === "PICK_HIGHWAY_END"
                               ? "คลิกบนแผนที่เพื่อกำหนดพิกัด กม.สิ้นสุด..."
-                          : adminPickMode === "ADD_LINE_VERTEX"
-                            ? "คลิกบนแผนที่เพื่อเพิ่มจุดบนเส้น (คลิกใกล้ปลายเส้นเพื่อต่อเส้นออกไป)..."
-                            : "คลิกบนถนนเพื่อเพิ่มจุดดัดแนวเส้นทาง (หรือลากหมุดสีส้ม)..."}
+                          : "คลิกบนถนนเพื่อเพิ่มจุดดัดแนวเส้นทาง (หรือลากหมุดสีส้ม)..."}
                   </span>
                 </div>
                 <button
