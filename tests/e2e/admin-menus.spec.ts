@@ -106,6 +106,37 @@ test("route editor lists and removes an individual bend point", async ({ page })
   await expect(page.getByLabel("รายการจุดดัดเส้น")).toHaveCount(0);
 });
 
+test("detour routing can force a straight heading through a selected intersection", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Map editing is verified in the desktop workspace");
+  await page.route("**/route/v1/driving/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: "Ok",
+        routes: [{ geometry: { type: "LineString", coordinates: [[101.186, 6.834], [101.189, 6.8365], [101.192, 6.839]] } }],
+      }),
+    });
+  });
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "จัดการแผนที่");
+  await page.getByRole("button", { name: "ทางเลี่ยง", exact: true }).click();
+  await page.getByLabel("พิกัดจุด A").fill("6.8340, 101.1860");
+  await page.getByLabel("พิกัดจุด A").blur();
+  await page.getByLabel("พิกัดจุด B").fill("6.8390, 101.1920");
+  await page.getByLabel("พิกัดจุด B").blur();
+  await page.getByRole("checkbox", { name: /บังคับตรงผ่านสามแยก\/สี่แยก/ }).check();
+  await page.getByRole("button", { name: "แตะจุดกลางเส้นเพื่อเพิ่มจุด" }).click();
+  const routingRequest = page.waitForRequest((request) => request.url().includes("/route/v1/driving/") && request.url().includes("continue_straight=true"));
+  await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
+  const request = await routingRequest;
+  const url = new URL(request.url());
+  expect(url.searchParams.get("continue_straight")).toBe("true");
+  expect(url.searchParams.get("alternatives")).toBe("false");
+  expect(url.searchParams.get("bearings")).toMatch(/^;\d{1,3},45;$/);
+  await expect(page.getByText("คำนวณแนวตรงผ่านแยกตามจุดควบคุมสำเร็จ", { exact: false })).toBeVisible();
+});
+
 test("office markers unlock only while their record is being edited", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Office map editing is verified in the desktop workspace");
   await page.goto(`${base}/admin/`);

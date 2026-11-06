@@ -576,3 +576,11 @@
 - **การทดสอบและผลลัพธ์:** `git diff --check`, lint, typecheck และ Pages build ผ่าน; Playwright เฉพาะพฤติกรรมลบจุดดัดและล็อก/ปลดล็อกหมุดสำนักงานผ่าน 2/2; Playwright regression แบบ static export สถานะผ่านทั้งหมด 32 tests ที่กำหนด โดยไม่มี test ล้มเหลว
 - **สถานะ:** ผ่าน local release gate รอตรวจ production หลัง deploy
 
+### [UPDATE-052] 2026-11-06: บังคับทางเลี่ยงวิ่งตรงผ่านสามแยก/สี่แยก
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์:** ให้เจ้าหน้าที่กำหนดจุดควบคุมบนทางแยกที่รถวิ่งตรงได้ และป้องกันระบบนำทางสร้างแนวอ้อมหรือยูเทิร์นโดยไม่จำเป็น
+- **ไฟล์ที่เกี่ยวข้อง:** `components/admin/tabs/MapManagementTab.tsx`, `tests/e2e/admin-menus.spec.ts`, `SUPPLEMENTAL_RULES.md`
+- **รายละเอียดการทำงาน:** เพิ่มโหมด “บังคับตรงผ่านสามแยก/สี่แยก” เฉพาะทางเลี่ยง; เมื่อเปิดโหมด จุดดัดทำหน้าที่เป็นจุดผ่านแยกและ request ไปยัง OSRM ใช้ `continue_straight=true`, ปิดเส้นทางทางเลือก และส่ง bearing ของแนวเข้า–ออกพร้อม tolerance 45 องศา; ไม่อนุญาตคำนวณโหมดนี้หากยังไม่มีจุดผ่านแยก; คงพรีวิวและข้อความเตือนให้เจ้าหน้าที่ตรวจแนวก่อนบันทึก และสามารถปิดโหมดเพื่อกลับไปใช้ routing ปกติได้ทันที
+- **การทดสอบและผลลัพธ์:** `git diff --check`, lint, typecheck และ Pages production build ผ่าน; Playwright ตรวจ query routing และพฤติกรรมจุดดัดผ่าน 2/2 โดยยืนยัน `continue_straight=true`, `alternatives=false` และ bearing ของจุดผ่านแยก; regression static export ผ่าน 21 tests และข้าม 13 tests ตามเงื่อนไข fixture/desktop-only โดยไม่มี test ล้มเหลว
+- **สถานะ:** ผ่าน local release gate รอตรวจ production หลัง deploy
+

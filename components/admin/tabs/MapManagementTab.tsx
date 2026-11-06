@@ -37,6 +37,25 @@ function parseCoordinatePair(value: string): [number, number] | null {
   return [lat, lon];
 }
 
+function calculateBearing(from: [number, number], to: [number, number]): number {
+  const fromLat = from[1] * Math.PI / 180;
+  const toLat = to[1] * Math.PI / 180;
+  const deltaLon = (to[0] - from[0]) * Math.PI / 180;
+  const y = Math.sin(deltaLon) * Math.cos(toLat);
+  const x = Math.cos(fromLat) * Math.sin(toLat) - Math.sin(fromLat) * Math.cos(toLat) * Math.cos(deltaLon);
+  return Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360);
+}
+
+export function buildDetourRoutingParams(points: [number, number][], forceStraightThrough: boolean): string {
+  const base = "overview=full&geometries=geojson";
+  if (!forceStraightThrough || points.length < 3) return base;
+  const bearings = points.map((point, index) => {
+    if (index === 0 || index === points.length - 1) return "";
+    return `${calculateBearing(points[index - 1], points[index + 1])},45`;
+  }).join(";");
+  return `${base}&continue_straight=true&alternatives=false&bearings=${encodeURIComponent(bearings)}`;
+}
+
 interface MapManagementTabProps {
   systemData: SystemDataPayload;
   onDataRefresh: (data?: any) => Promise<any> | void;
@@ -103,6 +122,7 @@ export function MapManagementTab({
   const [detourName, setDetourName] = useState("");
   const [detourDesc, setDetourDesc] = useState("");
   const [detourAdviceView, setDetourAdviceView] = useState<"FORWARD" | "REVERSE" | "COMBINED">("COMBINED");
+  const [forceStraightThrough, setForceStraightThrough] = useState(false);
 
   // Coordinates - Start empty without hardcoded mock defaults
   const [startLat, setStartLat] = useState<number | string>("");
@@ -285,7 +305,15 @@ export function MapManagementTab({
     try {
       if (routeMode === "DETOUR") {
         const points: [number, number][] = [[numSLon, numSLat], ...waypoints, [numELon, numELat]];
-        const routing = await fetchOsrmWithFailover(points.map((point) => point.join(",")).join(";"), "overview=full&geometries=geojson");
+        if (forceStraightThrough && waypoints.length === 0) {
+          setDraftCoordinates([[numSLon, numSLat], [numELon, numELat]]);
+          setSnappingStatusText("กรุณาเพิ่มจุดดัดบนสามแยก/สี่แยกอย่างน้อย 1 จุด แล้วคำนวณอีกครั้ง");
+          return;
+        }
+        const routing = await fetchOsrmWithFailover(
+          points.map((point) => point.join(",")).join(";"),
+          buildDetourRoutingParams(points, forceStraightThrough),
+        );
         if (requestId !== routingRequest.current) return;
         const coordinates = routing?.data?.routes?.[0]?.geometry?.coordinates;
         if (!Array.isArray(coordinates) || coordinates.length < 2) {
@@ -294,7 +322,9 @@ export function MapManagementTab({
           return;
         }
         setDraftCoordinates(coordinates);
-        setSnappingStatusText(`✓ คำนวณทางเลี่ยงตามถนนสำเร็จ (${coordinates.length} จุด)`);
+        setSnappingStatusText(forceStraightThrough
+          ? `✓ คำนวณแนวตรงผ่านแยกตามจุดควบคุมสำเร็จ (${coordinates.length} จุด) — กรุณาตรวจพรีวิวก่อนบันทึก`
+          : `✓ คำนวณทางเลี่ยงตามถนนสำเร็จ (${coordinates.length} จุด)`);
         return;
       }
       const points: [number, number][] = [[numSLon, numSLat], ...waypoints, [numELon, numELat]];
@@ -442,6 +472,7 @@ export function MapManagementTab({
     setDetourDesc("");
     setFieldImages([]);
     setSaveAsDraft(false);
+    setForceStraightThrough(false);
     originalRouteCoordinates.current = [];
     onDraftPickMarkersChange?.([]);
     onToast("ล้างเส้นทางร่างและแบบฟอร์มแล้ว");
@@ -839,6 +870,22 @@ export function MapManagementTab({
           )}
 
           {/* Waypoint Operations & Midpoint Insertion */}
+          {routeMode === "DETOUR" && (
+            <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-amber-700/60 bg-amber-950/30 p-3 text-xs text-amber-100">
+              <input
+                type="checkbox"
+                checked={forceStraightThrough}
+                onChange={(event) => {
+                  setForceStraightThrough(event.target.checked);
+                  setSnappingStatusText(event.target.checked
+                    ? "เปิดโหมดตรงผ่านแยกแล้ว: เพิ่มจุดดัดบนกึ่งกลางสามแยก/สี่แยก แล้วกดคำนวณเส้นเกาะถนน"
+                    : "ปิดโหมดตรงผ่านแยกแล้ว");
+                }}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-amber-500"
+              />
+              <span><strong className="block text-amber-300">บังคับตรงผ่านสามแยก/สี่แยก</strong>จุดดัดจะเป็นจุดควบคุมทิศทางตรง ระบบจะป้องกันการยูเทิร์นที่จุดนั้นและยังคงเกาะถนนจริง กรุณาตรวจเส้นพรีวิวก่อนบันทึก</span>
+            </label>
+          )}
           <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-2">
               <button
@@ -864,7 +911,9 @@ export function MapManagementTab({
                     : "bg-slate-800 text-amber-300 border-slate-700 hover:bg-slate-700"
                 }`}
               >
-                {adminPickMode === "ADD_WAYPOINT" ? "คลิกถนนเพื่อดัด..." : "+ เพิ่มจุดดัดเส้น"}
+                {adminPickMode === "ADD_WAYPOINT"
+                  ? (forceStraightThrough && routeMode === "DETOUR" ? "คลิกกึ่งกลางแยก..." : "คลิกถนนเพื่อดัด...")
+                  : (forceStraightThrough && routeMode === "DETOUR" ? "+ เพิ่มจุดผ่านแยกตรง" : "+ เพิ่มจุดดัดเส้น")}
               </button>
             </div>
 
