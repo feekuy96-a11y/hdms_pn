@@ -52,6 +52,7 @@ export default function AdminPage() {
   const [draftPickMarkers, setDraftPickMarkers] = useState<Array<{ lat: number; lon: number; label: string; mode: string }>>([]);
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [editableOfficeId, setEditableOfficeId] = useState<string | null>(null);
 
   const { data: systemData = INITIAL_SYSTEM_DATA, refetch, isFetching, isError } = useQuery<SystemDataPayload>({
     queryKey: ["dohAdminSystemData"],
@@ -222,6 +223,7 @@ export default function AdminPage() {
               onToast={showToast}
               setIncomingGisLines={setIncomingGisLines}
               setDraftPickMarkers={setDraftPickMarkers}
+              onOfficeEditModeChange={setEditableOfficeId}
             />
           </div>
 
@@ -255,6 +257,12 @@ export default function AdminPage() {
               draftWaypoints={draftWaypoints}
               draftPickMarkers={draftPickMarkers}
               onWaypointDragged={handleWaypointDragged}
+              editableOfficeId={editableOfficeId}
+              onOfficeDragged={editableOfficeId ? (officeId, position) => {
+                if (officeId !== editableOfficeId) return;
+                setPickedCoordinate({ lat: position.lat, lon: position.lon, mode: "OFFICE_DRAG", ts: Date.now() });
+                showToast("ย้ายหมุดสำนักงานแล้ว กดบันทึกในฟอร์มเพื่อยืนยันตำแหน่งใหม่");
+              } : undefined}
               draftMode={draftMode}
               focusCoordinates={focusCoordinates}
               incomingGisLines={incomingGisLines}

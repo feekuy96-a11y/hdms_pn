@@ -55,6 +55,7 @@ test("route geometry editor opens with coordinate selection and export controls"
   await editRoute.click();
   await expect(page.getByRole("heading", { name: "ปรับแนวถนนทางหลวง" })).toBeVisible();
   await expect(page.getByRole("button", { name: "เกาะแนวถนน" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "คืนค่าแนวเดิม" })).toBeVisible();
   await expect(page.getByRole("button", { name: "ส่งออก GeoJSON" })).toBeVisible();
   await expect(page.getByRole("button", { name: "ส่งออก KML" })).toBeVisible();
 });
@@ -89,6 +90,34 @@ test("route editor keeps A and B markers visible and permits a map bend point", 
   await expect(page.locator(".doh-draft-endpoint")).toHaveCount(2);
   await page.getByRole("button", { name: /เพิ่มจุดดัดเส้น/ }).click();
   await expect(page.getByRole("button", { name: /คลิกถนนเพื่อดัด/ })).toBeVisible();
+});
+
+test("route editor lists and removes an individual bend point", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Map editing is verified in the desktop workspace");
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "จัดการแผนที่");
+  await page.getByLabel("พิกัดจุด A").fill("6.8340, 101.1860");
+  await page.getByLabel("พิกัดจุด A").blur();
+  await page.getByLabel("พิกัดจุด B").fill("6.8390, 101.1920");
+  await page.getByLabel("พิกัดจุด B").blur();
+  await page.getByRole("button", { name: "แตะจุดกลางเส้นเพื่อเพิ่มจุด" }).click();
+  await expect(page.getByLabel("รายการจุดดัดเส้น")).toBeVisible();
+  await page.getByRole("button", { name: "ลบจุดดัดที่ 1" }).click();
+  await expect(page.getByLabel("รายการจุดดัดเส้น")).toHaveCount(0);
+});
+
+test("office markers unlock only while their record is being edited", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Office map editing is verified in the desktop workspace");
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "จัดการระบบ");
+  const editOffice = page.getByRole("button", { name: /แก้ไขสำนักงาน/ }).first();
+  test.skip(await editOffice.count() === 0, "No office record is currently available");
+  await expect(page.locator(".doh-office-marker.leaflet-marker-draggable")).toHaveCount(0);
+  await editOffice.click();
+  await expect(page.getByText("หมุดของรายการนี้ปลดล็อกแล้ว", { exact: false })).toBeVisible();
+  await expect(page.locator(".doh-office-marker.leaflet-marker-draggable")).toHaveCount(1);
+  await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
+  await expect(page.locator(".doh-office-marker.leaflet-marker-draggable")).toHaveCount(0);
 });
 
 test("map management exposes all approved traffic choices without color labels", async ({ page }) => {

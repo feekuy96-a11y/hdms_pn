@@ -15,6 +15,7 @@ interface SystemSettingsTabProps {
   showSuccessModal: (title: string, message: string) => void;
   setAdminPickMode: (mode: string | null) => void;
   pickedCoordinate?: { lat: number; lon: number; mode: string } | null;
+  onOfficeEditModeChange?: (officeId: string | null) => void;
 }
 
 export function SystemSettingsTab({
@@ -25,6 +26,7 @@ export function SystemSettingsTab({
   showSuccessModal,
   setAdminPickMode,
   pickedCoordinate,
+  onOfficeEditModeChange,
 }: SystemSettingsTabProps) {
   const [sysName, setSysName] = useState(systemData.systemSettings?.name || APP_CONFIG.TITLE);
   const [sysOrg, setSysOrg] = useState(systemData.systemSettings?.org || APP_CONFIG.ORGANIZATION);
@@ -44,10 +46,10 @@ export function SystemSettingsTab({
   const [officeLon, setOfficeLon] = useState(101.25);
 
   useEffect(() => {
-    if (pickedCoordinate && pickedCoordinate.mode === "OFFICE_PIN") {
+    if (pickedCoordinate && ["OFFICE_PIN", "OFFICE_DRAG"].includes(pickedCoordinate.mode)) {
       setOfficeLat(pickedCoordinate.lat);
       setOfficeLon(pickedCoordinate.lon);
-      onToast(`ปักหมุดพิกัดสำนักงาน: ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
+      onToast(`${pickedCoordinate.mode === "OFFICE_DRAG" ? "ย้าย" : "ปัก"}หมุดพิกัดสำนักงาน: ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
     }
   }, [pickedCoordinate, onToast]);
 
@@ -102,6 +104,8 @@ export function SystemSettingsTab({
         onDataRefresh(res.systemData);
         showSuccessModal("บันทึกสำนักงานสำเร็จ", `บันทึกหมุด [${officeName}] เรียบร้อยแล้ว`);
         setIsOfficeFormOpen(false);
+        setOfficeEditId("");
+        onOfficeEditModeChange?.(null);
       }
     } catch (e: any) {
       onToast("เกิดข้อผิดพลาด: " + e.message);
@@ -246,6 +250,7 @@ export function SystemSettingsTab({
               setOfficeAddress("");
               setOfficePhone("");
               setIsOfficeFormOpen(true);
+              onOfficeEditModeChange?.(null);
             }}
             className="bg-sky-600 hover:bg-sky-500 text-white font-heading font-bold text-xs px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition shadow"
           >
@@ -259,6 +264,11 @@ export function SystemSettingsTab({
             <h4 className="font-heading font-bold text-xs text-sky-300">
               {officeEditId ? "แก้ไขข้อมูลสำนักงาน" : "เพิ่มหมุดสำนักงานใหม่"}
             </h4>
+            {officeEditId && (
+              <p role="status" className="rounded-xl border border-sky-700/70 bg-sky-950/50 px-3 py-2 text-xs text-sky-200">
+                หมุดของรายการนี้ปลดล็อกแล้ว สามารถลากหมุดอาคารบนแผนที่เพื่อปรับพิกัด และกดบันทึกเพื่อยืนยันตำแหน่งใหม่
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-slate-300">ชื่อสำนักงาน / หมวดทางหลวง *</label>
@@ -334,7 +344,7 @@ export function SystemSettingsTab({
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setIsOfficeFormOpen(false)}
+                onClick={() => { setIsOfficeFormOpen(false); setOfficeEditId(""); setAdminPickMode(null); onOfficeEditModeChange?.(null); }}
                 className="bg-slate-800 text-slate-300 px-3 py-1.5 rounded-xl text-xs"
               >
                 ยกเลิก
@@ -383,7 +393,9 @@ export function SystemSettingsTab({
                       setOfficeLat(off.lat);
                       setOfficeLon(off.lon);
                       setIsOfficeFormOpen(true);
+                      onOfficeEditModeChange?.(off.id);
                     }}
+                    aria-label={`แก้ไขสำนักงาน ${off.name}`}
                     className="p-1 bg-slate-900 hover:bg-amber-500 hover:text-slate-950 text-amber-300 rounded-lg text-xs"
                   >
                     <Edit className="w-3.5 h-3.5" />
@@ -391,6 +403,7 @@ export function SystemSettingsTab({
                   <button
                     type="button"
                     onClick={() => handleDeleteOffice(off.id)}
+                    aria-label={`ลบสำนักงาน ${off.name}`}
                     className="p-1 bg-slate-900 hover:bg-red-600 hover:text-white text-red-400 rounded-lg text-xs"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

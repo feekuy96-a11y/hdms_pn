@@ -54,6 +54,7 @@ interface LongdoGisMapProps {
   draftPickMarkers?: { lat: number; lon: number; label: string; mode: string }[];
   onWaypointDragged?: (index: number, newCoord: [number, number]) => void;
   onOfficeDragged?: (officeId: string, newPosition: { lat: number; lon: number }) => void;
+  editableOfficeId?: string | null;
   draftMode?: "FLOOD" | "DETOUR";
   focusCoordinates?: [number, number] | null;
   incomingGisLines?: [number, number][][];
@@ -73,6 +74,7 @@ export function LongdoGisMap({
   draftPickMarkers = [],
   onWaypointDragged,
   onOfficeDragged,
+  editableOfficeId = null,
   draftMode = "FLOOD",
   focusCoordinates = null,
   incomingGisLines = [],
@@ -704,8 +706,9 @@ export function LongdoGisMap({
             iconAnchor: [14, 14],
           });
 
-          const marker = L.marker([office.lat, office.lon], { icon: officeIcon, draggable: !publicMode && Boolean(onOfficeDraggedRef.current) }).addTo(group);
-          if (!publicMode && onOfficeDraggedRef.current) {
+          const isOfficeEditable = !publicMode && editableOfficeId === office.id && Boolean(onOfficeDraggedRef.current);
+          const marker = L.marker([office.lat, office.lon], { icon: officeIcon, draggable: isOfficeEditable }).addTo(group);
+          if (isOfficeEditable) {
             marker.on("dragend", (event: any) => {
               const position = event.target.getLatLng();
               onOfficeDraggedRef.current?.(office.id, { lat: Number(position.lat.toFixed(6)), lon: Number(position.lng.toFixed(6)) });
@@ -754,6 +757,7 @@ export function LongdoGisMap({
     publicMode,
     animationsEnabled,
     adminPickMode,
+    editableOfficeId,
   ]);
 
   return (

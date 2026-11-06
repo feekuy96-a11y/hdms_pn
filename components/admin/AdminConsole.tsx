@@ -43,6 +43,7 @@ interface AdminConsoleProps {
   onToast: (msg: string) => void;
   setIncomingGisLines?: (lines: [number, number][][]) => void;
   setDraftPickMarkers?: React.Dispatch<React.SetStateAction<Array<{ lat: number; lon: number; label: string; mode: string }>>>;
+  onOfficeEditModeChange?: (officeId: string | null) => void;
 }
 
 export function AdminConsole({
@@ -60,6 +61,7 @@ export function AdminConsole({
   onToast,
   setIncomingGisLines,
   setDraftPickMarkers,
+  onOfficeEditModeChange,
 }: AdminConsoleProps) {
   // Navigation & View
   const [activeTab, setActiveTab] = useState<
@@ -214,6 +216,7 @@ export function AdminConsole({
                   if (item.id !== "map") {
                     setEditingRoute(null);
                   }
+                  if (item.id !== "system") onOfficeEditModeChange?.(null);
                 }}
                 className={`w-full flex items-center rounded-xl p-2.5 text-left transition ${
                   isActive
@@ -296,6 +299,7 @@ export function AdminConsole({
                 onClick={() => {
                   setActiveTab(item.id);
                   if (item.id !== "map") setEditingRoute(null);
+                  if (item.id !== "system") onOfficeEditModeChange?.(null);
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-heading font-bold shrink-0 flex items-center gap-1.5 transition ${
                   isActive
@@ -322,6 +326,7 @@ export function AdminConsole({
               showSuccessModal={showSuccessModal}
               setAdminPickMode={setAdminPickMode}
               pickedCoordinate={pickedCoordinate}
+              onOfficeEditModeChange={onOfficeEditModeChange}
             />
           )}
 

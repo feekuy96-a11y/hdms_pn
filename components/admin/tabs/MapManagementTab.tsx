@@ -13,6 +13,7 @@ import {
   Camera,
   Save,
   FileUp,
+  Trash2,
 } from "lucide-react";
 import { upsertRouteAction, snapRouteAction } from "@/app/actions/doh-actions";
 import {
@@ -85,6 +86,7 @@ export function MapManagementTab({
   const [routeMode, setRouteMode] = useState<"FLOOD" | "DETOUR">("FLOOD");
   useEffect(() => { onDraftModeChange?.(routeMode); }, [routeMode, onDraftModeChange]);
   const routingRequest = useRef(0);
+  const originalRouteCoordinates = useRef<[number, number][]>([]);
   const [routeEditId, setRouteEditId] = useState<string>("");
 
   // Common Highway Attributes
@@ -208,6 +210,7 @@ export function MapManagementTab({
       let coords: [number, number][] = [];
       if (Array.isArray(flood.coordinates_json)) coords = flood.coordinates_json as [number, number][];
       else if (typeof flood.coordinates_json === "string") coords = JSON.parse(flood.coordinates_json);
+      originalRouteCoordinates.current = coords.map((coordinate) => [...coordinate] as [number, number]);
       setDraftCoordinates(coords);
       setFieldImages(flood.latest_photo_url ? [flood.latest_photo_url] : []);
     } else {
@@ -225,6 +228,7 @@ export function MapManagementTab({
       let coords: [number, number][] = [];
       if (Array.isArray(detour.coordinates_json)) coords = detour.coordinates_json as [number, number][];
       else if (typeof detour.coordinates_json === "string") coords = JSON.parse(detour.coordinates_json);
+      originalRouteCoordinates.current = coords.map((coordinate) => [...coordinate] as [number, number]);
       setDraftCoordinates(coords);
     }
   }, [editingRoute, systemData]);
@@ -368,12 +372,16 @@ export function MapManagementTab({
 
   // Add Midpoint Waypoint
   const handleAddMidpointWaypoint = () => {
-    if (draftCoordinates.length < 2) {
-      onToast("ต้องมีแนวเส้นทางอย่างน้อย ๒ จุดก่อนเพิ่มจุดกึ่งกลาง");
+    const start: [number, number] = [Number(startLon), Number(startLat)];
+    const end: [number, number] = [Number(endLon), Number(endLat)];
+    const hasEndpoints = [...start, ...end].every(Number.isFinite) && start.every((value) => value !== 0) && end.every((value) => value !== 0);
+    if (draftCoordinates.length < 2 && !hasEndpoints) {
+      onToast("กรุณากำหนดจุด A และ B ก่อนเพิ่มจุดกึ่งกลาง");
       return;
     }
-    const midIdx = Math.floor(draftCoordinates.length / 2);
-    const midPoint = draftCoordinates[midIdx];
+    const midPoint: [number, number] = draftCoordinates.length >= 2
+      ? draftCoordinates[Math.floor(draftCoordinates.length / 2)]
+      : [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
     setDraftWaypoints((prev) => [...prev, midPoint]);
     onToast(`เพิ่มจุดดัดแนวเส้นทางที่พิกัด ${midPoint[1].toFixed(4)}, ${midPoint[0].toFixed(4)}`);
   };
@@ -390,6 +398,27 @@ export function MapManagementTab({
     } else {
       onToast("ไม่มีจุดดัดเส้นทางให้ยกเลิก");
     }
+  };
+
+  const handleRemoveWaypoint = (index: number) => {
+    const updated = draftWaypoints.filter((_, waypointIndex) => waypointIndex !== index);
+    setDraftWaypoints(updated);
+    onToast(`ลบจุดดัดที่ ${index + 1} แล้ว`);
+    if (startLat && startLon && endLat && endLon) {
+      void triggerDualRoadSnapping(startLat, startLon, endLat, endLon, updated);
+    }
+  };
+
+  const handleRestoreOriginalRoute = () => {
+    if (originalRouteCoordinates.current.length < 2) {
+      onToast("รายการนี้ไม่มีแนวเส้นเดิมสำหรับคืนค่า");
+      return;
+    }
+    routingRequest.current += 1;
+    setDraftWaypoints([]);
+    setDraftCoordinates(originalRouteCoordinates.current.map((coordinate) => [...coordinate] as [number, number]));
+    setSnappingStatusText("คืนค่าแนวเส้นเดิมแล้ว กดบันทึกเพื่อยืนยัน");
+    onToast("คืนค่าแนวเส้นเดิมเรียบร้อยแล้ว");
   };
 
   // Clear Route
@@ -413,6 +442,7 @@ export function MapManagementTab({
     setDetourDesc("");
     setFieldImages([]);
     setSaveAsDraft(false);
+    originalRouteCoordinates.current = [];
     onDraftPickMarkersChange?.([]);
     onToast("ล้างเส้นทางร่างและแบบฟอร์มแล้ว");
   };
@@ -846,6 +876,15 @@ export function MapManagementTab({
               >
                 <Undo2 className="w-3 h-3" /> ย้อนกลับ
               </button>
+              {originalRouteCoordinates.current.length >= 2 && (
+                <button
+                  type="button"
+                  onClick={handleRestoreOriginalRoute}
+                  className="min-h-10 rounded-lg border border-slate-700 px-3 text-sky-300 hover:border-sky-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
+                >
+                  คืนค่าแนวเดิม
+                </button>
+              )}
               <button
                 type="button"
                 onClick={requestClearRoute}
@@ -855,6 +894,26 @@ export function MapManagementTab({
               </button>
             </div>
           </div>
+          {draftWaypoints.length > 0 && (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3" aria-label="รายการจุดดัดเส้น">
+              <p className="mb-2 text-xs font-semibold text-slate-200">จุดดัดเส้น ({draftWaypoints.length} จุด)</p>
+              <div className="flex flex-wrap gap-2">
+                {draftWaypoints.map(([lon, lat], index) => (
+                  <div key={`${lon}-${lat}-${index}`} className="flex min-h-10 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-2 text-xs text-slate-300">
+                    <span className="font-mono">#{index + 1} · {lat.toFixed(5)}, {lon.toFixed(5)}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveWaypoint(index)}
+                      aria-label={`ลบจุดดัดที่ ${index + 1}`}
+                      className="grid h-8 w-8 place-items-center rounded-md text-red-400 hover:bg-red-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 3. Auto Detour Advice Generator (If in Detour mode) */}

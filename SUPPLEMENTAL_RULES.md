@@ -568,3 +568,11 @@
 - **การทดสอบและผลลัพธ์:** `git diff --check`, `npm run lint`, `npx tsc --noEmit`, `BASE_PATH=/hdms_pn npm run build:pages` ผ่าน; Playwright static ผ่านทุก test ที่ดำเนินการได้ 16 รายการบน desktop/mobile และข้าม 10 รายการที่กำหนด desktop-only หรือไม่มี fixture geometry
 - **สถานะ:** พร้อมเผยแพร่และตรวจ production ต่อ
 
+### [UPDATE-051] 2026-11-06: ล็อกหมุดสำนักงานและจัดการจุดดัดเส้นเป็นรายจุด
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์:** ใช้ `landing-page-design` ทำให้สถานะการแก้ไขบนแผนที่ชัดเจน ลดการเลื่อนหมุดโดยไม่ตั้งใจ และให้เจ้าหน้าที่ควบคุมจุดดัดของเส้นน้ำท่วม ทางเลี่ยง และโครงข่ายสายทางได้ครบ
+- **ไฟล์ที่เกี่ยวข้อง:** `app/admin/page.tsx`, `components/admin/AdminConsole.tsx`, `components/admin/tabs/SystemSettingsTab.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `components/map/LongdoGisMap.tsx`, `tests/e2e/admin-menus.spec.ts`, `SUPPLEMENTAL_RULES.md`
+- **รายละเอียดการทำงาน:** หมุดสำนักงานถูกล็อกตามปกติและลากได้เฉพาะหมุดของรายการที่เปิดฟอร์มแก้ไข; การลากอัปเดตพิกัดในฟอร์มและต้องกดบันทึกจึงยืนยัน; เพิ่มรายการพิกัดจุดดัดพร้อมปุ่มลบรายจุด; คำนวณแนวเส้นใหม่หลังลบ; เพิ่มปุ่มคืนค่าแนวเดิมสำหรับเหตุการณ์/ทางเลี่ยงที่กำลังแก้และตัวแก้แนวโครงข่าย; รองรับเพิ่มจุดกึ่งกลางจาก A/B แม้เส้นพรีวิวยังไม่พร้อม
+- **การทดสอบและผลลัพธ์:** `git diff --check`, lint, typecheck และ Pages build ผ่าน; Playwright เฉพาะพฤติกรรมลบจุดดัดและล็อก/ปลดล็อกหมุดสำนักงานผ่าน 2/2; Playwright regression แบบ static export สถานะผ่านทั้งหมด 32 tests ที่กำหนด โดยไม่มี test ล้มเหลว
+- **สถานะ:** ผ่าน local release gate รอตรวจ production หลัง deploy
+

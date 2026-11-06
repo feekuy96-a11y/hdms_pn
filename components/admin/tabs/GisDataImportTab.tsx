@@ -170,7 +170,7 @@ export function GisDataImportTab({
   const [isCommitting, setIsCommitting] = useState(false);
   const [routeSearch, setRouteSearch] = useState("");
   const [selectedRoute, setSelectedRoute] = useState<{ layerId: string; featureIdx: number } | null>(null);
-  const [editingGeometry, setEditingGeometry] = useState<{ layerId: string; featureIdx: number; start: [number, number]; end: [number, number] } | null>(null);
+  const [editingGeometry, setEditingGeometry] = useState<{ layerId: string; featureIdx: number; start: [number, number]; end: [number, number]; originalCoordinates: [number, number][] } | null>(null);
   const [isSnappingGeometry, setIsSnappingGeometry] = useState(false);
 
   useEffect(() => {
@@ -311,7 +311,7 @@ export function GisDataImportTab({
     // The common map drag handler must use road routing for a highway editor,
     // not the flood-only PostGIS snap rule inherited from a previous tab.
     onDraftModeChange?.("DETOUR");
-    setEditingGeometry({ layerId, featureIdx, start, end });
+    setEditingGeometry({ layerId, featureIdx, start, end, originalCoordinates: coords.map((coordinate) => [...coordinate] as [number, number]) });
     onToast("เปิดตัวแก้ไขแนวถนนแล้ว เลือกพิกัดบนแผนที่หรือกรอกพิกัดเองได้");
   };
 
@@ -328,6 +328,30 @@ export function GisDataImportTab({
     } finally {
       setIsSnappingGeometry(false);
     }
+  };
+
+  const removeGeometryWaypoint = async (index: number) => {
+    if (!editingGeometry) return;
+    const nextWaypoints = draftWaypoints.filter((_, waypointIndex) => waypointIndex !== index);
+    setDraftWaypoints(nextWaypoints);
+    setIsSnappingGeometry(true);
+    try {
+      const coords = await calculateRoadSnappedRoute(editingGeometry.start, editingGeometry.end, nextWaypoints);
+      if (coords.length < 2) throw new Error("ไม่พบแนวถนนหลังลบจุดดัด");
+      setDraftCoordinates(coords);
+      onToast(`ลบจุดดัดที่ ${index + 1} และคำนวณแนวถนนใหม่แล้ว`);
+    } catch (error: any) {
+      onToast(`ลบจุดดัดแล้ว แต่คำนวณแนวถนนใหม่ไม่สำเร็จ: ${error.message}`);
+    } finally {
+      setIsSnappingGeometry(false);
+    }
+  };
+
+  const restoreOriginalGeometry = () => {
+    if (!editingGeometry) return;
+    setDraftWaypoints([]);
+    setDraftCoordinates(editingGeometry.originalCoordinates.map((coordinate) => [...coordinate] as [number, number]));
+    onToast("คืนค่าแนวถนนเดิมแล้ว กดบันทึกเพื่อยืนยัน");
   };
 
   const saveEditedGeometry = async () => {
@@ -1489,10 +1513,26 @@ export function GisDataImportTab({
               <button type="button" disabled={isSnappingGeometry} onClick={snapEditedGeometry} className="rounded-lg bg-sky-500 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50">{isSnappingGeometry ? "กำลังหาแนวถนน" : "เกาะแนวถนน"}</button>
               <span className="text-[11px] text-slate-400">เส้นปัจจุบัน {draftCoordinates.length} จุด · จุดดัด {draftWaypoints.length} จุด</span>
             </div>
+            {draftWaypoints.length > 0 && (
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3" aria-label="รายการจุดดัดแนวถนน">
+                <p className="mb-2 text-xs font-semibold text-slate-200">จุดดัดแนวถนน ({draftWaypoints.length} จุด)</p>
+                <div className="flex flex-wrap gap-2">
+                  {draftWaypoints.map(([lon, lat], index) => (
+                    <div key={`${lon}-${lat}-${index}`} className="flex min-h-10 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-2 text-xs text-slate-300">
+                      <span className="font-mono">#{index + 1} · {lat.toFixed(5)}, {lon.toFixed(5)}</span>
+                      <button type="button" onClick={() => void removeGeometryWaypoint(index)} aria-label={`ลบจุดดัดแนวถนนที่ ${index + 1}`} className="grid h-8 w-8 place-items-center rounded-md text-red-400 hover:bg-red-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex flex-wrap justify-between gap-2 border-t border-slate-800 pt-3">
               <div className="flex gap-2">
                 <button type="button" onClick={() => exportEditedGeometry("geojson")} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white">ส่งออก GeoJSON</button>
                 <button type="button" onClick={() => exportEditedGeometry("kml")} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white">ส่งออก KML</button>
+                <button type="button" onClick={restoreOriginalGeometry} className="rounded-lg border border-sky-700 bg-sky-950/40 px-3 py-2 text-xs text-sky-200">คืนค่าแนวเดิม</button>
               </div>
               <div className="flex gap-2">
                 <button type="button" onClick={() => { setEditingGeometry(null); setAdminPickMode(null); setDraftCoordinates([]); setDraftWaypoints([]); onDraftModeChange?.("FLOOD"); }} className="rounded-lg bg-slate-800 px-4 py-2 text-xs text-white">ยกเลิก</button>
