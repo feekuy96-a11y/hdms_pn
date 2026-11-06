@@ -38,6 +38,8 @@ export function IncidentRegistryTab({
   const [newWaterLevel, setNewWaterLevel] = useState<number>(0);
   const [updateNote, setUpdateNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedIncidentIds, setSelectedIncidentIds] = useState<Set<string>>(() => new Set());
+  const [exportScope, setExportScope] = useState<"FILTERED" | "ALL" | "SELECTED">("FILTERED");
 
   const activeCount = (systemData.floodRoutes || []).filter((r) => r.is_active).length;
   const resolvedCount = (systemData.floodRoutes || []).filter((r) => !r.is_active).length;
@@ -124,7 +126,13 @@ export function IncidentRegistryTab({
     });
   };
 
-  const handleExportCsv = (records = filteredIncidents) => {
+  const exportRecords = () => exportScope === "ALL"
+    ? (systemData.floodRoutes || [])
+    : exportScope === "SELECTED"
+      ? (systemData.floodRoutes || []).filter((route) => selectedIncidentIds.has(route.id))
+      : filteredIncidents;
+
+  const handleExportCsv = (records = exportRecords()) => {
     const headers = ["ID", "RouteNo", "Section", "KmStart", "KmEnd", "Lat", "Lon", "WaterCm", "Status", "IsActive", "UpdatedAt"];
     const rows = records.map((r) => [
       r.id,
@@ -153,9 +161,10 @@ export function IncidentRegistryTab({
   };
 
   const handleExport = async (format: GisExportFormat) => {
-    if (!filteredIncidents.length) return onToast("ไม่มีเหตุการณ์ตามตัวกรองสำหรับส่งออก");
+    const records = exportRecords();
+    if (!records.length) return onToast(exportScope === "SELECTED" ? "กรุณาเลือกรายการก่อนส่งออก" : "ไม่มีเหตุการณ์สำหรับส่งออก");
     if (format === "csv") return handleExportCsv();
-    const features = filteredIncidents.map((route) => ({
+    const features = records.map((route) => ({
       type: "Feature" as const,
       properties: {
         id: route.id, name: `ทล.${route.route_no} ${route.section_name}`, route_no: route.route_no,
@@ -199,8 +208,11 @@ export function IncidentRegistryTab({
           </button>
           <label className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-2 text-xs text-amber-300">
             <FileText className="w-4 h-4" />
-            <select aria-label="ส่งออกเหตุการณ์ตามตัวกรอง" defaultValue="" onChange={(e) => { if (e.target.value) void handleExport(e.target.value as GisExportFormat); e.target.value = ""; }} className="min-h-10 bg-transparent font-heading font-semibold outline-none">
-              <option value="" disabled>ส่งออกตามตัวกรอง…</option>
+            <select aria-label="ขอบเขตส่งออกเหตุการณ์" value={exportScope} onChange={(e) => setExportScope(e.target.value as typeof exportScope)} className="min-h-10 max-w-28 bg-transparent font-heading outline-none">
+              <option value="FILTERED">ตามตัวกรอง</option><option value="ALL">ทั้งหมด</option><option value="SELECTED">ที่เลือก</option>
+            </select>
+            <select aria-label="รูปแบบส่งออกเหตุการณ์" defaultValue="" onChange={(e) => { if (e.target.value) void handleExport(e.target.value as GisExportFormat); e.target.value = ""; }} className="min-h-10 bg-transparent font-heading font-semibold outline-none">
+              <option value="" disabled>ส่งออก…</option>
               <option value="csv">CSV</option><option value="geojson">GeoJSON</option><option value="kml">KML</option><option value="kmz">KMZ</option><option value="shapefile">Shapefile ZIP</option>
             </select>
           </label>
@@ -287,6 +299,18 @@ export function IncidentRegistryTab({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`เลือกเหตุการณ์ ทล.${r.route_no} ${r.section_name}`}
+                        checked={selectedIncidentIds.has(r.id)}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => setSelectedIncidentIds((previous) => {
+                          const next = new Set(previous);
+                          if (event.target.checked) next.add(r.id); else next.delete(r.id);
+                          return next;
+                        })}
+                        className="h-4 w-4 accent-amber-500"
+                      />
                       <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700" title="จุดน้ำท่วม"><Waves className="h-4 w-4" /></span>
                       <span
                         className="font-heading font-black text-xs px-2 py-0.5 rounded shadow-sm"

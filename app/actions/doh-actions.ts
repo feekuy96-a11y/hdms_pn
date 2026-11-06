@@ -50,6 +50,7 @@ export async function upsertRouteAction(payload: {
   detourRefId?: string;
   detourName?: string;
   detourDesc?: string;
+  isActive?: boolean;
   district?: string;
   subdistrict?: string;
 }): Promise<{ success: boolean; systemData: SystemDataPayload }> {

@@ -552,3 +552,11 @@
 - **การทดสอบ:** `git diff --check`, lint, typecheck และ Pages build ผ่าน; Playwright desktop ของเมนู Admin ผ่าน 8 tests และข้าม 1 test ที่ไม่มี geometry fixture; test เฉพาะสัญลักษณ์/รูปแบบรายการผ่าน โดยรองรับทั้งกรณีมีข้อมูลและ Empty State; รอตรวจ production
 - **สถานะ:** ผ่าน local release gate รอเผยแพร่
 
+### [UPDATE-049] 2026-11-06: นำเข้ารายการเป็นฉบับร่างและส่งออกตามขอบเขตที่เลือก
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์:** รองรับการนำเข้าแนวเส้นน้ำท่วมหรือทางเลี่ยงก่อน แล้วให้เจ้าหน้าที่แก้รายละเอียดและค่อยเผยแพร่ภายหลัง; ลดความเสี่ยงส่งออกข้อมูลเกินขอบเขตที่ต้องการ
+- **ไฟล์ที่เกี่ยวข้อง:** `app/actions/doh-actions.ts`, `lib/hdms-api.ts`, `supabase/functions/hdms-api/index.ts`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `tests/e2e/admin-menus.spec.ts`, `SUPPLEMENTAL_RULES.md`
+- **รายละเอียดการทำงาน:** เพิ่มค่า `isActive` ตลอดสัญญา Server Action, fallback client และ Edge API; ฟอร์มจัดการแผนที่มีตัวเลือก “บันทึกเป็นฉบับร่าง” และเลือกเป็นค่าเริ่มต้นหลังนำเข้าไฟล์ เพื่อซ่อนจากแผนที่ประชาชนจนกว่าจะเปิดใช้งาน; ตารางเหตุการณ์น้ำท่วมและทางเลี่ยงเพิ่มการเลือกรายการและขอบเขตส่งออก `ตามตัวกรอง / ทั้งหมด / ที่เลือก` สำหรับ CSV, GeoJSON, KML, KMZ และ Shapefile ZIP
+- **การทดสอบและผลลัพธ์:** `git diff --check`, `npm run lint`, `npx tsc --noEmit` และ `BASE_PATH=/hdms_pn npm run build:pages` ผ่าน; Playwright desktop ผ่าน 8 tests และข้าม 1 test ที่ไม่มี geometry fixture; mobile suite ข้าม 9 tests ตามขอบเขต desktop-first. ยังต้อง deploy Edge Function `hdms-api` เพื่อให้ค่า draft มีผลกับ Supabase production
+- **สถานะ:** พร้อมเผยแพร่หน้าเว็บ; Edge Function รอสิทธิ์ deploy ของ Supabase
+

@@ -94,7 +94,7 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
           district: p.district ?? "",
           subdistrict: p.subdistrict ?? "",
           detour_advice: p.detourAdvice ?? "",
-          is_active: true,
+          is_active: typeof p.isActive === "boolean" ? p.isActive : true,
           deleted_at: null,
           updated_at: now,
         });
@@ -110,7 +110,7 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
           lon_end: p.lonEnd,
           coordinates_json: p.coordinates,
           description: p.detourDesc ?? "",
-          is_active: true,
+          is_active: typeof p.isActive === "boolean" ? p.isActive : true,
           deleted_at: null,
           updated_at: now,
         });

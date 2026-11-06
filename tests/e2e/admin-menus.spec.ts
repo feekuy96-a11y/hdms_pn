@@ -107,14 +107,17 @@ test("map workflows expose import, safe reset, and multi-format exports", async 
   await page.goto(`${base}/admin/`);
   await openMenu(page, "จัดการแผนที่");
   await expect(page.getByText("นำเข้าแนวเส้นเพื่อแก้รายละเอียดภายหลัง", { exact: false })).toBeVisible();
+  await expect(page.getByText("บันทึกเป็นฉบับร่าง (ยังไม่แสดงบนแผนที่ประชาชน)", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "ล้างข้อมูลทั้งหมด" })).toBeVisible();
 
   await openMenu(page, "รายการเหตุการณ์");
-  const incidentExport = page.getByLabel("ส่งออกเหตุการณ์ตามตัวกรอง");
+  await expect(page.getByLabel("ขอบเขตส่งออกเหตุการณ์")).toHaveValue("FILTERED");
+  const incidentExport = page.getByLabel("รูปแบบส่งออกเหตุการณ์");
   for (const value of ["csv", "geojson", "kml", "kmz", "shapefile"]) await expect(incidentExport.locator(`option[value="${value}"]`)).toHaveCount(1);
 
   await openMenu(page, "รายการทางเลี่ยง");
-  const detourExport = page.getByLabel("ส่งออกทางเลี่ยงตามตัวกรอง");
+  await expect(page.getByLabel("ขอบเขตส่งออกทางเลี่ยง")).toHaveValue("FILTERED");
+  const detourExport = page.getByLabel("รูปแบบส่งออกทางเลี่ยง");
   for (const value of ["csv", "geojson", "kml", "kmz", "shapefile"]) await expect(detourExport.locator(`option[value="${value}"]`)).toHaveCount(1);
 });
 

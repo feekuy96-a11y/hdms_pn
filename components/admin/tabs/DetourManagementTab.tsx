@@ -68,6 +68,8 @@ export function DetourManagementTab({
   const [editDetourAdviceView, setEditDetourAdviceView] = useState<"FORWARD" | "REVERSE" | "COMBINED">("COMBINED");
   const [editIsActive, setEditIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedDetourIds, setSelectedDetourIds] = useState<Set<string>>(() => new Set());
+  const [exportScope, setExportScope] = useState<"FILTERED" | "ALL" | "SELECTED">("FILTERED");
 
   const detourList = systemData.detourRoutes || [];
   const floodList = systemData.floodRoutes || [];
@@ -207,8 +209,14 @@ export function DetourManagementTab({
   };
 
   // Export CSV
-  const handleExportCSV = () => {
-    if (filteredDetours.length === 0) {
+  const exportRecords = () => exportScope === "ALL"
+    ? detourList
+    : exportScope === "SELECTED"
+      ? detourList.filter((route) => selectedDetourIds.has(route.id))
+      : filteredDetours;
+
+  const handleExportCSV = (records = exportRecords()) => {
+    if (records.length === 0) {
       onToast("ไม่มีข้อมูลเส้นทางเลี่ยงสำหรับส่งออก");
       return;
     }
@@ -227,7 +235,7 @@ export function DetourManagementTab({
       "อัปเดตล่าสุด",
     ];
 
-    const rows = filteredDetours.map((d) => {
+    const rows = records.map((d) => {
       const linkedFlood = floodList.find((f) => f.id === d.flood_id_ref);
       return [
         `"${d.id}"`,
@@ -257,9 +265,10 @@ export function DetourManagementTab({
   };
 
   const handleExport = async (format: GisExportFormat) => {
-    if (!filteredDetours.length) return onToast("ไม่มีข้อมูลเส้นทางเลี่ยงตามตัวกรองสำหรับส่งออก");
+    const records = exportRecords();
+    if (!records.length) return onToast(exportScope === "SELECTED" ? "กรุณาเลือกรายการก่อนส่งออก" : "ไม่มีข้อมูลเส้นทางเลี่ยงสำหรับส่งออก");
     if (format === "csv") return handleExportCSV();
-    const features = filteredDetours.map((route) => ({
+    const features = records.map((route) => ({
       type: "Feature" as const,
       properties: {
         id: route.id, name: route.route_name, route_name: route.route_name,
@@ -355,8 +364,11 @@ export function DetourManagementTab({
         <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
           <label className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-2 text-xs text-slate-200">
             <FileText className="w-3.5 h-3.5 text-sky-400" />
-            <select aria-label="ส่งออกทางเลี่ยงตามตัวกรอง" defaultValue="" onChange={(e) => { if (e.target.value) void handleExport(e.target.value as GisExportFormat); e.target.value = ""; }} className="min-h-10 bg-transparent font-heading outline-none">
-              <option value="" disabled>ส่งออกตามตัวกรอง…</option>
+            <select aria-label="ขอบเขตส่งออกทางเลี่ยง" value={exportScope} onChange={(e) => setExportScope(e.target.value as typeof exportScope)} className="min-h-10 max-w-28 bg-transparent font-heading outline-none">
+              <option value="FILTERED">ตามตัวกรอง</option><option value="ALL">ทั้งหมด</option><option value="SELECTED">ที่เลือก</option>
+            </select>
+            <select aria-label="รูปแบบส่งออกทางเลี่ยง" defaultValue="" onChange={(e) => { if (e.target.value) void handleExport(e.target.value as GisExportFormat); e.target.value = ""; }} className="min-h-10 bg-transparent font-heading outline-none">
+              <option value="" disabled>ส่งออก…</option>
               <option value="csv">CSV</option><option value="geojson">GeoJSON</option><option value="kml">KML</option><option value="kmz">KMZ</option><option value="shapefile">Shapefile ZIP</option>
             </select>
           </label>
@@ -413,7 +425,7 @@ export function DetourManagementTab({
                       !item.is_active ? "opacity-50 bg-slate-950/40" : ""
                     }`}
                   >
-                    <td className="p-3 text-center font-mono text-slate-400">{idx + 1}</td>
+                    <td className="p-3 text-center font-mono text-slate-400"><div className="flex items-center justify-center gap-2"><input type="checkbox" aria-label={`เลือกทางเลี่ยง ${item.route_name}`} checked={selectedDetourIds.has(item.id)} onClick={(event) => event.stopPropagation()} onChange={(event) => setSelectedDetourIds((previous) => { const next = new Set(previous); if (event.target.checked) next.add(item.id); else next.delete(item.id); return next; })} className="h-4 w-4 accent-amber-500" />{idx + 1}</div></td>
 
                     {/* Status Toggle Switch */}
                     <td className="p-3 text-center" onClick={(event) => event.stopPropagation()}>

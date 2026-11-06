@@ -143,6 +143,7 @@ export function MapManagementTab({
   // Images & Submitting
   const [fieldImages, setFieldImages] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [saveAsDraft, setSaveAsDraft] = useState(false);
 
   // Dynamic Highway Routes strictly from database (Issue #12)
   const availableHighways = React.useMemo(() => {
@@ -198,6 +199,7 @@ export function MapManagementTab({
       sectionNameManuallyEdited.current = true;
       setRouteWaterLevel(flood.water_level_cm);
       setRouteStatus(flood.traffic_status);
+      setSaveAsDraft(!flood.is_active);
       setStartLat(flood.lat_start);
       setStartLon(flood.lon_start);
       setEndLat(flood.lat_end);
@@ -214,6 +216,7 @@ export function MapManagementTab({
       setDetourRefId(detour.flood_id_ref || "");
       setDetourName(detour.route_name);
       setDetourDesc(detour.description || "");
+      setSaveAsDraft(!detour.is_active);
       setStartLat(detour.lat_start || 0);
       setStartLon(detour.lon_start || 0);
       setEndLat(detour.lat_end || 0);
@@ -409,6 +412,7 @@ export function MapManagementTab({
     setDetourName("");
     setDetourDesc("");
     setFieldImages([]);
+    setSaveAsDraft(false);
     onDraftPickMarkersChange?.([]);
     onToast("ล้างเส้นทางร่างและแบบฟอร์มแล้ว");
   };
@@ -473,6 +477,7 @@ export function MapManagementTab({
       if (coordinates.length < 2) throw new Error("ไม่พบแนวเส้นที่ใช้งานได้");
       setDraftCoordinates(coordinates);
       setDraftWaypoints([]);
+      setSaveAsDraft(true);
       const [firstLon, firstLat] = coordinates[0];
       const [lastLon, lastLat] = coordinates[coordinates.length - 1];
       setStartLat(firstLat); setStartLon(firstLon); setEndLat(lastLat); setEndLon(lastLon);
@@ -547,6 +552,7 @@ export function MapManagementTab({
         detourRefId,
         detourName: detourName || "เส้นทางเลี่ยงน้ำท่วม",
         detourDesc,
+        isActive: !saveAsDraft,
         latStart: numSLat || undefined,
         lonStart: numSLon || undefined,
         latEnd: numELat || undefined,
@@ -558,8 +564,10 @@ export function MapManagementTab({
       if (res.success) {
         onDataRefresh(res.systemData);
         showSuccessModal(
-          routeEditId ? "แก้ไขข้อมูลสำเร็จ" : routeMode === "DETOUR" ? "บันทึกทางเลี่ยงสำเร็จ" : "บันทึกเหตุการณ์น้ำท่วมสำเร็จ",
-          routeMode === "DETOUR"
+          saveAsDraft ? "บันทึกร่างสำเร็จ" : routeEditId ? "แก้ไขข้อมูลสำเร็จ" : routeMode === "DETOUR" ? "บันทึกทางเลี่ยงสำเร็จ" : "บันทึกเหตุการณ์น้ำท่วมสำเร็จ",
+          saveAsDraft
+            ? "บันทึกรายการแบบยังไม่เผยแพร่แล้ว สามารถเปิดจากรายการเพื่อแก้ไขและเปิดใช้งานภายหลัง"
+            : routeMode === "DETOUR"
             ? `ทางเลี่ยง ${detourName || "รายการใหม่"} ถูกจัดเก็บและแสดงในรายการทางเลี่ยงแล้ว`
             : `ข้อมูล ทล.${routeNo} ${sectionName} ถูกจัดเก็บและแสดงบนแผนที่ประชาชนเรียบร้อยแล้ว`
         );
@@ -617,6 +625,11 @@ export function MapManagementTab({
       <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-sky-700 bg-sky-950/30 px-3 py-2 text-xs font-semibold text-sky-300 hover:bg-sky-950/50">
         <FileUp className="h-4 w-4" /> นำเข้าแนวเส้นเพื่อแก้รายละเอียดภายหลัง
         <input type="file" className="sr-only" accept=".kml,.kmz,.zip,.shp,.geojson,.json,.gpx" onChange={handleRouteFileImport} />
+      </label>
+
+      <label className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-3 text-xs text-slate-200">
+        <input type="checkbox" checked={saveAsDraft} onChange={(event) => setSaveAsDraft(event.target.checked)} className="h-4 w-4 accent-amber-500" />
+        บันทึกเป็นฉบับร่าง (ยังไม่แสดงบนแผนที่ประชาชน)
       </label>
 
       {/* Main Map Form Container */}
