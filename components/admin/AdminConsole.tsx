@@ -176,7 +176,7 @@ export function AdminConsole({
         className={`hidden shrink-0 flex-col text-white transition-[width] duration-200 lg:flex ${
           isSidebarCollapsed ? "w-20" : "w-64"
         }`}
-        style={{ background: "linear-gradient(180deg, #071B3D, #0B2A5B)" }}
+        style={{ background: "#071B3D" }}
       >
         {/* Sidebar Header Brand */}
         <div className="flex h-16 items-center border-b border-white/10 gap-3 px-4">

@@ -12,10 +12,16 @@ const LongdoGisMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-full min-h-[350px] bg-[#0b1426] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-slate-400">
-          <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-heading font-medium">กำลังโหลดแผนที่ GIS ปัตตานี...</span>
+      <div className="h-full min-h-[350px] w-full bg-[#0b1426] p-4" role="status" aria-live="polite">
+        <span className="sr-only">กำลังโหลดแผนที่ GIS ปัตตานี</span>
+        <div aria-hidden="true" className="h-full min-h-[318px] rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="h-5 w-48 rounded-md bg-slate-700/70 animate-pulse motion-reduce:animate-none" />
+          <div className="mt-4 h-8 w-64 rounded-xl bg-slate-800/80 animate-pulse motion-reduce:animate-none" />
+          <div className="mt-6 grid h-[calc(100%-7rem)] grid-cols-3 gap-3 opacity-60">
+            <div className="rounded-xl bg-slate-800/80 animate-pulse motion-reduce:animate-none" />
+            <div className="rounded-xl bg-slate-700/50 animate-pulse motion-reduce:animate-none" />
+            <div className="rounded-xl bg-slate-800/70 animate-pulse motion-reduce:animate-none" />
+          </div>
         </div>
       </div>
     ),

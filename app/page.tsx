@@ -13,10 +13,16 @@ const LongdoGisMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-full min-h-[350px] bg-[#0b1426] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-slate-400">
-          <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-heading font-medium">กำลังโหลดแผนที่ GIS ปัตตานี...</span>
+      <div className="h-full min-h-[350px] w-full bg-[#0b1426] p-4" role="status" aria-live="polite">
+        <span className="sr-only">กำลังโหลดแผนที่ GIS ปัตตานี</span>
+        <div aria-hidden="true" className="h-full min-h-[318px] rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="h-5 w-40 rounded-md bg-slate-700/70 animate-pulse motion-reduce:animate-none" />
+          <div className="mt-4 h-8 w-56 rounded-xl bg-slate-800/80 animate-pulse motion-reduce:animate-none" />
+          <div className="mt-6 grid h-[calc(100%-7rem)] grid-cols-3 gap-3 opacity-60">
+            <div className="rounded-xl bg-slate-800/80 animate-pulse motion-reduce:animate-none" />
+            <div className="rounded-xl bg-slate-700/50 animate-pulse motion-reduce:animate-none" />
+            <div className="rounded-xl bg-slate-800/70 animate-pulse motion-reduce:animate-none" />
+          </div>
         </div>
       </div>
     ),
@@ -213,7 +219,7 @@ export default function HomePage() {
                 ศูนย์ปฏิบัติการฉุกเฉิน 24 ชม.
               </span>
               <span className="text-[10px] bg-emerald-950/80 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-bold hidden md:inline-flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> <span className="tracking-wide">LIVE</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse motion-reduce:animate-none"></span> <span className="tracking-wide">LIVE</span>
               </span>
             </div>
             <h1 className="font-heading text-xs sm:text-sm font-semibold text-slate-300 truncate">
@@ -249,7 +255,7 @@ export default function HomePage() {
           <div className="p-3.5 bg-[#091122] border-b border-slate-800 space-y-2.5 shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse motion-reduce:animate-none" />
                 <h2 className="font-heading font-bold text-xs sm:text-sm text-white">
                   จุดเฝ้าระวังและน้ำท่วมทางหลวง ({filteredFloods.length} จุด)
                 </h2>
@@ -477,7 +483,7 @@ export default function HomePage() {
           {!isMobileDrawerOpen && !showDossier && (
             <div className="lg:hidden fixed bottom-3 inset-x-3 z-[450] bg-[#091122]/95 backdrop-blur-md border border-amber-500/50 p-2.5 rounded-2xl shadow-2xl flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping motion-reduce:animate-none" />
                 <div className="truncate">
                   <div className="text-xs font-heading font-bold text-white truncate">
                     จุดเฝ้าระวังและน้ำท่วม ({filteredFloods.length} จุด)
@@ -507,7 +513,7 @@ export default function HomePage() {
                   <div className="w-12 h-1.5 bg-slate-600 rounded-full mx-auto mb-1" />
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse motion-reduce:animate-none" />
                       <h2 className="font-heading font-bold text-sm text-white">
                         จุดเฝ้าระวังและน้ำท่วมทางหลวง ({filteredFloods.length} จุด)
                       </h2>

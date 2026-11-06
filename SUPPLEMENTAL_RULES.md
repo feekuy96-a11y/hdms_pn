@@ -560,3 +560,11 @@
 - **การทดสอบและผลลัพธ์:** `git diff --check`, `npm run lint`, `npx tsc --noEmit` และ `BASE_PATH=/hdms_pn npm run build:pages` ผ่าน; Playwright desktop ผ่าน 8 tests และข้าม 1 test ที่ไม่มี geometry fixture; mobile suite ข้าม 9 tests ตามขอบเขต desktop-first. ยังต้อง deploy Edge Function `hdms-api` เพื่อให้ค่า draft มีผลกับ Supabase production
 - **สถานะ:** พร้อมเผยแพร่หน้าเว็บ; Edge Function รอสิทธิ์ deploy ของ Supabase
 
+### [UPDATE-050] 2026-11-06: ปรับประสบการณ์แผนที่แบบลดการเคลื่อนไหวและ Loading State
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์:** ใช้ `landing-page-design` ปรับหน้าประชาชนและ Admin ให้แสดงผลระหว่างโหลดอย่างเป็นรูปธรรม ลดการใช้ทรัพยากรจาก motion ที่ไม่จำเป็น และทำให้พื้นผิวของระบบอ่านข้อมูลสำคัญได้ชัดขึ้น
+- **ไฟล์ที่เกี่ยวข้อง:** `app/page.tsx`, `app/admin/page.tsx`, `app/globals.css`, `components/admin/AdminConsole.tsx`, `SUPPLEMENTAL_RULES.md`
+- **รายละเอียดการทำงาน:** เปลี่ยน loading map จาก spinner เป็น skeleton ที่มีโครงรูปแบบแผนที่จริงและประกาศสถานะสำหรับ screen reader; ใช้ `prefers-reduced-motion` ปิด animation ของหมุด ป้ายสถานะ เส้นน้ำท่วม เส้นทางเลี่ยง และ modal; ปรับเส้นเคลื่อนไหวเป็น easing แบบ decelerate; แทน background gradients ที่ไม่จำเป็นใน header, ป้ายแผนที่ และ Admin sidebar ด้วยสีพื้นเรียบ โดยคง Prompt/Sarabun และสีสถานะเดิม
+- **การทดสอบและผลลัพธ์:** `git diff --check`, `npm run lint`, `npx tsc --noEmit`, `BASE_PATH=/hdms_pn npm run build:pages` ผ่าน; Playwright static ผ่านทุก test ที่ดำเนินการได้ 16 รายการบน desktop/mobile และข้าม 10 รายการที่กำหนด desktop-only หรือไม่มี fixture geometry
+- **สถานะ:** พร้อมเผยแพร่และตรวจ production ต่อ
+
