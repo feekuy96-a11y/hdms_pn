@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { SystemDataPayload } from "@/db/default-data";
 import { DEFAULT_MAP_STYLES } from "@/lib/constants";
 import {
@@ -75,6 +75,21 @@ export function AdminConsole({
     type: "FLOOD" | "DETOUR";
     id: string;
   } | null>(null);
+
+  // Stable callback: an inline arrow here changed identity on every render and re-fired the
+  // MapManagementTab effect that depends on it. It also skips the state update when nothing changed.
+  const handleDraftPickMarkersChange = useCallback(
+    (markers: { lat: number; lon: number; label: string; mode: string }[]) => {
+      setDraftPickMarkers?.((previous) => {
+        const unchanged = previous.length === markers.length && previous.every((item, index) => {
+          const next = markers[index];
+          return item.lat === next?.lat && item.lon === next?.lon && item.label === next?.label && item.mode === next?.mode;
+        });
+        return unchanged ? previous : markers;
+      });
+    },
+    [setDraftPickMarkers]
+  );
 
   // Status Modal State
   const [modalState, setModalState] = useState<{
@@ -348,13 +363,7 @@ export function AdminConsole({
               draftWaypoints={draftWaypoints}
               setDraftWaypoints={setDraftWaypoints}
               onDraftModeChange={onDraftModeChange}
-              onDraftPickMarkersChange={(markers) => setDraftPickMarkers?.((previous) => {
-                const unchanged = previous.length === markers.length && previous.every((item, index) => {
-                  const next = markers[index];
-                  return item.lat === next?.lat && item.lon === next?.lon && item.label === next?.label && item.mode === next?.mode;
-                });
-                return unchanged ? previous : markers;
-              })}
+              onDraftPickMarkersChange={handleDraftPickMarkersChange}
               editingRoute={editingRoute}
               onClearEditingRoute={() => setEditingRoute(null)}
             />
