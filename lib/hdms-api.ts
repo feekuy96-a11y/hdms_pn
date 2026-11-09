@@ -18,6 +18,16 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
     case "getSystemDataAction":
       return (await refreshSystemData()) as T;
 
+    case "getPublicSystemDataAction": {
+      // Light highway geometry when the display RPC exists, otherwise the normal full payload.
+      const { data, error } = await client.rpc("doh_get_system_data_display_rpc");
+      if (!error && data && Array.isArray(data.floodRoutes)) {
+        data.systemSettings = data.systemSettings?.main || data.systemSettings;
+        return data as T;
+      }
+      return (await refreshSystemData()) as T;
+    }
+
     case "setIncidentStatusAction": {
       const { error } = await client.from("doh_flood_routes").update({ is_active: second, updated_at: now }).eq("id", p);
       if (error) throw error;
@@ -202,6 +212,15 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
   }
 }
 
+// Saving or re-importing a highway layer sends a whole GeoJSON FeatureCollection and the server then
+// rebuilds the system payload, so it needs far longer than a small edit. Aborting it early would also
+// leave the admin unsure whether the save went through.
+const HEAVY_ACTION_TIMEOUT_MS = 90_000;
+const DEFAULT_ACTION_TIMEOUT_MS = 20_000;
+// Actions that only read. Every other action is a write: for those the app reloads the data itself
+// afterwards, so it asks the server not to send the whole system payload back a second time.
+const READ_ONLY_ACTIONS = new Set(["getSystemDataAction", "getPublicSystemDataAction", "getDeletedRoutesAction", "snapRouteAction"]);
+
 export async function invokeHdms<T = any>(action: string, args: unknown[]): Promise<T> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -218,8 +237,8 @@ export async function invokeHdms<T = any>(action: string, args: unknown[]): Prom
         apikey: key,
         ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
       },
-      body: JSON.stringify({ action, args }),
-      signal: AbortSignal.timeout(15000),
+      body: JSON.stringify(READ_ONLY_ACTIONS.has(action) ? { action, args } : { action, args, light: true }),
+      signal: AbortSignal.timeout(action === "updateHighwayLayerAction" ? HEAVY_ACTION_TIMEOUT_MS : DEFAULT_ACTION_TIMEOUT_MS),
     });
 
   } catch {
@@ -227,7 +246,7 @@ export async function invokeHdms<T = any>(action: string, args: unknown[]): Prom
     // unavailable. Mutations must not be retried through a second transport:
     // a timeout can otherwise create a duplicate route while reporting an
     // ambiguous result to the administrator.
-    if (action === "getSystemDataAction" || action === "snapRouteAction" || action === "getDeletedRoutesAction") {
+    if (action === "getSystemDataAction" || action === "getPublicSystemDataAction" || action === "snapRouteAction" || action === "getDeletedRoutesAction") {
       return executeDirectAction<T>(client, action, args);
     }
     throw new Error("ไม่สามารถเชื่อมต่อบริการบันทึกข้อมูลได้ โปรดลองอีกครั้ง");

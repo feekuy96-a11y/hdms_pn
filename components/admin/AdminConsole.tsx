@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { SystemDataPayload } from "@/db/default-data";
 import { DEFAULT_MAP_STYLES } from "@/lib/constants";
 import {
@@ -73,6 +73,11 @@ export function AdminConsole({
     "system" | "map" | "incidents" | "detours" | "routes" | "style" | "projects"
   >("map");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // On laptop-width screens the menu starts as an icon rail so the forms get the room.
+  // It runs once after mount (not during render) to stay hydration safe; the user can still toggle it.
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 1535px)").matches) setIsSidebarCollapsed(true);
+  }, []);
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
 
   // Cross-tab route editing
@@ -189,14 +194,21 @@ export function AdminConsole({
     },
   ];
 
+  // Menu grouped by what the officer is doing, in the order of a normal working day.
+  const NAV_GROUPS: Array<{ title: string; ids: Array<(typeof NAV_ITEMS)[number]["id"]> }> = [
+    { title: "สถานการณ์น้ำท่วม", ids: ["incidents", "map", "detours"] },
+    { title: "ข้อมูลโครงข่ายและแผนที่", ids: ["routes", "style"] },
+    { title: "บริหารและรายงาน", ids: ["projects", "system"] },
+  ];
+
   return (
-    <div className="flex h-full w-full bg-slate-950 text-slate-100 font-body overflow-hidden select-none">
+    <div className="doh-readable flex h-full w-full bg-slate-950 text-slate-100 font-body overflow-hidden select-none">
       {/* ===================================================================== */}
       {/* 1. LEFT AUTHENTIC SIDEBAR (Matching reference site)                   */}
       {/* ===================================================================== */}
       <aside
         className={`hidden shrink-0 flex-col text-white transition-[width] duration-200 lg:flex ${
-          isSidebarCollapsed ? "w-20" : "w-64"
+          isSidebarCollapsed ? "w-[72px]" : "w-60"
         }`}
         style={{ background: "#071B3D" }}
       >
@@ -222,55 +234,68 @@ export function AdminConsole({
         </div>
 
         {/* Sidebar Nav Items */}
-        <nav className="flex-1 space-y-1.5 p-3 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                title={item.label}
-                onClick={() => {
-                  setActiveTab(item.id);
-                  if (item.id !== "map") {
-                    setEditingRoute(null);
-                  }
-                  if (item.id !== "system") onOfficeEditModeChange?.(null);
-                }}
-                className={`w-full flex items-center rounded-xl p-2.5 text-left transition ${
-                  isActive
-                    ? "bg-amber-500 text-slate-950 font-bold shadow-md"
-                    : "text-slate-300 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-slate-950" : "text-amber-400"}`} />
-                {!isSidebarCollapsed && (
-                  <div className="ml-3 min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <p className="truncate text-xs font-heading font-bold">{item.label}</p>
-                      {item.badge !== undefined && item.badge > 0 && (
-                        <span
-                          className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                            isActive ? "bg-slate-950 text-white" : "bg-red-600 text-white"
+        <nav aria-label="เมนูระบบจัดการ" className="flex-1 overflow-y-auto p-3">
+          {NAV_GROUPS.map((group, groupIndex) => (
+            <div key={group.title} className={groupIndex === 0 ? "" : "mt-4"}>
+              {isSidebarCollapsed ? (
+                groupIndex > 0 && <div aria-hidden="true" className="mx-3 mb-3 border-t border-white/10" />
+              ) : (
+                <p className="px-2.5 pb-1.5 text-xs font-semibold tracking-wide text-slate-400">{group.title}</p>
+              )}
+              <div className="space-y-1">
+                {group.ids.map((id) => NAV_ITEMS.find((entry) => entry.id === id)).filter((entry): entry is (typeof NAV_ITEMS)[number] => Boolean(entry)).map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    title={item.label}
+                    aria-label={item.label}
+                    aria-current={isActive ? "page" : undefined}
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      if (item.id !== "map") {
+                        setEditingRoute(null);
+                      }
+                      if (item.id !== "system") onOfficeEditModeChange?.(null);
+                    }}
+                    className={`w-full flex items-center rounded-xl p-2.5 text-left transition ${
+                      isActive
+                        ? "bg-amber-500 text-slate-950 font-bold shadow-md"
+                        : "text-slate-300 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-slate-950" : "text-amber-400"}`} />
+                    {!isSidebarCollapsed && (
+                      <div className="ml-3 min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <p className="truncate text-xs font-heading font-bold">{item.label}</p>
+                          {item.badge !== undefined && item.badge > 0 && (
+                            <span
+                              className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                                isActive ? "bg-slate-950 text-white" : "bg-red-600 text-white"
+                              }`}
+                            >
+                              {item.badge}
+                            </span>
+                          )}
+                        </div>
+                        <p
+                          className={`truncate text-[10px] ${
+                            isActive ? "text-slate-800" : "text-slate-400"
                           }`}
                         >
-                          {item.badge}
-                        </span>
-                      )}
-                    </div>
-                    <p
-                      className={`truncate text-[10px] ${
-                        isActive ? "text-slate-800" : "text-slate-400"
-                      }`}
-                    >
-                      {item.subLabel}
-                    </p>
-                  </div>
-                )}
-              </button>
-            );
-          })}
+                          {item.subLabel}
+                        </p>
+                      </div>
+                    )}
+                  </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         {/* Sidebar Footer Actions */}
@@ -335,7 +360,7 @@ export function AdminConsole({
         </div>
 
         {/* Scrollable Tab Workspace */}
-        <div className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 lg:p-6">
+        <div className="doh-form flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 lg:p-6">
           {/* TAB 1: System Settings */}
           {activeTab === "system" && (
             <SystemSettingsTab

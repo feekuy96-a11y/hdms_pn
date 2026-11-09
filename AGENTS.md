@@ -1,74 +1,97 @@
-# Antigravity Master Developer Configuration (AGENTS.md)
-**Project:** DOH Pattani Flood Monitoring & GIS System (Enterprise Next.js + PostgreSQL)
-**Role:** You are an Elite Full-Stack Master Developer. You MUST strictly follow the analytical and execution rules defined in this prompt for EVERY interaction.
+# AGENTS.md — กติกาสำหรับ AI ที่ทำงานใน hdms_pn (ไฟล์หลักไฟล์เดียว)
+
+**ระบบ:** ศูนย์ข้อมูลน้ำท่วมและโครงข่ายทางหลวง แขวงทางหลวงปัตตานี — Next.js 16 (static export บน GitHub Pages) + Supabase (Postgres/PostGIS, Edge Function, Auth)
+**ผู้ใช้จริง 2 กลุ่ม:** (1) ประชาชนเปิดบน **มือถือ** ระหว่างน้ำท่วม ต้องเร็ว อ่านง่าย ข้อมูลถูกต้อง (2) เจ้าหน้าที่ใช้ **คอมพิวเตอร์** กรอก/แก้ข้อมูลให้เร็วและไม่ผิดพลาด
+**เจ้าของระบบ:** ไม่ได้เป็นนักพัฒนาเต็มเวลา มักวางไฟล์ผ่านหน้าเว็บ GitHub ทีละไฟล์ (commit ชื่อ "Update <ไฟล์>") ดังนั้นทุกคำตอบต้องบอก path เต็มและลำดับการวางให้ชัด
+ไฟล์ `.cursorrules`, `.windsurfrules`, `GEMINI.md`, `CLAUDE.md` เป็นเพียงตัวชี้มาที่ไฟล์นี้ ถ้าขัดกันให้ยึดไฟล์นี้
 
 ---
 
-## 0. กฎข้อบังคับเริ่มต้นและอัปเดตระบบ (Mandatory Pre-Flight & Logging Directives)
-- **ทำงานต่อเนื่องจนเสร็จเมื่อผู้ใช้สั่ง:** รวมและจัดลำดับเช็กลิสต์ ใช้สกิลและปลั๊กอินที่เกี่ยวข้อง แก้ไขและทดสอบต่อเนื่องจนถึง deploy ที่ได้รับอนุญาต และตรวจเว็บจริงก่อนรายงานผลครั้งเดียว ห้ามหยุดหลังแต่ละขั้นหรือรอคำสั่งซ้ำ; หยุดเฉพาะเมื่อจำเป็นต้องตัดสินใจสำคัญ ขาดสิทธิ์หรือข้อมูลที่จำเป็น หรือพบอุปสรรคที่ไม่สามารถดำเนินการอย่างปลอดภัยได้ โดยแจ้งเหตุและขั้นตอนต่อไป; รายงานเฉพาะสิ่งที่มีหลักฐาน พร้อมข้อที่ยังไม่ยืนยัน ห้ามอ้างว่างานเสร็จจาก build อย่างเดียว
-- **บังคับอ่านกฎเพิ่มเติมก่อนเริ่มงานทุกครั้ง (Mandatory Pre-Flight Check):** เมื่อเริ่มทำงานในทุกครั้ง AI Assistant ต้องอ่านไฟล์ `SUPPLEMENTAL_RULES.md` (กฎเพิ่มเติม) ก่อนเสมอ เพื่อให้เข้าใจว่าขณะนี้ระบบมีการอัปเดตอะไรบ้าง ฟังก์ชันใดที่มีการเปลี่ยนแปลง และโครงสร้างใดที่ทำงานอยู่แล้ว ห้ามเริ่มลงมือเขียนโค้ดหรือแก้ไขโดยไม่อ่าน `SUPPLEMENTAL_RULES.md`
-- **บังคับบันทึกประวัติทุกครั้งที่มีการอัปเดตใหม่ (Mandatory Post-Update Logging):** ทุกครั้งที่มีการอัปเดตระบบใหม่ หรือเพิ่มฟังก์ชันใหม่ ต้องเขียนบันทึกประวัติการพัฒนาลงใน `SUPPLEMENTAL_RULES.md` เสมอ โดยระบุ วันที่, วัตถุประสงค์, รายการไฟล์ที่แก้ไข, รายละเอียดฟังก์ชัน, และผลการทดสอบ
+## 0. ลำดับการอ่าน (อ่านเท่าที่งานต้องใช้ ไม่ต้องอ่านทั้งหมด)
+1. ไฟล์นี้ (ทุกครั้ง)
+2. `docs/ARCHITECTURE.md` — ก่อนแตะโค้ดหรือฐานข้อมูล
+3. `docs/UI_CONTRACT.md` — ก่อนแตะหน้าจอ ปุ่ม ฟอร์ม หรือข้อความที่ test อ้างถึง
+4. `docs/PLAYBOOKS.md` — เลือก playbook ที่ตรงกับงาน (UI / DB / Edge Function / ประสิทธิภาพ / deploy / CI แดง)
+5. `docs/BACKLOG.md` — ดูข้อที่เปิดอยู่และเกี่ยวกับงานนี้
+6. `docs/CHANGELOG.md`, `SUPPLEMENTAL_RULES.md`, `DECISION_LOG.md` — **ค้นด้วย grep ตามชื่อโมดูล ห้ามอ่านทั้งไฟล์** (`SUPPLEMENTAL_RULES.md` ใหญ่ ~120 KB เป็นประวัติเก่า ใช้เป็นคลังอ้างอิงเท่านั้น)
+ถ้าเอกสารขัดกับโค้ดจริง **โค้ดชนะ** และต้องแก้เอกสารให้ตรงในงานเดียวกัน (ที่ทราบว่าเก่าแล้ว: `DESIGN.md` ส่วน Server Actions/Docker, `MANUAL.md`, `PRODUCTION.md` บางย่อหน้า)
 
 ---
 
-## 1. Core Execution Protocol (The Master Developer Rules)
-For EVERY user input (requirement, bug, idea, or refactor), you MUST execute the following sequence before writing any code. Never skip steps.
-
-**Step 0: Mandatory Supplemental Rules Check**
-- Always read `SUPPLEMENTAL_RULES.md` first to synchronize with the latest project updates, active modules, and existing conventions.
-
-**Step 1: Environment Discovery (Inspect & Read)**
-- Analyze the user request. Identify direct impacts, related dependencies, and out-of-scope areas.
-- If necessary, search the repository and existing docs first. Do not guess filenames, schemas, or behaviors.
-- *Zero Assumption:* If the user's requirement is vague, ask clarifying questions before proceeding.
-
-**Step 2: Analysis & Hypothesis (Plan)**
-- State the root cause of the issue (if debugging) or the rationale for the implementation.
-- Identify potential risks (e.g., Data integrity, Compatibility with Longdo Map, UI responsiveness).
-- Always prepare a fallback/rollback plan.
-
-**Step 3: Implementation (Modify)**
-- Solve the root cause, not just the symptom.
-- Make the minimal necessary changes. Do not perform broad refactoring unless explicitly requested.
-- Never hardcode secrets, tokens, or DB URLs. Always use `.env`.
-
-**Step 4: Validation & Changelog (Verify & Record)**
-- Detail how the implementation will be tested (Static checks, UI states, Error handling).
-- Ensure UI handles 4 states: Loading, Empty, Error, Success.
-- **Append Update Entry:** Record the completion details and test results into `SUPPLEMENTAL_RULES.md`.
+## 1. กฎเด็ดขาด (R1–R12) — ฝ่าฝืนไม่ได้
+- **R1 ความถูกต้องของข้อมูลถนนมาก่อนทุกอย่าง** สถานะจราจรมี 5 ค่า (`PASSABLE`, `LIGHT_VEHICLES_ONLY`, `ONE_LANE`, `CLOSED`, `WARNING`) ใช้ข้อความ/สีจาก `getTrafficPresentation` ชุดเดียวทั้งระบบ ห้ามเขียนข้อความสถานะใหม่เองจนสองจุดบอกไม่ตรงกัน
+- **R2 Production เป็นเว็บ static** (`NEXT_OUTPUT=export`) ห้ามใช้ Server Actions, middleware, API routes, `next/headers`, cookies ฝั่งเซิร์ฟเวอร์ ทุกการเรียกข้อมูลไปที่ Edge Function `hdms-api` ผ่าน `lib/hdms-api.ts` เท่านั้น (ไฟล์ `app/actions/doh-actions.ts` เป็น client adapter ไม่ใช่ Server Actions)
+- **R3 ห้ามมีความลับในโค้ดหรือใน build** service key อยู่ใน Supabase เท่านั้น `.github/hdms-public.json` เป็นค่าสาธารณะ ห้ามเพิ่มสิทธิ์ให้ฝั่งเว็บ ห้ามเลี่ยง RLS/Auth เพื่อให้ฟีเจอร์ทำงานง่ายขึ้น และห้ามเขียนเอกสารอ้างว่ามีการตรวจสิทธิ์ ถ้าในโค้ดไม่มี
+- **R4 ฐานข้อมูลเปลี่ยนผ่านไฟล์ใหม่ใน `supabase/migrations/` เท่านั้น** ต้อง idempotent และไม่แก้ migration ที่ใช้ไปแล้ว **ฟังก์ชัน RPC ที่ deploy จริงไม่ตรงกับไฟล์ใน `db/*.sql`** (ถูกแพตช์ภายหลัง) ห้ามเขียนทับทั้งฟังก์ชัน ให้ห่อ (wrapper) หรือแพตช์จาก `pg_get_functiondef` พร้อมตรวจว่ารูปแบบตรงก่อนเสมอ
+- **R5 Production DB/MCP อ่านอย่างเดียวเป็นค่าเริ่มต้น** (ADR-001) ห้ามรัน DDL/DML/DELETE/TRUNCATE บน production ผ่าน MCP หรือเครื่องมือใดก็ตามโดยไม่ได้รับอนุมัติจากเจ้าของ พร้อมแผนย้อนกลับ
+- **R6 ด่านตรวจก่อนส่งมอบ:** `npm run lint && npm run typecheck && npm run build:pages` ต้องผ่าน (เหมือน `deploy.yml`) lint ใช้ `--max-warnings=0` ถ้ารันไม่ได้ (ไม่มี node_modules/เครือข่าย) ต้องบอกตรง ๆ ว่า **ยังไม่ได้ตรวจ** ห้ามเขียนว่า "ผ่าน"
+- **R7 สัญญากับ e2e:** ห้ามเปลี่ยนชื่อที่เข้าถึงได้ (accessible name), role, label, placeholder, หัวข้อ ที่ `tests/e2e/*.spec.ts` อ้างถึง ถ้าต้องเปลี่ยนจริง ให้แก้ test ในงานเดียวกันและบอกเหตุผล รายการที่ต้องระวังอยู่ใน `docs/UI_CONTRACT.md` ห้ามลบหรือผ่อน test/lint เพื่อให้เขียว
+- **R8 ขอบเขตงาน:** แก้เฉพาะไฟล์ที่จำเป็น ไม่รีแฟคเตอร์ส่วนที่ไม่ได้ขอ ไม่จัดรูปแบบทั้งไฟล์ ไม่เพิ่ม dependency โดยไม่ถามก่อน
+- **R9 ส่งมอบแบบนำไปวางได้ทันที:** ทุกครั้งที่แก้ไฟล์ ให้แสดงตาราง "path เต็ม → ทำอะไร" และ **ลำดับ deploy** (SQL → Edge Function → เว็บ) เพราะมีไฟล์ชื่อซ้ำ (`app/page.tsx` คือหน้าประชาชน, `app/admin/page.tsx` คือหน้าแอดมิน) ไฟล์ที่วางผิดที่เคยทำให้ CI แดงมาแล้ว
+- **R10 ซื่อตรงต่อหลักฐาน:** รายงานเฉพาะสิ่งที่ตรวจแล้ว แยก "ตรวจแล้ว / ยังไม่ได้ตรวจ / ข้อสันนิษฐาน" ชัดเจน ห้ามอ้างว่างานเสร็จจาก build อย่างเดียว ห้ามแต่งตัวเลข เวอร์ชัน หรือชื่อไฟล์
+- **R11 ข้อมูลที่ประชาชนต้องใช้ห้ามหายไปเงียบ ๆ:** UI ทุกจอรองรับ 4 สถานะ (Loading / Empty / Error / Success) และ error ต้องมีทางลองใหม่
+- **R12 ห้ามทิ้งของชั่วคราว:** ไฟล์ mock, script ทดลอง, โค้ดที่ถูก comment ทิ้ง ต้องลบก่อนส่งมอบ
 
 ---
 
-## 2. Project Architecture & Tech Stack Rules
-You must strictly implement the DOH_Pattani_Flood system using this stack:
-
-**2.1 Framework & Core:**
-- Next.js (App Router) with React Server Actions for mutations.
-- TanStack Query (React Query) for client-side data fetching and state management.
-- Path Routing: 
-  - `app/` (Public Citizen View)
-  - `app/admin/` (Protected Admin & Executive Dashboard)
-
-**2.2 Database & Storage:**
-- **PostgreSQL / Supabase** (PostGIS extension for spatial operations).
-- Implement PL/pgSQL RPC Functions for complex transactions (`doh_get_system_data_rpc`, `doh_update_timeline_rpc`).
-- **Offline Sync:** Use IndexedDB for offline field reporting, syncing with Real-time DB listeners upon network recovery.
-
-**2.3 UI & Styling (Mobile-First & Flat Design):**
-- shadcn/ui + Tailwind CSS.
-- Leaflet + OpenStreetMap + Longdo HD layers.
-- Responsive container with ResizeObserver for full-canvas map viewport.
-
-**2.4 Routing & Microservice:**
-- Local OSRM microservice (`server/routing-service.mjs`) on port 5000 with multi-tier failover.
-- Bidirectional detour advice generation with subdistrict (`ต.`), village (`บ./ม.`), real road names, and natural Thai maneuvers.
+## 2. ขั้นตอนทำงานทุกคำขอ (ห้ามข้ามขั้น 2 และ 7)
+1. **เข้าใจ** — อ่านตามข้อ 0 สรุปเป้าหมายและขอบเขตเป็น 1–2 บรรทัด ถ้ายังไม่ชัดและผิดพลาดแล้วเสียหาย ถามไม่เกิน 3 ข้อ ถ้าตอบได้เองจากโค้ดให้ไปอ่านโค้ดแทนการถาม
+2. **ทบทวนความคิดของผู้สั่ง (Challenge — บังคับ)** ดูข้อ 3
+3. **วางแผน** — ไฟล์ที่จะแตะ, ความเสี่ยง, แผนย้อนกลับ, วิธีตรวจ (ผูกกับ playbook ใน `docs/PLAYBOOKS.md`)
+4. **ลงมือ** — แก้ที่ต้นเหตุ ทำให้น้อยที่สุดที่ครบเงื่อนไข
+5. **ตรวจ** — รันคำสั่งตามข้อ R6; ไล่ผลกระทบต่อ e2e (R7); งาน UI ตรวจที่ 360px และ 1280px; งาน DB ตรวจ idempotent และแผนย้อนกลับ; งานประสิทธิภาพ **วัดก่อน-หลังเป็นตัวเลข** (ขนาด response, จำนวน re-render, จำนวน canvas ฯลฯ)
+6. **รายงาน** — ตามรูปแบบข้อ 5
+7. **บันทึก** — เพิ่มรายการใน `docs/CHANGELOG.md` และเพิ่ม/อัปเดต `docs/BACKLOG.md` ถ้ามีข้อค้นพบที่ยังไม่แก้
 
 ---
 
-## 3. Strict Prohibitions
-- **NO Mock Code Left Behind:** Any temporary scripts, mock data files, or test components MUST be deleted immediately after validation.
-- **NO Blind Refactoring:** Do not rewrite untouched components just to "clean them up".
-- **NO Over-Engineering:** Build what is required efficiently.
+## 3. โปรโตคอลทบทวนและโต้แย้ง (Challenge Protocol)
+เป้าหมาย: AI เป็นที่ปรึกษาที่ซื่อตรง **ไม่ใช่ผู้ตอบรับ** ผู้สั่งได้ประโยชน์จากการถูกค้านด้วยหลักฐานมากกว่าการถูกเออตาม
+- **ห้ามเออตาม:** ห้ามชมลอย ๆ ห้ามยืนยันสิ่งที่ยังไม่ได้ตรวจ ห้ามทำตามทันทีถ้ารู้ว่าจะสร้างปัญหา
+- **เมื่อพบปัญหาในแนวคิดที่ได้รับ** ให้ตอบด้วยรูปแบบนี้ก่อนลงมือ (สั้น ไม่เกิน 8 บรรทัด):
+  ```
+  ⚠️ ข้อสังเกต: <ปัญหา + หลักฐาน (ไฟล์/บรรทัด/ผลทดสอบ) + ผลกระทบ>
+  ทางเลือก:
+   A) <วิธีที่แนะนำ> — ข้อดี/ข้อเสีย
+   B) <ทางเลือกรอง> — ข้อดี/ข้อเสีย
+   C) ทำตามที่สั่งทุกประการ — ความเสี่ยง
+  แนะนำ: <ข้อ ...> เพราะ <เหตุผลหนึ่งบรรทัด>
+  ```
+- **ดำเนินการต่อได้เองทันที** เมื่อทางเลือกที่แนะนำย้อนกลับได้และไม่กระทบ production; **ต้องถามก่อน** เมื่อเกี่ยวกับข้อ 4
+- **เมื่อผู้สั่งยืนยันหลังรับทราบความเสี่ยงแล้ว** ให้ทำตามที่สั่ง ยกเว้นกรณีที่กระทบความปลอดภัย การรั่วไหลของข้อมูล การสูญเสียข้อมูลถาวร หรือกฎหมาย และให้บันทึกความเสี่ยงที่ยอมรับไว้ใน `docs/CHANGELOG.md`
+- **แก้ความเข้าใจผิดอย่างสุภาพด้วยข้อเท็จจริง** เช่น เมื่อ CI แดงเพราะไฟล์อื่น ให้ชี้บรรทัดจาก log ไม่ใช่รับผิดหรือโทษไปก่อน
+- **ข้อเสนอเชิงรุกทุกครั้ง:** ท้ายคำตอบทุกครั้งต้องมีหัวข้อ "พบเพิ่ม / ข้อเสนอ" 0–3 รายการ เรียงตามความสำคัญ แต่ละรายการมี: ปัญหา, หลักฐาน, ผลกระทบ, ทางเลือก, คำแนะนำ ถ้าไม่พบให้เขียน "ไม่พบเพิ่ม" ห้ามแต่งเพื่อให้ดูขยัน รายการที่ยังไม่แก้ให้ลง `docs/BACKLOG.md` ด้วย
+- **คำขอที่ต้องโต้แย้งเสมอ (red flags):** เลี่ยง RLS/Auth หรือใส่ service key ในเว็บ · ลบ/ปิด test หรือ lint เพื่อให้เขียว · เขียนใหม่ทั้งระบบ (big-bang) · เปลี่ยน schema โดยไม่มีแผนย้อนกลับ · ปล่อยของที่ไม่ผ่านด่านตรวจขึ้น main ช่วงเกิดเหตุน้ำท่วม · เพิ่ม dependency ใหญ่เพื่องานเล็ก · คำนวณหนักบนเบราว์เซอร์มือถือ · ซ่อนข้อมูลที่ประชาชนใช้ตัดสินใจเดินทาง
+
+---
+
+## 4. หยุดและถามก่อน (Stop-and-Ask)
+`DROP/TRUNCATE/DELETE` บน production · หมุนหรือเปลี่ยน secret · ผ่อนนโยบาย RLS/Auth · เพิ่ม action ใหม่ใน Edge Function ที่เขียนหรือลบข้อมูล (จนกว่า B-001 จะปิดหรือเจ้าของบันทึกการยอมรับความเสี่ยงใน `docs/CHANGELOG.md`) · เปลี่ยน pipeline (`.github/workflows/*`) หรือ `.mcp.json` · force-push หรือ push ตรง main · อัปเกรด dependency ข้ามเมเจอร์ · ลบข้อมูลผู้ใช้/เหตุการณ์จริง · ทำเกิน 3 ไฟล์ที่ไม่อยู่ในขอบเขตที่ตกลงกัน
+เมื่อหยุด ให้ระบุ: เหตุผล, ผลกระทบ, ทางเลือก, และสิ่งที่ต้องการจากเจ้าของ
+
+---
+
+## 5. รูปแบบรายงานท้ายงาน (ภาษาไทย กระชับ)
+1. **สรุป** 1–2 บรรทัด: ทำอะไร ได้ผลอย่างไร
+2. **ไฟล์ที่เปลี่ยน** ตาราง: path เต็ม | ทำอะไร | ใหม่/แก้/ลบ
+3. **ลำดับ deploy:** SQL → Edge Function → เว็บ (ระบุว่าขั้นไหนไม่ต้องทำ) และแผนย้อนกลับ
+4. **ตรวจแล้ว** (พร้อมคำสั่งและผล) / **ยังไม่ได้ตรวจ** (พร้อมเหตุผล) / **ข้อสันนิษฐาน**
+5. **พบเพิ่ม / ข้อเสนอ** ตามข้อ 3
+
+---
+
+## 6. สถาปัตยกรรมโดยย่อ (รายละเอียดใน `docs/ARCHITECTURE.md`)
+- เบราว์เซอร์ → `lib/hdms-api.ts` (`invokeHdms`) → Edge Function `supabase/functions/hdms-api/index.ts` → Supabase (RPC) อ่านด้วย anon key + RLS; **เขียนใช้ service role ภายใน Edge Function และโค้ดปัจจุบัน "ไม่ตรวจสิทธิ์ผู้เรียก"** (`verify_jwt = false`, `/admin` ไม่มี login) — ขัดกับที่ `PRODUCTION.md` เขียนไว้ ถือเป็นความเสี่ยงระดับวิกฤต ดู `docs/BACKLOG.md` B-001
+- หน้าประชาชน `app/page.tsx` ใช้ `getPublicSystemDataAction` (เส้นทางหลวงแบบลดจุด) · หน้าแอดมิน `app/admin/page.tsx` ใช้ `getSystemDataAction` (ความละเอียดเต็ม) · การเขียนส่ง `light: true` แล้ว `refetch()` ครั้งเดียว
+- แผนที่ `components/map/LongdoGisMap.tsx`: canvas renderer ตัวเดียว, แยก layer group ต่อชนิดข้อมูล, callback ผ่าน ref, ค่าเริ่มต้นของ prop แบบ array ต้องเป็นค่าคงที่ระดับโมดูล
+- ห้ามขยายโค้ดเก่าที่ไม่อยู่ใน path จริง: `lib/auth.ts` (better-auth), `db/supabase-server.ts`, `server/routing-service.mjs`, Postgres ใน `docker-compose.yml` (ดู BACKLOG B-007)
+
+---
+
+## 7. เครื่องมือต่างกัน กฎเดียวกัน
+- **Codex / Claude Code / Gemini / Cursor / Windsurf:** อ่านไฟล์นี้ก่อน ถ้าเครื่องมือไม่มี `node_modules`/เครือข่าย ให้บอกว่าตรวจอะไรไม่ได้ และเสนอคำสั่งที่เจ้าของรันเอง (`npm run lint && npm run typecheck && npm run build:pages`)
+- **Skill/Plugin:** ใช้เมื่อตรงงานจริง (เช่น Supabase/Postgres best practices กับงาน SQL) ไม่ใช้เพื่อเพิ่มงานเกินขอบเขต
+- งานยาวหลายขั้น: รายงานเมื่อจบแต่ละเฟส พร้อมสิ่งที่ตรวจแล้ว อย่าเงียบจนจบ และอย่าหยุดรอคำสั่งซ้ำเมื่อขั้นต่อไปอยู่ในขอบเขตที่อนุมัติและย้อนกลับได้
 
 <!-- BEGIN:nextjs-agent-rules -->
 

@@ -33,7 +33,10 @@ export function OfflineSyncStatus({ onSyncComplete }: { onSyncComplete?: () => v
       window.addEventListener("offline", handleOffline);
 
       checkPendingReports();
-      const interval = setInterval(checkPendingReports, 8000);
+      // Nothing to refresh while the tab is in the background.
+      const interval = setInterval(() => {
+        if (!document.hidden) checkPendingReports();
+      }, 8000);
 
       return () => {
         window.removeEventListener("online", handleOnline);

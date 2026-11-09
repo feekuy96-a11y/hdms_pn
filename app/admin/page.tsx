@@ -224,7 +224,7 @@ export default function AdminPage() {
         /* Main Split Layout: Admin Console on Left (ฝั่งซ้ายมือ), GIS Map on Right */
         <div className="flex-1 flex flex-col lg:flex-row lg:min-h-0 overflow-visible lg:overflow-hidden">
           {/* Left: Full Government Administrative Console (ฝั่งซ้ายมือ) */}
-          <div className="w-full lg:w-[42vw] xl:w-[720px] min-h-[72vh] lg:min-h-0 flex flex-col overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0">
+          <div className="w-full lg:w-[56vw] xl:w-[clamp(720px,50vw,1040px)] min-h-[72vh] lg:min-h-0 flex flex-col overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0">
             <AdminConsole
               systemData={systemData}
               onDataRefresh={(newData) => {

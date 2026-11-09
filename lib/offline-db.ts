@@ -14,8 +14,14 @@ export interface OfflineReportItem {
   synced: boolean;
 }
 
+// One shared connection. Every helper below used to open a fresh connection and never close it, and
+// the admin page polls the queue every few seconds, so connections piled up for as long as the tab
+// stayed open.
+let dbPromise: Promise<IDBDatabase> | null = null;
+
 function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (dbPromise) return dbPromise;
+  const opening = new Promise<IDBDatabase>((resolve, reject) => {
     if (typeof window === "undefined" || !window.indexedDB) {
       return reject(new Error("IndexedDB not supported in this environment"));
     }
@@ -31,9 +37,26 @@ function openDB(): Promise<IDBDatabase> {
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db = request.result;
+      // Let a newer tab/version upgrade the database, and reopen on demand afterwards.
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+      db.onclose = () => {
+        dbPromise = null;
+      };
+      resolve(db);
+    };
     request.onerror = () => reject(request.error);
   });
+  dbPromise = opening;
+  // A failed open must not be cached forever.
+  opening.catch(() => {
+    if (dbPromise === opening) dbPromise = null;
+  });
+  return opening;
 }
 
 /**

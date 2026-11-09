@@ -20,7 +20,9 @@ Deno.serve(async (req) => {
   try {
     const raw = await req.text();
     if (raw.length > 25 * 1024 * 1024) return reply({ error: "Request too large" }, 413);
-    const { action, args = [] } = JSON.parse(raw);
+    // `light: true` (sent by the web app for writes) means the caller will reload the data itself, so
+    // the response only needs to confirm success instead of re-sending the whole system payload.
+    const { action, args = [], light = false } = JSON.parse(raw);
     if (!Array.isArray(args)) fail("Invalid arguments");
     const url = Deno.env.get("SUPABASE_URL")!;
     const key = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -30,7 +32,7 @@ Deno.serve(async (req) => {
     // server-only service role because this deployment is configured to allow
     // direct /admin access without a login session. Never expose serviceKey to
     // the browser or include it in a response.
-    const mutation = action !== "getSystemDataAction";
+    const mutation = !["getSystemDataAction", "getPublicSystemDataAction"].includes(action);
     const db = createClient(url, mutation && serviceKey ? serviceKey : key, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: !mutation && authorization ? { Authorization: authorization } : {} } });
     const check = async (query: PromiseLike<{ data: any; error: any }>) => {
       const { data, error } = await query;
@@ -43,13 +45,22 @@ Deno.serve(async (req) => {
       }
       return data;
     };
-    const system = async () => {
-      const data = await check(db.rpc("doh_get_system_data_rpc"));
+    const system = async (display = false) => {
+      let data: any = null;
+      if (display) {
+        // Light highway geometry for the public map. Falls back to the full payload if the
+        // db/supabase/migrations/20261107000200 migration has not been applied yet.
+        const { data: displayData, error } = await db.rpc("doh_get_system_data_display_rpc");
+        if (error) console.warn("Display payload unavailable, using full payload", error.code);
+        else data = displayData;
+      }
+      if (!data || !Array.isArray(data.floodRoutes)) data = await check(db.rpc("doh_get_system_data_rpc"));
       if (!data || !Array.isArray(data.floodRoutes)) fail("Invalid system data", 502);
       data.systemSettings = data.systemSettings?.main || data.systemSettings;
       return data;
     };
     if (action === "getSystemDataAction") return reply(await system());
+    if (action === "getPublicSystemDataAction") return reply(await system(true));
     if (mutation && !serviceKey) return reply({ error: "Server mutation key is not configured" }, 503);
     const [p, second] = args;
     const now = new Date().toISOString();
@@ -106,7 +117,7 @@ Deno.serve(async (req) => {
       case "updateSystemSettingsAction": await check(db.from("doh_system_settings").upsert({ setting_key: "main", setting_value: { name: text(p.name, "Name"), org: p.org || "", desc: p.desc || "", phone: p.phone || "", logoUrl: p.logoUrl || "" }, updated_at: now })); break;
       default: return reply({ error: "Unknown operation" }, 400);
     }
-    return reply({ success: true, systemData: await system() });
+    return reply(light === true ? { success: true } : { success: true, systemData: await system() });
   } catch (error: any) {
     return reply({ error: error.status ? error.message : "Invalid request" }, error.status || 400);
   }

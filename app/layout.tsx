@@ -35,10 +35,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th" className={`${prompt.variable} ${sarabun.variable} dark`}>
-      <head>
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
-      </head>
       <body className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-amber-500 selection:text-slate-950 font-sans">
         <QueryProvider>{children}</QueryProvider>
         <script

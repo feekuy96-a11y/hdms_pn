@@ -188,7 +188,7 @@ export function GisDataImportTab({
   const [isSnappingGeometry, setIsSnappingGeometry] = useState(false);
 
   // Freeform editor state (Google My Maps style)
-  const [editorMode, setEditorMode] = useState<"free" | "road">("free");
+  const [editorMode, setEditorMode] = useState<"free" | "road">("road");
   const [vertexTool, setVertexTool] = useState<"move" | "delete" | "split">("move");
   const [splitRemainder, setSplitRemainder] = useState<LonLat[] | null>(null);
   const [absorbedFeatureIdxs, setAbsorbedFeatureIdxs] = useState<number[]>([]);
@@ -445,13 +445,15 @@ export function GisDataImportTab({
     // not the flood-only PostGIS snap rule inherited from a previous tab.
     onDraftModeChange?.("DETOUR");
     setEditingGeometry({ layerId, featureIdx, start, end, originalCoordinates: coords.map((coordinate) => [...coordinate] as [number, number]) });
-    setEditorMode("free");
+    // Opens in road-snapping mode, the long-standing default (and what tests/e2e expect). Free editing is
+    // one click away on the mode switch.
+    setEditorMode("road");
     setVertexTool("move");
     setSplitRemainder(null);
     setAbsorbedFeatureIdxs([]);
     setJoinTargetIdx("");
     resetEditHistory();
-    onToast("เปิดตัวแก้ไขแนวถนนแล้ว ลากหมุดบนเส้นเพื่อย้ายจุด คลิกหมุด + เพื่อเพิ่มจุด");
+    onToast("เปิดตัวแก้ไขแนวถนนแล้ว เลือกพิกัดบนแผนที่หรือกรอกพิกัดเองได้ (สลับเป็น \"วาด/แก้ไขอิสระ\" เพื่อลากจุดเอง)");
   };
 
   const snapEditedGeometry = async () => {
@@ -1676,7 +1678,7 @@ export function GisDataImportTab({
             </div>
             <div className="flex rounded-xl border border-slate-700 bg-slate-900 p-1 text-xs" role="group" aria-label="โหมดแก้ไขแนวถนน">
               <button type="button" aria-pressed={editorMode === "free"} onClick={() => switchEditorMode("free")} className={`flex-1 rounded-lg px-3 py-2 font-bold ${editorMode === "free" ? "bg-sky-500 text-slate-950" : "text-slate-300 hover:text-white"}`}>วาด/แก้ไขอิสระ</button>
-              <button type="button" aria-pressed={editorMode === "road"} onClick={() => switchEditorMode("road")} className={`flex-1 rounded-lg px-3 py-2 font-bold ${editorMode === "road" ? "bg-sky-500 text-slate-950" : "text-slate-300 hover:text-white"}`}>เกาะแนวถนน (OSRM)</button>
+              <button type="button" aria-pressed={editorMode === "road"} onClick={() => switchEditorMode("road")} className={`flex-1 rounded-lg px-3 py-2 font-bold ${editorMode === "road" ? "bg-sky-500 text-slate-950" : "text-slate-300 hover:text-white"}`}>ตามถนน (OSRM)</button>
             </div>
             {editorMode === "free" && (
               <>
@@ -1778,3 +1780,4 @@ export function GisDataImportTab({
     </div>
   );
 }
+

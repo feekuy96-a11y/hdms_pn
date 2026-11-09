@@ -17,6 +17,16 @@ export async function getSystemDataAction(): Promise<SystemDataPayload> {
   return invokeHdms("getSystemDataAction", []);
 }
 
+// Public map data: same payload, but highway lines are the light (simplified) copy. Falls back to the
+// full payload when the server has not been updated yet, so the site keeps working during rollout.
+export async function getPublicSystemDataAction(): Promise<SystemDataPayload> {
+  try {
+    return await invokeHdms("getPublicSystemDataAction", []);
+  } catch {
+    return invokeHdms("getSystemDataAction", []);
+  }
+}
+
 export async function saveTimelineUpdateAction(payload: {
   floodId: string;
   waterLevelCm: number;

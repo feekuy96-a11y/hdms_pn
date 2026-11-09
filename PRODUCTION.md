@@ -1,3 +1,5 @@
+> ⚠️ **ประกาศแก้ข้อมูล (2026-11-08):** ย่อหน้าที่ระบุว่า "ทุก mutation ตรวจ token และบทบาทผู้ใช้ และใช้ database client ของผู้ใช้ภายใต้ RLS" **ไม่ตรงกับโค้ดใน `supabase/functions/hdms-api/index.ts`** ซึ่งใช้ service role และไม่ตรวจสิทธิ์ผู้เรียก (`supabase/config.toml`: `verify_jwt = false`) กรุณาตรวจฟังก์ชันที่ deploy จริง และดู `docs/BACKLOG.md` B-001 · สถาปัตยกรรมปัจจุบันดู `docs/ARCHITECTURE.md`
+
 # Production deployment
 
 Run the same application on Node.js 24/Docker or GitHub Pages. Both call the shared Supabase Edge Function `hdms-api`; no server credential is required by either web build.

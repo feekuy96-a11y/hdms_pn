@@ -25,7 +25,10 @@ export function OsrmRoutingBadge() {
 
   useEffect(() => {
     verify();
-    const interval = setInterval(verify, 30000);
+    // Each check calls the public OSRM demo server, so skip hidden tabs and poll once a minute.
+    const interval = setInterval(() => {
+      if (!document.hidden) verify();
+    }, 60000);
     return () => clearInterval(interval);
   }, []);
 

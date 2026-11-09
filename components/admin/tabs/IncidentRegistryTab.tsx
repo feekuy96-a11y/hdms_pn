@@ -197,15 +197,8 @@ export function IncidentRegistryTab({
             <strong>{totalCount}</strong> รายการ
           </p>
         </div>
-        <div className="flex gap-2">
-          <button type="button" className="text-sky-300 text-xs" onClick={async () => { try { setDeleted(await getDeletedRoutesAction()); } catch { onToast("โหลดรายการที่ลบไม่สำเร็จ"); } }}>รายการที่ลบ / กู้คืน</button>
-          <button
-            type="button"
-            onClick={onAddFlood}
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow"
-          >
-            <Plus className="w-4 h-4" /> เพิ่มเหตุการณ์
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="min-h-10 rounded-xl border border-slate-700 bg-slate-900 px-3 text-xs font-heading font-bold text-sky-300 transition hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400" onClick={async () => { try { setDeleted(await getDeletedRoutesAction()); } catch { onToast("โหลดรายการที่ลบไม่สำเร็จ"); } }}>รายการที่ลบ / กู้คืน</button>
           <label className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-2 text-xs text-amber-300">
             <FileText className="w-4 h-4" />
             <select aria-label="ขอบเขตส่งออกเหตุการณ์" value={exportScope} onChange={(e) => setExportScope(e.target.value as typeof exportScope)} className="min-h-10 max-w-28 bg-transparent font-heading outline-none">
@@ -216,16 +209,23 @@ export function IncidentRegistryTab({
               <option value="csv">CSV</option><option value="geojson">GeoJSON</option><option value="kml">KML</option><option value="kmz">KMZ</option><option value="shapefile">Shapefile ZIP</option>
             </select>
           </label>
+          <button
+            type="button"
+            onClick={onAddFlood}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs min-h-10 px-4 rounded-xl flex items-center gap-1.5 shadow"
+          >
+            <Plus className="w-4 h-4" /> เพิ่มเหตุการณ์
+          </button>
         </div>
       </div>
 
       {/* Filters & Search */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950 p-3 rounded-2xl border border-slate-800">
-        <div className="flex gap-1.5">
+        <div role="group" aria-label="กรองสถานะเหตุการณ์" className="flex flex-wrap gap-1.5">
           <button
             type="button"
             onClick={() => setIncidentFilter("ACTIVE")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-heading font-bold transition ${
+            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition ${
               incidentFilter === "ACTIVE"
                 ? "bg-red-600 text-white"
                 : "bg-slate-900 text-slate-300 hover:bg-slate-800"
@@ -236,7 +236,7 @@ export function IncidentRegistryTab({
           <button
             type="button"
             onClick={() => setIncidentFilter("RESOLVED")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-heading font-bold transition ${
+            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition ${
               incidentFilter === "RESOLVED"
                 ? "bg-emerald-600 text-white"
                 : "bg-slate-900 text-slate-300 hover:bg-slate-800"
@@ -247,7 +247,7 @@ export function IncidentRegistryTab({
           <button
             type="button"
             onClick={() => setIncidentFilter("ALL")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-heading font-bold transition ${
+            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition ${
               incidentFilter === "ALL"
                 ? "bg-amber-500 text-slate-950"
                 : "bg-slate-900 text-slate-300 hover:bg-slate-800"
@@ -258,13 +258,13 @@ export function IncidentRegistryTab({
         </div>
 
         <div className="relative min-w-[220px]">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={incidentSearch}
             onChange={(e) => setIncidentSearch(e.target.value)}
             placeholder="ค้นหาสายทาง 42, 43, หนองจิก..."
-            className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white"
+            className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-sm text-white"
           />
         </div>
       </div>

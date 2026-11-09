@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { ActionButton, FormSection, StickyActionBar, ToolGroup } from "@/components/admin/ui";
 import { SystemDataPayload } from "@/db/default-data";
 import {
   MapPinned,
@@ -650,8 +651,8 @@ export function MapManagementTab({
   };
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
+    <div className="space-y-5 max-w-4xl">
+      <div className="border-b border-slate-800 pb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-heading font-black text-lg text-white flex items-center gap-2">
             <MapPinned className="w-5 h-5 text-amber-400" /> จัดการแผนที่และรายงานเหตุการณ์
@@ -683,6 +684,8 @@ export function MapManagementTab({
         </div>
       </div>
 
+      {/* Save options: import a file, or keep the record hidden from citizens until it is reviewed */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-sky-700 bg-sky-950/30 px-3 py-2 text-xs font-semibold text-sky-300 hover:bg-sky-950/50">
         <FileUp className="h-4 w-4" /> นำเข้าแนวเส้นเพื่อแก้รายละเอียดภายหลัง
         <input type="file" className="sr-only" accept=".kml,.kmz,.zip,.shp,.geojson,.json,.gpx" onChange={handleRouteFileImport} />
@@ -692,10 +695,12 @@ export function MapManagementTab({
         <input type="checkbox" checked={saveAsDraft} onChange={(event) => setSaveAsDraft(event.target.checked)} className="h-4 w-4 accent-amber-500" />
         บันทึกเป็นฉบับร่าง (ยังไม่แสดงบนแผนที่ประชาชน)
       </label>
+      </div>
 
       {/* Main Map Form Container */}
-      <div className="bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-4">
+      <div className="space-y-5">
         {/* 1. Highway Identification */}
+        <FormSection step={1} title="ข้อมูลสายทางและพื้นที่" description="ระบุทางหลวง ช่วง กม. และบริเวณที่เกิดเหตุ">
         {routeMode === "FLOOD" ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
@@ -792,51 +797,35 @@ export function MapManagementTab({
           </div>
         )}
 
-        {/* 2. Coordinates & Dual-Source Snapping Controls */}
-        <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <span className="text-xs font-heading font-bold text-amber-400 shrink-0">
-              ๑. กำหนดจุดเริ่มต้น (A) และ สิ้นสุด (B)
-            </span>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setAdminPickMode("PICK_START")}
-                className={`text-[11px] px-2.5 py-1 rounded-lg border font-heading transition ${
-                  adminPickMode === "PICK_START"
-                    ? "bg-amber-500 text-slate-950 font-bold border-amber-400 animate-pulse"
-                    : "bg-slate-800 text-amber-300 border-slate-700 hover:bg-slate-700"
-                }`}
-              >
-                {adminPickMode === "PICK_START" ? "เลือกจุด A..." : "เลือกจุด A"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdminPickMode("PICK_END")}
-                className={`text-[11px] px-2.5 py-1 rounded-lg border font-heading transition ${
-                  adminPickMode === "PICK_END"
-                    ? "bg-amber-500 text-slate-950 font-bold border-amber-400 animate-pulse"
-                    : "bg-slate-800 text-amber-300 border-slate-700 hover:bg-slate-700"
-                }`}
-              >
-                {adminPickMode === "PICK_END" ? "เลือกจุด B..." : "เลือกจุด B"}
-              </button>
-              <button
-                type="button"
-                onClick={handleSwapEndpoints}
-                title="สลับจุดเริ่มต้น (A) ↔ สิ้นสุด (B) และกลับทิศทางเส้นทาง"
-                className="text-[11px] px-2.5 py-1 rounded-lg border font-heading transition bg-slate-800 text-sky-300 border-sky-700/60 hover:bg-sky-900/60 flex items-center gap-1 shadow-sm"
-              >
-                <ArrowRightLeft className="w-3 h-3 text-sky-400" />
-                <span>สลับ A ⇄ B</span>
-              </button>
-            </div>
-          </div>
+        </FormSection>
 
-          {/* Coordinate Inputs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-            <div>
-              <span className="text-[10px] text-slate-400">พิกัดจุด A</span>
+        {/* 2. Coordinates & Dual-Source Snapping Controls */}
+        <FormSection
+          step={2}
+          title="แนวเส้นบนแผนที่"
+          description="เลือกจุดเริ่มต้น-สิ้นสุด ให้ระบบคำนวณเส้นเกาะถนน แล้วดัดแนวด้วยจุดดัดเส้น"
+          actions={
+            <ActionButton
+              variant="secondary"
+              onClick={handleSwapEndpoints}
+              title="สลับจุดเริ่มต้น (A) ↔ สิ้นสุด (B) และกลับทิศทางเส้นทาง"
+            >
+              <ArrowRightLeft className="h-3.5 w-3.5 text-sky-400" />
+              <span>สลับ A ⇄ B</span>
+            </ActionButton>
+          }
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 text-sm font-semibold text-white">
+                  <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-xs font-black text-slate-950">A</span>
+                  จุดเริ่มต้น
+                </span>
+                <ActionButton variant="pick" active={adminPickMode === "PICK_START"} onClick={() => setAdminPickMode("PICK_START")}>
+                  {adminPickMode === "PICK_START" ? "เลือกจุด A..." : "เลือกจุด A"}
+                </ActionButton>
+              </div>
               <input
                 type="text"
                 aria-label="พิกัดจุด A"
@@ -844,11 +833,19 @@ export function MapManagementTab({
                 onChange={(e) => setStartCoordinateText(e.target.value)}
                 onBlur={() => { const pair = parseCoordinatePair(startCoordinateText); if (pair) { setStartLat(pair[0]); setStartLon(pair[1]); } else { setStartLat(""); setStartLon(""); } }}
                 placeholder="วางจาก Google Maps เช่น 6.8340, 101.1860"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px] placeholder:text-slate-600"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm text-white placeholder:text-slate-500"
               />
             </div>
-            <div>
-              <span className="text-[10px] text-slate-400">พิกัดจุด B</span>
+            <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 text-sm font-semibold text-white">
+                  <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-red-500 text-xs font-black text-white">B</span>
+                  จุดสิ้นสุด
+                </span>
+                <ActionButton variant="pick" active={adminPickMode === "PICK_END"} onClick={() => setAdminPickMode("PICK_END")}>
+                  {adminPickMode === "PICK_END" ? "เลือกจุด B..." : "เลือกจุด B"}
+                </ActionButton>
+              </div>
               <input
                 type="text"
                 aria-label="พิกัดจุด B"
@@ -856,7 +853,7 @@ export function MapManagementTab({
                 onChange={(e) => setEndCoordinateText(e.target.value)}
                 onBlur={() => { const pair = parseCoordinatePair(endCoordinateText); if (pair) { setEndLat(pair[0]); setEndLon(pair[1]); } else { setEndLat(""); setEndLon(""); } }}
                 placeholder="วางจาก Google Maps เช่น 6.8390, 101.1920"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white text-[11px] placeholder:text-slate-600"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm text-white placeholder:text-slate-500"
               />
             </div>
           </div>
@@ -886,61 +883,40 @@ export function MapManagementTab({
               <span><strong className="block text-amber-300">บังคับตรงผ่านสามแยก/สี่แยก</strong>จุดดัดจะเป็นจุดควบคุมทิศทางตรง ระบบจะป้องกันการยูเทิร์นที่จุดนั้นและยังคงเกาะถนนจริง กรุณาตรวจเส้นพรีวิวก่อนบันทึก</span>
             </label>
           )}
-          <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints)}
-                className="bg-sky-600 hover:bg-sky-500 text-white font-heading font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 shadow"
-              >
-                <Wand2 className="w-3.5 h-3.5" /> คำนวณเส้นเกาะถนน
-              </button>
-              <button
-                type="button"
-                onClick={handleAddMidpointWaypoint}
-                className="bg-slate-800 hover:bg-slate-700 text-amber-300 font-heading text-xs px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1"
-              >
-                <Plus className="w-3.5 h-3.5" /> แตะจุดกลางเส้นเพื่อเพิ่มจุด
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdminPickMode("ADD_WAYPOINT")}
-                className={`text-xs px-3 py-1.5 rounded-lg border font-heading transition ${
-                  adminPickMode === "ADD_WAYPOINT"
-                    ? "bg-amber-500 text-slate-950 font-bold border-amber-400 animate-pulse"
-                    : "bg-slate-800 text-amber-300 border-slate-700 hover:bg-slate-700"
-                }`}
-              >
-                {adminPickMode === "ADD_WAYPOINT"
-                  ? (forceStraightThrough && routeMode === "DETOUR" ? "คลิกกึ่งกลางแยก..." : "คลิกถนนเพื่อดัด...")
-                  : (forceStraightThrough && routeMode === "DETOUR" ? "+ เพิ่มจุดผ่านแยกตรง" : "+ เพิ่มจุดดัดเส้น")}
-              </button>
-            </div>
+          <div className="space-y-4 border-t border-slate-800 pt-4">
+            <ActionButton
+              variant="primary"
+              className="w-full sm:w-auto"
+              onClick={() => triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints)}
+            >
+              <Wand2 className="h-3.5 w-3.5" /> คำนวณเส้นเกาะถนน
+            </ActionButton>
 
-            <div className="flex items-center gap-2 text-xs">
-              <button
-                type="button"
-                onClick={handleUndoWaypoint}
-                className="text-amber-400 hover:underline flex items-center gap-1 font-heading"
-              >
-                <Undo2 className="w-3 h-3" /> ย้อนกลับ
-              </button>
-              {originalRouteCoordinates.current.length >= 2 && (
-                <button
-                  type="button"
-                  onClick={handleRestoreOriginalRoute}
-                  className="min-h-10 rounded-lg border border-slate-700 px-3 text-sky-300 hover:border-sky-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400"
-                >
-                  คืนค่าแนวเดิม
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={requestClearRoute}
-                className="text-red-400 hover:underline font-heading"
-              >
-                ล้างข้อมูลทั้งหมด
-              </button>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <ToolGroup label="ดัดแนวเส้น">
+                <ActionButton variant="secondary" className="text-amber-300" onClick={handleAddMidpointWaypoint}>
+                  <Plus className="h-3.5 w-3.5" /> แตะจุดกลางเส้นเพื่อเพิ่มจุด
+                </ActionButton>
+                <ActionButton variant="pick" active={adminPickMode === "ADD_WAYPOINT"} onClick={() => setAdminPickMode("ADD_WAYPOINT")}>
+                  {adminPickMode === "ADD_WAYPOINT"
+                    ? (forceStraightThrough && routeMode === "DETOUR" ? "คลิกกึ่งกลางแยก..." : "คลิกถนนเพื่อดัด...")
+                    : (forceStraightThrough && routeMode === "DETOUR" ? "+ เพิ่มจุดผ่านแยกตรง" : "+ เพิ่มจุดดัดเส้น")}
+                </ActionButton>
+              </ToolGroup>
+
+              <ToolGroup label="ย้อนกลับหรือล้าง">
+                <ActionButton variant="secondary" onClick={handleUndoWaypoint}>
+                  <Undo2 className="h-3.5 w-3.5" /> ย้อนกลับ
+                </ActionButton>
+                {originalRouteCoordinates.current.length >= 2 && (
+                  <ActionButton variant="secondary" className="text-sky-300" onClick={handleRestoreOriginalRoute}>
+                    คืนค่าแนวเดิม
+                  </ActionButton>
+                )}
+                <ActionButton variant="danger" onClick={requestClearRoute}>
+                  ล้างข้อมูลทั้งหมด
+                </ActionButton>
+              </ToolGroup>
             </div>
           </div>
           {draftWaypoints.length > 0 && (
@@ -963,11 +939,11 @@ export function MapManagementTab({
               </div>
             </div>
           )}
-        </div>
+        </FormSection>
 
         {/* 3. Auto Detour Advice Generator (If in Detour mode) */}
         {routeMode === "DETOUR" && (
-          <div className="p-3 bg-amber-950/30 border border-amber-600/40 rounded-xl space-y-2.5">
+          <FormSection step={3} tone="amber" title="คำแนะนำสำหรับประชาชน" description="ข้อความที่ประชาชนจะเห็นในหน้าหลัก แยกทิศทางขาไปและขากลับ">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <label className="text-xs font-heading font-bold text-amber-300">
@@ -1051,12 +1027,12 @@ export function MapManagementTab({
                 <ArrowRightLeft className="w-3 h-3" /> สลับมุมมองทิศทาง
               </button>
             </div>
-          </div>
+          </FormSection>
         )}
 
         {/* 4. Water Level, Status & Safety Measures (If Flood) */}
         {routeMode === "FLOOD" && (
-          <div className="space-y-3">
+          <FormSection step={3} title="สถานการณ์น้ำและมาตรการ" description="ระดับน้ำ สถานะการจราจร มาตรการความปลอดภัย และภาพถ่ายหน้างาน">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-slate-300">ระดับน้ำท่วมผิวทาง (ซม.) *</label>
@@ -1136,11 +1112,11 @@ export function MapManagementTab({
                 </div>
               )}
             </div>
-          </div>
+          </FormSection>
         )}
 
         {/* Submit Route Button */}
-        <div className="pt-3 border-t border-slate-800 flex gap-2">
+        <StickyActionBar>
           <button
             type="button"
             disabled={isSubmitting}
@@ -1165,7 +1141,7 @@ export function MapManagementTab({
               ยกเลิก
             </button>
           )}
-        </div>
+        </StickyActionBar>
       </div>
     </div>
   );

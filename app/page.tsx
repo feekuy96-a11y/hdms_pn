@@ -4,9 +4,8 @@ import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
-import { getSystemDataAction } from "@/app/actions/doh-actions";
-import { INITIAL_SYSTEM_DATA, SystemDataPayload } from "@/db/default-data";
-import { WaterTimelineChart } from "@/components/charts/WaterTimelineChart";
+import { getPublicSystemDataAction } from "@/app/actions/doh-actions";
+import { INITIAL_SYSTEM_DATA, SystemDataPayload, FloodRoute } from "@/db/default-data";
 
 const LongdoGisMap = dynamic(
   () => import("@/components/map/LongdoGisMap").then((mod) => mod.LongdoGisMap),
@@ -28,6 +27,17 @@ const LongdoGisMap = dynamic(
     ),
   }
 );
+// Chart.js + react-chartjs-2 are only needed once a flood dossier is open, so keep them out of the
+// initial bundle that every visitor downloads.
+const WaterTimelineChart = dynamic(
+  () => import("@/components/charts/WaterTimelineChart").then((mod) => mod.WaterTimelineChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full flex items-center justify-center text-xs text-slate-400">กำลังโหลดกราฟระดับน้ำ...</div>
+    ),
+  }
+);
 import {
   AlertTriangle,
   Settings,
@@ -42,6 +52,7 @@ import {
   Clock,
   CheckCircle2,
   ArrowRightLeft,
+  Droplets,
 } from "lucide-react";
 import { extractDirectionalAdvice } from "@/lib/gis-utils";
 import { usePollingActivity } from "@/lib/use-polling-activity";
@@ -62,6 +73,81 @@ function getTrafficPresentation(status: TrafficStatus, waterLevelCm: number) {
     default:
       return { label: "ผ่านได้ปกติ", detail: "การจราจรผ่านได้ตามปกติ", icon: "✅", color: "emerald" as const };
   }
+}
+
+type StatusColor = ReturnType<typeof getTrafficPresentation>["color"];
+
+// Most severe first, so the points citizens must avoid are always at the top of the list.
+const STATUS_ORDER: Record<StatusColor, number> = { red: 0, amber: 1, sky: 2, emerald: 3 };
+const STATUS_BAR: Record<StatusColor, string> = { red: "#ef4444", amber: "#f59e0b", sky: "#38bdf8", emerald: "#10b981" };
+const STATUS_CHIP: Record<StatusColor, string> = {
+  red: "bg-red-500/15 text-red-300 border-red-500/50",
+  amber: "bg-amber-500/15 text-amber-200 border-amber-500/50",
+  sky: "bg-sky-500/15 text-sky-200 border-sky-500/50",
+  emerald: "bg-emerald-500/15 text-emerald-200 border-emerald-500/50",
+};
+const SUMMARY_ITEMS: ReadonlyArray<{ color: StatusColor; label: string; dot: string }> = [
+  { color: "red", label: "ผ่านไม่ได้", dot: "bg-red-500" },
+  { color: "amber", label: "เฝ้าระวัง", dot: "bg-amber-500" },
+  { color: "sky", label: "รถเล็กผ่านได้", dot: "bg-sky-400" },
+  { color: "emerald", label: "ผ่านได้ปกติ", dot: "bg-emerald-500" },
+];
+
+function SituationSummary({ counts }: { counts: Record<StatusColor, number> }) {
+  const visible = SUMMARY_ITEMS.filter((item) => counts[item.color] > 0);
+  if (visible.length === 0) return <p className="text-xs text-slate-300">ยังไม่มีจุดเฝ้าระวังที่รายงานในขณะนี้</p>;
+  return (
+    <ul aria-label="สรุปสถานการณ์ทุกจุด" className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-200">
+      {visible.map((item) => (
+        <li key={item.color} className="inline-flex items-center gap-1.5">
+          <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${item.dot}`} />
+          <strong className="font-mono text-sm text-white">{counts[item.color]}</strong> {item.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// One card for the desktop sidebar and the mobile sheet (they used to be two diverging copies).
+function FloodCard({ flood, selected, onSelect }: { flood: FloodRoute; selected: boolean; onSelect: (flood: FloodRoute) => void }) {
+  const status = getTrafficPresentation(flood.traffic_status as TrafficStatus, flood.water_level_cm);
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={() => onSelect(flood)}
+      className={`relative block w-full overflow-hidden rounded-2xl border py-3 pl-4 pr-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400 ${
+        selected ? "border-amber-400/70 bg-slate-900 ring-1 ring-amber-400/60" : "border-slate-800 bg-[#0f1b33] hover:border-slate-600"
+      }`}
+    >
+      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: STATUS_BAR[status.color] }} />
+      <span className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 rounded-md bg-amber-400 px-2 py-0.5 font-heading text-xs font-black text-slate-950">ทล.{flood.route_no}</span>
+          <span className="truncate text-xs text-slate-300">กม.{flood.km_start} - {flood.km_end}</span>
+        </span>
+        <span className={`shrink-0 rounded-full border px-2.5 py-1 font-heading text-xs font-bold ${STATUS_CHIP[status.color]}`}>
+          {status.icon} {status.label}
+        </span>
+      </span>
+      <span className="mt-2 line-clamp-2 block font-heading text-sm font-bold leading-snug text-white">{flood.section_name}</span>
+      <span className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-300">
+        <span className="inline-flex items-center gap-1.5">
+          <Droplets aria-hidden="true" className="h-4 w-4 text-sky-300" />
+          ระดับน้ำ <strong className="font-mono text-sm text-white">{flood.water_level_cm}</strong> ซม.
+        </span>
+        <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-amber-300">
+          รายละเอียด <ChevronRight aria-hidden="true" className="h-4 w-4" />
+        </span>
+      </span>
+      {flood.detour_advice && (
+        <span className="mt-2 flex items-start gap-1.5 rounded-lg bg-slate-950/50 px-2 py-1.5 text-xs text-amber-100">
+          <Compass aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+          <span className="line-clamp-2">ทางเลี่ยง: {flood.detour_advice}</span>
+        </span>
+      )}
+    </button>
+  );
 }
 
 export default function HomePage() {
@@ -88,7 +174,7 @@ export default function HomePage() {
   const { data: systemData = INITIAL_SYSTEM_DATA, isPending, isError, refetch } = useQuery<SystemDataPayload>({
     queryKey: ["dohSystemData"],
     queryFn: async () => {
-      return await getSystemDataAction();
+      return await getPublicSystemDataAction();
     },
     staleTime: 0,
     refetchOnMount: "always",
@@ -131,6 +217,16 @@ export default function HomePage() {
 
   const selectedFlood =
     systemData.floodRoutes.find((r) => r.id === selectedFloodId) || systemData.floodRoutes[0];
+
+  // Parsing the advice text is regex heavy; do it once per advice text, not on every render.
+  const selectedFloodKey = selectedFlood?.id;
+  const selectedFloodAdvice = selectedFlood?.detour_advice || "";
+  const directionalAdvice = React.useMemo(() => extractDirectionalAdvice(selectedFloodAdvice), [selectedFloodAdvice]);
+  // Latest 3 updates of the selected flood, computed once per data/selection change.
+  const selectedFloodRecentUpdates = React.useMemo(
+    () => (selectedFloodKey ? systemData.timelineUpdates.filter((u) => u.flood_id_ref === selectedFloodKey).slice(0, 3) : []),
+    [systemData.timelineUpdates, selectedFloodKey]
+  );
 
   // Dynamic route chips strictly from database & imported files (Issue #7)
   const routeChips = React.useMemo(() => {
@@ -178,7 +274,26 @@ export default function HomePage() {
     const matchChip = selectedRouteFilter === "ALL" || cleanNo === selectedRouteFilter || r.route_no === selectedRouteFilter;
 
     return matchSearch && matchChip;
-  });
+  }).sort(
+    (a, b) =>
+      STATUS_ORDER[getTrafficPresentation(a.traffic_status as TrafficStatus, a.water_level_cm).color] -
+      STATUS_ORDER[getTrafficPresentation(b.traffic_status as TrafficStatus, b.water_level_cm).color]
+  );
+  const situationCounts = React.useMemo(() => {
+    const counts: Record<StatusColor, number> = { red: 0, amber: 0, sky: 0, emerald: 0 };
+    (systemData.floodRoutes || []).forEach((route) => {
+      if (route.is_active) counts[getTrafficPresentation(route.traffic_status as TrafficStatus, route.water_level_cm).color] += 1;
+    });
+    return counts;
+  }, [systemData.floodRoutes]);
+  const activeFloodCount = situationCounts.red + situationCounts.amber + situationCounts.sky + situationCounts.emerald;
+  const dossierStatus = getTrafficPresentation((selectedFlood?.traffic_status ?? "PASSABLE") as TrafficStatus, selectedFlood?.water_level_cm ?? 0);
+  const handleSelectFlood = (flood: FloodRoute) => {
+    setSelectedFloodId(flood.id);
+    setShowDossier(true);
+    setIsMobileDrawerOpen(false);
+    if (flood.lat_start && flood.lon_start) setFocusCoordinates([flood.lon_start, flood.lat_start]);
+  };
   const activeDetours = (systemData.detourRoutes || []).filter((route) => route.is_active);
   const filteredDetours = activeDetours.filter((route) => `${route.route_name} ${route.description || ""}`.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase()));
   const selectedFloodDetours = selectedFlood
@@ -193,29 +308,29 @@ export default function HomePage() {
 
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-body">
+    <div className="doh-readable min-h-screen flex flex-col bg-slate-950 text-slate-100 font-body">
       {/* =================================================================== */}
       {/* 1. TOP NAVBAR (Official DOH Brand + Status + Hotline)               */}
       {/* =================================================================== */}
-      <header className="doh-header border-b-2 border-amber-500 sticky top-0 z-50 h-16 px-3 sm:px-6 flex items-center justify-between shadow-xl bg-[#091122]">
-        <div className="flex items-center gap-3 min-w-0">
+      <header className="doh-header border-b-2 border-amber-500 sticky top-0 z-50 h-16 px-3 sm:px-6 flex items-center justify-between gap-2 shadow-xl bg-[#091122]">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           {systemData.systemSettings?.logoUrl ? (
             <img
               src={systemData.systemSettings.logoUrl}
               alt="Logo"
-              className="w-10 h-10 rounded-xl object-contain shadow-md shrink-0 bg-slate-900 border border-slate-700 p-0.5"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-contain shadow-md shrink-0 bg-slate-900 border border-slate-700 p-0.5"
             />
           ) : (
-            <div className="w-10 h-10 rounded-xl gold-gradient flex items-center justify-center shadow-md shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl gold-gradient flex items-center justify-center shadow-md shrink-0">
               <AlertTriangle className="w-5 h-5 text-slate-950 font-bold" />
             </div>
           )}
-          <div className="truncate">
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-heading font-black text-amber-400 text-xs sm:text-sm tracking-wide">
+              <span className="truncate font-heading font-black text-amber-400 text-[13px] sm:text-sm tracking-wide">
                 {systemData.systemSettings?.name || "ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย"}
               </span>
-              <span className="bg-amber-400 text-slate-950 text-[10px] font-heading font-extrabold px-1.5 py-0.2 rounded uppercase">
+              <span className="hidden md:inline-block shrink-0 bg-amber-400 text-slate-950 text-[10px] font-heading font-extrabold px-1.5 py-0.2 rounded">
                 ศูนย์ปฏิบัติการฉุกเฉิน 24 ชม.
               </span>
               <span className="text-[10px] bg-emerald-950/80 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-bold hidden md:inline-flex items-center gap-1">
@@ -232,9 +347,12 @@ export default function HomePage() {
         <div className="flex items-center gap-2 shrink-0">
           <a
             href={`tel:${systemData.systemSettings?.phone || "1586"}`}
-            className="min-h-11 flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white font-heading font-bold text-xs px-3.5 py-1.5 rounded-xl shadow-lg transition"
+            aria-label={`โทรสายด่วน ${systemData.systemSettings?.phone || "1586"}`}
+            className="min-h-11 flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white font-heading font-bold text-sm px-3 sm:px-3.5 py-1.5 rounded-xl shadow-lg transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
           >
-            <Phone className="w-3.5 h-3.5" /> สายด่วน {systemData.systemSettings?.phone || "1586"}
+            <Phone className="w-4 h-4" />
+            <span className="hidden sm:inline">สายด่วน</span>
+            <span className="font-mono">{systemData.systemSettings?.phone || "1586"}</span>
           </a>
         </div>
       </header>
@@ -271,16 +389,18 @@ export default function HomePage() {
               </button>
             </div>
 
+            <SituationSummary counts={situationCounts} />
+
             {/* Search Input Box */}
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="ค้นหาสายทาง (ทล.43, ทล.42, ทล.418) หรือชื่อจุด/อำเภอ..."
                 aria-label="ค้นหาหมายเลขทางหลวงหรือพื้นที่"
-                className="min-h-11 w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-sm text-white placeholder-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                className="min-h-11 w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-sm text-white placeholder-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
               />
             </div>
 
@@ -310,88 +430,9 @@ export default function HomePage() {
           {/* Incident Cards Scrollable List */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
             {detourList}
-            {filteredFloods.map((flood) => {
-              const isSelected = flood.id === selectedFloodId;
-              const status = getTrafficPresentation(flood.traffic_status, flood.water_level_cm);
-
-              return (
-                <button
-                  key={flood.id}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => {
-                    setSelectedFloodId(flood.id);
-                    setShowDossier(true);
-                    if (flood.lat_start && flood.lon_start) {
-                      setFocusCoordinates([flood.lon_start, flood.lat_start]);
-                    }
-                  }}
-                  className={`block w-full text-left min-h-20 p-3 rounded-2xl border transition cursor-pointer shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400 ${
-                    isSelected
-                      ? "bg-slate-900 ring-2 ring-amber-400 border-transparent shadow-amber-500/10"
-                      : "bg-[#0f1b33] border-slate-800/90 hover:border-slate-700"
-                  }`}
-                  style={{
-                    borderLeftWidth: "1px",
-                    borderLeftColor: status.color === "red" ? "#ef4444" : status.color === "amber" ? "#f59e0b" : status.color === "sky" ? "#38bdf8" : "#10b981",
-                  }}
-                >
-                  {/* Top Line: Badge, Section Name, Traffic Status */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="bg-amber-400 text-slate-950 font-heading font-black text-[10px] px-1.5 py-0.2 rounded">
-                          ทล.{flood.route_no}
-                        </span>
-                        <span className="text-slate-400 text-[10px]">
-                          กม.{flood.km_start} - {flood.km_end}
-                        </span>
-                      </div>
-                      <h3 className="font-heading font-bold text-xs sm:text-sm text-white truncate">
-                        {flood.section_name}
-                      </h3>
-                    </div>
-
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border shrink-0 ${
-                        status.color === "red"
-                          ? "bg-red-500/20 text-red-400 border-red-500/40 alert-badge-pulse"
-                          : status.color === "amber"
-                          ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                          : status.color === "sky"
-                          ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
-                          : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                      }`}
-                    >
-                      {status.icon} {status.label}
-                    </span>
-                  </div>
-
-                  {/* Middle Line: Timestamp & Latest Update Note */}
-                  <div className="mt-2 text-[11px] text-slate-300 flex items-start gap-1.5 bg-slate-950/40 p-2 rounded-xl">
-                    <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="line-clamp-2">
-                        {flood.detour_advice
-                          ? `คำแนะนำ: ${flood.detour_advice}`
-                          : `ระดับน้ำ ${flood.water_level_cm} ซม. รายงานสถานการณ์ล่าสุด`}
-                      </p>
-                    </div>
-                    <span className="text-amber-400 font-bold hover:underline shrink-0 text-[10px]">
-                      ดูไทม์ไลน์ &gt;
-                    </span>
-                  </div>
-
-                  {/* Detour Route Advice if available */}
-                  {flood.detour_advice && (
-                    <div className="mt-1.5 text-[10px] text-amber-200/90 flex items-center gap-1 font-mono">
-                      <Compass className="w-3 h-3 text-amber-400 shrink-0" />
-                      <span className="truncate">ทางเลี่ยง: {flood.detour_advice}</span>
-                    </div>
-                  )}
-                </button>
-              );
-            })}
+            {filteredFloods.map((flood) => (
+              <FloodCard key={flood.id} flood={flood} selected={flood.id === selectedFloodId} onSelect={handleSelectFlood} />
+            ))}
             {filteredFloods.length === 0 && (
               <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-6 text-center text-sm space-y-2.5">
                 <div className="w-10 h-10 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
@@ -435,7 +476,7 @@ export default function HomePage() {
         {/* ================================================================= */}
         {/* B. MAIN GIS MAP VIEWPORT                                          */}
         {/* ================================================================= */}
-        <div className="order-1 lg:order-2 relative h-[calc(100vh-64px)] lg:h-full flex-1 w-full overflow-hidden bg-[#0b1426]">
+        <div className="order-1 lg:order-2 relative h-[calc(100dvh-64px)] lg:h-full flex-1 w-full overflow-hidden bg-[#0b1426]">
           {isPending && (
             <div role="status" aria-live="polite" className="absolute left-1/2 top-4 z-[600] -translate-x-1/2 rounded-xl border border-slate-700 bg-slate-950/95 px-4 py-3 text-sm text-white shadow-xl">
               กำลังโหลดข้อมูลสถานการณ์ล่าสุด…
@@ -479,28 +520,23 @@ export default function HomePage() {
           {/* =============================================================== */}
           {/* C. MOBILE FLOATING ACTION BAR & BOTTOM SHEET DRAWER             */}
           {/* =============================================================== */}
-          {/* 1. Floating bottom pill on mobile when drawer & dossier are closed */}
+          {/* 1. Situation bar on mobile when drawer & dossier are closed */}
           {!isMobileDrawerOpen && !showDossier && (
-            <div className="lg:hidden fixed bottom-3 inset-x-3 z-[450] bg-[#091122]/95 backdrop-blur-md border border-amber-500/50 p-2.5 rounded-2xl shadow-2xl flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping motion-reduce:animate-none" />
-                <div className="truncate">
-                  <div className="text-xs font-heading font-bold text-white truncate">
-                    จุดเฝ้าระวังและน้ำท่วม ({filteredFloods.length} จุด)
-                  </div>
-                  <div className="text-[10px] text-amber-300 font-mono truncate">
-                    ปิดทาง {systemData.floodRoutes.filter((r) => r.traffic_status === "CLOSED").length} จุด · ห้ามผ่าน {systemData.floodRoutes.filter((r) => r.traffic_status === "WARNING").length} จุด
-                  </div>
+            <div className="lg:hidden fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[450] rounded-2xl border border-amber-500/50 bg-[#091122]/95 p-3 shadow-2xl backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <p className="font-heading text-sm font-bold text-white">จุดเฝ้าระวังน้ำท่วม {activeFloodCount} จุด</p>
+                  <SituationSummary counts={situationCounts} />
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileDrawerOpen(true)}
+                  className="min-h-12 shrink-0 rounded-xl bg-amber-500 px-4 font-heading text-sm font-black text-slate-950 shadow-lg transition hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white flex items-center gap-1.5"
+                >
+                  <Search className="h-4 w-4" />
+                  <span>ดูรายการสายทาง</span>
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsMobileDrawerOpen(true)}
-                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black text-xs px-3.5 py-2 rounded-xl shadow-lg flex items-center gap-1.5 shrink-0 transition"
-              >
-                <Search className="w-3.5 h-3.5" />
-                <span>ดูรายการสายทาง</span>
-              </button>
             </div>
           )}
 
@@ -508,7 +544,7 @@ export default function HomePage() {
           {isMobileDrawerOpen && (
             <div className="lg:hidden fixed inset-0 z-[650] flex flex-col justify-end bg-black/60 backdrop-blur-sm animate-fade-in">
               <div className="flex-1" onClick={() => setIsMobileDrawerOpen(false)} />
-              <div className="bg-[#0c1527] border-t-2 border-amber-500 rounded-t-3xl max-h-[82vh] flex flex-col shadow-2xl overflow-hidden">
+              <div role="dialog" aria-modal="true" aria-label="รายการสายทางและจุดเฝ้าระวัง" className="bg-[#0c1527] border-t-2 border-amber-500 rounded-t-3xl max-h-[88dvh] flex flex-col shadow-2xl overflow-hidden">
                 <div className="p-3 bg-[#091122] border-b border-slate-800 space-y-2.5 shrink-0">
                   <div className="w-12 h-1.5 bg-slate-600 rounded-full mx-auto mb-1" />
                   <div className="flex items-center justify-between">
@@ -522,20 +558,24 @@ export default function HomePage() {
                       type="button"
                       onClick={() => setIsMobileDrawerOpen(false)}
                       aria-label="ปิดรายการสายทาง"
-                      className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                      className="grid h-11 w-11 place-items-center rounded-lg bg-slate-800 text-slate-300 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
 
+                  <SituationSummary counts={situationCounts} />
+
                   <div className="relative">
-                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                    <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="ค้นหาสายทาง (ทล.43, ทล.42, ทล.418)..."
-                      className="min-h-11 w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-sm text-white placeholder-slate-400"
+                      aria-label="ค้นหาหมายเลขทางหลวงหรือพื้นที่"
+                      inputMode="search"
+                      className="min-h-11 w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-sm text-white placeholder-slate-400"
                     />
                   </div>
 
@@ -547,7 +587,7 @@ export default function HomePage() {
                           key={chip.id}
                           type="button"
                           onClick={() => setSelectedRouteFilter(chip.id)}
-                          className={`min-h-10 px-3 py-1 rounded-lg font-heading font-bold whitespace-nowrap transition ${
+                          className={`min-h-11 px-3 py-1 rounded-lg font-heading font-bold whitespace-nowrap transition ${
                             isActive
                               ? "bg-amber-500 text-slate-950 shadow-md"
                               : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
@@ -560,81 +600,12 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+                <div className="flex-1 overflow-y-auto overscroll-contain p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2.5">
                   {detourList}
                   {filteredFloods.length === 0 && <div className="rounded-xl border border-slate-700 p-4 text-slate-300 text-sm"><p>{systemData.floodRoutes.length === 0 ? "ยังไม่มีรายงานจุดน้ำท่วม" : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p><button type="button" className="mt-3 min-h-11 text-amber-300" onClick={() => { setSearchQuery(""); setSelectedRouteFilter("ALL"); }}>ล้างตัวกรอง</button></div>}
-                  {filteredFloods.map((flood) => {
-                    const isSelected = flood.id === selectedFloodId;
-                    const status = getTrafficPresentation(flood.traffic_status, flood.water_level_cm);
-
-                    return (
-                      <button
-                        key={flood.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedFloodId(flood.id);
-                          setShowDossier(true);
-                          setIsMobileDrawerOpen(false);
-                          if (flood.lat_start && flood.lon_start) {
-                            setFocusCoordinates([flood.lon_start, flood.lat_start]);
-                          }
-                        }}
-                        className={`block w-full text-left p-3 rounded-2xl border transition shadow-md ${
-                          isSelected
-                            ? "bg-slate-900 ring-2 ring-amber-400 border-transparent shadow-amber-500/10"
-                            : "bg-[#0f1b33] border-slate-800/90 hover:border-slate-700"
-                        }`}
-                        style={{
-                          borderLeftWidth: "4px",
-                          borderLeftColor: status.color === "red" ? "#ef4444" : status.color === "amber" ? "#f59e0b" : status.color === "sky" ? "#38bdf8" : "#10b981",
-                        }}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <span className="bg-amber-400 text-slate-950 font-heading font-black text-[10px] px-1.5 py-0.2 rounded">
-                                ทล.{flood.route_no}
-                              </span>
-                              <span className="text-slate-400 text-[10px]">
-                                กม.{flood.km_start} - {flood.km_end}
-                              </span>
-                            </div>
-                            <h3 className="font-heading font-bold text-xs sm:text-sm text-white truncate">
-                              {flood.section_name}
-                            </h3>
-                          </div>
-
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border shrink-0 ${
-                              status.color === "red"
-                                ? "bg-red-500/20 text-red-400 border-red-500/40"
-                                : status.color === "amber"
-                                ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                                : status.color === "sky"
-                                ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
-                                : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                            }`}
-                          >
-                            {status.icon} {status.label}
-                          </span>
-                        </div>
-
-                        <div className="mt-2 text-[11px] text-slate-300 flex items-start gap-1.5 bg-slate-950/40 p-2 rounded-xl">
-                          <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                          <div className="flex-1 min-w-0">
-                            <p className="line-clamp-2">
-                              {flood.detour_advice
-                                ? `คำแนะนำ: ${flood.detour_advice}`
-                                : `ระดับน้ำ ${flood.water_level_cm} ซม. รายงานสถานการณ์ล่าสุด`}
-                            </p>
-                          </div>
-                          <span className="text-amber-400 font-bold hover:underline shrink-0 text-[10px]">
-                            ดูไทม์ไลน์ &gt;
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
+                  {filteredFloods.map((flood) => (
+                    <FloodCard key={flood.id} flood={flood} selected={flood.id === selectedFloodId} onSelect={handleSelectFlood} />
+                  ))}
                 </div>
               </div>
             </div>
@@ -656,11 +627,7 @@ export default function HomePage() {
                     </span>
                   </div>
                   <h2 className="font-heading text-sm font-bold text-white truncate">
-                    {selectedFlood.traffic_status === "CLOSED"
-                      ? "⛔ ปิดการจราจร"
-                      : selectedFlood.traffic_status === "WARNING"
-                      ? "⚠️ รถเล็กห้ามผ่าน"
-                      : "✅ ผ่านได้ปกติ"}{" "}
+                    {dossierStatus.icon} {dossierStatus.label}{" "}
                     · {selectedFlood.section_name}
                   </h2>
                 </div>
@@ -706,7 +673,7 @@ export default function HomePage() {
           )}
           {selectedFlood && showDossier && (
             <div
-              className="fixed inset-0 z-[700] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/65 backdrop-blur-xs animate-fade-in"
+              className="fixed inset-0 z-[700] flex items-end justify-center bg-slate-950/65 backdrop-blur-xs animate-fade-in sm:items-center sm:p-4"
               onClick={(e) => {
                 if (e.target === e.currentTarget) setShowDossier(false);
               }}
@@ -715,35 +682,33 @@ export default function HomePage() {
                 role="dialog"
                 aria-modal="true"
                 aria-label={`รายละเอียดจุดน้ำท่วม ${selectedFlood.section_name}`}
-                className="w-full max-w-[530px] max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-700/80 bg-[#0c162c] text-slate-100 shadow-2xl relative"
+                className="relative max-h-[92dvh] w-full overflow-y-auto overscroll-contain rounded-t-3xl border border-slate-700/80 bg-[#0c162c] text-slate-100 shadow-2xl sm:max-h-[90vh] sm:max-w-[560px] sm:rounded-3xl"
               >
-                {/* Pull handle on mobile */}
-                <div className="w-12 h-1.5 bg-slate-600 rounded-full mx-auto my-2 lg:hidden" />
-                {/* Header: Dark Navy Header with Badge, Section Title, KM Range & Action Buttons */}
-                <div className="sticky top-0 z-20 bg-[#0c1a30] text-white p-3.5 border-b border-slate-800 flex items-start justify-between gap-2 shadow-md">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="bg-[#f59e0b] text-slate-950 font-heading font-black text-xs px-2.5 py-1 rounded-md shadow shrink-0">
-                        ทล.{selectedFlood.route_no}
-                      </span>
-                      <h3 className="font-heading font-bold text-sm sm:text-base text-white truncate">
-                        {selectedFlood.section_name}
-                      </h3>
+                {/* Header: what is it, how bad is it, when was it updated */}
+                <div className="sticky top-0 z-20 border-b border-slate-800 bg-[#0c1a30] px-4 pb-3 pt-2 shadow-md">
+                  <div aria-hidden="true" className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-slate-600 sm:hidden" />
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="shrink-0 rounded-md bg-[#f59e0b] px-2.5 py-1 font-heading text-xs font-black text-slate-950 shadow">
+                          ทล.{selectedFlood.route_no}
+                        </span>
+                        <span className={`rounded-full border px-2.5 py-1 font-heading text-xs font-bold ${STATUS_CHIP[dossierStatus.color]}`}>
+                          {dossierStatus.icon} {dossierStatus.label}
+                        </span>
+                      </div>
+                      <h3 className="font-heading text-base font-bold leading-snug text-white">{selectedFlood.section_name}</h3>
+                      <p className="text-xs text-slate-300">
+                        กม.{selectedFlood.km_start} ถึง กม.{selectedFlood.km_end} ({selectedFlood.subdistrict || selectedFlood.district || "อ.หนองจิก"})
+                      </p>
+                      <p className="text-xs text-slate-400">อัปเดตล่าสุด: {selectedFlood.updated_at ? new Date(selectedFlood.updated_at).toLocaleString("th-TH") : "ไม่ระบุ"}</p>
                     </div>
-                    <div className="text-[11px] text-slate-300 mt-1">
-                      กม.{selectedFlood.km_start} ถึง กม.{selectedFlood.km_end} ({selectedFlood.subdistrict || selectedFlood.district || "อ.หนองจิก"}) • พิกัด {selectedFlood.lat_start.toFixed(4)}, {selectedFlood.lon_start.toFixed(4)}
-                    </div>
-                    <p className="mt-1 text-xs text-slate-300">อัปเดตล่าสุด: {selectedFlood.updated_at ? new Date(selectedFlood.updated_at).toLocaleString("th-TH") : "ไม่ระบุ"}</p>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {/* Close Dossier Button */}
                     <button
                       ref={closeDetailsRef}
                       type="button"
                       onClick={() => setShowDossier(false)}
                       aria-label="ปิดรายละเอียด"
-                      className="min-h-11 min-w-11 p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                      className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg bg-slate-800 p-2 text-slate-300 transition hover:bg-slate-700 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                       title="ปิดหน้าต่างรายละเอียด"
                     >
                       <X className="w-4 h-4" />
@@ -751,34 +716,12 @@ export default function HomePage() {
                   </div>
                 </div>
 
-              {/* Body Content */}
-              <div className="p-4 space-y-3.5">
-                {/* 2-Column Section: Photo & Current Water Level */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-                  {/* Left: Photo with GPS overlay */}
-                  <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900 group">
-                    {selectedFlood.latest_photo_url ? (
-                      <img
-                        src={selectedFlood.latest_photo_url}
-                        alt={`ภาพสถานการณ์ ${selectedFlood.section_name}`}
-                        className="w-full h-36 object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-36 items-center justify-center px-4 text-center text-xs text-slate-400">ยังไม่มีภาพถ่ายสถานการณ์ล่าสุด</div>
-                    )}
-                    {/* Animated Alert Badge Overlay on photo */}
-                    <div className="absolute top-2 left-2 z-10">
-                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/95 px-2.5 py-1 text-[10px] font-heading font-black text-white shadow-xl">
-                        {getTrafficPresentation(selectedFlood.traffic_status, selectedFlood.water_level_cm).icon} {getTrafficPresentation(selectedFlood.traffic_status, selectedFlood.water_level_cm).label}
-                      </span>
-                    </div>
-                    <div className="p-1.5 bg-slate-950/90 text-[10px] text-slate-400 flex items-center justify-between font-mono">
-                      <span>📍 ภาพถ่ายหน้างานพร้อมพิกัด GPS: {selectedFlood.lat_start.toFixed(3)}, {selectedFlood.lon_start.toFixed(3)}</span>
-                    </div>
-                  </div>
-
+                {/* Body, in reading priority on a phone: level -> what to do -> photo -> history.
+                    From sm up the photo sits beside the level card. */}
+                <div className="grid grid-cols-1 gap-3.5 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:grid-cols-2">
+                  <div className="sm:col-start-2 sm:row-start-1">
                   {/* Right: Water Level Stat & Traffic Advisory */}
-                  <div className="bg-[#0f1b33] p-3 rounded-xl border border-slate-800 flex flex-col justify-between h-36">
+                  <div className="flex h-full flex-col justify-between gap-3 rounded-xl border border-slate-800 bg-[#0f1b33] p-3.5 sm:min-h-36">
                     <div>
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-heading font-bold text-slate-400 uppercase">
@@ -795,7 +738,7 @@ export default function HomePage() {
                         </span>
                       </div>
                       <div className="flex items-baseline gap-1.5 mt-0.5">
-                        <span className="font-heading font-black text-4xl sm:text-5xl text-red-500 font-mono tracking-tight">
+                        <span className="font-heading font-black text-5xl text-red-500 font-mono tracking-tight">
                           {selectedFlood.water_level_cm}
                         </span>
                         <span className="text-xs text-slate-300 font-bold">เซนติเมตร (ซม.)</span>
@@ -813,8 +756,8 @@ export default function HomePage() {
                       </div>
                     </div>
                   </div>
-                </div>
-
+                  </div>
+                  <div className="sm:col-span-2 sm:row-start-2">
                 {/* Detour Recommendation Box (Yellow Banner) */}
                 <div className="bg-amber-500/10 border border-amber-400/50 rounded-xl p-3.5 space-y-2.5">
                   {selectedFloodDetours.map((route) => (
@@ -835,14 +778,14 @@ export default function HomePage() {
                     <div className="flex items-center gap-2">
                       {/* Direction Switcher Toggle if bidirectional advice exists */}
                       {(() => {
-                        const ext = extractDirectionalAdvice(selectedFlood.detour_advice || "");
+                        const ext = directionalAdvice;
                         if (!ext.hasBoth) return null;
                         return (
                           <div className="flex items-center bg-slate-950/80 p-0.5 rounded-lg border border-amber-500/40 text-[10px] font-heading font-bold">
                             <button
                               type="button"
                               onClick={() => setCitizenDetourDirection("FORWARD")}
-                              className={`px-2 py-0.5 rounded transition flex items-center gap-1 ${
+                              className={`min-h-9 px-2.5 py-1 rounded transition flex items-center gap-1 ${
                                 citizenDetourDirection === "FORWARD"
                                   ? "bg-amber-500 text-slate-950 shadow"
                                   : "text-amber-300/80 hover:text-white"
@@ -853,7 +796,7 @@ export default function HomePage() {
                             <button
                               type="button"
                               onClick={() => setCitizenDetourDirection("REVERSE")}
-                              className={`px-2 py-0.5 rounded transition flex items-center gap-1 ${
+                              className={`min-h-9 px-2.5 py-1 rounded transition flex items-center gap-1 ${
                                 citizenDetourDirection === "REVERSE"
                                   ? "bg-amber-500 text-slate-950 shadow"
                                   : "text-amber-300/80 hover:text-white"
@@ -885,7 +828,7 @@ export default function HomePage() {
                         </p>
                       );
                     }
-                    const ext = extractDirectionalAdvice(selectedFlood.detour_advice);
+                    const ext = directionalAdvice;
                     const displayText = ext.hasBoth
                       ? citizenDetourDirection === "FORWARD"
                         ? ext.forward
@@ -893,13 +836,41 @@ export default function HomePage() {
                       : selectedFlood.detour_advice;
 
                     return (
-                      <div className="bg-slate-950/70 p-3 rounded-lg border border-amber-500/20 text-xs text-amber-100/95 leading-relaxed font-sans whitespace-pre-line max-h-56 overflow-y-auto">
+                      <div className="bg-slate-950/70 p-3 rounded-lg border border-amber-500/20 text-xs text-amber-100/95 leading-relaxed font-sans whitespace-pre-line sm:max-h-56 sm:overflow-y-auto">
                         {displayText}
                       </div>
                     );
                   })()}
                 </div>
 
+
+                  </div>
+                  <div className="sm:col-start-1 sm:row-start-1">
+                  {/* Left: Photo with GPS overlay */}
+                  <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900 group">
+                    {selectedFlood.latest_photo_url ? (
+                      <img
+                        src={selectedFlood.latest_photo_url}
+                        alt={`ภาพสถานการณ์ ${selectedFlood.section_name}`}
+                        className="w-full h-36 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-36 items-center justify-center px-4 text-center text-xs text-slate-400">ยังไม่มีภาพถ่ายสถานการณ์ล่าสุด</div>
+                    )}
+                    {/* Animated Alert Badge Overlay on photo */}
+                    <div className="absolute top-2 left-2 z-10">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/95 px-2.5 py-1 text-[10px] font-heading font-black text-white shadow-xl">
+                        {getTrafficPresentation(selectedFlood.traffic_status, selectedFlood.water_level_cm).icon} {getTrafficPresentation(selectedFlood.traffic_status, selectedFlood.water_level_cm).label}
+                      </span>
+                    </div>
+                    <div className="p-1.5 bg-slate-950/90 text-[10px] text-slate-400 flex items-center justify-between font-mono">
+                      <span>📍 ภาพถ่ายหน้างานพร้อมพิกัด GPS: {selectedFlood.lat_start.toFixed(3)}, {selectedFlood.lon_start.toFixed(3)}</span>
+                    </div>
+                  </div>
+
+
+                  </div>
+                  <div className="sm:col-span-2 sm:row-start-3">
                 {/* Timeline Section */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs font-heading font-bold text-white">
@@ -909,7 +880,7 @@ export default function HomePage() {
                     <span className="text-[10px] text-amber-300 font-normal">+ อัปเดตระดับน้ำล่าสุด</span>
                   </div>
 
-                  <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800 h-28 w-full">
+                  <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800 h-36 w-full">
                     <WaterTimelineChart
                       timelineUpdates={systemData.timelineUpdates}
                       floodId={selectedFlood.id}
@@ -917,10 +888,8 @@ export default function HomePage() {
                   </div>
 
                   {/* Recent Timeline History Updates */}
-                  <div className="space-y-1.5 max-h-24 overflow-y-auto">
-                    {systemData.timelineUpdates
-                      .filter((u) => u.flood_id_ref === selectedFlood.id)
-                      .slice(0, 3)
+                  <div className="space-y-1.5">
+                    {selectedFloodRecentUpdates
                       .map((item) => (
                         <div
                           key={item.id}
@@ -942,17 +911,18 @@ export default function HomePage() {
                       ))}
                   </div>
                 </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
         </div>
       </div>
 
 
       {/* Toast Notification */}
       {(toastMessage || isError) && (
-        <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-[9999] bg-slate-950 border-2 border-amber-400 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-heading flex items-center gap-2.5 max-w-sm">
+        <div role="status" aria-live="polite" className="fixed bottom-28 left-3 right-3 z-[9999] lg:bottom-4 lg:left-auto lg:right-4 bg-slate-950 border-2 border-amber-400 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-heading flex items-center gap-2.5 max-w-sm">
           <span className="w-2 h-2 rounded-full bg-amber-400" />
           <span>{toastMessage || "ตรวจสอบข้อมูลล่าสุดไม่สำเร็จ โปรดลองอีกครั้ง"}</span>
         </div>

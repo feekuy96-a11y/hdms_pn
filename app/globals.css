@@ -295,3 +295,63 @@
     animation: none !important;
   }
 }
+
+/* ==========================================================================
+   Interface tokens (public page = phone first, admin = desktop first)
+   --------------------------------------------------------------------------
+   .doh-readable  : applied on the public page root and the admin console root.
+                    Raises the 10px / 11px utility sizes that are used across the
+                    app to 12px so no readable text is smaller than 12px.
+   .doh-form      : applied on the admin workspace. Gives every form control the
+                    same size, radius, border and focus ring without having to
+                    restyle each field by hand.
+   ========================================================================== */
+:root {
+  --doh-focus: #fbbf24;
+  --doh-field-border: #3b4a63;
+}
+
+.doh-readable .text-\[10px\],
+.doh-readable .text-\[11px\] {
+  font-size: 0.75rem;
+  line-height: 1.1rem;
+}
+
+.doh-readable :is(a, button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--doh-focus);
+  outline-offset: 2px;
+}
+
+.doh-form :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]),
+    select,
+    textarea
+  ) {
+  min-height: 2.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  border-radius: 0.625rem;
+  border-color: var(--doh-field-border);
+}
+
+.doh-form textarea {
+  min-height: 5rem;
+}
+
+.doh-form :is(input, select, textarea):disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.doh-form :is(input, textarea)::placeholder {
+  color: #94a3b8;
+}
+
+/* Field captions (the plain slate-300 labels that sit above a control): readable size and a gap
+   below. Labels that are part of a flex row, or that have their own colour, are left alone. */
+.doh-form :not(.flex):not(.inline-flex) > label.text-xs.text-slate-300:not(.flex):not(.inline-flex):not(.block) {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
