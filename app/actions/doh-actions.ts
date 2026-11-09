@@ -36,6 +36,10 @@ export async function saveTimelineUpdateAction(payload: {
   reporterName: string;
   remark: string;
   photoUrl?: string;
+  roadSide?: "LEFT" | "RIGHT" | "BOTH" | "UNKNOWN";
+  affectedLanes?: string;
+  affectedShoulder?: "NONE" | "LEFT" | "RIGHT" | "BOTH" | "AFFECTED" | "UNKNOWN";
+  directionMeta?: Record<string, any>;
 }): Promise<{ success: boolean; systemData: SystemDataPayload }> {
   return invokeHdms("saveTimelineUpdateAction", [payload]);
 }
@@ -52,6 +56,10 @@ export async function upsertRouteAction(payload: {
   latEnd?: number;
   lonEnd?: number;
   coordinates?: [number, number][];
+  reverseCoordinates?: [number, number][];
+  reverseWaypoints?: [number, number][];
+  directionMode?: "TWO_WAY" | "FORWARD_ONLY" | "REVERSE_ONLY";
+  detourMeta?: Record<string, any>;
   waterLevelCm?: number;
   trafficStatus?: "CLOSED" | "WARNING" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE";
   latestPhotoUrl?: string;
@@ -63,6 +71,11 @@ export async function upsertRouteAction(payload: {
   isActive?: boolean;
   district?: string;
   subdistrict?: string;
+  roadSide?: "LEFT" | "RIGHT" | "BOTH" | "UNKNOWN";
+  affectedLanes?: string;
+  affectedShoulder?: "NONE" | "LEFT" | "RIGHT" | "BOTH" | "AFFECTED" | "UNKNOWN";
+  reporterName?: string;
+  directionMeta?: Record<string, any>;
 }): Promise<{ success: boolean; systemData: SystemDataPayload }> {
   return invokeHdms("upsertRouteAction", [payload]);
 }

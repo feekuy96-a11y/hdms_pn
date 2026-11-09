@@ -155,7 +155,49 @@ export interface MapLineStyleItem {
   dashArray?: string;
   animation: "none" | "chaser" | "arrows" | "pulse" | "blink";
   animationSpeed?: "slow" | "normal" | "fast";
+  showArrows?: boolean;
+  arrowColor?: string;
+  arrowSize?: number;
+  arrowSpacingPx?: number;
+  arrowMinZoom?: number;
 }
+
+export const ROAD_SIDE_OPTIONS = [
+  { value: "BOTH", label: "ทั้งสองฝั่ง (ขาไปและขากลับ)" },
+  { value: "LEFT", label: "ฝั่งซ้ายทาง (อ้างอิงตามทิศ กม. เพิ่มขึ้น)" },
+  { value: "RIGHT", label: "ฝั่งขวาทาง (อ้างอิงตามทิศ กม. เพิ่มขึ้น)" },
+  { value: "UNKNOWN", label: "ไม่ระบุ / ไม่ทราบฝั่ง" },
+] as const;
+
+export type RoadSideType = (typeof ROAD_SIDE_OPTIONS)[number]["value"];
+
+export const AFFECTED_LANES_OPTIONS = [
+  "ทุกช่องจราจร",
+  "ช่องจราจรที่ 1 (ช่องซ้ายสุด)",
+  "ช่องจราจรที่ 1 และ 2",
+  "ช่องจราจรขวาสุด (ติดเกาะกลาง)",
+  "เฉพาะไหล่ทาง / ทางคู่ขนาน",
+  "ไม่ระบุช่องจราจร",
+] as const;
+
+export const AFFECTED_SHOULDER_OPTIONS = [
+  { value: "NONE", label: "ไม่กระทบไหล่ทาง / ปกติ" },
+  { value: "LEFT", label: "ท่วมไหล่ทางซ้าย" },
+  { value: "RIGHT", label: "ท่วมไหล่ทางขวา" },
+  { value: "BOTH", label: "ท่วมไหล่ทางทั้งสองฝั่ง" },
+  { value: "AFFECTED", label: "ท่วมไหล่ทาง (ไม่ระบุฝั่ง)" },
+  { value: "UNKNOWN", label: "ไม่ทราบสถานะไหล่ทาง" },
+] as const;
+
+export type AffectedShoulderType = (typeof AFFECTED_SHOULDER_OPTIONS)[number]["value"];
+
+export const DETOUR_DIRECTION_MODES = [
+  { value: "TWO_WAY", label: "ไป-กลับ ๒ ทิศทาง", desc: "คำนวณ A→B และ B→A แยกตามถนนจริง" },
+  { value: "FORWARD_ONLY", label: "เฉพาะขาไป (A → B)", desc: "เดินรถทิศทางเดียวจากจุด A ไป B" },
+  { value: "REVERSE_ONLY", label: "เฉพาะขากลับ (B → A)", desc: "เดินรถทิศทางเดียวจากจุด B ไป A" },
+] as const;
+
+export type DetourDirectionModeType = (typeof DETOUR_DIRECTION_MODES)[number]["value"];
 
 export const DEFAULT_MAP_STYLES: Record<"flood" | "detour" | "primary" | "secondary", MapLineStyleItem> = {
   flood: {
@@ -171,6 +213,11 @@ export const DEFAULT_MAP_STYLES: Record<"flood" | "detour" | "primary" | "second
     pattern: "solid",
     animation: "pulse",
     animationSpeed: "normal",
+    showArrows: false,
+    arrowColor: "#ffffff",
+    arrowSize: 12,
+    arrowSpacingPx: 140,
+    arrowMinZoom: 12,
   },
   detour: {
     color: "#FBC02D",
@@ -186,6 +233,11 @@ export const DEFAULT_MAP_STYLES: Record<"flood" | "detour" | "primary" | "second
     dashArray: "8, 6",
     animation: "chaser",
     animationSpeed: "normal",
+    showArrows: true,
+    arrowColor: "#0f172a",
+    arrowSize: 13,
+    arrowSpacingPx: 120,
+    arrowMinZoom: 11,
   },
   primary: {
     color: "#1B5E20",
@@ -200,6 +252,11 @@ export const DEFAULT_MAP_STYLES: Record<"flood" | "detour" | "primary" | "second
     pattern: "solid",
     animation: "none",
     animationSpeed: "normal",
+    showArrows: true,
+    arrowColor: "#ffffff",
+    arrowSize: 11,
+    arrowSpacingPx: 160,
+    arrowMinZoom: 12,
   },
   secondary: {
     color: "#0284c7",
@@ -214,6 +271,11 @@ export const DEFAULT_MAP_STYLES: Record<"flood" | "detour" | "primary" | "second
     pattern: "solid",
     animation: "none",
     animationSpeed: "normal",
+    showArrows: true,
+    arrowColor: "#ffffff",
+    arrowSize: 10,
+    arrowSpacingPx: 180,
+    arrowMinZoom: 13,
   },
 };
 

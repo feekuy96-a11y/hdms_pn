@@ -30,6 +30,36 @@ const trafficStatusLabel = (status: unknown) => ({
   WARNING: "เฝ้าระวัง",
 }[String(status)] || "ไม่ระบุสถานะ");
 
+const roadSideLabel = (side: unknown) => ({
+  LEFT: "ฝั่งซ้ายทาง (ตามทิศ กม. เพิ่มขึ้น)",
+  RIGHT: "ฝั่งขวาทาง (ตามทิศ กม. เพิ่มขึ้น)",
+  BOTH: "ทั้งสองฝั่งจราจร",
+  UNKNOWN: "ไม่ระบุฝั่ง",
+}[String(side || "UNKNOWN")] || "ไม่ระบุฝั่ง");
+
+const shoulderLabel = (shoulder: unknown) => ({
+  NONE: "ปกติ",
+  LEFT: "ท่วมไหล่ทางซ้าย",
+  RIGHT: "ท่วมไหล่ทางขวา",
+  BOTH: "ท่วมไหล่ทางทั้งสองฝั่ง",
+  AFFECTED: "ท่วมไหล่ทาง",
+  UNKNOWN: "ไม่ทราบสถานะไหล่ทาง",
+}[String(shoulder || "NONE")] || "ปกติ");
+
+const detourDirectionLabel = (mode: unknown) => ({
+  TWO_WAY: "ไป-กลับ ๒ ทิศทาง (A ⇄ B)",
+  FORWARD_ONLY: "ทิศทางเดียว: เฉพาะขาไป (A → B)",
+  REVERSE_ONLY: "ทิศทางเดียว: เฉพาะขากลับ (B → A)",
+}[String(mode || "TWO_WAY")] || "ไป-กลับ ๒ ทิศทาง (A ⇄ B)");
+
+export function isFloodLineVisibleOnCurrentMap(flood: FloodRoute): boolean {
+  if (!flood.is_active) return false;
+  const known = flood.direction_meta?.water_level_known !== false;
+  // รายการที่ 3: หากยืนยันระดับน้ำล่าสุดเป็น 0 ซม. ให้ซ่อนเส้นน้ำท่วมออกจากแผนที่สถานการณ์ปัจจุบัน (แต่ถ้าไม่ทราบระดับน้ำ ไม่ตีความเป็น 0)
+  if (known && Number(flood.water_level_cm) === 0) return false;
+  return true;
+}
+
 /**
  * ปรับพิกัดให้เป็น [Latitude, Longitude] สำหรับ Leaflet เสมอ
  * ป้องกันพิกัดสลับที่ทำให้ละติจูดพุ่งขึ้นไป 101 องศาลงทะเล
@@ -149,14 +179,18 @@ function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color: string
 }
 
 function buildDetourPopupHtml(detour: DetourRoute, color: string): string {
+  const dirMode = detour.direction_mode || "TWO_WAY";
   return `
-    <div class="text-xs p-2.5 min-w-[240px] font-body bg-slate-950 text-white rounded-xl border" style="border-color: ${color}">
+    <div class="text-xs p-2.5 min-w-[250px] font-body bg-slate-950 text-white rounded-xl border" style="border-color: ${color}">
       <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
         <span style="color:${color}" aria-hidden="true">↪</span>
         <h4 class="font-bold text-white text-sm font-heading">${escapeHtml(detour.route_name)}</h4>
       </div>
-      <p class="text-slate-300 mt-2 whitespace-pre-wrap">${escapeHtml(detour.description || "ยังไม่มีคำแนะนำการเดินทาง")}</p>
-      <div class="mt-2 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1.5 text-[10px] text-amber-300">${detour.flood_id_ref ? "เชื่อมโยงกับเหตุการณ์น้ำท่วม" : "ทางเลี่ยงอิสระ"}</div>
+      <div class="mt-2 flex flex-wrap gap-1">
+        <span class="rounded bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">${escapeHtml(detourDirectionLabel(dirMode))}</span>
+        <span class="rounded bg-slate-900 border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-300">${detour.flood_id_ref ? "เชื่อมโยงจุดน้ำท่วม" : "ทางเลี่ยงอิสระ"}</span>
+      </div>
+      <p class="text-slate-300 mt-2 whitespace-pre-wrap text-[11px] max-h-44 overflow-y-auto">${escapeHtml(detour.description || "ยังไม่มีคำแนะนำการเดินทาง")}</p>
     </div>
   `;
 }
@@ -172,7 +206,16 @@ function buildFloodPopupHtml(flood: FloodRoute, updates: TimelineUpdate[]): stri
     return `<circle cx="${xFor(index)}" cy="${yFor(update.water_level_cm)}" r="2.5" fill="#f59e0b"><title>${escapeHtml(time)} · ${update.water_level_cm} ซม.</title></circle>`;
   }).join("");
   const linePoints = updates.map((update, index) => `${xFor(index)},${yFor(update.water_level_cm)}`).join(" ");
-  return `<div style="width:250px;color:#0f172a;font-family:Sarabun,sans-serif"><strong>ทล.${escapeHtml(flood.route_no)} ${escapeHtml(flood.section_name)}</strong><div style="font-size:12px;margin-top:3px">ระหว่าง กม.${escapeHtml(formatKmPost(flood.km_start))} ถึง กม.${escapeHtml(formatKmPost(flood.km_end))}</div>${flood.latest_photo_url ? `<img src="${escapeHtml(flood.latest_photo_url)}" alt="ภาพสถานการณ์" style="width:100%;height:108px;object-fit:cover;border-radius:8px;margin-top:7px"/>` : ""}<div style="margin-top:7px;font-size:13px"><b>ระดับน้ำล่าสุด ${flood.water_level_cm} ซม.</b> · ${escapeHtml(trafficStatusLabel(flood.traffic_status))}</div>${updates.length ? `<svg viewBox="0 0 120 56" style="width:100%;height:80px;margin-top:4px"><line x1="8" y1="48" x2="112" y2="48" stroke="#cbd5e1"/><polyline points="${linePoints}" fill="none" stroke="#f59e0b" stroke-width="2"/>${chartPoints}</svg><div style="font-size:10px;color:#64748b">ชี้ที่จุดกราฟเพื่อดูเวลาและระดับน้ำ</div>` : `<div style="font-size:11px;color:#64748b;margin-top:3px">ยังไม่มีข้อมูลระดับน้ำย้อนหลัง</div>`}</div>`;
+  const waterKnown = flood.direction_meta?.water_level_known !== false;
+  const levelDisplay = waterKnown ? `${flood.water_level_cm} ซม.` : "ไม่ระบุระดับน้ำ (รอวัดหน้างาน)";
+  const sideCode = flood.road_side || "UNKNOWN";
+  const sideDisplay = roadSideLabel(sideCode);
+  const unreportedSideNote = (sideCode === "LEFT" || sideCode === "RIGHT")
+    ? `<div style="margin-top:4px;padding:3px 6px;border-radius:6px;background:#fef3c7;color:#92400e;font-size:10px">⚠️ ฝั่งตรงข้ามที่ไม่ได้รายงาน: ยังไม่ยืนยันความปลอดภัย โปรดใช้ความระมัดระวัง</div>`
+    : "";
+  const lanesDisplay = flood.affected_lanes ? ` · ช่องจราจร: ${escapeHtml(flood.affected_lanes)}` : "";
+  const shoulderDisplay = flood.affected_shoulder && flood.affected_shoulder !== "NONE" ? ` · ไหล่ทาง: ${escapeHtml(shoulderLabel(flood.affected_shoulder))}` : "";
+  return `<div style="width:265px;color:#0f172a;font-family:Sarabun,sans-serif"><strong>ทล.${escapeHtml(flood.route_no)} ${escapeHtml(flood.section_name)}</strong><div style="font-size:12px;margin-top:3px">ระหว่าง กม.${escapeHtml(formatKmPost(flood.km_start))} ถึง กม.${escapeHtml(formatKmPost(flood.km_end))}</div><div style="font-size:11px;margin-top:3px;color:#334155"><b>ฝั่งที่เกิดเหตุ:</b> ${escapeHtml(sideDisplay)}${lanesDisplay}${shoulderDisplay}</div>${unreportedSideNote}${flood.latest_photo_url ? `<img src="${escapeHtml(flood.latest_photo_url)}" alt="ภาพสถานการณ์" style="width:100%;height:108px;object-fit:cover;border-radius:8px;margin-top:7px"/>` : ""}<div style="margin-top:7px;font-size:13px"><b>ระดับน้ำล่าสุด ${escapeHtml(levelDisplay)}</b> · ${escapeHtml(trafficStatusLabel(flood.traffic_status))}</div>${updates.length ? `<svg viewBox="0 0 120 56" style="width:100%;height:80px;margin-top:4px"><line x1="8" y1="48" x2="112" y2="48" stroke="#cbd5e1"/><polyline points="${linePoints}" fill="none" stroke="#f59e0b" stroke-width="2"/>${chartPoints}</svg><div style="font-size:10px;color:#64748b">ชี้ที่จุดกราฟเพื่อดูเวลาและระดับน้ำ</div>` : `<div style="font-size:11px;color:#64748b;margin-top:3px">ยังไม่มีข้อมูลระดับน้ำย้อนหลัง</div>`}</div>`;
 }
 
 function buildOfficePopupHtml(office: DohOfficeLocation): string {
@@ -204,9 +247,14 @@ interface LongdoGisMapProps {
   adminPickMode?: string | null;
   onCoordinatePicked?: (lat: number, lon: number, mode: string) => void;
   draftCoordinates?: [number, number][];
+  draftReverseCoordinates?: [number, number][];
   draftWaypoints?: [number, number][];
+  draftReverseWaypoints?: [number, number][];
   draftPickMarkers?: { lat: number; lon: number; label: string; mode: string }[];
+  draftDirectionMeta?: "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN";
+  draftConflictPoints?: [number, number][];
   onWaypointDragged?: (index: number, newCoord: [number, number]) => void;
+  onReverseWaypointDragged?: (index: number, newCoord: [number, number]) => void;
   /** Freeform line editor (Google My Maps style): show draggable handles on every vertex of the draft line. */
   vertexEditable?: boolean;
   onVertexMoved?: (index: number, newCoord: [number, number]) => void;
@@ -229,9 +277,14 @@ export function LongdoGisMap({
   adminPickMode = null,
   onCoordinatePicked,
   draftCoordinates = EMPTY_COORDS,
+  draftReverseCoordinates = EMPTY_COORDS,
   draftWaypoints = EMPTY_COORDS,
+  draftReverseWaypoints = EMPTY_COORDS,
   draftPickMarkers = EMPTY_PICK_MARKERS,
+  draftDirectionMeta = "TWO_WAY",
+  draftConflictPoints = EMPTY_COORDS,
   onWaypointDragged,
+  onReverseWaypointDragged,
   vertexEditable = false,
   onVertexMoved,
   onVertexInserted,
@@ -254,6 +307,7 @@ export function LongdoGisMap({
   const detourGroupRef = useRef<any>(null);
   const floodGroupRef = useRef<any>(null);
   const draftGroupRef = useRef<any>(null);
+  const arrowGroupRef = useRef<any>(null);
   const draftLineRef = useRef<any>(null);
   const vertexGroupRef = useRef<any>(null);
   const officeGroupRef = useRef<any>(null);
@@ -264,6 +318,8 @@ export function LongdoGisMap({
   const [activeBaseMap, setActiveBaseMap] = useState<"road" | "sat" | "longdo">("longdo");
   const [isLayerControlCollapsed, setIsLayerControlCollapsed] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const [currentZoom, setCurrentZoom] = useState<number>(APP_CONFIG.DEFAULT_ZOOM);
+  const [forceShowAllHighways, setForceShowAllHighways] = useState(false);
   const [showFloodLayer, setShowFloodLayer] = useState(true);
   const [showDetourLayer, setShowDetourLayer] = useState(true);
   const [showMainHwy, setShowMainHwy] = useState(true);
@@ -325,6 +381,8 @@ export function LongdoGisMap({
   onCoordinatePickedRef.current = onCoordinatePicked;
   const onWaypointDraggedRef = useRef(onWaypointDragged);
   onWaypointDraggedRef.current = onWaypointDragged;
+  const onReverseWaypointDraggedRef = useRef(onReverseWaypointDragged);
+  onReverseWaypointDraggedRef.current = onReverseWaypointDragged;
   const onOfficeDraggedRef = useRef(onOfficeDragged);
   onOfficeDraggedRef.current = onOfficeDragged;
   const onVertexMovedRef = useRef(onVertexMoved);
@@ -400,9 +458,15 @@ export function LongdoGisMap({
         detourGroupRef.current = L.layerGroup().addTo(map);
         floodGroupRef.current = L.layerGroup().addTo(map);
         draftGroupRef.current = L.layerGroup().addTo(map);
+        arrowGroupRef.current = L.layerGroup().addTo(map);
         vertexGroupRef.current = L.layerGroup().addTo(map);
         officeGroupRef.current = L.layerGroup().addTo(map);
         shieldGroupRef.current = L.layerGroup().addTo(map);
+
+        setCurrentZoom(map.getZoom());
+        map.on("zoomend", () => {
+          setCurrentZoom(map.getZoom());
+        });
 
         setMapReady(true);
 
@@ -442,6 +506,7 @@ export function LongdoGisMap({
       detourGroupRef.current = null;
       floodGroupRef.current = null;
       draftGroupRef.current = null;
+      arrowGroupRef.current = null;
       draftLineRef.current = null;
       vertexGroupRef.current = null;
       officeGroupRef.current = null;
@@ -558,13 +623,27 @@ export function LongdoGisMap({
     return items;
   }, [systemData.highwayLayers]);
 
-  // 4a. Highway network (the heaviest layer) - independent from drafts, zoom, selection and picking.
+  // Set of highway numbers that currently have active flood or detour incidents (must remain visible even when zoomed out)
+  const criticalHighwayRouteNos = useMemo(() => {
+    const set = new Set<string>();
+    (systemData.floodRoutes || []).forEach((f) => {
+      if (f.is_active && f.route_no) {
+        set.add(String(f.route_no).replace(/^ทล\.?/i, "").trim());
+      }
+    });
+    return set;
+  }, [systemData.floodRoutes]);
+
+  // 4a. Highway network (Zoom-dependent rendering per Item 1: Zoom < 11 hides secondary highways unless they have active critical incidents or forceShowAllHighways is toggled).
+  const showSecondaryAtCurrentZoom = forceShowAllHighways || currentZoom >= 11;
+
   useEffect(() => {
     const L = leafletRef.current;
     const group = highwayGroupRef.current;
     if (!mapReady || !L || !group) return;
     group.clearLayers();
     const renderer = rendererRef.current;
+    const isLowZoom = currentZoom < 11;
 
     (systemData.highwayLayers || []).forEach((layer) => {
       if (!layer.is_visible || !layer.geojson_data) return;
@@ -579,9 +658,15 @@ export function LongdoGisMap({
         const geoLayer = L.geoJSON(layer.geojson_data, {
           renderer,
           filter: (feature: any) => {
+            if (feature?.properties?.is_visible === false) return false;
             const type = feature?.properties?.highway_type;
             const featureIsMain = type === "MAIN_HIGHWAY" ? true : type === "SECOND_HIGHWAY" ? false : isMain;
-            return feature?.properties?.is_visible !== false && (featureIsMain ? showMainHwy : showSecHwy);
+            if (featureIsMain) return showMainHwy;
+            if (!showSecHwy) return false;
+            if (showSecondaryAtCurrentZoom) return true;
+            // When zoomed out (< 11), keep secondary highways that have an active critical flood incident
+            const code = String(routeCodeOf(feature?.properties)).replace(/^ทล\.?/i, "").trim();
+            return Boolean(code && criticalHighwayRouteNos.has(code));
           },
           style: (feature: any) => {
             const props = feature?.properties || {};
@@ -594,6 +679,9 @@ export function LongdoGisMap({
               else if (lanesStr.includes("๖") || lanesStr.includes("6")) featureWeight = 7.5;
               else if (lanesStr.includes("๔") || lanesStr.includes("4")) featureWeight = 5.5;
               else if (lanesStr.includes("๒") || lanesStr.includes("2")) featureWeight = 3.5;
+            }
+            if (isLowZoom) {
+              featureWeight = Math.max(2, featureWeight * 0.8);
             }
             return {
               color: featureStyle?.color || color,
@@ -641,7 +729,7 @@ export function LongdoGisMap({
     return () => {
       group.clearLayers();
     };
-  }, [mapReady, systemData.highwayLayers, mapStyles, showMainHwy, showSecHwy, showRoadLabels]);
+  }, [mapReady, systemData.highwayLayers, mapStyles, showMainHwy, showSecHwy, showRoadLabels, showSecondaryAtCurrentZoom, criticalHighwayRouteNos, currentZoom]);
 
   // 4b. Highway shield labels - viewport-limited, grid-based collision check, redrawn on pan/zoom.
   useEffect(() => {
@@ -655,7 +743,8 @@ export function LongdoGisMap({
     let timer: ReturnType<typeof setTimeout> | null = null;
     const draw = () => {
       group.clearLayers();
-      if (map.getZoom() < 11) return;
+      const z = map.getZoom();
+      if (z < 10) return;
       const viewport = map.getBounds().pad(0.25);
       const occupied: Record<string, Array<{ x: number; y: number }>> = {};
       let drawn = 0;
@@ -663,6 +752,7 @@ export function LongdoGisMap({
       for (const item of shieldCandidates) {
         if (drawn >= MAX_VISIBLE_SHIELDS) break;
         if (item.isMain ? !showMainHwy : !showSecHwy) continue;
+        if (!item.isMain && z < 11 && !forceShowAllHighways && !criticalHighwayRouteNos.has(item.code.replace(/^ทล\.?/i, "").trim())) continue;
         if (!viewport.contains(item.latlng)) continue;
         const point = map.latLngToContainerPoint(item.latlng);
         const cellX = Math.floor(point.x / 48);
@@ -703,9 +793,9 @@ export function LongdoGisMap({
       map.off("moveend zoomend", schedule);
       group.clearLayers();
     };
-  }, [mapReady, shieldCandidates, showHighwayShields, showMainHwy, showSecHwy]);
+  }, [mapReady, shieldCandidates, showHighwayShields, showMainHwy, showSecHwy, forceShowAllHighways, criticalHighwayRouteNos]);
 
-  // 4c. Detour routes
+  // 4c. Detour routes (Supports A->B, B->A asymmetric carriageways & one-way detours per Item 4)
   useEffect(() => {
     const L = leafletRef.current;
     const group = detourGroupRef.current;
@@ -720,28 +810,49 @@ export function LongdoGisMap({
 
     (systemData.detourRoutes || []).forEach((detour) => {
       if (!detour.is_active) return;
-      const coords = parseRouteCoordinates(detour.coordinates_json);
-      if (coords.length < 2) return;
-      const latLngs = coords.map(toLeafletLatLng);
+      const dirMode = detour.direction_mode || "TWO_WAY";
+      const fwdCoords = parseRouteCoordinates(detour.coordinates_json);
+      const revCoords = parseRouteCoordinates(detour.reverse_coordinates_json);
 
-      const polyline = L.polyline(latLngs as any, {
-        color: dColor,
-        weight: detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight,
-        dashArray: dDash,
-        opacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
-        className,
-        renderer,
-      }).addTo(group);
-      polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor));
+      // Draw forward A->B line if mode is TWO_WAY or FORWARD_ONLY
+      if (dirMode !== "REVERSE_ONLY" && fwdCoords.length >= 2) {
+        const latLngs = fwdCoords.map(toLeafletLatLng);
+        const polyline = L.polyline(latLngs as any, {
+          color: dColor,
+          weight: detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight,
+          dashArray: dDash,
+          opacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
+          className,
+          renderer,
+        }).addTo(group);
+        polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor));
 
-      const midPoint = latLngs[Math.floor(latLngs.length / 2)];
-      const detourIcon = L.divIcon({
-        html: `<div class="doh-route-symbol" style="width:30px;height:30px;border-radius:9px;background:${dColor};color:#0f172a;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(15,23,42,.45)"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9"/><path d="m15 2 3 3-3 3"/><path d="M9 19h10"/><path d="m16 16 3 3-3 3"/></svg></div>`,
-        className: "doh-detour-symbol",
-        iconSize: [30, 30],
-        iconAnchor: [15, 15],
-      });
-      L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(() => buildDetourPopupHtml(detour, dColor)).addTo(group);
+        const midPoint = latLngs[Math.floor(latLngs.length / 2)];
+        const detourIcon = L.divIcon({
+          html: `<div class="doh-route-symbol" style="width:30px;height:30px;border-radius:9px;background:${dColor};color:#0f172a;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(15,23,42,.45)"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9"/><path d="m15 2 3 3-3 3"/><path d="M9 19h10"/><path d="m16 16 3 3-3 3"/></svg></div>`,
+          className: "doh-detour-symbol",
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
+        });
+        L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(() => buildDetourPopupHtml(detour, dColor)).addTo(group);
+      }
+
+      // Draw reverse B->A line if present and distinct (or when REVERSE_ONLY)
+      if (dirMode !== "FORWARD_ONLY") {
+        const effectiveRev = revCoords.length >= 2 ? revCoords : (dirMode === "REVERSE_ONLY" ? fwdCoords : []);
+        if (effectiveRev.length >= 2) {
+          const revLatLngs = effectiveRev.map(toLeafletLatLng);
+          const revColor = dirMode === "REVERSE_ONLY" ? dColor : (detour.detour_meta?.arrow_color_reverse || "#38bdf8");
+          const revPolyline = L.polyline(revLatLngs as any, {
+            color: revColor,
+            weight: Math.max(3.5, (detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight) - 0.5),
+            dashArray: dDash || "6, 6",
+            opacity: detourStyle?.opacity ?? 0.9,
+            renderer,
+          }).addTo(group);
+          revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor));
+        }
+      }
     });
 
     // Keep stacking order: highways (bottom) < detours < floods < drafts.
@@ -751,7 +862,7 @@ export function LongdoGisMap({
     };
   }, [mapReady, systemData.detourRoutes, showDetourLayer, mapStyles]);
 
-  // 4d. Flood routes + capsule markers. Selection no longer rebuilds this layer (see 4e).
+  // 4d. Flood routes + capsule markers (Item 3: Hide flood line from current map when confirmed water_level_cm === 0, while preserving DB history).
   useEffect(() => {
     const L = leafletRef.current;
     const group = floodGroupRef.current;
@@ -775,7 +886,7 @@ export function LongdoGisMap({
     Object.values(updatesByFlood).forEach((list) => list.sort((a, b) => new Date(a.reported_at).getTime() - new Date(b.reported_at).getTime()));
 
     (systemData.floodRoutes || []).forEach((flood) => {
-      if (!flood.is_active) return;
+      if (!isFloodLineVisibleOnCurrentMap(flood)) return;
       const coords = parseRouteCoordinates(flood.coordinates_json);
 
       if (coords.length >= 2) {
@@ -794,31 +905,32 @@ export function LongdoGisMap({
         });
       }
 
-      // Flood location marker (capsule badge with route number and level) - centered on line
+      // Flood location marker (capsule badge with route number, side badge, and level) - centered on line
       const midCoord = coords.length > 0 ? coords[Math.floor(coords.length / 2)] : null;
       const midLat = midCoord ? midCoord[1] : (flood.lat_start || APP_CONFIG.DEFAULT_CENTER.lat);
       const midLon = midCoord ? midCoord[0] : (flood.lon_start || APP_CONFIG.DEFAULT_CENTER.lon);
 
+      const waterKnown = flood.direction_meta?.water_level_known !== false;
       let capsuleClass = "doh-capsule-tag doh-capsule-amber";
-      let levelText = `${flood.water_level_cm} ซม.`;
-      if (flood.traffic_status === "CLOSED" || flood.water_level_cm >= 40) {
+      const levelText = waterKnown ? `${flood.water_level_cm} ซม.` : "รอวัดระดับน้ำ";
+      if (flood.traffic_status === "CLOSED" || (waterKnown && flood.water_level_cm >= 40)) {
         capsuleClass = "doh-capsule-tag doh-capsule-red";
-      } else if (flood.water_level_cm === 0 || ["PASSABLE", "LIGHT_VEHICLES_ONLY"].includes(flood.traffic_status)) {
+      } else if (["PASSABLE", "LIGHT_VEHICLES_ONLY"].includes(flood.traffic_status)) {
         capsuleClass = "doh-capsule-tag doh-capsule-green";
-        levelText = "ปกติ";
       }
+      const sideBadge = flood.road_side === "LEFT" ? " [ซ้าย]" : flood.road_side === "RIGHT" ? " [ขวา]" : "";
 
       const pinIcon = L.divIcon({
         html: `
             <div class="${capsuleClass}">
               <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-sky-700" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M12 3v2"/></svg></span>
-              <span>ทล.${escapeHtml(flood.route_no)}</span>
+              <span>ทล.${escapeHtml(flood.route_no)}${escapeHtml(sideBadge)}</span>
               <span class="opacity-90">(${escapeHtml(levelText)})</span>
             </div>
           `,
         className: "doh-map-capsule-pin",
-        iconSize: [120, 28],
-        iconAnchor: [60, 14],
+        iconSize: [130, 28],
+        iconAnchor: [65, 14],
       });
 
       const marker = L.marker([midLat, midLon], { icon: pinIcon }).addTo(group);
@@ -843,7 +955,7 @@ export function LongdoGisMap({
     });
   }, [selectedFloodId, mapReady, systemData.floodRoutes, showFloodLayer, mapStyles]);
 
-  // 4f. Admin draft route, imported-GIS preview and draggable markers (small, redrawn often).
+  // 4f. Admin draft route (A->B and B->A), conflict alerts, imported-GIS preview and draggable markers.
   useEffect(() => {
     const L = leafletRef.current;
     const group = draftGroupRef.current;
@@ -864,7 +976,7 @@ export function LongdoGisMap({
       }).addTo(group);
     });
 
-    // Snapped draft route
+    // Snapped draft route (Primary / Forward A->B)
     if (draftCoordinates.length >= 2) {
       const draftColor = draftMode === "FLOOD"
         ? (mapStyles.flood?.color || "#ef4444")
@@ -887,6 +999,37 @@ export function LongdoGisMap({
       });
     }
 
+    // Snapped reverse draft route (B->A for Detour or Dual Carriageway preview)
+    if (draftReverseCoordinates.length >= 2) {
+      const revDraftLine = L.polyline(draftReverseCoordinates.map(toLeafletLatLng) as any, {
+        color: "#38bdf8",
+        weight: 5,
+        dashArray: "6, 6",
+        opacity: 0.95,
+        renderer,
+      }).addTo(group);
+      revDraftLine.on("click", (event: any) => {
+        if (adminPickModeRef.current !== "ADD_REVERSE_WAYPOINT") return;
+        L.DomEvent.stopPropagation(event);
+        const point = event.latlng;
+        onCoordinatePickedRef.current?.(Number(point.lat.toFixed(6)), Number(point.lng.toFixed(6)), "ADD_REVERSE_WAYPOINT");
+      });
+    }
+
+    // Closed-road conflict warning markers on draft detour
+    draftConflictPoints.forEach((pt, idx) => {
+      const [lat, lng] = toLeafletLatLng(pt);
+      const conflictIcon = L.divIcon({
+        html: `<div style="width:28px;height:28px;border-radius:50%;background:#dc2626;color:#fff;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;box-shadow:0 0 12px rgba(220,38,38,0.9)">!</div>`,
+        className: "doh-conflict-marker",
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      });
+      L.marker([lat, lng], { icon: conflictIcon, zIndexOffset: 1500 })
+        .bindTooltip(`⚠️ จุดตัดผ่านถนนที่ปิดการจราจร (#${idx + 1}) — ห้ามใช้เส้นทางนี้`, { direction: "top" })
+        .addTo(group);
+    });
+
     // Start / end pick markers (A / B)
     draftPickMarkers.forEach((point) => {
       const icon = L.divIcon({
@@ -902,7 +1045,7 @@ export function LongdoGisMap({
       });
     });
 
-    // Numbered draggable waypoints for bending paths (ดัดเส้น)
+    // Numbered draggable waypoints for forward path (A->B)
     draftWaypoints.forEach((wp, idx) => {
       const wpIcon = L.divIcon({
         html: `<div class="w-6 h-6 rounded-full bg-amber-400 text-slate-950 border-2 border-slate-950 font-heading font-black text-[11px] flex items-center justify-center shadow-lg cursor-move">${idx + 1}</div>`,
@@ -911,10 +1054,26 @@ export function LongdoGisMap({
         iconAnchor: [12, 12],
       });
       const wpMarker = L.marker([wp[1], wp[0]], { icon: wpIcon, draggable: true }).addTo(group);
-      wpMarker.bindTooltip(`จุดดัดเส้นทางที่ ${idx + 1} (ลากหมุดนี้เพื่อขยับแนวถนน)`, { direction: "top" });
+      wpMarker.bindTooltip(`จุดดัดขาไป A→B ที่ ${idx + 1} (ลากหมุดเพื่อขยับแนวถนน)`, { direction: "top" });
       wpMarker.on("dragend", (ev: any) => {
         const pos = ev.target.getLatLng();
         onWaypointDraggedRef.current?.(idx, [Number(pos.lng.toFixed(6)), Number(pos.lat.toFixed(6))]);
+      });
+    });
+
+    // Numbered draggable waypoints for reverse path (B->A)
+    draftReverseWaypoints.forEach((wp, idx) => {
+      const wpIcon = L.divIcon({
+        html: `<div class="w-6 h-6 rounded-full bg-sky-400 text-slate-950 border-2 border-slate-950 font-heading font-black text-[11px] flex items-center justify-center shadow-lg cursor-move">R${idx + 1}</div>`,
+        className: "doh-wp-rev-marker",
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      });
+      const wpMarker = L.marker([wp[1], wp[0]], { icon: wpIcon, draggable: true }).addTo(group);
+      wpMarker.bindTooltip(`จุดดัดขากลับ B→A ที่ ${idx + 1} (ลากหมุดเพื่อขยับแนวถนน)`, { direction: "top" });
+      wpMarker.on("dragend", (ev: any) => {
+        const pos = ev.target.getLatLng();
+        onReverseWaypointDraggedRef.current?.(idx, [Number(pos.lng.toFixed(6)), Number(pos.lat.toFixed(6))]);
       });
     });
 
@@ -923,7 +1082,205 @@ export function LongdoGisMap({
       draftLineRef.current = null;
       group.clearLayers();
     };
-  }, [mapReady, incomingGisLines, draftCoordinates, draftWaypoints, draftPickMarkers, draftMode, mapStyles]);
+  }, [mapReady, incomingGisLines, draftCoordinates, draftReverseCoordinates, draftWaypoints, draftReverseWaypoints, draftConflictPoints, draftPickMarkers, draftMode, mapStyles]);
+
+  // 4f-arrows. Directional Arrow System (Items 2 & 4): Viewport-culled, zoom-gated directional arrows for highways, detours, and active draft previews.
+  useEffect(() => {
+    const L = leafletRef.current;
+    const map = leafletMapRef.current;
+    const group = arrowGroupRef.current;
+    if (!mapReady || !L || !map || !group) return;
+    group.clearLayers();
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const MAX_ARROWS = 160;
+
+    const placeArrowsOnLine = (
+      coords: [number, number][],
+      direction: "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN",
+      color: string,
+      sizePx: number,
+      spacingPx: number,
+      bgBadge: string | null,
+      viewport: any,
+      counter: { count: number }
+    ) => {
+      if (direction === "UNKNOWN" || coords.length < 2 || counter.count >= MAX_ARROWS) return;
+      const latLngs = coords.map(toLeafletLatLng);
+      let accumPx = spacingPx * 0.45;
+
+      for (let i = 0; i < latLngs.length - 1 && counter.count < MAX_ARROWS; i++) {
+        const p1 = latLngs[i];
+        const p2 = latLngs[i + 1];
+        if (!viewport.contains(p1) && !viewport.contains(p2)) continue;
+
+        const pt1 = map.latLngToContainerPoint(p1);
+        const pt2 = map.latLngToContainerPoint(p2);
+        const dx = pt2.x - pt1.x;
+        const dy = pt2.y - pt1.y;
+        const segLenPx = Math.hypot(dx, dy);
+        if (segLenPx < 6) continue;
+
+        while (accumPx + segLenPx >= spacingPx && counter.count < MAX_ARROWS) {
+          const remain = spacingPx - accumPx;
+          const ratio = Math.max(0, Math.min(1, remain / segLenPx));
+          const lat = p1[0] + (p2[0] - p1[0]) * ratio;
+          const lng = p1[1] + (p2[1] - p1[1]) * ratio;
+
+          if (viewport.contains([lat, lng])) {
+            let angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+            if (direction === "REVERSE") angleDeg += 180;
+
+            const svgHtml =
+              direction === "TWO_WAY"
+                ? `<div style="transform:rotate(${angleDeg.toFixed(1)}deg);width:${sizePx + 6}px;height:${sizePx + 6}px;display:flex;align-items:center;justify-content:center;${bgBadge ? `background:${bgBadge};border-radius:999px;border:1px solid rgba(255,255,255,0.75);box-shadow:0 1px 4px rgba(0,0,0,0.45);` : "filter:drop-shadow(0 1px 2px rgba(0,0,0,0.85));"}"><svg width="${sizePx}" height="${sizePx}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8l4 4-4 4"/><path d="M7 16l-4-4 4-4"/><path d="M3 12h18"/></svg></div>`
+                : `<div style="transform:rotate(${angleDeg.toFixed(1)}deg);width:${sizePx + 4}px;height:${sizePx + 4}px;display:flex;align-items:center;justify-content:center;${bgBadge ? `background:${bgBadge};border-radius:999px;border:1px solid rgba(255,255,255,0.8);box-shadow:0 1px 4px rgba(0,0,0,0.45);` : "filter:drop-shadow(0 1px 2px rgba(0,0,0,0.85));"}"><svg width="${sizePx}" height="${sizePx}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>`;
+
+            const icon = L.divIcon({
+              html: svgHtml,
+              className: "doh-dir-arrow-icon",
+              iconSize: [sizePx + 6, sizePx + 6],
+              iconAnchor: [(sizePx + 6) / 2, (sizePx + 6) / 2],
+            });
+            L.marker([lat, lng], { icon, interactive: false, keyboard: false }).addTo(group);
+            counter.count++;
+          }
+          accumPx -= spacingPx;
+        }
+        accumPx += segLenPx;
+      }
+    };
+
+    const drawArrows = () => {
+      group.clearLayers();
+      const z = map.getZoom();
+      const viewport = map.getBounds().pad(0.15);
+      const counter = { count: 0 };
+
+      // 1. Draft preview arrows (always shown at zoom >= 11 so admin can inspect before saving)
+      if (z >= 11 && draftCoordinates.length >= 2) {
+        const isDetourDraft = draftMode === "DETOUR";
+        const effectiveDir = draftReverseCoordinates.length >= 2 ? "FORWARD" : draftDirectionMeta;
+        placeArrowsOnLine(
+          draftCoordinates,
+          effectiveDir,
+          isDetourDraft ? "#0f172a" : "#ffffff",
+          13,
+          110,
+          isDetourDraft ? "#f59e0b" : "#0284c7",
+          viewport,
+          counter
+        );
+      }
+      if (z >= 11 && draftReverseCoordinates.length >= 2) {
+        placeArrowsOnLine(
+          draftReverseCoordinates,
+          "FORWARD",
+          "#0f172a",
+          13,
+          110,
+          "#38bdf8",
+          viewport,
+          counter
+        );
+      }
+
+      // 2. Active Detour Route Arrows (Item 4)
+      const detourStyle = mapStyles.detour;
+      const showDetourArrows = detourStyle?.showArrows ?? true;
+      const detourMinZoom = detourStyle?.arrowMinZoom ?? 11;
+      if (showDetourLayer && showDetourArrows && z >= detourMinZoom) {
+        const dArrowColor = detourStyle?.arrowColor || "#0f172a";
+        const dArrowSize = detourStyle?.arrowSize || 12;
+        const dArrowSpacing = detourStyle?.arrowSpacingPx || 120;
+        const dBadgeBg = detourStyle?.color || "#FBC02D";
+
+        (systemData.detourRoutes || []).forEach((detour) => {
+          if (!detour.is_active) return;
+          if (detour.detour_meta?.show_arrows === false) return;
+          const dirMode = detour.direction_mode || "TWO_WAY";
+          const fwd = parseRouteCoordinates(detour.coordinates_json);
+          const rev = parseRouteCoordinates(detour.reverse_coordinates_json);
+
+          if (dirMode === "FORWARD_ONLY") {
+            placeArrowsOnLine(fwd, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
+          } else if (dirMode === "REVERSE_ONLY") {
+            const target = rev.length >= 2 ? rev : fwd;
+            placeArrowsOnLine(target, rev.length >= 2 ? "FORWARD" : "REVERSE", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
+          } else {
+            if (rev.length >= 2) {
+              placeArrowsOnLine(fwd, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
+              placeArrowsOnLine(rev, "FORWARD", "#0f172a", dArrowSize, dArrowSpacing, "#38bdf8", viewport, counter);
+            } else {
+              placeArrowsOnLine(fwd, "TWO_WAY", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
+            }
+          }
+        });
+      }
+
+      // 3. Highway Network Arrows (Item 2: Only draw on features with explicit directional metadata or when zoomed in >= 12)
+      const priStyle = mapStyles.primary;
+      const secStyle = mapStyles.secondary;
+      if (z >= 12) {
+        (systemData.highwayLayers || []).forEach((layer) => {
+          if (!layer.is_visible || !layer.geojson_data) return;
+          const isMain = layer.layer_id === "MAIN_HIGHWAY";
+          geoJsonFeatures(layer.geojson_data).forEach((feature: any) => {
+            const props = feature?.properties || {};
+            if (props.is_visible === false) return;
+            const featureIsMain = props.highway_type === "MAIN_HIGHWAY" ? true : props.highway_type === "SECOND_HIGHWAY" ? false : isMain;
+            if (featureIsMain ? !showMainHwy : !showSecHwy) return;
+            if (!featureIsMain && !showSecondaryAtCurrentZoom) return;
+
+            const st = featureIsMain ? priStyle : secStyle;
+            const allowLayerArrows = (st?.showArrows ?? true) && z >= (st?.arrowMinZoom ?? (featureIsMain ? 12 : 13));
+            if (!allowLayerArrows && !props.arrow_direction) return;
+
+            // Only draw highway arrows when direction metadata is known (never guess from raw vertex order alone)
+            const dirMeta: "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN" =
+              props.arrow_direction === "FORWARD" || props.traffic_direction === "ONE_WAY_FORWARD"
+                ? "FORWARD"
+                : props.arrow_direction === "REVERSE" || props.traffic_direction === "ONE_WAY_REVERSE"
+                ? "REVERSE"
+                : props.arrow_direction === "TWO_WAY" || props.carriageway_type === "SINGLE_CENTERLINE" || props.lanes?.includes("2") || props.lanes?.includes("๒")
+                ? "TWO_WAY"
+                : props.arrow_direction === "UNKNOWN"
+                ? "UNKNOWN"
+                : "TWO_WAY";
+
+            if (props.show_arrows === false || dirMeta === "UNKNOWN") return;
+            const geom = feature?.geometry;
+            const lines: [number, number][][] =
+              geom?.type === "LineString"
+                ? [geom.coordinates]
+                : geom?.type === "MultiLineString"
+                ? geom.coordinates
+                : [];
+            const arrowColor = props.arrow_color || st?.arrowColor || "#ffffff";
+            const arrowSize = Number(props.arrow_size || st?.arrowSize || (featureIsMain ? 11 : 10));
+            const arrowSpacing = Number(props.arrow_spacing_px || st?.arrowSpacingPx || (featureIsMain ? 160 : 180));
+
+            lines.forEach((lineCoords) => {
+              placeArrowsOnLine(lineCoords, dirMeta, arrowColor, arrowSize, arrowSpacing, null, viewport, counter);
+            });
+          });
+        });
+      }
+    };
+
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(drawArrows, 150);
+    };
+
+    drawArrows();
+    map.on("moveend zoomend", schedule);
+    return () => {
+      if (timer) clearTimeout(timer);
+      map.off("moveend zoomend", schedule);
+      group.clearLayers();
+    };
+  }, [mapReady, systemData.highwayLayers, systemData.detourRoutes, mapStyles, showMainHwy, showSecHwy, showDetourLayer, showSecondaryAtCurrentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode]);
 
   // 4h. Freeform vertex editor: draggable handle on every vertex + "+" handle on every segment middle.
   // Only vertices inside the viewport are drawn (at most MAX_VERTEX_HANDLES), so long lines stay fast.
@@ -1137,10 +1494,26 @@ export function LongdoGisMap({
             {legendRouteList === "SECOND_HIGHWAY" && <div role="tooltip" className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white shadow-xl">{legendRoutes("SECOND_HIGHWAY").length ? legendRoutes("SECOND_HIGHWAY").map((route) => <div key={`${route.code}-${route.name}`} className="border-b border-slate-800 py-1 last:border-0"><strong className="text-sky-300">ทล.{route.code}</strong> — {route.name}</div>) : "ไม่มีสายทางที่แสดง"}</div>}
             </div>
 
+            {showSecHwy && (
+              <div className="pl-5 pb-1">
+                <label className="flex items-center justify-between gap-2 cursor-pointer text-[11px] text-slate-300 hover:text-white">
+                  <span className="truncate">
+                    แสดงสายรองทุกระดับซูม {!showSecondaryAtCurrentZoom ? "(ซูมออกซ่อนอัตโนมัติ)" : ""}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={forceShowAllHighways}
+                    onChange={(e) => setForceShowAllHighways(e.target.checked)}
+                    className="accent-amber-400 rounded"
+                  />
+                </label>
+              </div>
+            )}
+
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
                 <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-sky-100 text-sky-700"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/></svg></span>
-                <span>เส้นน้ำท่วม <span className="ml-1 rounded-full bg-red-950 px-1.5 py-0.5 text-[10px] text-red-300">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
+                <span>เส้นน้ำท่วม <span className="ml-1 rounded-full bg-red-950 px-1.5 py-0.5 text-[10px] text-red-300">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => isFloodLineVisibleOnCurrentMap(item)).length : 0}</span></span>
               </span>
               <input
                 type="checkbox"

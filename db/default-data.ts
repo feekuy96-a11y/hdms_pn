@@ -13,6 +13,18 @@ import {
 
 export type { DohOfficeLocation, MapLineStyleItem };
 
+export type RoadSide = "LEFT" | "RIGHT" | "BOTH" | "UNKNOWN";
+export type AffectedShoulder = "NONE" | "LEFT" | "RIGHT" | "BOTH" | "AFFECTED" | "UNKNOWN";
+export type DetourDirectionMode = "TWO_WAY" | "FORWARD_ONLY" | "REVERSE_ONLY";
+
+export interface FloodDirectionMeta {
+  water_level_known?: boolean;
+  carriageway_mode?: "SINGLE" | "DUAL" | "MIXED";
+  arrow_direction?: "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN";
+  safety_measure?: string;
+  [key: string]: any;
+}
+
 export interface FloodRoute {
   id: string;
   route_no: string;
@@ -35,6 +47,22 @@ export interface FloodRoute {
   diff_cm?: number;
   detour_note?: string;
   detour_advice?: string;
+  road_side?: RoadSide;
+  affected_lanes?: string;
+  affected_shoulder?: AffectedShoulder;
+  reporter_name?: string;
+  direction_meta?: FloodDirectionMeta;
+}
+
+export interface DetourMeta {
+  forward_distance_km?: number;
+  reverse_distance_km?: number;
+  is_asymmetric?: boolean;
+  closed_road_verified?: boolean;
+  arrow_color_forward?: string;
+  arrow_color_reverse?: string;
+  show_arrows?: boolean;
+  [key: string]: any;
 }
 
 export interface DetourRoute {
@@ -46,6 +74,10 @@ export interface DetourRoute {
   lat_end: number;
   lon_end: number;
   coordinates_json: string | [number, number][];
+  reverse_coordinates_json?: string | [number, number][];
+  reverse_waypoints_json?: string | [number, number][];
+  direction_mode?: DetourDirectionMode;
+  detour_meta?: DetourMeta;
   description: string;
   is_active: boolean;
   updated_at: string;
@@ -62,6 +94,10 @@ export interface TimelineUpdate {
   photo_url: string;
   reporter_name: string;
   remark: string;
+  road_side?: RoadSide;
+  affected_lanes?: string;
+  affected_shoulder?: AffectedShoulder;
+  direction_meta?: FloodDirectionMeta;
 }
 
 export interface MitigationProject {

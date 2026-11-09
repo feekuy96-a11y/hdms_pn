@@ -38,6 +38,22 @@ interface AdminConsoleProps {
   setDraftCoordinates: (coords: [number, number][]) => void;
   draftWaypoints: [number, number][];
   setDraftWaypoints: React.Dispatch<React.SetStateAction<[number, number][]>>;
+  draftReverseCoordinates?: [number, number][];
+  setDraftReverseCoordinates?: (coords: [number, number][]) => void;
+  draftReverseWaypoints?: [number, number][];
+  setDraftReverseWaypoints?: React.Dispatch<React.SetStateAction<[number, number][]>>;
+  draftDirectionMeta?: {
+    arrowDirection?: "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN";
+    showArrows?: boolean;
+    directionMode?: "TWO_WAY" | "FORWARD_ONLY" | "REVERSE_ONLY";
+  } | null;
+  setDraftDirectionMeta?: (meta: {
+    arrowDirection?: "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN";
+    showArrows?: boolean;
+    directionMode?: "TWO_WAY" | "FORWARD_ONLY" | "REVERSE_ONLY";
+  } | null) => void;
+  draftConflictPoints?: Array<{ coord: [number, number]; label: string }>;
+  setDraftConflictPoints?: (points: Array<{ coord: [number, number]; label: string }>) => void;
   onDraftModeChange?: (mode: "FLOOD" | "DETOUR") => void;
   pickedCoordinate?: { lat: number; lon: number; mode: string } | null;
   onFocusCoordinates?: (coords: [number, number]) => void;
@@ -60,6 +76,14 @@ export function AdminConsole({
   setDraftCoordinates,
   draftWaypoints,
   setDraftWaypoints,
+  draftReverseCoordinates,
+  setDraftReverseCoordinates,
+  draftReverseWaypoints,
+  setDraftReverseWaypoints,
+  draftDirectionMeta,
+  setDraftDirectionMeta,
+  draftConflictPoints,
+  setDraftConflictPoints,
   onDraftModeChange,
   pickedCoordinate,
   onFocusCoordinates,
@@ -395,6 +419,14 @@ export function AdminConsole({
               setDraftCoordinates={setDraftCoordinates}
               draftWaypoints={draftWaypoints}
               setDraftWaypoints={setDraftWaypoints}
+              draftReverseCoordinates={draftReverseCoordinates}
+              setDraftReverseCoordinates={setDraftReverseCoordinates}
+              draftReverseWaypoints={draftReverseWaypoints}
+              setDraftReverseWaypoints={setDraftReverseWaypoints}
+              draftDirectionMeta={draftDirectionMeta}
+              setDraftDirectionMeta={setDraftDirectionMeta}
+              draftConflictPoints={draftConflictPoints}
+              setDraftConflictPoints={setDraftConflictPoints}
               onDraftModeChange={onDraftModeChange}
               onDraftPickMarkersChange={handleDraftPickMarkersChange}
               editingRoute={editingRoute}
@@ -460,6 +492,12 @@ export function AdminConsole({
               setDraftCoordinates={setDraftCoordinates}
               draftWaypoints={draftWaypoints}
               setDraftWaypoints={setDraftWaypoints}
+              draftReverseCoordinates={draftReverseCoordinates}
+              setDraftReverseCoordinates={setDraftReverseCoordinates}
+              draftReverseWaypoints={draftReverseWaypoints}
+              setDraftReverseWaypoints={setDraftReverseWaypoints}
+              draftDirectionMeta={draftDirectionMeta}
+              setDraftDirectionMeta={setDraftDirectionMeta}
               onDraftModeChange={onDraftModeChange}
               setDraftPickMarkers={setDraftPickMarkers}
               vertexEvent={vertexEvent}

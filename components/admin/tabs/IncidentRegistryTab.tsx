@@ -36,6 +36,7 @@ export function IncidentRegistryTab({
   const [updateModalIncident, setUpdateModalIncident] = useState<FloodRoute | null>(null);
   const [viewingIncident, setViewingIncident] = useState<FloodRoute | null>(null);
   const [newWaterLevel, setNewWaterLevel] = useState<number>(0);
+  const [newTrafficStatus, setNewTrafficStatus] = useState<FloodRoute["traffic_status"]>("WARNING");
   const [updateNote, setUpdateNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedIncidentIds, setSelectedIncidentIds] = useState<Set<string>>(() => new Set());
@@ -86,7 +87,9 @@ export function IncidentRegistryTab({
     setIsSubmitting(true);
     try {
       const flood = updateModalIncident;
-      const trafficStatus = newWaterLevel >= 40 ? "CLOSED" : newWaterLevel > 0 ? "WARNING" : "PASSABLE";
+      // Strict Rule (Item 3): Never auto-change traffic_status to PASSABLE just because waterLevel === 0 cm.
+      // Use the explicit traffic status selected by the officer (initialized to flood.traffic_status).
+      const trafficStatus = newTrafficStatus || flood.traffic_status;
 
       const res = await saveTimelineUpdateAction({
         floodId: flood.id,
@@ -95,8 +98,11 @@ export function IncidentRegistryTab({
         latitude: flood.lat_start,
         longitude: flood.lon_start,
         photoUrl: flood.latest_photo_url || "",
-        reporterName: "เจ้าหน้าที่ศูนย์ฯ 24 ชม.",
-        remark: updateNote || `อัปเดตระดับน้ำเป็น ${newWaterLevel} ซม.`,
+        reporterName: flood.reporter_name || "เจ้าหน้าที่ศูนย์ฯ 24 ชม.",
+        remark: updateNote || `อัปเดตระดับน้ำเป็น ${newWaterLevel} ซม. (${trafficLabel(trafficStatus)})`,
+        roadSide: flood.road_side,
+        affectedLanes: flood.affected_lanes,
+        affectedShoulder: flood.affected_shoulder,
       });
 
       if (res.success) {
@@ -331,9 +337,26 @@ export function IncidentRegistryTab({
                     </div>
                     <div className="text-xs text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
                       <span>ระหว่าง กม.{r.km_start} ถึง กม.{r.km_end}</span>
+                      {r.road_side && (
+                        <span className="text-sky-300 font-medium">
+                          {r.road_side === "LEFT"
+                            ? "ฝั่งซ้าย (ขาไป)"
+                            : r.road_side === "RIGHT"
+                            ? "ฝั่งขวา (ขากลับ)"
+                            : r.road_side === "BOTH"
+                            ? "ทั้ง 2 ฝั่ง"
+                            : "ยังไม่ระบุฝั่ง"}
+                          {r.affected_lanes ? ` · ${r.affected_lanes}` : ""}
+                        </span>
+                      )}
                       <span>
                         ระดับน้ำ:{" "}
-                        <strong className="text-white font-mono">{r.water_level_cm} ซม.</strong>
+                        <strong className="text-white font-mono">
+                          {r.direction_meta?.water_level_known === false ? "ยังไม่ทราบค่า" : `${r.water_level_cm} ซม.`}
+                        </strong>
+                        {r.water_level_cm === 0 && r.direction_meta?.water_level_known !== false && (
+                          <span className="ml-1 text-[10px] text-emerald-300">(ซ่อนเส้นบนแผนที่ปัจจุบัน)</span>
+                        )}
                         {r.diff_cm !== undefined && (
                           <span
                             className={`ml-1 text-[11px] font-bold ${
@@ -359,6 +382,7 @@ export function IncidentRegistryTab({
                         event.stopPropagation();
                         setUpdateModalIncident(r);
                         setNewWaterLevel(r.water_level_cm);
+                        setNewTrafficStatus(r.traffic_status);
                       }}
                       className="bg-sky-950 hover:bg-sky-800 text-sky-300 border border-sky-700 px-3 py-1 rounded-xl text-xs font-heading font-medium transition"
                     >
@@ -427,10 +451,30 @@ export function IncidentRegistryTab({
                 </div>
                 <input
                   type="number"
+                  min={0}
                   value={newWaterLevel}
                   onChange={(e) => setNewWaterLevel(Number(e.target.value))}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-base font-bold"
                 />
+                {newWaterLevel === 0 && (
+                  <p className="mt-1 text-[11px] text-emerald-300">
+                    💡 เมื่อระดับน้ำเป็น 0 ซม. ระบบจะซ่อนเส้นน้ำท่วมจากแผนที่ปัจจุบัน แต่<strong>ไม่เปลี่ยนสถานะการจราจรเป็นเปิดอัตโนมัติ</strong> กรุณาเลือกสถานะการจราจรด้านล่างตามความจริง
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs text-slate-300 block mb-1">สถานะการจราจร (เจ้าหน้าที่ยืนยัน) *</label>
+                <select
+                  value={newTrafficStatus}
+                  onChange={(e) => setNewTrafficStatus(e.target.value as FloodRoute["traffic_status"])}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                >
+                  <option value="PASSABLE">ผ่านได้ปกติ</option>
+                  <option value="LIGHT_VEHICLES_ONLY">รถเล็กผ่านได้</option>
+                  <option value="ONE_LANE">ผ่านได้ 1 ช่องทาง</option>
+                  <option value="WARNING">เฝ้าระวัง</option>
+                  <option value="CLOSED">ผ่านไม่ได้ (ปิดการจราจร)</option>
+                </select>
               </div>
               <div>
                 <label className="text-xs text-slate-300">หมายเหตุ / มาตรการความปลอดภัย</label>

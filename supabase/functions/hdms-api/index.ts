@@ -12,6 +12,9 @@ const fail = (message: string, status = 400): never => { throw Object.assign(new
 const text = (value: unknown, label: string) => typeof value === "string" && value.trim() ? value.trim() : fail(`${label} required`);
 const number = (value: unknown, min: number, max: number) => typeof value === "number" && Number.isFinite(value) && value >= min && value <= max ? value : fail("Invalid numeric value");
 const traffic = (value: unknown) => ["CLOSED", "WARNING", "PASSABLE", "LIGHT_VEHICLES_ONLY", "ONE_LANE"].includes(String(value)) ? value : fail("Invalid traffic status");
+const roadSide = (value: unknown) => ["LEFT", "RIGHT", "BOTH", "UNKNOWN"].includes(String(value || "UNKNOWN")) ? String(value || "UNKNOWN") : "UNKNOWN";
+const shoulder = (value: unknown) => ["NONE", "LEFT", "RIGHT", "BOTH", "AFFECTED", "UNKNOWN"].includes(String(value || "NONE")) ? String(value || "NONE") : "NONE";
+const detourDir = (value: unknown) => ["TWO_WAY", "FORWARD_ONLY", "REVERSE_ONLY"].includes(String(value || "TWO_WAY")) ? String(value || "TWO_WAY") : "TWO_WAY";
 const typeTable = (type: unknown) => type === "FLOOD" ? "doh_flood_routes" : type === "DETOUR" ? "doh_detour_routes" : fail("Invalid record type");
 
 Deno.serve(async (req) => {
@@ -84,8 +87,22 @@ Deno.serve(async (req) => {
         const coords = await check(db.rpc("doh_snap_line_rpc", { p_a_lng: number(p[0], -180, 180), p_a_lat: number(p[1], -90, 90), p_b_lng: number(second[0], -180, 180), p_b_lat: number(second[1], -90, 90), p_max_m: 250 }));
         return reply(coords?.found && coords.geojson?.type === "LineString" ? coords.geojson.coordinates : null);
       }
-      case "saveTimelineUpdateAction":
-        await check(db.rpc("doh_update_timeline_rpc", { payload: { timelineId: `TL-${crypto.randomUUID()}`, floodId: text(p.floodId, "Flood ID"), waterLevelCm: number(p.waterLevelCm, 0, 10000), trafficStatus: traffic(p.trafficStatus), latitude: number(p.latitude, -90, 90), longitude: number(p.longitude, -180, 180), photoUrl: p.photoUrl || "", reporterName: text(p.reporterName, "Reporter"), remark: p.remark || "" } })); break;
+      case "saveTimelineUpdateAction": {
+        const timelineId = `TL-${crypto.randomUUID()}`;
+        const floodId = text(p.floodId, "Flood ID");
+        await check(db.rpc("doh_update_timeline_rpc", { payload: { timelineId, floodId, waterLevelCm: number(p.waterLevelCm, 0, 10000), trafficStatus: traffic(p.trafficStatus), latitude: number(p.latitude, -90, 90), longitude: number(p.longitude, -180, 180), photoUrl: p.photoUrl || "", reporterName: text(p.reporterName, "Reporter"), remark: p.remark || "" } }));
+        if (p.roadSide || p.affectedLanes || p.affectedShoulder || p.directionMeta) {
+          const extFlood: Record<string, unknown> = { updated_at: now };
+          const extTimeline: Record<string, unknown> = {};
+          if (p.roadSide) { extFlood.road_side = roadSide(p.roadSide); extTimeline.road_side = roadSide(p.roadSide); }
+          if (typeof p.affectedLanes === "string") { extFlood.affected_lanes = p.affectedLanes; extTimeline.affected_lanes = p.affectedLanes; }
+          if (p.affectedShoulder) { extFlood.affected_shoulder = shoulder(p.affectedShoulder); extTimeline.affected_shoulder = shoulder(p.affectedShoulder); }
+          if (p.directionMeta && typeof p.directionMeta === "object") { extFlood.direction_meta = p.directionMeta; extTimeline.direction_meta = p.directionMeta; }
+          await db.from("doh_flood_routes").update(extFlood).eq("id", floodId);
+          await db.from("doh_timeline_updates").update(extTimeline).eq("id", timelineId);
+        }
+        break;
+      }
       case "upsertRouteAction": {
         const table = typeTable(p.recordType);
         const id = p.id || `${p.recordType === "FLOOD" ? "F" : "D"}-${crypto.randomUUID()}`;
@@ -93,13 +110,27 @@ Deno.serve(async (req) => {
         const geometry = p.coordinates ?? existing.coordinates_json ?? [];
         if (!Array.isArray(geometry) || geometry.length < 2) fail("At least two route points required");
         geometry.forEach((point: any) => { number(point[0], -180, 180); number(point[1], -90, 90); });
-        const row: Record<string, unknown> = { id, lat_start: number(p.latStart ?? existing.lat_start, -90, 90), lon_start: number(p.lonStart ?? existing.lon_start, -180, 180), lat_end: number(p.latEnd ?? existing.lat_end, -90, 90), lon_end: number(p.lonEnd ?? existing.lon_end, -180, 180), coordinates_json: geometry, is_active: typeof p.isActive === "boolean" ? p.isActive : (existing.is_active ?? true), updated_at: now };
-        if (p.recordType === "FLOOD") Object.assign(row, { route_no: text(p.routeNo ?? existing.route_no, "Route"), section_name: text(p.sectionName ?? existing.section_name, "Section"), km_start: text(p.kmStart ?? existing.km_start, "Start KM"), km_end: text(p.kmEnd ?? existing.km_end, "End KM"), water_level_cm: number(p.waterLevelCm ?? existing.water_level_cm ?? 0, 0, 10000), traffic_status: traffic(p.trafficStatus ?? existing.traffic_status ?? "WARNING"), latest_photo_url: p.photoUrl ?? p.latestPhotoUrl ?? existing.latest_photo_url ?? "", district: p.district ?? existing.district ?? "", subdistrict: p.subdistrict ?? existing.subdistrict ?? "", detour_advice: p.detourAdvice ?? existing.detour_advice ?? "" });
-        else Object.assign(row, { flood_id_ref: (p.detourRefId === "" ? null : p.detourRefId ?? existing.flood_id_ref ?? null), route_name: text(p.detourName ?? existing.route_name, "Detour name"), description: p.detourDesc ?? existing.description ?? "" });
-        // The route RPC still enforces the legacy authenticated role policy in
-        // some projects. Since this deployment intentionally runs login-free,
-        // perform the validated upsert through the server-only service client.
-        await check(db.from(table).upsert(row)); break;
+        const baseRow: Record<string, unknown> = { id, lat_start: number(p.latStart ?? existing.lat_start, -90, 90), lon_start: number(p.lonStart ?? existing.lon_start, -180, 180), lat_end: number(p.latEnd ?? existing.lat_end, -90, 90), lon_end: number(p.lonEnd ?? existing.lon_end, -180, 180), coordinates_json: geometry, is_active: typeof p.isActive === "boolean" ? p.isActive : (existing.is_active ?? true), updated_at: now };
+        const extRow: Record<string, unknown> = {};
+        if (p.recordType === "FLOOD") {
+          Object.assign(baseRow, { route_no: text(p.routeNo ?? existing.route_no, "Route"), section_name: text(p.sectionName ?? existing.section_name, "Section"), km_start: text(p.kmStart ?? existing.km_start, "Start KM"), km_end: text(p.kmEnd ?? existing.km_end, "End KM"), water_level_cm: number(p.waterLevelCm ?? existing.water_level_cm ?? 0, 0, 10000), traffic_status: traffic(p.trafficStatus ?? existing.traffic_status ?? "WARNING"), latest_photo_url: p.photoUrl ?? p.latestPhotoUrl ?? existing.latest_photo_url ?? "", district: p.district ?? existing.district ?? "", subdistrict: p.subdistrict ?? existing.subdistrict ?? "", detour_advice: p.detourAdvice ?? existing.detour_advice ?? "" });
+          Object.assign(extRow, { road_side: roadSide(p.roadSide ?? existing.road_side ?? "UNKNOWN"), affected_lanes: String(p.affectedLanes ?? existing.affected_lanes ?? ""), affected_shoulder: shoulder(p.affectedShoulder ?? existing.affected_shoulder ?? "NONE"), reporter_name: String(p.reporterName ?? existing.reporter_name ?? ""), direction_meta: (p.directionMeta && typeof p.directionMeta === "object") ? p.directionMeta : (existing.direction_meta ?? {}) });
+        } else {
+          const revGeometry = Array.isArray(p.reverseCoordinates) ? p.reverseCoordinates : (existing.reverse_coordinates_json ?? []);
+          if (Array.isArray(revGeometry) && revGeometry.length > 0) {
+            revGeometry.forEach((point: any) => { number(point[0], -180, 180); number(point[1], -90, 90); });
+          }
+          const revWaypoints = Array.isArray(p.reverseWaypoints) ? p.reverseWaypoints : (existing.reverse_waypoints_json ?? []);
+          Object.assign(baseRow, { flood_id_ref: (p.detourRefId === "" ? null : p.detourRefId ?? existing.flood_id_ref ?? null), route_name: text(p.detourName ?? existing.route_name, "Detour name"), description: p.detourDesc ?? existing.description ?? "" });
+          Object.assign(extRow, { reverse_coordinates_json: revGeometry, reverse_waypoints_json: revWaypoints, direction_mode: detourDir(p.directionMode ?? existing.direction_mode ?? "TWO_WAY"), detour_meta: (p.detourMeta && typeof p.detourMeta === "object") ? p.detourMeta : (existing.detour_meta ?? {}) });
+        }
+        // Perform validated upsert through the server-only service client, falling back cleanly if the additive migration hasn't been applied yet.
+        const fullUpsert = await db.from(table).upsert({ ...baseRow, ...extRow });
+        if (fullUpsert.error) {
+          console.warn("Extended upsert fallback to base columns", fullUpsert.error.code, fullUpsert.error.message);
+          await check(db.from(table).upsert(baseRow));
+        }
+        break;
       }
       case "upsertMitigationProjectAction":
         if (!["COMPLETED", "PENDING_BUDGET"].includes(p.statusGroup)) fail("Invalid project status");

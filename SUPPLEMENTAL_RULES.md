@@ -584,3 +584,16 @@
 - **การทดสอบและผลลัพธ์:** `git diff --check`, lint, typecheck และ Pages production build ผ่าน; Playwright ตรวจ query routing และพฤติกรรมจุดดัดผ่าน 2/2 โดยยืนยัน `continue_straight=true`, `alternatives=false` และ bearing ของจุดผ่านแยก; regression static export ผ่าน 21 tests และข้าม 13 tests ตามเงื่อนไข fixture/desktop-only โดยไม่มี test ล้มเหลว
 - **สถานะ:** ผ่าน local release gate รอตรวจ production หลัง deploy
 
+### [UPDATE-056] 2026-11-09: พัฒนาระบบ GIS ทั้ง 4 รายการหลัก (Zoom-based Highway, Directional Arrows, Side/Lane Flood Reporting, A-B / B-A Detour Routing)
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์:** พัฒนาและต่อยอดระบบ HDMS_PN ตามข้อกำหนด 4 รายการหลักภายใต้ทางเลือก A (Additive Schema Migration + Backward Fallback) โดยรักษาความเข้ากันได้กับข้อมูลเดิมทั้งหมด
+- **ไฟล์ที่เกี่ยวข้อง:** `supabase/migrations/20261109000100_directional_flood_and_detour.sql`, `lib/constants.ts`, `db/default-data.ts`, `app/actions/doh-actions.ts`, `supabase/functions/hdms-api/index.ts`, `lib/gis-utils.ts`, `components/map/LongdoGisMap.tsx`, `components/admin/tabs/LineStylingTab.tsx`, `app/admin/page.tsx`, `components/admin/AdminConsole.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `app/page.tsx`, `docs/CHANGELOG.md`, `SUPPLEMENTAL_RULES.md`
+- **รายละเอียดการทำงาน:**
+  1. **รายการที่ 1 (ระบบแสดงเส้นทางหลวงตามระดับ Zoom):** ซ่อนทางหลวงสายรอง (`SECOND_HIGHWAY`) อัตโนมัติเมื่อ `zoom < 11` ยกเว้นสายรองที่มีเหตุการณ์น้ำท่วมกำลังเกิดเหตุ (`criticalHighwayRouteNos`) พร้อมสวิตช์ `"แสดงสายรองทุกระดับซูม"` ใน Legend และลดความหนาแน่นของเส้นในมุมมองภาพรวมโดยคง Canvas Renderer ตัวเดียว
+  2. **รายการที่ 2 (ระบบสร้างแนวเส้น GIS และลูกศรอัตโนมัติ):** รองรับการสร้างแนวเส้นอ้างอิงโครงข่ายถนนจริง (`SINGLE_CENTERLINE` 2 ทิศทาง, `DUAL_CARRIAGEWAY` แยกคันทาง A→B และ B→A จาก OSRM โดยห้ามใช้ offset ปลอม, และ `ONE_WAY`) พร้อมระบบลูกศรบอกทิศทาง (`TWO_WAY ⇄`, `FORWARD →`, `REVERSE ←`, `UNKNOWN` ซ่อนลูกศรเพื่อไม่เดาทิศทางจากลำดับจุดดิบ), ปรับแต่งสี/ขนาด/ระยะห่าง/เปิด-ปิด ได้ใน `LineStylingTab.tsx`, ซ่อนอัตโนมัติเมื่อซูมออก และจำกัดการวาดเฉพาะในกรอบหน้าจอ (`MAX_ARROWS = 160`)
+  3. **รายการที่ 3 (ระบบน้ำท่วมแยกฝั่งและช่องจราจร):** เพิ่มการบันทึก `road_side` (`LEFT/RIGHT/BOTH/UNKNOWN`), `affected_lanes`, `affected_shoulder`, `reporter_name`, และ `direction_meta.water_level_known` · ซ่อนเส้นน้ำท่วมจากแผนที่ปัจจุบันเมื่อยืนยันระดับน้ำล่าสุดเป็น `0 ซม.` (`isFloodLineVisibleOnCurrentMap`) โดยเก็บประวัติทั้งหมดไว้ · แก้ไข `IncidentRegistryTab.tsx` ไม่ให้เปลี่ยนสถานะถนนเป็น `PASSABLE` อัตโนมัติเมื่ออัปเดตระดับน้ำเป็น `0 ซม.` · แจ้งเตือนชัดเจนว่าฝั่งตรงข้ามที่ไม่มีรายงานไม่ถือว่าปลอดภัยอัตโนมัติ
+  4. **รายการที่ 4 (ระบบทางเลี่ยง A-B และ B-A):** คำนวณเส้นทางเลี่ยง `A → B` และ `B → A` แยกจากกันตามโครงข่ายถนนจริง รองรับ `direction_mode` (`TWO_WAY`, `FORWARD_ONLY`, `REVERSE_ONLY`), ตรวจสอบการทับซ้อนกับช่วงถนนที่ปิดการจราจร (`detectClosedRoadConflicts`) พร้อมบล็อกการเผยแพร่ทางเลี่ยงที่ตัดผ่านจุดปิดการจราจร และเพิ่มกล่องพรีวิวตรวจสอบ `A-B / B-A Inspector` ก่อนบันทึก
+- **การทดสอบและผลลัพธ์:** `npm run lint` (`--max-warnings=0`), `npm run typecheck`, และ `NEXT_OUTPUT=export npm run build` ผ่านทั้งหมด (6/6 static pages)
+- **สถานะ:** เสร็จสมบูรณ์ตามแผนดำเนินงานทางเลือก A
+
+

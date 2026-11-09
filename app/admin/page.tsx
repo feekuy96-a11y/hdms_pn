@@ -48,6 +48,14 @@ export default function AdminPage() {
   const [adminPickMode, setAdminPickMode] = useState<string | null>(null);
   const [draftCoordinates, setDraftCoordinates] = useState<[number, number][]>([]);
   const [draftWaypoints, setDraftWaypoints] = useState<[number, number][]>([]);
+  const [draftReverseCoordinates, setDraftReverseCoordinates] = useState<[number, number][]>([]);
+  const [draftReverseWaypoints, setDraftReverseWaypoints] = useState<[number, number][]>([]);
+  const [draftDirectionMeta, setDraftDirectionMeta] = useState<{
+    arrowDirection?: "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN";
+    showArrows?: boolean;
+    directionMode?: "TWO_WAY" | "FORWARD_ONLY" | "REVERSE_ONLY";
+  } | null>(null);
+  const [draftConflictPoints, setDraftConflictPoints] = useState<Array<{ coord: [number, number]; label: string }>>([]);
   const [draftMode, setDraftMode] = useState<"FLOOD" | "DETOUR">("FLOOD");
   const [incomingGisLines, setIncomingGisLinesState] = useState<[number, number][][]>([]);
   // Stable setter that ignores "clear" requests when the preview is already empty, so child tabs
@@ -115,6 +123,27 @@ export default function AdminPage() {
         if (requestId !== waypointRequestRef.current) return;
         setDraftCoordinates([]);
         showToast("คำนวณเส้นทางใหม่ไม่สำเร็จ กรุณาลองอีกครั้ง");
+      }
+    }
+  };
+
+  const handleReverseWaypointDragged = async (idx: number, newCoord: [number, number]) => {
+    const nextReverseWaypoints = [...draftReverseWaypoints];
+    nextReverseWaypoints[idx] = newCoord;
+    setDraftReverseWaypoints(nextReverseWaypoints);
+    const requestId = ++waypointRequestRef.current;
+
+    if (draftReverseCoordinates.length >= 2) {
+      const startCoord = draftReverseCoordinates[0];
+      const endCoord = draftReverseCoordinates[draftReverseCoordinates.length - 1];
+      try {
+        const snapped = await calculateRoadSnappedRoute(startCoord, endCoord, nextReverseWaypoints);
+        if (requestId !== waypointRequestRef.current) return;
+        setDraftReverseCoordinates(snapped);
+        showToast(`ปรับดัดแนวเส้นขากลับ B→A จุด #R${idx + 1} สำเร็จ`);
+      } catch {
+        if (requestId !== waypointRequestRef.current) return;
+        showToast("คำนวณเส้นทางขากลับใหม่ไม่สำเร็จ กรุณาลองอีกครั้ง");
       }
     }
   };
@@ -243,6 +272,14 @@ export default function AdminPage() {
               setDraftCoordinates={setDraftCoordinates}
               draftWaypoints={draftWaypoints}
               setDraftWaypoints={setDraftWaypoints}
+              draftReverseCoordinates={draftReverseCoordinates}
+              setDraftReverseCoordinates={setDraftReverseCoordinates}
+              draftReverseWaypoints={draftReverseWaypoints}
+              setDraftReverseWaypoints={setDraftReverseWaypoints}
+              draftDirectionMeta={draftDirectionMeta}
+              setDraftDirectionMeta={setDraftDirectionMeta}
+              draftConflictPoints={draftConflictPoints}
+              setDraftConflictPoints={setDraftConflictPoints}
               onDraftModeChange={setDraftMode}
               pickedCoordinate={pickedCoordinate}
               onFocusCoordinates={(coords) => setFocusCoordinates(coords)}
@@ -310,14 +347,23 @@ export default function AdminPage() {
                     { lat, lon, label, mode },
                   ]);
                 }
-                if (mode !== "ADD_WAYPOINT" && mode !== "ADD_LINE_VERTEX") {
+                if (mode !== "ADD_WAYPOINT" && mode !== "ADD_REVERSE_WAYPOINT" && mode !== "ADD_LINE_VERTEX") {
                   setAdminPickMode(null);
                 }
               }}
               draftCoordinates={draftCoordinates}
               draftWaypoints={draftWaypoints}
+              draftReverseCoordinates={draftReverseCoordinates}
+              draftReverseWaypoints={draftReverseWaypoints}
+              draftDirectionMeta={
+                draftDirectionMeta?.showArrows === false
+                  ? "UNKNOWN"
+                  : (draftDirectionMeta?.arrowDirection || "TWO_WAY")
+              }
+              draftConflictPoints={draftConflictPoints.map((p) => p.coord)}
               draftPickMarkers={draftPickMarkers}
               onWaypointDragged={handleWaypointDragged}
+              onReverseWaypointDragged={handleReverseWaypointDragged}
               vertexEditable={vertexEditable}
               onVertexMoved={(index, coord: LonLat) => emitVertexEvent({ type: "move", index, coord })}
               onVertexInserted={(index, coord: LonLat) => emitVertexEvent({ type: "insert", index, coord })}

@@ -135,8 +135,22 @@ export function DetourManagementTab({
   const handleGenerateAdviceInModal = async () => {
     if (!editingDetour) return;
     const linkedFlood = floodList.find((f) => f.id === editDetourRefId);
+    const forwardCoords = typeof editingDetour.coordinates_json === "string"
+      ? JSON.parse(editingDetour.coordinates_json)
+      : editingDetour.coordinates_json;
+    const reverseCoords = typeof editingDetour.reverse_coordinates_json === "string"
+      ? JSON.parse(editingDetour.reverse_coordinates_json)
+      : editingDetour.reverse_coordinates_json;
 
-    const advice = await generateAutoDetourAdvice([editingDetour.lon_start, editingDetour.lat_start], [editingDetour.lon_end, editingDetour.lat_end], typeof editingDetour.coordinates_json === "string" ? JSON.parse(editingDetour.coordinates_json) : editingDetour.coordinates_json, linkedFlood?.route_no || "43");
+    const advice = await generateAutoDetourAdvice(
+      [editingDetour.lon_start, editingDetour.lat_start],
+      [editingDetour.lon_end, editingDetour.lat_end],
+      forwardCoords,
+      linkedFlood?.route_no || "43",
+      systemData.highwayLayers || [],
+      reverseCoords,
+      editingDetour.direction_mode || "TWO_WAY"
+    );
 
     setEditDetourDesc(advice);
     onToast("วิเคราะห์คำแนะนำการเดินทาง ๒ ทิศทางสำเร็จ");
@@ -163,6 +177,10 @@ export function DetourManagementTab({
         latEnd: editingDetour.lat_end,
         lonEnd: editingDetour.lon_end,
         coordinates: typeof editingDetour.coordinates_json === "string" ? JSON.parse(editingDetour.coordinates_json) : editingDetour.coordinates_json,
+        reverseCoordinates: typeof editingDetour.reverse_coordinates_json === "string" ? JSON.parse(editingDetour.reverse_coordinates_json) : editingDetour.reverse_coordinates_json,
+        reverseWaypoints: typeof editingDetour.reverse_waypoints_json === "string" ? JSON.parse(editingDetour.reverse_waypoints_json) : editingDetour.reverse_waypoints_json,
+        directionMode: editingDetour.direction_mode || "TWO_WAY",
+        detourMeta: editingDetour.detour_meta,
       });
 
       // Update active state if changed
@@ -447,7 +465,16 @@ export function DetourManagementTab({
                     <td className="p-3">
                       <div className="font-heading font-bold text-white text-xs flex items-center gap-1.5">
                         <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-slate-950" title="เส้นทางเลี่ยง"><Route className="h-4 w-4" /></span>
-                        <span>{item.route_name}</span>
+                        <div>
+                          <span>{item.route_name}</span>
+                          <span className="block text-[10px] font-normal text-sky-300 mt-0.5">
+                            {item.direction_mode === "FORWARD_ONLY"
+                              ? "→ เฉพาะขาไป (A → B)"
+                              : item.direction_mode === "REVERSE_ONLY"
+                              ? "→ เฉพาะขากลับ (B → A)"
+                              : "⇄ เดินรถ 2 ทิศทาง (A-B / B-A)"}
+                          </span>
+                        </div>
                       </div>
                     </td>
 

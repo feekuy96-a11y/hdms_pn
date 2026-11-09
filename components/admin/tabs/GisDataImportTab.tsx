@@ -35,6 +35,7 @@ import {
   extractAvailableGisFields,
   detectSmartFieldMapping,
   calculateRoadSnappedRoute,
+  analyzeCarriagewaySeparation,
   ExtractedGisFeature,
 } from "@/lib/gis-utils";
 
@@ -125,6 +126,20 @@ interface GisDataImportTabProps {
   setDraftCoordinates: (coords: [number, number][]) => void;
   draftWaypoints: [number, number][];
   setDraftWaypoints: React.Dispatch<React.SetStateAction<[number, number][]>>;
+  draftReverseCoordinates?: [number, number][];
+  setDraftReverseCoordinates?: (coords: [number, number][]) => void;
+  draftReverseWaypoints?: [number, number][];
+  setDraftReverseWaypoints?: React.Dispatch<React.SetStateAction<[number, number][]>>;
+  draftDirectionMeta?: {
+    arrowDirection?: "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN";
+    showArrows?: boolean;
+    directionMode?: "TWO_WAY" | "FORWARD_ONLY" | "REVERSE_ONLY";
+  } | null;
+  setDraftDirectionMeta?: (meta: {
+    arrowDirection?: "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN";
+    showArrows?: boolean;
+    directionMode?: "TWO_WAY" | "FORWARD_ONLY" | "REVERSE_ONLY";
+  } | null) => void;
   onDraftModeChange?: (mode: "FLOOD" | "DETOUR") => void;
   setDraftPickMarkers?: React.Dispatch<React.SetStateAction<Array<{ lat: number; lon: number; label: string; mode: string }>>>;
   vertexEvent?: VertexEditEvent | null;
@@ -155,6 +170,12 @@ export function GisDataImportTab({
   setDraftCoordinates,
   draftWaypoints,
   setDraftWaypoints,
+  draftReverseCoordinates = [],
+  setDraftReverseCoordinates,
+  draftReverseWaypoints = [],
+  setDraftReverseWaypoints,
+  draftDirectionMeta,
+  setDraftDirectionMeta,
   onDraftModeChange,
   setDraftPickMarkers,
   vertexEvent,
@@ -186,6 +207,29 @@ export function GisDataImportTab({
   const [selectedRoute, setSelectedRoute] = useState<{ layerId: string; featureIdx: number } | null>(null);
   const [editingGeometry, setEditingGeometry] = useState<{ layerId: string; featureIdx: number; start: [number, number]; end: [number, number]; originalCoordinates: [number, number][] } | null>(null);
   const [isSnappingGeometry, setIsSnappingGeometry] = useState(false);
+
+  // Item 2: Road Structure & Directional Arrow Metadata for GIS Line Generation
+  const [carriagewayStructure, setCarriagewayStructure] = useState<"SINGLE_CENTERLINE" | "DUAL_CARRIAGEWAY" | "ONE_WAY">("SINGLE_CENTERLINE");
+  const [arrowDirectionSetting, setArrowDirectionSetting] = useState<"TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN">("TWO_WAY");
+  const [showFeatureArrows, setShowFeatureArrows] = useState<boolean>(true);
+  const [dualReverseCoords, setDualReverseCoords] = useState<[number, number][]>([]);
+
+  useEffect(() => {
+    if (!editingGeometry) return;
+    const effectiveArrowDir =
+      carriagewayStructure === "DUAL_CARRIAGEWAY"
+        ? "FORWARD"
+        : carriagewayStructure === "ONE_WAY"
+          ? arrowDirectionSetting === "REVERSE"
+            ? "REVERSE"
+            : "FORWARD"
+          : arrowDirectionSetting;
+    setDraftDirectionMeta?.({
+      arrowDirection: effectiveArrowDir,
+      showArrows: showFeatureArrows && effectiveArrowDir !== "UNKNOWN",
+      directionMode: carriagewayStructure === "DUAL_CARRIAGEWAY" ? "TWO_WAY" : "FORWARD_ONLY",
+    });
+  }, [editingGeometry, carriagewayStructure, arrowDirectionSetting, showFeatureArrows, setDraftDirectionMeta]);
 
   // Freeform editor state (Google My Maps style)
   const [editorMode, setEditorMode] = useState<"free" | "road">("road");
@@ -236,6 +280,10 @@ export function GisDataImportTab({
     setAdminPickMode(null);
     setDraftCoordinates([]);
     setDraftWaypoints([]);
+    setDraftReverseCoordinates?.([]);
+    setDraftReverseWaypoints?.([]);
+    setDraftDirectionMeta?.(null);
+    setDualReverseCoords([]);
     setSplitRemainder(null);
     setAbsorbedFeatureIdxs([]);
     setJoinTargetIdx("");
@@ -299,9 +347,16 @@ export function GisDataImportTab({
   }, [vertexEvent?.seq]);
 
   useEffect(() => {
-    if (editingGeometry) setIncomingGisLines?.(splitRemainder ? [draftCoordinates, splitRemainder] : [draftCoordinates]);
-    else setIncomingGisLines?.([]);
-  }, [editingGeometry, draftCoordinates, splitRemainder, setIncomingGisLines]);
+    if (editingGeometry) {
+      const lines: [number, number][][] = [draftCoordinates];
+      if (splitRemainder && splitRemainder.length >= 2) lines.push(splitRemainder);
+      if (carriagewayStructure === "DUAL_CARRIAGEWAY" && dualReverseCoords.length >= 2) lines.push(dualReverseCoords);
+      setIncomingGisLines?.(lines);
+      setDraftReverseCoordinates?.(carriagewayStructure === "DUAL_CARRIAGEWAY" ? dualReverseCoords : []);
+    } else {
+      setIncomingGisLines?.([]);
+    }
+  }, [editingGeometry, draftCoordinates, splitRemainder, carriagewayStructure, dualReverseCoords, setIncomingGisLines, setDraftReverseCoordinates]);
 
   // Nearest other routes of the same layer (by distance between line ends) that can be joined.
   const joinCandidates = useMemo(() => {
@@ -363,8 +418,7 @@ export function GisDataImportTab({
       if (res.success) {
         onDataRefresh(res.systemData);
         onToast(
-          `สลับการแสดงผล [${targetFeature.properties?.route_no || targetFeature.properties?.section_name || "สายทาง"}] เป็น ${
-            !currentVis ? "แสดงบนแผนที่" : "ซ่อนจากแผนที่"
+          `สลับการแสดงผล [${targetFeature.properties?.route_no || targetFeature.properties?.section_name || "สายทาง"}] เป็น ${!currentVis ? "แสดงบนแผนที่" : "ซ่อนจากแผนที่"
           }`
         );
       }
@@ -439,8 +493,23 @@ export function GisDataImportTab({
     }
     const start = coords[0];
     const end = coords[coords.length - 1];
+    const props = feature?.properties || {};
     setDraftCoordinates(coords);
     setDraftWaypoints([]);
+    setDualReverseCoords([]);
+    setCarriagewayStructure(
+      props.carriageway_type === "DUAL_CARRIAGEWAY"
+        ? "DUAL_CARRIAGEWAY"
+        : props.carriageway_type === "ONE_WAY"
+          ? "ONE_WAY"
+          : "SINGLE_CENTERLINE"
+    );
+    setArrowDirectionSetting(
+      props.arrow_direction === "FORWARD" || props.arrow_direction === "REVERSE" || props.arrow_direction === "TWO_WAY" || props.arrow_direction === "UNKNOWN"
+        ? props.arrow_direction
+        : "TWO_WAY"
+    );
+    setShowFeatureArrows(props.show_arrows !== false);
     // The common map drag handler must use road routing for a highway editor,
     // not the flood-only PostGIS snap rule inherited from a previous tab.
     onDraftModeChange?.("DETOUR");
@@ -463,7 +532,27 @@ export function GisDataImportTab({
       const coords = await calculateRoadSnappedRoute(editingGeometry.start, editingGeometry.end, draftWaypoints);
       if (coords.length < 2) throw new Error("ไม่พบแนวถนนสำหรับเชื่อมต่อพิกัดที่เลือก");
       setDraftCoordinates(coords);
-      onToast("สร้างแนวเชื่อมต่อเกาะตามถนนแล้ว คุณสามารถลากจุดสีส้มเพื่อดัดแนวได้");
+
+      if (carriagewayStructure === "DUAL_CARRIAGEWAY") {
+        // Query real opposite carriageway B -> A from OSRM without fake parallel offset
+        const revWaypoints = [...draftWaypoints].reverse();
+        const revCoords = await calculateRoadSnappedRoute(editingGeometry.end, editingGeometry.start, revWaypoints).catch(() => [] as [number, number][]);
+        if (revCoords.length >= 2) {
+          const sep = analyzeCarriagewaySeparation(coords, revCoords);
+          if (!sep.isSymmetricSingleLine) {
+            setDualReverseCoords(revCoords);
+            onToast(`สร้างแนวถนน 2 คันทางแยกตามโครงข่ายจริงแล้ว (A→B ${coords.length} จุด, B→A ${revCoords.length} จุด · ห่างเฉลี่ย ${sep.medianSeparationMeters} ม.)`);
+          } else {
+            setDualReverseCoords([]);
+            onToast("โครงข่ายถนนบริเวณนี้เป็นเส้นกึ่งกลางเดี่ยว ระบบใช้เส้นเดี่ยวพร้อมลูกศร 2 ทิศทาง (ไม่ใช้เส้นคู่ขนานปลอม)");
+          }
+        } else {
+          setDualReverseCoords([]);
+        }
+      } else {
+        setDualReverseCoords([]);
+        onToast("สร้างแนวเชื่อมต่อเกาะตามถนนแล้ว คุณสามารถลากจุดสีส้มเพื่อดัดแนวได้");
+      }
     } catch (error: any) {
       onToast(`สร้างแนวถนนไม่สำเร็จ: ${error.message}`);
     } finally {
@@ -535,7 +624,41 @@ export function GisDataImportTab({
     const layer = (systemData.highwayLayers || []).find((item) => item.layer_id === editingGeometry.layerId);
     if (!layer?.geojson_data?.features?.[editingGeometry.featureIdx]) return;
     const geojson = JSON.parse(JSON.stringify(layer.geojson_data));
+    const currentProps = geojson.features[editingGeometry.featureIdx].properties || {};
+    const effectiveArrowDir =
+      carriagewayStructure === "DUAL_CARRIAGEWAY" && dualReverseCoords.length >= 2
+        ? "FORWARD"
+        : carriagewayStructure === "ONE_WAY"
+          ? arrowDirectionSetting === "REVERSE"
+            ? "REVERSE"
+            : "FORWARD"
+          : arrowDirectionSetting;
+
     geojson.features[editingGeometry.featureIdx].geometry = { type: "LineString", coordinates: draftCoordinates };
+    geojson.features[editingGeometry.featureIdx].properties = {
+      ...currentProps,
+      carriageway_type: carriagewayStructure === "DUAL_CARRIAGEWAY" && dualReverseCoords.length >= 2 ? "DUAL_CARRIAGEWAY" : carriagewayStructure,
+      arrow_direction: effectiveArrowDir,
+      show_arrows: showFeatureArrows && effectiveArrowDir !== "UNKNOWN",
+      direction_verified: effectiveArrowDir !== "UNKNOWN",
+    };
+
+    if (carriagewayStructure === "DUAL_CARRIAGEWAY" && dualReverseCoords.length >= 2) {
+      const reverseProps = JSON.parse(JSON.stringify(geojson.features[editingGeometry.featureIdx].properties || {}));
+      const baseSection = String(currentProps.section_name || currentProps.route_name || "").replace(/\s*\(ขาไป.*\)|\s*\(ขากลับ.*\)/g, "").trim();
+      geojson.features[editingGeometry.featureIdx].properties.section_name = baseSection ? `${baseSection} (ขาไป A→B)` : "ขาไป A→B";
+      reverseProps.section_name = baseSection ? `${baseSection} (ขากลับ B→A)` : "ขากลับ B→A";
+      reverseProps.arrow_direction = "FORWARD"; // vertices of dualReverseCoords are already ordered B -> A
+      reverseProps.carriageway_type = "DUAL_CARRIAGEWAY";
+      reverseProps.show_arrows = showFeatureArrows;
+      reverseProps.direction_verified = true;
+      geojson.features.push({
+        type: "Feature",
+        properties: reverseProps,
+        geometry: { type: "LineString", coordinates: dualReverseCoords },
+      });
+    }
+
     if (splitRemainder && splitRemainder.length >= 2) {
       // Second half of a split becomes a new feature. Copy the properties but clear km values that
       // no longer describe it, so they can be re-entered from the route specs editor.
@@ -552,7 +675,7 @@ export function GisDataImportTab({
       if (!result.success) throw new Error("ฐานข้อมูลไม่ยืนยันการบันทึกแนวถนน");
       onDataRefresh(result.systemData);
       closeGeometryEditor();
-      showSuccessModal("บันทึกแนวถนนสำเร็จ", splitRemainder || absorbedFeatureIdxs.length > 0 ? "อัปเดตเส้นทางในฐานข้อมูลและบนแผนที่แล้ว กรุณาตรวจสอบ กม.เริ่มต้น/สิ้นสุดของสายทางที่ตัดหรือรวมในหน้ารายละเอียด" : "อัปเดตเส้นทางในฐานข้อมูลและบนแผนที่แล้ว");
+      showSuccessModal("บันทึกแนวถนนสำเร็จ", splitRemainder || absorbedFeatureIdxs.length > 0 || (carriagewayStructure === "DUAL_CARRIAGEWAY" && dualReverseCoords.length >= 2) ? "อัปเดตเส้นทางและทิศทางลูกศรในฐานข้อมูลและบนแผนที่แล้ว" : "อัปเดตเส้นทางในฐานข้อมูลและบนแผนที่แล้ว");
     } catch (error: any) {
       onToast(`บันทึกแนวถนนไม่สำเร็จ: ${error.message}`);
     }
@@ -1336,11 +1459,10 @@ export function GisDataImportTab({
                         <button
                           type="button"
                           onClick={() => handleToggleFeatureVisibility(item.layerId, item.featureIdx)}
-                          className={`p-1.5 rounded-lg border transition ${
-                            item.isVisible
+                          className={`p-1.5 rounded-lg border transition ${item.isVisible
                               ? "bg-emerald-950/80 text-emerald-300 border-emerald-600 hover:bg-emerald-900"
                               : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"
-                          }`}
+                            }`}
                           title={item.isVisible ? "คลิกเพื่อซ่อนเส้นทางนี้บนแผนที่" : "คลิกเพื่อแสดงเส้นทางนี้บนแผนที่"}
                         >
                           {item.isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
@@ -1480,7 +1602,7 @@ export function GisDataImportTab({
               </div>
 
               {/* Row 2: KM Range & Distance */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-slate-300 block mb-1">กม.เริ่มต้น</label>
                   <input
@@ -1521,12 +1643,12 @@ export function GisDataImportTab({
                 </div>
                 <div>
                   <label className="text-slate-300 block mb-1">ระยะทาง (กม.) · คำนวณอัตโนมัติ</label>
-                    <input
+                  <input
                     type="number"
                     step="any"
                     value={editingRouteSpecs.lengthKm}
-                      readOnly
-                      aria-label="ระยะทางคำนวณอัตโนมัติ"
+                    readOnly
+                    aria-label="ระยะทางคำนวณอัตโนมัติ"
                     placeholder="เช่น 5.7"
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-emerald-400 font-mono font-bold"
                   />
@@ -1673,11 +1795,10 @@ export function GisDataImportTab({
               <div className="grid grid-cols-2 gap-2.5 text-xs">
                 <div className="col-span-2 rounded-xl border border-slate-800 bg-slate-900/80 p-3 flex items-center justify-between">
                   <span className="text-slate-400">ประเภทสายทาง</span>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-                    item.highwayType === "MAIN_HIGHWAY"
+                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${item.highwayType === "MAIN_HIGHWAY"
                       ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-400"
                       : "border-sky-500/40 bg-sky-500/15 text-sky-400"
-                  }`}>
+                    }`}>
                     {item.highwayType === "MAIN_HIGHWAY" ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"}
                   </span>
                 </div>
@@ -1779,6 +1900,67 @@ export function GisDataImportTab({
               <button type="button" aria-pressed={editorMode === "free"} onClick={() => switchEditorMode("free")} className={`flex-1 rounded-lg px-3 py-2 font-bold ${editorMode === "free" ? "bg-sky-500 text-slate-950" : "text-slate-300 hover:text-white"}`}>วาด/แก้ไขอิสระ</button>
               <button type="button" aria-pressed={editorMode === "road"} onClick={() => switchEditorMode("road")} className={`flex-1 rounded-lg px-3 py-2 font-bold ${editorMode === "road" ? "bg-sky-500 text-slate-950" : "text-slate-300 hover:text-white"}`}>ตามถนน (OSRM)</button>
             </div>
+            {/* Item 2: Road Structure & Directional Arrow Controls */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 space-y-2.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-slate-300 block mb-1">โครงสร้างทางหลวงตามจริง</label>
+                  <select
+                    value={carriagewayStructure}
+                    onChange={(e) => {
+                      const val = e.target.value as "SINGLE_CENTERLINE" | "DUAL_CARRIAGEWAY" | "ONE_WAY";
+                      setCarriagewayStructure(val);
+                      if (val === "SINGLE_CENTERLINE") {
+                        setArrowDirectionSetting("TWO_WAY");
+                        setDualReverseCoords([]);
+                      } else if (val === "ONE_WAY") {
+                        setArrowDirectionSetting("FORWARD");
+                        setDualReverseCoords([]);
+                      } else {
+                        setArrowDirectionSetting("FORWARD");
+                      }
+                    }}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-amber-300 font-semibold"
+                  >
+                    <option value="SINGLE_CENTERLINE">ถนน 2 ทิศทาง (เส้นเดี่ยวกึ่งกลาง ⇄)</option>
+                    <option value="DUAL_CARRIAGEWAY">ถนนมีเกาะกลาง (แยกเส้น A→B และ B→A ตามจริง)</option>
+                    <option value="ONE_WAY">ถนนเดินรถทางเดียว (ลูกศรทิศทางเดียว →)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-300 block mb-1">ทิศทางลูกศรจราจรบนเส้น</label>
+                  <select
+                    value={arrowDirectionSetting}
+                    disabled={carriagewayStructure === "DUAL_CARRIAGEWAY"}
+                    onChange={(e) => setArrowDirectionSetting(e.target.value as "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN")}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white disabled:opacity-60"
+                  >
+                    <option value="TWO_WAY">⇄ สวนกัน 2 ทิศทาง (Two-Way)</option>
+                    <option value="FORWARD">→ ทิศทางเดียวตามแนว A → B</option>
+                    <option value="REVERSE">← ทิศทางเดียวตามแนว B → A</option>
+                    <option value="UNKNOWN">ไม่ระบุทิศทาง (ซ่อนลูกศรเพื่อป้องกันการเดาทิศทาง)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+                <label className="flex items-center gap-2 cursor-pointer text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={showFeatureArrows}
+                    onChange={(e) => setShowFeatureArrows(e.target.checked)}
+                    className="h-3.5 w-3.5 accent-amber-400"
+                  />
+                  <span>แสดงลูกศรกำกับทิศทางบนสายทางนี้ (พรีวิวบนแผนที่ทันที)</span>
+                </label>
+                {carriagewayStructure === "DUAL_CARRIAGEWAY" && (
+                  <span className="text-[10px] text-sky-300">
+                    {dualReverseCoords.length >= 2
+                      ? `✓ แยก 2 คันทางจริง (A→B ${draftCoordinates.length} จุด · B→A ${dualReverseCoords.length} จุด)`
+                      : "กด \"เกาะแนวถนน\" เพื่อดึงเส้นคู่ขนานตามคันทางจริงจากโครงข่ายถนน"}
+                  </span>
+                )}
+              </div>
+            </div>
             {editorMode === "free" && (
               <>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1825,41 +2007,41 @@ export function GisDataImportTab({
             )}
             {editorMode === "road" && (
               <>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {(["start", "end"] as const).map((key) => {
-                const label = key === "start" ? "พิกัด กม.เริ่มต้น" : "พิกัด กม.สิ้นสุด";
-                return <div key={key} className="space-y-1.5">
-                  <label className="text-xs text-slate-300">{label} · ละติจูด, ลองจิจูด</label>
-                  <input key={`${key}-${editingGeometry[key].join(",")}`} aria-label={label} type="text" defaultValue={`${editingGeometry[key][1]}, ${editingGeometry[key][0]}`} placeholder="เช่น 6.850000, 101.250000" onBlur={(event) => {
-                    const rawParts = event.target.value.split(",").map((value) => value.trim());
-                    const parts = rawParts.map(Number);
-                    if (rawParts.length !== 2 || rawParts.some((value) => !value) || parts.some((value) => !Number.isFinite(value)) || Math.abs(parts[0]) > 90 || Math.abs(parts[1]) > 180) { onToast("กรุณากรอกพิกัดเป็นละติจูด, ลองจิจูด"); event.target.value = `${editingGeometry[key][1]}, ${editingGeometry[key][0]}`; return; }
-                    setEditingGeometry((current) => current ? { ...current, [key]: [parts[1], parts[0]] } : current);
-                  }} className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-xs text-white" />
-                  <button type="button" onClick={() => setAdminPickMode(key === "start" ? "PICK_HIGHWAY_START" : "PICK_HIGHWAY_END")} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-sky-300 hover:border-sky-400">ปักหมุดบนแผนที่</button>
-                </div>;
-              })}
-            </div>
-            <div className="flex flex-wrap items-center gap-2 border-t border-slate-800 pt-3">
-              <button type="button" onClick={() => setAdminPickMode("ADD_HIGHWAY_BEND")} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-amber-300 hover:border-amber-400">เพิ่มจุดดัดแนวจากแผนที่</button>
-              <button type="button" disabled={isSnappingGeometry} onClick={snapEditedGeometry} className="rounded-lg bg-sky-500 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50">{isSnappingGeometry ? "กำลังหาแนวถนน" : "เกาะแนวถนน"}</button>
-              <span className="text-[11px] text-slate-400">เส้นปัจจุบัน {draftCoordinates.length} จุด · จุดดัด {draftWaypoints.length} จุด</span>
-            </div>
-            {draftWaypoints.length > 0 && (
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3" aria-label="รายการจุดดัดแนวถนน">
-                <p className="mb-2 text-xs font-semibold text-slate-200">จุดดัดแนวถนน ({draftWaypoints.length} จุด)</p>
-                <div className="flex flex-wrap gap-2">
-                  {draftWaypoints.map(([lon, lat], index) => (
-                    <div key={`${lon}-${lat}-${index}`} className="flex min-h-10 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-2 text-xs text-slate-300">
-                      <span className="font-mono">#{index + 1} · {lat.toFixed(5)}, {lon.toFixed(5)}</span>
-                      <button type="button" onClick={() => void removeGeometryWaypoint(index)} aria-label={`ลบจุดดัดแนวถนนที่ ${index + 1}`} className="grid h-8 w-8 place-items-center rounded-md text-red-400 hover:bg-red-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {(["start", "end"] as const).map((key) => {
+                    const label = key === "start" ? "พิกัด กม.เริ่มต้น" : "พิกัด กม.สิ้นสุด";
+                    return <div key={key} className="space-y-1.5">
+                      <label className="text-xs text-slate-300">{label} · ละติจูด, ลองจิจูด</label>
+                      <input key={`${key}-${editingGeometry[key].join(",")}`} aria-label={label} type="text" defaultValue={`${editingGeometry[key][1]}, ${editingGeometry[key][0]}`} placeholder="เช่น 6.850000, 101.250000" onBlur={(event) => {
+                        const rawParts = event.target.value.split(",").map((value) => value.trim());
+                        const parts = rawParts.map(Number);
+                        if (rawParts.length !== 2 || rawParts.some((value) => !value) || parts.some((value) => !Number.isFinite(value)) || Math.abs(parts[0]) > 90 || Math.abs(parts[1]) > 180) { onToast("กรุณากรอกพิกัดเป็นละติจูด, ลองจิจูด"); event.target.value = `${editingGeometry[key][1]}, ${editingGeometry[key][0]}`; return; }
+                        setEditingGeometry((current) => current ? { ...current, [key]: [parts[1], parts[0]] } : current);
+                      }} className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-xs text-white" />
+                      <button type="button" onClick={() => setAdminPickMode(key === "start" ? "PICK_HIGHWAY_START" : "PICK_HIGHWAY_END")} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-sky-300 hover:border-sky-400">ปักหมุดบนแผนที่</button>
+                    </div>;
+                  })}
                 </div>
-              </div>
-            )}
+                <div className="flex flex-wrap items-center gap-2 border-t border-slate-800 pt-3">
+                  <button type="button" onClick={() => setAdminPickMode("ADD_HIGHWAY_BEND")} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-amber-300 hover:border-amber-400">เพิ่มจุดดัดแนวจากแผนที่</button>
+                  <button type="button" disabled={isSnappingGeometry} onClick={snapEditedGeometry} className="rounded-lg bg-sky-500 px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-50">{isSnappingGeometry ? "กำลังหาแนวถนน" : "เกาะแนวถนน"}</button>
+                  <span className="text-[11px] text-slate-400">เส้นปัจจุบัน {draftCoordinates.length} จุด · จุดดัด {draftWaypoints.length} จุด</span>
+                </div>
+                {draftWaypoints.length > 0 && (
+                  <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3" aria-label="รายการจุดดัดแนวถนน">
+                    <p className="mb-2 text-xs font-semibold text-slate-200">จุดดัดแนวถนน ({draftWaypoints.length} จุด)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {draftWaypoints.map(([lon, lat], index) => (
+                        <div key={`${lon}-${lat}-${index}`} className="flex min-h-10 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-2 text-xs text-slate-300">
+                          <span className="font-mono">#{index + 1} · {lat.toFixed(5)}, {lon.toFixed(5)}</span>
+                          <button type="button" onClick={() => void removeGeometryWaypoint(index)} aria-label={`ลบจุดดัดแนวถนนที่ ${index + 1}`} className="grid h-8 w-8 place-items-center rounded-md text-red-400 hover:bg-red-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
             <div className="flex flex-wrap justify-between gap-2 border-t border-slate-800 pt-3">

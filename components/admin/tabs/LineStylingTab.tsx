@@ -422,6 +422,80 @@ export function LineStylingTab({
               </div>
             </div>
           </div>
+
+          {/* Directional Arrow System Controls (Items 2 & 4) */}
+          <div className="border-t border-slate-800 pt-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="flex min-h-10 items-center gap-2 text-xs font-heading font-bold text-amber-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={currentItem.showArrows ?? (selectedStyleKey !== "flood")}
+                  onChange={(e) => handleUpdateCurrentStyle({ showArrows: e.target.checked })}
+                  className="h-4 w-4 accent-amber-500 rounded"
+                />
+                เปิดแสดงลูกศรบอกทิศทางการจราจรบนแผนที่ (Directional Arrows)
+              </label>
+              <span className="text-[11px] text-slate-400">
+                ซ่อนอัตโนมัติเมื่อซูมออกไกลเพื่อป้องกันเส้นทึบและรักษาความเร็วแผนที่
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="mb-1 block text-xs text-slate-300">สีลูกศรบอกทิศทาง</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={currentItem.arrowColor || (selectedStyleKey === "detour" ? "#0f172a" : "#ffffff")}
+                    disabled={!(currentItem.showArrows ?? (selectedStyleKey !== "flood"))}
+                    onChange={(e) => handleUpdateCurrentStyle({ arrowColor: e.target.value })}
+                    className="h-9 w-12 rounded-lg border border-slate-700 bg-slate-900 p-0.5 disabled:opacity-40"
+                  />
+                  <input
+                    type="text"
+                    value={currentItem.arrowColor || (selectedStyleKey === "detour" ? "#0f172a" : "#ffffff")}
+                    disabled={!(currentItem.showArrows ?? (selectedStyleKey !== "flood"))}
+                    onChange={(e) => handleUpdateCurrentStyle({ arrowColor: e.target.value })}
+                    className="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs font-mono text-white disabled:opacity-40"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs text-slate-300 mb-1">
+                  <span>ขนาดหัวลูกศร (Size):</span>
+                  <span className="font-mono text-amber-400 font-bold">{currentItem.arrowSize || 12} px</span>
+                </div>
+                <input
+                  type="range"
+                  min="8"
+                  max="22"
+                  step="1"
+                  value={currentItem.arrowSize || 12}
+                  disabled={!(currentItem.showArrows ?? (selectedStyleKey !== "flood"))}
+                  onChange={(e) => handleUpdateCurrentStyle({ arrowSize: Number(e.target.value) })}
+                  className="w-full accent-amber-500 cursor-pointer disabled:opacity-40"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs text-slate-300 mb-1">
+                  <span>ระยะห่างลูกศร (Spacing):</span>
+                  <span className="font-mono text-amber-400 font-bold">{currentItem.arrowSpacingPx || 140} px</span>
+                </div>
+                <input
+                  type="range"
+                  min="70"
+                  max="300"
+                  step="10"
+                  value={currentItem.arrowSpacingPx || 140}
+                  disabled={!(currentItem.showArrows ?? (selectedStyleKey !== "flood"))}
+                  onChange={(e) => handleUpdateCurrentStyle({ arrowSpacingPx: Number(e.target.value) })}
+                  className="w-full accent-amber-500 cursor-pointer disabled:opacity-40"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
