@@ -54,7 +54,7 @@ import {
   ArrowRightLeft,
   Droplets,
 } from "lucide-react";
-import { extractDirectionalAdvice } from "@/lib/gis-utils";
+import { extractDirectionalAdvice, splitDetourAdviceByDirection } from "@/lib/gis-utils";
 import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
 
@@ -790,12 +790,21 @@ export default function HomePage() {
                   <div className="sm:col-span-2 sm:row-start-2">
                 {/* Detour Recommendation Box (Yellow Banner) */}
                 <div className="bg-amber-500/10 border border-amber-400/50 rounded-xl p-3.5 space-y-2.5">
-                  {selectedFloodDetours.map((route) => (
-                    <div key={route.id} className="rounded-lg border border-amber-400/30 bg-slate-950/70 p-3 text-sm text-amber-100">
-                      <strong className="block text-amber-300">{route.route_name}</strong>
-                      <p className="mt-1 whitespace-pre-line">{route.description || "ยังไม่มีคำแนะนำการเดินทาง"}</p>
-                    </div>
-                  ))}
+                  {selectedFloodDetours.map((route) => {
+                    const parsed = splitDetourAdviceByDirection(route.description || "", route.direction_mode);
+                    const displayText = citizenDetourDirection === "FORWARD" ? parsed.forwardText : parsed.reverseText;
+                    return (
+                      <div key={route.id} className="rounded-lg border border-amber-400/30 bg-slate-950/70 p-3 text-sm text-amber-100">
+                        <div className="flex items-center justify-between gap-2">
+                          <strong className="block text-amber-300 font-heading">{route.route_name}</strong>
+                          <span className="rounded bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold text-amber-300 shrink-0">
+                            {route.direction_mode === "FORWARD_ONLY" ? "A → B (ทิศทางเดียว)" : route.direction_mode === "REVERSE_ONLY" ? "B → A (ทิศทางเดียว)" : "ไป-กลับ (A ⇄ B)"}
+                          </span>
+                        </div>
+                        <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-amber-100/95">{displayText}</p>
+                      </div>
+                    );
+                  })}
                   {selectedFloodDetours.length === 0 && !selectedFlood.detour_advice && (
                     <p className="text-[11px] text-amber-100/90">ยังไม่มีทางเลี่ยงที่ยืนยันและผูกกับจุดน้ำท่วมนี้ โปรดโทร 1586 ก่อนเดินทาง</p>
                   )}
@@ -806,37 +815,33 @@ export default function HomePage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {/* Direction Switcher Toggle if bidirectional advice exists */}
-                      {(() => {
-                        const ext = directionalAdvice;
-                        if (!ext.hasBoth) return null;
-                        return (
-                          <div className="flex items-center bg-slate-950/80 p-0.5 rounded-lg border border-amber-500/40 text-[10px] font-heading font-bold">
-                            <button
-                              type="button"
-                              onClick={() => setCitizenDetourDirection("FORWARD")}
-                              className={`min-h-9 px-2.5 py-1 rounded transition flex items-center gap-1 ${
-                                citizenDetourDirection === "FORWARD"
-                                  ? "bg-amber-500 text-slate-950 shadow"
-                                  : "text-amber-300/80 hover:text-white"
-                              }`}
-                            >
-                              <span>🚗 ขาไป (A → B)</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setCitizenDetourDirection("REVERSE")}
-                              className={`min-h-9 px-2.5 py-1 rounded transition flex items-center gap-1 ${
-                                citizenDetourDirection === "REVERSE"
-                                  ? "bg-amber-500 text-slate-950 shadow"
-                                  : "text-amber-300/80 hover:text-white"
-                              }`}
-                            >
-                              <span>🚙 ขากลับ (B → A)</span>
-                            </button>
-                          </div>
-                        );
-                      })()}
+                      {/* Direction Switcher Toggle if bidirectional advice or detour exists */}
+                      {(directionalAdvice.hasBoth || selectedFloodDetours.length > 0) && (
+                        <div className="flex items-center bg-slate-950/80 p-0.5 rounded-lg border border-amber-500/40 text-[10px] font-heading font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setCitizenDetourDirection("FORWARD")}
+                            className={`min-h-9 px-2.5 py-1 rounded transition flex items-center gap-1 cursor-pointer ${
+                              citizenDetourDirection === "FORWARD"
+                                ? "bg-amber-500 text-slate-950 shadow"
+                                : "text-amber-300/80 hover:text-white"
+                            }`}
+                          >
+                            <span>🚗 ขาไป (A → B)</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCitizenDetourDirection("REVERSE")}
+                            className={`min-h-9 px-2.5 py-1 rounded transition flex items-center gap-1 cursor-pointer ${
+                              citizenDetourDirection === "REVERSE"
+                                ? "bg-amber-500 text-slate-950 shadow"
+                                : "text-amber-300/80 hover:text-white"
+                            }`}
+                          >
+                            <span>🚙 ขากลับ (B → A)</span>
+                          </button>
+                        </div>
+                      )}
 
                       <a
                         href={`https://www.google.com/maps/dir/?api=1&destination=${selectedFlood.lat_start},${selectedFlood.lon_start}`}

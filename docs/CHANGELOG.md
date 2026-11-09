@@ -61,3 +61,11 @@
 - **ความเสี่ยงที่ยอมรับ:** เจ้าของระบบอนุมัติทางเลือก A (Additive Schema Migration + Backward Fallback) และรับทราบว่าจะทยอยอัปเดตข้อมูลทิศทางของรายการเดิมภายหลัง · คงระบบบันทึก χωρίς การบังคับ Login ในรอบนี้ตาม B-001
 - **ตรวจแล้ว:** `npm run lint` (`--max-warnings=0`), `npm run typecheck`, และ `NEXT_OUTPUT=export npm run build` ผ่านทั้งหมด (6/6 static pages) · **ยังไม่ได้ตรวจ:** รันไฟล์ SQL migration บนฐานข้อมูล Supabase จริง และรัน Edge Function บนคลาวด์จริง
 - **ลำดับ deploy:** 1) รัน SQL `supabase/migrations/20261109000100_directional_flood_and_detour.sql` → 2) Deploy Edge Function `supabase/functions/hdms-api/index.ts` → 3) Deploy เว็บ (ทั้ง Edge Function และเว็บมีระบบ fallback อัตโนมัติหากยังไม่ได้รัน SQL)
+
+### [UPDATE-057] 2026-11-09 แก้ไข 3 จุดตามภาพข้อเสนอแนะ (UI Polish & Detour Direction Toggle)
+- **ไฟล์:** `components/map/LongdoGisMap.tsx`, `app/globals.css`, `lib/gis-utils.ts`, `app/page.tsx`
+- **ทำอะไร:**
+  1. **แก้ไขรายละเอียดจุดน้ำท่วมไม่แสดง (ภาพที่ 1):** ลบโค้ด inline style `color:#0f172a` ที่ทำให้ตัวหนังสือกลืนเป็นสีดำไปกับพื้นหลังป๊อปอัป ปรับเป็นชุดสีสว่าง (`text-slate-100`, `text-white`, `text-amber-400`, ป้าย ทล. สีเหลืองทองเด่นชัด, ป้ายสถานะจราจร, ข้อมูลฝั่ง/ช่องจราจร/ไหล่ทาง และปุ่ม `"ดูรายงานและทางเลี่ยงแบบเต็ม →"`)
+  2. **แก้ไขป้ายซ้อนทับกันบนมือถือ (ภาพที่ 2):** ยุบรวมป้ายสรุปสถานะ (`น้ำท่วม x จุด`, `ทางเลี่ยง y เส้นทาง`) และปุ่ม `"สัญลักษณ์บนแผนที่"` เข้าใน Header Bar แถวเดียวกันด้านบนแผนที่ (`justify-between gap-1.5`) ป้องกันไม่ให้ป้ายชนหรือเกยทับกันบนจอมือถือ พร้อมเลื่อนปุ่ม Zoom Control ของ Leaflet ลงมาที่ `top: 54px` ไม่ให้ชนกับป้ายด้านบน
+  3. **เพิ่มปุ่มสลับคำอธิบายทางเลี่ยง A→B และ B→A (ภาพที่ 3):** เพิ่มฟังก์ชัน `splitDetourAdviceByDirection` และปุ่ม Segmented Toggle `[ ขาไป (A → B) | ขากลับ (B → A) ]` ใน Detour Popup บนแผนที่ และกล่องแนะนำทางเลี่ยงในหน้าต่างรายละเอียดฝั่งประชาชน
+- **ตรวจแล้ว:** `npm run lint` (`--max-warnings=0`), `npm run typecheck`, และ `NEXT_OUTPUT=export npm run build` (Static pages 6/6) ผ่านสมบูรณ์ 100%

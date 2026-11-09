@@ -596,4 +596,15 @@
 - **การทดสอบและผลลัพธ์:** `npm run lint` (`--max-warnings=0`), `npm run typecheck`, และ `NEXT_OUTPUT=export npm run build` ผ่านทั้งหมด (6/6 static pages)
 - **สถานะ:** เสร็จสมบูรณ์ตามแผนดำเนินงานทางเลือก A
 
+### [UPDATE-057] 2026-11-09: แก้ไข 3 จุดตามภาพข้อเสนอแนะ (UI Polish & Detour Direction Toggle)
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์:** แก้ไขปัญหาการแสดงผลรายละเอียดน้ำท่วม ป้ายซ้อนทับกันบนมือถือ และเพิ่มปุ่มสลับทิศทางคำอธิบายทางเลี่ยง (A→B และ B→A) ตามภาพที่ 1, 2, 3
+- **ไฟล์ที่เกี่ยวข้อง:** `components/map/LongdoGisMap.tsx`, `app/globals.css`, `lib/gis-utils.ts`, `app/page.tsx`, `docs/CHANGELOG.md`, `SUPPLEMENTAL_RULES.md`
+- **รายละเอียดการทำงาน:**
+  1. ปรับแต่ง `buildFloodPopupHtml` ให้ใช้สีตัวหนังสือสว่างตัดกับพื้นหลังสีเข้ม ลบ inline `color:#0f172a` ที่ทำให้ตัวหนังสือหาย พร้อมแสดงป้าย ทล., สถานะจราจร, ฝั่ง/ช่องจราจร/ไหล่ทาง, และปุ่มเปิดหน้ารายละเอียดแบบเต็ม
+  2. รวมแถบสรุปสถานะและปุ่มควบคุมสัญลักษณ์เข้าเป็น Responsive Header แถวเดียว พร้อมขยับ Leaflet Zoom Control ลงมาที่ `top: 54px` เพื่อป้องกันการเกยทับกันบนมือถือ
+  3. เพิ่ม `splitDetourAdviceByDirection` และปุ่มสลับทิศทาง `[ ขาไป (A → B) | ขากลับ (B → A) ]` ใน Detour Popup บนแผนที่ และกล่องแนะนำทางเลี่ยงฝั่งประชาชน
+- **การทดสอบและผลลัพธ์:** `npm run lint` (`--max-warnings=0`), `npm run typecheck`, และ `NEXT_OUTPUT=export npm run build` ผ่าน 100% (6/6 static pages)
+- **สถานะ:** พร้อม deploy
+
 

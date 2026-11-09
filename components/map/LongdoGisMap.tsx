@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import { SystemDataPayload, FloodRoute, DetourRoute, TimelineUpdate, DohOfficeLocation } from "@/db/default-data";
 import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
+import { splitDetourAdviceByDirection } from "@/lib/gis-utils";
 import { Layers, Navigation, Building2, Map, ChevronUp, ChevronDown } from "lucide-react";
 
 const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -180,17 +181,46 @@ function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color: string
 
 function buildDetourPopupHtml(detour: DetourRoute, color: string): string {
   const dirMode = detour.direction_mode || "TWO_WAY";
+  const { forwardText, reverseText } = splitDetourAdviceByDirection(detour.description || "", dirMode);
+  const safeId = String(detour.id || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+
   return `
-    <div class="text-xs p-2.5 min-w-[250px] font-body bg-slate-950 text-white rounded-xl border" style="border-color: ${color}">
+    <div class="text-xs p-2.5 min-w-[260px] max-w-[290px] font-body bg-slate-950 text-white rounded-xl border shadow-2xl" style="border-color: ${color}">
       <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
-        <span style="color:${color}" aria-hidden="true">↪</span>
-        <h4 class="font-bold text-white text-sm font-heading">${escapeHtml(detour.route_name)}</h4>
+        <span style="color:${color}" class="text-base font-bold" aria-hidden="true">↪</span>
+        <h4 class="font-bold text-white text-sm font-heading leading-tight">${escapeHtml(detour.route_name)}</h4>
       </div>
       <div class="mt-2 flex flex-wrap gap-1">
         <span class="rounded bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">${escapeHtml(detourDirectionLabel(dirMode))}</span>
         <span class="rounded bg-slate-900 border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-300">${detour.flood_id_ref ? "เชื่อมโยงจุดน้ำท่วม" : "ทางเลี่ยงอิสระ"}</span>
       </div>
-      <p class="text-slate-300 mt-2 whitespace-pre-wrap text-[11px] max-h-44 overflow-y-auto">${escapeHtml(detour.description || "ยังไม่มีคำแนะนำการเดินทาง")}</p>
+
+      <!-- ปุ่มสลับทิศทางคำอธิบายทางเลี่ยง (A → B และ B → A) ตามข้อกำหนด -->
+      <div class="mt-2.5 flex rounded-lg bg-slate-900 p-0.5 border border-slate-700/80">
+        <button
+          type="button"
+          id="detour-btn-fwd-${safeId}"
+          onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'FORWARD')"
+          class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 transition cursor-pointer text-center"
+        >
+          ขาไป (A → B)
+        </button>
+        <button
+          type="button"
+          id="detour-btn-rev-${safeId}"
+          onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'REVERSE')"
+          class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md text-slate-400 hover:text-white transition cursor-pointer text-center"
+        >
+          ขากลับ (B → A)
+        </button>
+      </div>
+
+      <div id="detour-desc-fwd-${safeId}" class="block text-slate-200 mt-2 whitespace-pre-wrap text-[11px] max-h-48 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2 bg-slate-900/60">
+        ${escapeHtml(forwardText)}
+      </div>
+      <div id="detour-desc-rev-${safeId}" class="hidden text-slate-200 mt-2 whitespace-pre-wrap text-[11px] max-h-48 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2 bg-slate-900/60">
+        ${escapeHtml(reverseText)}
+      </div>
     </div>
   `;
 }
@@ -203,19 +233,66 @@ function buildFloodPopupHtml(flood: FloodRoute, updates: TimelineUpdate[]): stri
   const xFor = (index: number) => updates.length < 2 ? 10 : 8 + (index * 104) / (updates.length - 1);
   const chartPoints = updates.map((update, index) => {
     const time = new Date(update.reported_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
-    return `<circle cx="${xFor(index)}" cy="${yFor(update.water_level_cm)}" r="2.5" fill="#f59e0b"><title>${escapeHtml(time)} · ${update.water_level_cm} ซม.</title></circle>`;
+    return `<circle cx="${xFor(index)}" cy="${yFor(update.water_level_cm)}" r="3" fill="#f59e0b" stroke="#ffffff" stroke-width="1"><title>${escapeHtml(time)} · ${update.water_level_cm} ซม.</title></circle>`;
   }).join("");
   const linePoints = updates.map((update, index) => `${xFor(index)},${yFor(update.water_level_cm)}`).join(" ");
   const waterKnown = flood.direction_meta?.water_level_known !== false;
-  const levelDisplay = waterKnown ? `${flood.water_level_cm} ซม.` : "ไม่ระบุระดับน้ำ (รอวัดหน้างาน)";
+  const levelDisplay = waterKnown ? `${flood.water_level_cm} ซม.` : "รอวัดระดับน้ำหน้างาน";
   const sideCode = flood.road_side || "UNKNOWN";
   const sideDisplay = roadSideLabel(sideCode);
   const unreportedSideNote = (sideCode === "LEFT" || sideCode === "RIGHT")
-    ? `<div style="margin-top:4px;padding:3px 6px;border-radius:6px;background:#fef3c7;color:#92400e;font-size:10px">⚠️ ฝั่งตรงข้ามที่ไม่ได้รายงาน: ยังไม่ยืนยันความปลอดภัย โปรดใช้ความระมัดระวัง</div>`
+    ? `<div class="mt-1.5 p-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 text-[10px] leading-tight">⚠️ อีกฝั่งจราจรที่ไม่ได้รายงาน ยังไม่ยืนยันความปลอดภัย</div>`
     : "";
   const lanesDisplay = flood.affected_lanes ? ` · ช่องจราจร: ${escapeHtml(flood.affected_lanes)}` : "";
   const shoulderDisplay = flood.affected_shoulder && flood.affected_shoulder !== "NONE" ? ` · ไหล่ทาง: ${escapeHtml(shoulderLabel(flood.affected_shoulder))}` : "";
-  return `<div style="width:265px;color:#0f172a;font-family:Sarabun,sans-serif"><strong>ทล.${escapeHtml(flood.route_no)} ${escapeHtml(flood.section_name)}</strong><div style="font-size:12px;margin-top:3px">ระหว่าง กม.${escapeHtml(formatKmPost(flood.km_start))} ถึง กม.${escapeHtml(formatKmPost(flood.km_end))}</div><div style="font-size:11px;margin-top:3px;color:#334155"><b>ฝั่งที่เกิดเหตุ:</b> ${escapeHtml(sideDisplay)}${lanesDisplay}${shoulderDisplay}</div>${unreportedSideNote}${flood.latest_photo_url ? `<img src="${escapeHtml(flood.latest_photo_url)}" alt="ภาพสถานการณ์" style="width:100%;height:108px;object-fit:cover;border-radius:8px;margin-top:7px"/>` : ""}<div style="margin-top:7px;font-size:13px"><b>ระดับน้ำล่าสุด ${escapeHtml(levelDisplay)}</b> · ${escapeHtml(trafficStatusLabel(flood.traffic_status))}</div>${updates.length ? `<svg viewBox="0 0 120 56" style="width:100%;height:80px;margin-top:4px"><line x1="8" y1="48" x2="112" y2="48" stroke="#cbd5e1"/><polyline points="${linePoints}" fill="none" stroke="#f59e0b" stroke-width="2"/>${chartPoints}</svg><div style="font-size:10px;color:#64748b">ชี้ที่จุดกราฟเพื่อดูเวลาและระดับน้ำ</div>` : `<div style="font-size:11px;color:#64748b;margin-top:3px">ยังไม่มีข้อมูลระดับน้ำย้อนหลัง</div>`}</div>`;
+  const statusLabel = trafficStatusLabel(flood.traffic_status);
+  const statusBg = flood.traffic_status === "CLOSED" ? "bg-red-500 text-white" : flood.traffic_status === "PASSABLE" ? "bg-emerald-500 text-white" : "bg-amber-400 text-slate-950";
+
+  return `
+    <div class="text-xs p-1 min-w-[250px] max-w-[280px] font-body text-slate-100">
+      <div class="flex items-center justify-between gap-1.5 pb-1 border-b border-slate-800">
+        <span class="bg-[#f59e0b] text-slate-950 text-[11px] font-extrabold px-2 py-0.5 rounded font-heading">
+          ทล.${escapeHtml(flood.route_no)}
+        </span>
+        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${statusBg}">
+          ${escapeHtml(statusLabel)}
+        </span>
+      </div>
+      <h4 class="font-bold text-white text-sm font-heading mt-1.5 leading-snug">${escapeHtml(flood.section_name)}</h4>
+      <div class="text-slate-300 text-[11px] mt-0.5">
+        ระหว่าง กม.${escapeHtml(formatKmPost(flood.km_start))} ถึง กม.${escapeHtml(formatKmPost(flood.km_end))}
+      </div>
+      <div class="mt-1.5 inline-flex flex-wrap items-center gap-1 text-[11px] text-sky-200 bg-sky-950/70 border border-sky-800/80 rounded px-2 py-0.5">
+        <span><b>ฝั่ง:</b> ${escapeHtml(sideDisplay)}</span>${lanesDisplay}${shoulderDisplay}
+      </div>
+      ${unreportedSideNote}
+      ${flood.latest_photo_url ? `<img src="${escapeHtml(flood.latest_photo_url)}" alt="ภาพสถานการณ์น้ำท่วม" class="w-full h-28 object-cover rounded-lg mt-2 border border-slate-700 shadow-inner"/>` : ""}
+      <div class="mt-2 pt-1.5 border-t border-slate-800 flex items-center justify-between">
+        <span class="text-slate-300 text-xs">ระดับน้ำล่าสุด:</span>
+        <strong class="text-amber-400 text-sm font-bold font-mono">${escapeHtml(levelDisplay)}</strong>
+      </div>
+      ${updates.length ? `
+        <div class="mt-2 pt-1 border-t border-slate-800/80">
+          <div class="text-[10px] text-slate-400 flex justify-between"><span>สถิติระดับน้ำย้อนหลัง</span><span class="text-amber-300 font-mono">${updates.length} ครั้ง</span></div>
+          <svg viewBox="0 0 120 56" class="w-full h-16 mt-1">
+            <line x1="8" y1="48" x2="112" y2="48" stroke="#334155" stroke-width="1"/>
+            <polyline points="${linePoints}" fill="none" stroke="#f59e0b" stroke-width="2"/>
+            ${chartPoints}
+          </svg>
+          <div class="text-[9px] text-slate-400 text-center">ชี้ที่จุดเพื่อดูเวลาและระดับน้ำ</div>
+        </div>
+      ` : `
+        <div class="text-[10px] text-slate-400 mt-1 italic text-center">ยังไม่มีข้อมูลระดับน้ำย้อนหลัง</div>
+      `}
+      <button
+        type="button"
+        onclick="window.__openFloodDossier && window.__openFloodDossier('${escapeHtml(flood.id)}')"
+        class="mt-2.5 w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black text-xs rounded-lg transition text-center shadow cursor-pointer"
+      >
+        ดูรายงานและทางเลี่ยงแบบเต็ม →
+      </button>
+    </div>
+  `;
 }
 
 function buildOfficePopupHtml(office: DohOfficeLocation): string {
@@ -395,6 +472,40 @@ export function LongdoGisMap({
   onSelectFloodRef.current = onSelectFlood;
   const selectedFloodIdRef = useRef(selectedFloodId);
   selectedFloodIdRef.current = selectedFloodId;
+
+  // Global popup handlers for direction toggling and opening flood dossier
+  useEffect(() => {
+    (window as any).__openFloodDossier = (id: string) => {
+      onSelectFloodRef.current?.(id);
+    };
+    (window as any).__toggleDetourPopupDir = (id: string, dir: "FORWARD" | "REVERSE") => {
+      const fwdBtn = document.getElementById(`detour-btn-fwd-${id}`);
+      const revBtn = document.getElementById(`detour-btn-rev-${id}`);
+      const fwdDesc = document.getElementById(`detour-desc-fwd-${id}`);
+      const revDesc = document.getElementById(`detour-desc-rev-${id}`);
+      if (!fwdBtn || !revBtn || !fwdDesc || !revDesc) return;
+
+      if (dir === "FORWARD") {
+        fwdBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 transition cursor-pointer text-center";
+        revBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md text-slate-400 hover:text-white transition cursor-pointer text-center";
+        fwdDesc.classList.remove("hidden");
+        fwdDesc.classList.add("block");
+        revDesc.classList.remove("block");
+        revDesc.classList.add("hidden");
+      } else {
+        revBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 transition cursor-pointer text-center";
+        fwdBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md text-slate-400 hover:text-white transition cursor-pointer text-center";
+        revDesc.classList.remove("hidden");
+        revDesc.classList.add("block");
+        fwdDesc.classList.remove("block");
+        fwdDesc.classList.add("hidden");
+      }
+    };
+    return () => {
+      delete (window as any).__openFloodDossier;
+      delete (window as any).__toggleDetourPopupDir;
+    };
+  }, []);
 
   // 1. Initialize Leaflet Map Instance
   useEffect(() => {
@@ -1427,20 +1538,41 @@ export function LongdoGisMap({
         style={{ position: "absolute", inset: 0, minHeight: 450 }}
       />
 
-      {/* Layer Control Legend (Floating Top-Right matching Reference Image 1 & Collapsible for Issue #4) */}
-      {isLayerControlCollapsed ? (
-        <button
-          type="button"
-          onClick={() => setIsLayerControlCollapsed(false)}
-          className="absolute top-4 right-4 z-[400] bg-[#0b162c]/95 hover:bg-[#0f1d3a] border border-slate-700/80 rounded-xl px-3 py-1.5 shadow-xl flex items-center gap-2 text-xs font-heading font-bold text-amber-300 transition backdrop-blur-md"
-          title="เปิดแถบควบคุมเลเยอร์แผนที่"
-        >
-          <Layers className="w-3.5 h-3.5 text-amber-400" />
-          <span>สัญลักษณ์บนแผนที่</span>
-          <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-        </button>
-      ) : (
-        <div className="absolute top-4 right-4 z-[400] bg-[#0b162c]/95 backdrop-blur border border-slate-700/80 rounded-2xl p-3 sm:p-3.5 shadow-2xl min-w-[215px] sm:min-w-[240px] text-xs pointer-events-auto animate-fade-in">
+      {/* Top Header Controls Bar (Responsive: status badges on left, legend toggle button on right) */}
+      <div className="absolute top-3 inset-x-3 z-[400] flex items-center justify-between gap-1.5 pointer-events-none" aria-label="สรุปสถานการณ์และแถบควบคุมบนแผนที่">
+        {/* Status Badges on the left */}
+        <div className="flex items-center gap-1.5 pointer-events-auto overflow-x-auto no-scrollbar py-0.5 max-w-[calc(100%-105px)] sm:max-w-none">
+          <div className="rounded-lg border border-red-500/50 bg-slate-950/95 px-2.5 py-1 text-[11px] sm:text-xs font-medium text-white shadow-lg backdrop-blur shrink-0 flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-full bg-red-400 animate-pulse" />
+            <span>น้ำท่วม <strong className="text-red-300 font-bold">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => item.is_active).length : 0}</strong> จุด</span>
+          </div>
+          <div className="rounded-lg border border-amber-500/50 bg-slate-950/95 px-2.5 py-1 text-[11px] sm:text-xs font-medium text-white shadow-lg backdrop-blur shrink-0 flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+            <span>ทางเลี่ยง <strong className="text-amber-300 font-bold">{showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</strong> เส้นทาง</span>
+          </div>
+        </div>
+
+        {/* Legend Toggle Button on the right (collapsed state) */}
+        {isLayerControlCollapsed && (
+          <div className="pointer-events-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsLayerControlCollapsed(false)}
+              className="bg-[#0b162c]/95 hover:bg-[#0f1d3a] border border-slate-700/80 rounded-lg px-2.5 py-1 shadow-lg flex items-center gap-1.5 text-[11px] sm:text-xs font-heading font-bold text-amber-300 transition backdrop-blur-md cursor-pointer"
+              title="เปิดแถบควบคุมเลเยอร์แผนที่"
+            >
+              <Layers className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="hidden xs:inline sm:inline">สัญลักษณ์บนแผนที่</span>
+              <span className="inline xs:hidden sm:hidden">สัญลักษณ์</span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Expanded Legend Panel (positioned cleanly at top-3 right-3, drops down smoothly) */}
+      {!isLayerControlCollapsed && (
+        <div className="absolute top-3 right-3 z-[410] bg-[#0b162c]/95 backdrop-blur border border-slate-700/80 rounded-2xl p-3 sm:p-3.5 shadow-2xl min-w-[215px] sm:min-w-[240px] max-w-[calc(100vw-24px)] text-xs pointer-events-auto animate-fade-in max-h-[85vh] overflow-y-auto">
           <div className="font-heading font-bold text-amber-400 flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
             <span className="flex items-center gap-1.5 text-xs text-white">
               <Layers className="w-3.5 h-3.5 text-amber-400" /> สัญลักษณ์บนแผนที่
@@ -1589,17 +1721,6 @@ export function LongdoGisMap({
           </div>
         </div>
       )}
-
-      <div className="absolute top-4 left-4 z-[400] flex flex-wrap gap-2 pointer-events-none" aria-label="สรุปสถานการณ์บนแผนที่">
-        <div className="rounded-xl border border-red-400/40 bg-slate-950/90 px-3 py-2 text-xs text-white shadow-xl backdrop-blur">
-          <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-red-400" />
-          น้ำท่วม <strong className="text-red-300">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => item.is_active).length : 0}</strong> จุด
-        </div>
-        <div className="rounded-xl border border-amber-400/40 bg-slate-950/90 px-3 py-2 text-xs text-white shadow-xl backdrop-blur">
-          <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-amber-300" />
-          ทางเลี่ยง <strong className="text-amber-300">{showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</strong> เส้นทาง
-        </div>
-      </div>
     </div>
   );
 }

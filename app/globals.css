@@ -83,6 +83,32 @@
   background: #0f172a !important;
 }
 
+.leaflet-popup-close-button {
+  color: #94a3b8 !important;
+  padding: 6px !important;
+  top: 4px !important;
+  right: 6px !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #ffffff !important;
+}
+
+/* Prevent Leaflet zoom controls from overlapping top status badges on mobile & desktop */
+.leaflet-top.leaflet-left {
+  top: 54px !important;
+  left: 12px !important;
+}
+
+/* Utilities */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Print Styles for Official Thai Government Dispatch */
 @media print {
   @page {

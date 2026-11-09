@@ -623,6 +623,65 @@ export async function generateAutoDetourAdvice(
 }
 
 /**
+ * แยกคำแนะนำการเดินทางของเส้นทางเลี่ยงออกเป็น ๒ ทิศทาง: ขาไป (A → B) และขากลับ (B → A)
+ * สำหรับใช้แสดงผลสลับแท็บบนแผนที่และหน้าต่างรายละเอียด
+ */
+export function splitDetourAdviceByDirection(
+  description: string,
+  directionMode: string = "TWO_WAY"
+): { forwardText: string; reverseText: string } {
+  const desc = (description || "").trim();
+  if (!desc) {
+    return {
+      forwardText: "ยังไม่มีคำแนะนำการเดินทางขาไป (A → B)",
+      reverseText: "ยังไม่มีคำแนะนำการเดินทางขากลับ (B → A)",
+    };
+  }
+
+  if (directionMode === "FORWARD_ONLY") {
+    return {
+      forwardText: desc,
+      reverseText: "เส้นทางเลี่ยงนี้เปิดใช้งานเฉพาะทิศทางขาไป (A → B) เท่านั้น กรุณาใช้เส้นทางอื่นสำหรับขากลับ",
+    };
+  }
+
+  if (directionMode === "REVERSE_ONLY") {
+    return {
+      forwardText: "เส้นทางเลี่ยงนี้เปิดใช้งานเฉพาะทิศทางขากลับ (B → A) เท่านั้น กรุณาใช้เส้นทางอื่นสำหรับขาไป",
+      reverseText: desc,
+    };
+  }
+
+  const markers = [
+    "=== ทิศทางขากลับ",
+    "ทิศทางขากลับ: จุด B → จุด A ===",
+    "ทิศทางขากลับ:",
+    "ขากลับ (จุด B → จุด A):",
+    "ขากลับ:",
+  ];
+
+  for (const marker of markers) {
+    const idx = desc.indexOf(marker);
+    if (idx !== -1) {
+      let forward = desc.substring(0, idx).trim();
+      let reverse = desc.substring(idx).trim();
+      // ตัดหัวข้อนำทางเดิมออกเพื่อให้เนื้อหากระชับสวยงาม
+      forward = forward.replace(/^===?\s*ทิศทางขาไป[^=]*===?\s*/i, "").trim();
+      reverse = reverse.replace(/^===?\s*ทิศทางขากลับ[^=]*===?\s*/i, "").trim();
+      return {
+        forwardText: forward || desc,
+        reverseText: reverse || desc,
+      };
+    }
+  }
+
+  return {
+    forwardText: desc,
+    reverseText: `ทิศทางขากลับ (จุด B → จุด A):\nวิ่งย้อนเส้นทางตามแนวถนนเดิม หรือใช้คำแนะนำการเดินทางของเส้นทางเลี่ยงนี้ในทิศทางตรงกันข้าม\n\n${desc}`,
+  };
+}
+
+/**
  * ลดทอนจุดพิกัดส่วนเกินด้วยขั้นตอนวิธี Douglas-Peucker (Point Decimation)
  */
 export function simplifyCoordinates(
