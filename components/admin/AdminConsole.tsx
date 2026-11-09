@@ -47,6 +47,8 @@ interface AdminConsoleProps {
   onOfficeEditModeChange?: (officeId: string | null) => void;
   vertexEvent?: VertexEditEvent | null;
   onVertexEditChange?: (active: boolean) => void;
+  isPaneCollapsed?: boolean;
+  onTogglePaneCollapse?: () => void;
 }
 
 export function AdminConsole({
@@ -67,6 +69,8 @@ export function AdminConsole({
   onOfficeEditModeChange,
   vertexEvent,
   onVertexEditChange,
+  isPaneCollapsed,
+  onTogglePaneCollapse,
 }: AdminConsoleProps) {
   // Navigation & View
   const [activeTab, setActiveTab] = useState<
@@ -207,9 +211,8 @@ export function AdminConsole({
       {/* 1. LEFT AUTHENTIC SIDEBAR (Matching reference site)                   */}
       {/* ===================================================================== */}
       <aside
-        className={`hidden shrink-0 flex-col text-white transition-[width] duration-200 lg:flex ${
-          isSidebarCollapsed ? "w-[72px]" : "w-60"
-        }`}
+        className={`hidden shrink-0 flex-col text-white transition-[width] duration-200 lg:flex ${isPaneCollapsed ? "w-[72px]" : isSidebarCollapsed ? "w-[72px]" : "w-60"
+          }`}
         style={{ background: "#071B3D" }}
       >
         {/* Sidebar Header Brand */}
@@ -225,7 +228,7 @@ export function AdminConsole({
               <ShieldCheck className="h-5 w-5 text-yellow-300" />
             </span>
           )}
-          {!isSidebarCollapsed && (
+          {!isPaneCollapsed && !isSidebarCollapsed && (
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-white">แขวงทางหลวงปัตตานี</p>
               <p className="text-[11px] text-yellow-300 font-mono">Admin Console</p>
@@ -237,7 +240,7 @@ export function AdminConsole({
         <nav aria-label="เมนูระบบจัดการ" className="flex-1 overflow-y-auto p-3">
           {NAV_GROUPS.map((group, groupIndex) => (
             <div key={group.title} className={groupIndex === 0 ? "" : "mt-4"}>
-              {isSidebarCollapsed ? (
+              {isPaneCollapsed || isSidebarCollapsed ? (
                 groupIndex > 0 && <div aria-hidden="true" className="mx-3 mb-3 border-t border-white/10" />
               ) : (
                 <p className="px-2.5 pb-1.5 text-xs font-semibold tracking-wide text-slate-400">{group.title}</p>
@@ -247,50 +250,50 @@ export function AdminConsole({
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
                   return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    title={item.label}
-                    aria-label={item.label}
-                    aria-current={isActive ? "page" : undefined}
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      if (item.id !== "map") {
-                        setEditingRoute(null);
-                      }
-                      if (item.id !== "system") onOfficeEditModeChange?.(null);
-                    }}
-                    className={`w-full flex items-center rounded-xl p-2.5 text-left transition ${
-                      isActive
-                        ? "bg-amber-500 text-slate-950 font-bold shadow-md"
-                        : "text-slate-300 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-slate-950" : "text-amber-400"}`} />
-                    {!isSidebarCollapsed && (
-                      <div className="ml-3 min-w-0 flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="truncate text-xs font-heading font-bold">{item.label}</p>
-                          {item.badge !== undefined && item.badge > 0 && (
-                            <span
-                              className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                                isActive ? "bg-slate-950 text-white" : "bg-red-600 text-white"
+                    <button
+                      key={item.id}
+                      type="button"
+                      title={item.label}
+                      aria-label={item.label}
+                      aria-current={isActive ? "page" : undefined}
+                      onClick={() => {
+                        setActiveTab(item.id);
+                        if (item.id !== "map") {
+                          setEditingRoute(null);
+                        }
+                        if (item.id !== "system") onOfficeEditModeChange?.(null);
+                        if (isPaneCollapsed && onTogglePaneCollapse) {
+                          onTogglePaneCollapse();
+                        }
+                      }}
+                      className={`w-full flex items-center rounded-xl p-2.5 text-left transition ${isActive
+                          ? "bg-amber-500 text-slate-950 font-bold shadow-md"
+                          : "text-slate-300 hover:bg-white/10 hover:text-white"
+                        }`}
+                    >
+                      <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-slate-950" : "text-amber-400"}`} />
+                      {!isPaneCollapsed && !isSidebarCollapsed && (
+                        <div className="ml-3 min-w-0 flex-1">
+                          <div className="flex items-center justify-between">
+                            <p className="truncate text-xs font-heading font-bold">{item.label}</p>
+                            {item.badge !== undefined && item.badge > 0 && (
+                              <span
+                                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${isActive ? "bg-slate-950 text-white" : "bg-red-600 text-white"
+                                  }`}
+                              >
+                                {item.badge}
+                              </span>
+                            )}
+                          </div>
+                          <p
+                            className={`truncate text-[10px] ${isActive ? "text-slate-800" : "text-slate-400"
                               }`}
-                            >
-                              {item.badge}
-                            </span>
-                          )}
+                          >
+                            {item.subLabel}
+                          </p>
                         </div>
-                        <p
-                          className={`truncate text-[10px] ${
-                            isActive ? "text-slate-800" : "text-slate-400"
-                          }`}
-                        >
-                          {item.subLabel}
-                        </p>
-                      </div>
-                    )}
-                  </button>
+                      )}
+                    </button>
                   );
                 })}
               </div>
@@ -307,7 +310,7 @@ export function AdminConsole({
             title="ออกรายงานเสนอผู้ว่าฯ (ด่วนที่สุด)"
           >
             <FileText className="w-4 h-4 shrink-0" />
-            {!isSidebarCollapsed && <span>รายงานผู้ว่าฯ ด่วน</span>}
+            {!isPaneCollapsed && !isSidebarCollapsed && <span>รายงานผู้ว่าฯ ด่วน</span>}
           </button>
 
           <button
@@ -331,7 +334,7 @@ export function AdminConsole({
       {/* ===================================================================== */}
       {/* 2. MAIN WORKING PANE                                                  */}
       {/* ===================================================================== */}
-      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-950">
+      <main className={`flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-950 ${isPaneCollapsed ? "hidden lg:hidden" : ""}`}>
         {/* Mobile / Tablet Horizontal Navigation Bar */}
         <div className="lg:hidden flex items-center overflow-x-auto border-b border-slate-800 p-2 gap-1.5 bg-slate-900 shrink-0">
           {NAV_ITEMS.map((item) => {
@@ -346,11 +349,10 @@ export function AdminConsole({
                   if (item.id !== "map") setEditingRoute(null);
                   if (item.id !== "system") onOfficeEditModeChange?.(null);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-heading font-bold shrink-0 flex items-center gap-1.5 transition ${
-                  isActive
+                className={`px-3 py-1.5 rounded-lg text-xs font-heading font-bold shrink-0 flex items-center gap-1.5 transition ${isActive
                     ? "bg-amber-500 text-slate-950"
                     : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                }`}
+                  }`}
               >
                 <Icon className="w-3.5 h-3.5" />
                 <span>{item.label}</span>

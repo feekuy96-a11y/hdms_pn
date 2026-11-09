@@ -228,7 +228,7 @@ export default function AdminPage() {
           <div
             className={`transition-all duration-300 ease-in-out border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0 flex flex-col overflow-hidden ${
               isSidebarCollapsed
-                ? "hidden"
+                ? "w-full lg:w-[72px]"
                 : "w-full lg:w-[56vw] xl:w-[clamp(720px,50vw,1040px)] min-h-[72vh] lg:min-h-0"
             }`}
           >
@@ -252,6 +252,11 @@ export default function AdminPage() {
               vertexEvent={vertexEvent}
               onVertexEditChange={setVertexEditable}
               onOfficeEditModeChange={setEditableOfficeId}
+              isPaneCollapsed={isSidebarCollapsed}
+              onTogglePaneCollapse={() => {
+                setIsSidebarCollapsed(false);
+                setTimeout(() => window.dispatchEvent(new Event("resize")), 350);
+              }}
             />
           </div>
 

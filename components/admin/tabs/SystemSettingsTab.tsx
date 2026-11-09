@@ -47,11 +47,21 @@ export function SystemSettingsTab({
   const [officePhone, setOfficePhone] = useState("");
   const [officeLat, setOfficeLat] = useState(6.815);
   const [officeLon, setOfficeLon] = useState(101.25);
+  const [officeCoordText, setOfficeCoordText] = useState("6.815, 101.25");
+
+  const parseCoordinatePair = (value: string): [number, number] | null => {
+    const numbers = value.match(/-?\d+(?:\.\d+)?/g)?.map(Number) || [];
+    if (numbers.length < 2) return null;
+    const [lat, lon] = numbers;
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    return [lat, lon];
+  };
 
   useEffect(() => {
     if (pickedCoordinate && ["OFFICE_PIN", "OFFICE_DRAG"].includes(pickedCoordinate.mode)) {
       setOfficeLat(pickedCoordinate.lat);
       setOfficeLon(pickedCoordinate.lon);
+      setOfficeCoordText(`${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
       onToast(`${pickedCoordinate.mode === "OFFICE_DRAG" ? "ย้าย" : "ปัก"}หมุดพิกัดสำนักงาน: ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
     }
   }, [pickedCoordinate, onToast]);
@@ -252,6 +262,9 @@ export function SystemSettingsTab({
               setOfficeName("");
               setOfficeAddress("");
               setOfficePhone("");
+              setOfficeLat(6.815);
+              setOfficeLon(101.25);
+              setOfficeCoordText("6.815, 101.25");
               setIsOfficeFormOpen(true);
               onOfficeEditModeChange?.(null);
             }}
@@ -330,29 +343,34 @@ export function SystemSettingsTab({
                     {adminPickMode === "OFFICE_PIN" ? "กำลังจิ้มพิกัดบนแผนที่..." : "จิ้มพิกัดบนแผนที่"}
                   </ActionButton>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="block text-[10px] text-slate-400 mb-0.5">ละติจูด (Lat)</span>
-                    <input
-                      type="number"
-                      step="any"
-                      value={officeLat}
-                      onChange={(e) => setOfficeLat(Number(e.target.value))}
-                      placeholder="เช่น 6.731259"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:border-amber-400 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <span className="block text-[10px] text-slate-400 mb-0.5">ลองจิจูด (Lon)</span>
-                    <input
-                      type="number"
-                      step="any"
-                      value={officeLon}
-                      onChange={(e) => setOfficeLon(Number(e.target.value))}
-                      placeholder="เช่น 101.095258"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:border-amber-400 focus:outline-none"
-                    />
-                  </div>
+                <div>
+                  <input
+                    type="text"
+                    value={officeCoordText}
+                    onChange={(e) => {
+                      setOfficeCoordText(e.target.value);
+                      const pair = parseCoordinatePair(e.target.value);
+                      if (pair) {
+                        setOfficeLat(pair[0]);
+                        setOfficeLon(pair[1]);
+                      }
+                    }}
+                    onBlur={() => {
+                      const pair = parseCoordinatePair(officeCoordText);
+                      if (pair) {
+                        setOfficeLat(pair[0]);
+                        setOfficeLon(pair[1]);
+                        setOfficeCoordText(`${pair[0]}, ${pair[1]}`);
+                      } else {
+                        setOfficeCoordText(`${officeLat}, ${officeLon}`);
+                      }
+                    }}
+                    placeholder="วางจาก Google Maps เช่น 6.731259, 101.095258"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono placeholder:text-slate-500 focus:border-amber-400 focus:outline-none"
+                  />
+                  <span className="block text-[10px] text-slate-500 mt-1">
+                    * สามารถคัดลอกจาก Google Maps (ละติจูด, ลองจิจูด) มาวางลงในช่องนี้ได้ทันที
+                  </span>
                 </div>
               </div>
             </div>
@@ -407,6 +425,7 @@ export function SystemSettingsTab({
                       setOfficePhone(off.phone);
                       setOfficeLat(off.lat);
                       setOfficeLon(off.lon);
+                      setOfficeCoordText(`${off.lat}, ${off.lon}`);
                       setIsOfficeFormOpen(true);
                       onOfficeEditModeChange?.(off.id);
                     }}

@@ -122,6 +122,7 @@ export function MapManagementTab({
   const sectionNameManuallyEdited = useRef(false);
 
   // Highway Search Combobox State
+  const [selectedHighwayName, setSelectedHighwayName] = useState("");
   const [isHighwayDropdownOpen, setIsHighwayDropdownOpen] = useState(false);
   const [highwaySearchQuery, setHighwaySearchQuery] = useState("");
   const highwayComboboxRef = useRef<HTMLDivElement>(null);
@@ -770,7 +771,7 @@ export function MapManagementTab({
                 onClick={() => setIsHighwayDropdownOpen((prev) => !prev)}
               >
                 <span className={`truncate ${!routeNo ? "text-slate-400" : "font-semibold text-amber-300"}`}>
-                  {routeNo ? (availableHighways.find((h) => h.no === routeNo)?.name || `ทล.${routeNo}`) : "-- เลือกหมายเลขทางหลวง --"}
+                  {selectedHighwayName || (routeNo ? (availableHighways.find((h) => h.no === routeNo)?.name || `ทล.${routeNo}`) : "-- เลือกหมายเลขทางหลวง --")}
                 </span>
                 <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 ml-2" />
               </div>
@@ -836,20 +837,21 @@ export function MapManagementTab({
                           key={`${h.no}_${h.name}_${h.kmStart || ""}`}
                           onClick={() => {
                             setRouteNo(h.no);
-                            if (h.sectionName && !sectionNameManuallyEdited.current) {
+                            setSelectedHighwayName(h.name);
+                            if (h.sectionName) {
                               setSectionName(h.sectionName);
                             }
-                            if (h.kmStart && !kmStart) {
+                            if (h.kmStart) {
                               setKmStart(h.kmStart);
                             }
-                            if (h.kmEnd && !kmEnd) {
+                            if (h.kmEnd) {
                               setKmEnd(h.kmEnd);
                             }
                             setIsHighwayDropdownOpen(false);
                             setHighwaySearchQuery("");
                           }}
                           className={`cursor-pointer px-3 py-2 text-xs transition hover:bg-slate-800/80 flex items-center justify-between ${
-                            routeNo === h.no ? "bg-amber-500/15 text-amber-300 font-semibold" : "text-slate-200"
+                            routeNo === h.no && selectedHighwayName === h.name ? "bg-amber-500/15 text-amber-300 font-semibold" : "text-slate-200"
                           }`}
                         >
                           <span className="truncate">{h.name}</span>

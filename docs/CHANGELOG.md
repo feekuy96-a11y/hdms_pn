@@ -42,3 +42,11 @@
   4. `components/admin/tabs/GisDataImportTab.tsx`: ปรับดีไซน์ Modal รายละเอียดสายทาง จัดหมวดหมู่คุณสมบัติวิศวกรรมและการ์ดปุ่มจัดการให้เรียบร้อยสวยงาม
   5. `components/admin/tabs/SystemSettingsTab.tsx`: ปรับปุ่ม "จิ้มพิกัดบนแผนที่" ให้ใช้ `ActionButton variant="pick"` พร้อมสถานะ active และจัดกรอบช่องกรอก Lat, Lon ให้เป็นมาตรฐานเดียวกัน
 - **ตรวจแล้ว:** `npm run typecheck`, `npm run lint` (0 warnings), Next.js Static Export build ผ่านสมบูรณ์ (Static pages 6/6) · **ยังไม่ได้ตรวจ:** ตรวจผลบนหน้าจอมือถือจริง
+
+### [UPDATE-055] 2026-11-09 แก้ไขเพิ่มเติมระบบเลือกทางหลวง พับแผง และช่องพิกัดเดี่ยว
+- **ไฟล์:** `components/admin/tabs/MapManagementTab.tsx`, `app/admin/page.tsx`, `components/admin/AdminConsole.tsx`, `components/admin/tabs/SystemSettingsTab.tsx`
+- **ทำอะไร:**
+  1. `MapManagementTab.tsx`: แก้ไข auto-fill กม.เริ่มต้น-สิ้นสุด ให้เปลี่ยนค่าตามสายทางหลวงที่เลือกใหม่เสมอทุกครั้ง (ไม่ถูกบล็อกด้วยเงื่อนไขเดิม)
+  2. `app/admin/page.tsx` & `AdminConsole.tsx`: ปรับปรุงระบบพับแผง เมื่อพับแผงย่อย (หน้าต่างฟอร์ม) แถบไอคอนเมนูหลักยังคงแสดงผลอยู่ด้านข้าง และเมื่อคลิกที่ไอคอนเมนูใดก็ตาม จะขยายเปิดแผงทำงานทั้งหมดกลับมาอัตโนมัติ
+  3. `SystemSettingsTab.tsx`: เปลี่ยนช่องกรอกพิกัดสำนักงานเป็นช่องเดี่ยว รองรับการคัดลอกพิกัดคู่ (Lat, Lon) จาก Google Maps มาวางได้โดยตรง พร้อมระบบ parse แยกค่าอัตโนมัติ
+- **ตรวจแล้ว:** `npm run typecheck`, `npm run lint` (0 warnings), Next.js Static Export build ผ่าน 100% (6/6 static pages)
