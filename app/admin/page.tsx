@@ -33,7 +33,7 @@ import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { ArrowLeft, RotateCw, LogOut, FileText, PieChart, Settings, Smartphone } from "lucide-react";
+import { ArrowLeft, RotateCw, LogOut, FileText, PieChart, Settings, Smartphone, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 import { ExecutiveDashboard } from "@/components/executive/ExecutiveDashboard";
 import { usePollingActivity } from "@/lib/use-polling-activity";
@@ -44,6 +44,7 @@ export default function AdminPage() {
   const [selectedFloodId, setSelectedFloodId] = useState<string>("");
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
   const [adminViewMode, setAdminViewMode] = useState<"console" | "executive">("console");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [adminPickMode, setAdminPickMode] = useState<string | null>(null);
   const [draftCoordinates, setDraftCoordinates] = useState<[number, number][]>([]);
   const [draftWaypoints, setDraftWaypoints] = useState<[number, number][]>([]);
@@ -222,9 +223,15 @@ export default function AdminPage() {
         </main>
       ) : (
         /* Main Split Layout: Admin Console on Left (ฝั่งซ้ายมือ), GIS Map on Right */
-        <div className="flex-1 flex flex-col lg:flex-row lg:min-h-0 overflow-visible lg:overflow-hidden">
-          {/* Left: Full Government Administrative Console (ฝั่งซ้ายมือ) */}
-          <div className="w-full lg:w-[56vw] xl:w-[clamp(720px,50vw,1040px)] min-h-[72vh] lg:min-h-0 flex flex-col overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0">
+        <div className="flex-1 flex flex-col lg:flex-row lg:min-h-0 overflow-visible lg:overflow-hidden relative">
+          {/* Left: Full Government Administrative Console (ฝั่งซ้ายมือ - รองรับการพับ/เปิด) */}
+          <div
+            className={`transition-all duration-300 ease-in-out border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0 flex flex-col overflow-hidden ${
+              isSidebarCollapsed
+                ? "hidden"
+                : "w-full lg:w-[56vw] xl:w-[clamp(720px,50vw,1040px)] min-h-[72vh] lg:min-h-0"
+            }`}
+          >
             <AdminConsole
               systemData={systemData}
               onDataRefresh={(newData) => {
@@ -250,6 +257,34 @@ export default function AdminPage() {
 
           {/* Right: Interactive GIS Map */}
           <div className="h-[44vh] min-h-[360px] lg:h-auto lg:min-h-0 lg:flex-1 relative">
+            {/* Sidebar Toggle Button (พับ/เปิด แผงควบคุมฝั่งซ้าย) */}
+            <div className="absolute top-3 left-3 z-[450] hidden lg:block">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSidebarCollapsed((prev) => !prev);
+                  // Trigger map resize adjustment
+                  setTimeout(() => {
+                    window.dispatchEvent(new Event("resize"));
+                  }, 350);
+                }}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-2 text-xs font-heading font-bold text-slate-200 shadow-xl backdrop-blur hover:bg-slate-800 hover:text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                title={isSidebarCollapsed ? "เปิดแผงควบคุม (แสดงฟอร์ม)" : "พับแผงควบคุม (ขยายแผนที่เต็มจอ)"}
+                aria-label={isSidebarCollapsed ? "เปิดแผงควบคุม" : "พับแผงควบคุม"}
+              >
+                {isSidebarCollapsed ? (
+                  <>
+                    <PanelLeftOpen className="h-4 w-4 text-amber-400" />
+                    <span>เปิดแผงควบคุม</span>
+                  </>
+                ) : (
+                  <>
+                    <PanelLeftClose className="h-4 w-4 text-slate-400" />
+                    <span>พับแผง</span>
+                  </>
+                )}
+              </button>
+            </div>
             <LongdoGisMap
               systemData={systemData}
               selectedFloodId={selectedFloodId}

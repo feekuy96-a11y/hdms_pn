@@ -32,3 +32,13 @@
 - **ไฟล์:** `AGENTS.md` (เขียนใหม่), `CLAUDE.md` (ใหม่), `GEMINI.md`, `.cursorrules`, `.windsurfrules` (เหลือตัวชี้), `docs/*` (ใหม่), `PRODUCTION.md` และ `DESIGN.md` (เพิ่มประกาศแก้ข้อมูลที่ไม่ตรงโค้ด)
 - **ทำอะไร:** ไฟล์กติกาหลักไฟล์เดียว (เดิม 4 ฉบับซ้ำและเพี้ยนกัน) · เลิกบังคับอ่าน `SUPPLEMENTAL_RULES.md` 120 KB ทุกเซสชัน · เพิ่ม Challenge Protocol และ "ข้อเสนอเชิงรุก" ท้ายทุกคำตอบ · เพิ่ม playbook, UI contract, backlog · บันทึกข้อค้นพบ B-001–B-012
 - **ตรวจแล้ว:** ทุกข้อเท็จจริงในเอกสารตรวจกับโค้ดในรีโปแล้ว (ระบุ "(ต้องยืนยัน)" ในจุดที่ต้องดู production)
+
+### [UPDATE-054] 2026-11-09 ปรับปรุง UI แผนที่และระบบจัดการ 5 จุด (UX/UI Enhancements)
+- **ไฟล์:** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `app/admin/page.tsx`, `components/admin/AdminConsole.tsx`, `components/admin/tabs/SystemSettingsTab.tsx`, `components/admin/tabs/MapManagementTab.tsx`
+- **ทำอะไร:**
+  1. `components/admin/tabs/MapManagementTab.tsx`: เปลี่ยนตัวเลือกหมายเลขทางหลวงเป็น Combobox ค้นหาอัจฉริยะ (Smart Search), จัดเรียงตามหมายเลขทางหลวงและคุณสมบัติทางวิศวกรรม พร้อมแสดงช่วง กม. และ auto-fill กม.เริ่มต้น/สิ้นสุด
+  2. `components/map/LongdoGisMap.tsx`: ปรับตำแหน่งป้ายแคปซูลแจ้งเตือนน้ำท่วม (Capsule Badge) ให้อยู่จุดกึ่งกลางของเส้นทางน้ำท่วม (Midpoint of polyline) เสมอ
+  3. `app/admin/page.tsx`: เพิ่มปุ่มพับ/เปิดแผงควบคุมฝั่งซ้าย (Collapsible Sidebar) ขยายแผนที่แบบเต็มจอ พร้อม auto-resize
+  4. `components/admin/tabs/GisDataImportTab.tsx`: ปรับดีไซน์ Modal รายละเอียดสายทาง จัดหมวดหมู่คุณสมบัติวิศวกรรมและการ์ดปุ่มจัดการให้เรียบร้อยสวยงาม
+  5. `components/admin/tabs/SystemSettingsTab.tsx`: ปรับปุ่ม "จิ้มพิกัดบนแผนที่" ให้ใช้ `ActionButton variant="pick"` พร้อมสถานะ active และจัดกรอบช่องกรอก Lat, Lon ให้เป็นมาตรฐานเดียวกัน
+- **ตรวจแล้ว:** `npm run typecheck`, `npm run lint` (0 warnings), Next.js Static Export build ผ่านสมบูรณ์ (Static pages 6/6) · **ยังไม่ได้ตรวจ:** ตรวจผลบนหน้าจอมือถือจริง

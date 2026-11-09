@@ -3,9 +3,10 @@
 import React, { useState, useEffect } from "react";
 import { SystemDataPayload, DohOfficeLocation } from "@/db/default-data";
 import { APP_CONFIG, DEFAULT_DOH_OFFICES } from "@/lib/constants";
-import { Settings, Building, Plus, Edit, Trash2, Phone, ExternalLink, Upload, Image as ImageIcon } from "lucide-react";
+import { Settings, Building, Plus, Edit, Trash2, Phone, ExternalLink, Upload, Image as ImageIcon, MapPin } from "lucide-react";
 import { updateSystemSettingsAction, saveOfficeAction, deleteOfficeAction } from "@/app/actions/doh-actions";
 import { compressImageToBase64 } from "@/lib/gis-utils";
+import { ActionButton } from "@/components/admin/ui";
 
 interface SystemSettingsTabProps {
   systemData: SystemDataPayload;
@@ -13,6 +14,7 @@ interface SystemSettingsTabProps {
   onToast: (msg: string) => void;
   showConfirmModal: (title: string, message: string, onConfirm: () => void) => void;
   showSuccessModal: (title: string, message: string) => void;
+  adminPickMode?: string | null;
   setAdminPickMode: (mode: string | null) => void;
   pickedCoordinate?: { lat: number; lon: number; mode: string } | null;
   onOfficeEditModeChange?: (officeId: string | null) => void;
@@ -24,6 +26,7 @@ export function SystemSettingsTab({
   onToast,
   showConfirmModal,
   showSuccessModal,
+  adminPickMode,
   setAdminPickMode,
   pickedCoordinate,
   onOfficeEditModeChange,
@@ -312,32 +315,44 @@ export function SystemSettingsTab({
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white"
                 />
               </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-slate-300">พิกัด Lat, Lon</label>
-                  <button
-                    type="button"
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                    พิกัดตำแหน่ง (Lat, Lon) *
+                  </label>
+                  <ActionButton
+                    variant="pick"
+                    active={adminPickMode === "OFFICE_PIN"}
                     onClick={() => setAdminPickMode("OFFICE_PIN")}
-                    className="text-[10px] text-amber-300 hover:underline"
+                    className="!min-h-8 !py-1 !px-2.5 !text-[11px]"
                   >
-                    จิ้มพิกัดบนแผนที่
-                  </button>
+                    {adminPickMode === "OFFICE_PIN" ? "กำลังจิ้มพิกัดบนแผนที่..." : "จิ้มพิกัดบนแผนที่"}
+                  </ActionButton>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="number"
-                    step="any"
-                    value={officeLat}
-                    onChange={(e) => setOfficeLat(Number(e.target.value))}
-                    className="bg-slate-900 border border-slate-700 rounded-xl px-2 py-1.5 text-xs text-white"
-                  />
-                  <input
-                    type="number"
-                    step="any"
-                    value={officeLon}
-                    onChange={(e) => setOfficeLon(Number(e.target.value))}
-                    className="bg-slate-900 border border-slate-700 rounded-xl px-2 py-1.5 text-xs text-white"
-                  />
+                  <div>
+                    <span className="block text-[10px] text-slate-400 mb-0.5">ละติจูด (Lat)</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={officeLat}
+                      onChange={(e) => setOfficeLat(Number(e.target.value))}
+                      placeholder="เช่น 6.731259"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:border-amber-400 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-400 mb-0.5">ลองจิจูด (Lon)</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={officeLon}
+                      onChange={(e) => setOfficeLon(Number(e.target.value))}
+                      placeholder="เช่น 101.095258"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:border-amber-400 focus:outline-none"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

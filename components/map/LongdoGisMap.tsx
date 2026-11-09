@@ -794,9 +794,10 @@ export function LongdoGisMap({
         });
       }
 
-      // Flood location marker (capsule badge with route number and level)
-      const midLat = flood.lat_start || (coords[0] ? coords[0][1] : APP_CONFIG.DEFAULT_CENTER.lat);
-      const midLon = flood.lon_start || (coords[0] ? coords[0][0] : APP_CONFIG.DEFAULT_CENTER.lon);
+      // Flood location marker (capsule badge with route number and level) - centered on line
+      const midCoord = coords.length > 0 ? coords[Math.floor(coords.length / 2)] : null;
+      const midLat = midCoord ? midCoord[1] : (flood.lat_start || APP_CONFIG.DEFAULT_CENTER.lat);
+      const midLon = midCoord ? midCoord[0] : (flood.lon_start || APP_CONFIG.DEFAULT_CENTER.lon);
 
       let capsuleClass = "doh-capsule-tag doh-capsule-amber";
       let levelText = `${flood.water_level_cm} ซม.`;

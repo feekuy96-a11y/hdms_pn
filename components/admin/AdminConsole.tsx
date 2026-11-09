@@ -369,6 +369,7 @@ export function AdminConsole({
               onToast={onToast}
               showConfirmModal={showConfirmModal}
               showSuccessModal={showSuccessModal}
+              adminPickMode={adminPickMode}
               setAdminPickMode={setAdminPickMode}
               pickedCoordinate={pickedCoordinate}
               onOfficeEditModeChange={onOfficeEditModeChange}

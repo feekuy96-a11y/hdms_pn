@@ -15,6 +15,9 @@ import {
   Save,
   FileUp,
   Trash2,
+  Search,
+  ChevronDown,
+  X,
 } from "lucide-react";
 import { upsertRouteAction, snapRouteAction } from "@/app/actions/doh-actions";
 import {
@@ -118,6 +121,22 @@ export function MapManagementTab({
   const [endArea, setEndArea] = useState<{ subdistrict: string; district: string } | null>(null);
   const sectionNameManuallyEdited = useRef(false);
 
+  // Highway Search Combobox State
+  const [isHighwayDropdownOpen, setIsHighwayDropdownOpen] = useState(false);
+  const [highwaySearchQuery, setHighwaySearchQuery] = useState("");
+  const highwayComboboxRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (highwayComboboxRef.current && !highwayComboboxRef.current.contains(event.target as Node)) {
+        setIsHighwayDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Detour Specific
   const [detourRefId, setDetourRefId] = useState("");
   const [detourName, setDetourName] = useState("");
@@ -168,19 +187,41 @@ export function MapManagementTab({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveAsDraft, setSaveAsDraft] = useState(false);
 
-  // Dynamic Highway Routes strictly from database (Issue #12)
+  // Dynamic Highway Routes strictly from database matching Highway Engineering Specifications
   const availableHighways = React.useMemo(() => {
-    const map = new Map<string, string>();
+    type HighwayOption = {
+      no: string;
+      name: string;
+      sectionName?: string;
+      kmStart?: string;
+      kmEnd?: string;
+      sortOrder: number;
+    };
+    const list: HighwayOption[] = [];
+    const seen = new Set<string>();
+
     (systemData.highwayLayers || []).forEach((layer) => {
       if (layer.geojson_data && Array.isArray(layer.geojson_data.features)) {
-        layer.geojson_data.features.forEach((f: any) => {
+        layer.geojson_data.features.forEach((f: any, idx: number) => {
           const props = f.properties || {};
           const no = props.route_no || props.route_code || props.ROAD_NO || props.route || props.code;
-          const name = props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || "";
+          const section = props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || "";
           if (no) {
             const cleanNo = String(no).replace(/^ทล\.?/i, "").trim();
-            if (!map.has(cleanNo)) {
-              map.set(cleanNo, name ? `ทล.${cleanNo} - ${name}` : `ทล.${cleanNo}`);
+            const kmS = props.km_start ? String(props.km_start).trim() : "";
+            const kmE = props.km_end ? String(props.km_end).trim() : "";
+            const key = `${cleanNo}_${section}_${kmS}_${kmE}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              const num = Number(cleanNo.match(/\d+/)?.[0] ?? Infinity);
+              list.push({
+                no: cleanNo,
+                name: section ? `ทล.${cleanNo} - ${section}` : `ทล.${cleanNo}`,
+                sectionName: section,
+                kmStart: kmS,
+                kmEnd: kmE,
+                sortOrder: num,
+              });
             }
           }
         });
@@ -190,19 +231,38 @@ export function MapManagementTab({
     (systemData.floodRoutes || []).forEach((r) => {
       if (r.route_no) {
         const cleanNo = String(r.route_no).replace(/^ทล\.?/i, "").trim();
-        if (!map.has(cleanNo)) {
-          map.set(cleanNo, r.section_name ? `ทล.${cleanNo} - ${r.section_name}` : `ทล.${cleanNo}`);
+        const key = `${cleanNo}_${r.section_name || ""}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          const num = Number(cleanNo.match(/\d+/)?.[0] ?? Infinity);
+          list.push({
+            no: cleanNo,
+            name: r.section_name ? `ทล.${cleanNo} - ${r.section_name}` : `ทล.${cleanNo}`,
+            sectionName: r.section_name,
+            kmStart: r.km_start,
+            kmEnd: r.km_end,
+            sortOrder: num,
+          });
         }
       }
     });
 
-    if (map.size === 0) {
+    if (list.length === 0) {
       HIGHWAY_ROUTES.forEach((h) => {
-        map.set(h.no, `ทล.${h.no} - ${h.name}`);
+        const num = Number(h.no.match(/\d+/)?.[0] ?? Infinity);
+        list.push({
+          no: h.no,
+          name: `ทล.${h.no} - ${h.name}`,
+          sectionName: h.name,
+          sortOrder: num,
+        });
       });
     }
 
-    return Array.from(map.entries()).map(([no, name]) => ({ no, name }));
+    return list.sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return a.no.localeCompare(b.no, "th", { numeric: true }) || a.name.localeCompare(b.name, "th");
+    });
   }, [systemData.highwayLayers, systemData.floodRoutes]);
 
   // Sync with editingRoute prop
@@ -703,20 +763,107 @@ export function MapManagementTab({
         <FormSection step={1} title="ข้อมูลสายทางและพื้นที่" description="ระบุทางหลวง ช่วง กม. และบริเวณที่เกิดเหตุ">
         {routeMode === "FLOOD" ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
+            <div className="relative" ref={highwayComboboxRef}>
               <label className="text-xs text-slate-300">หมายเลขทางหลวง *</label>
+              <div
+                className="relative mt-1 flex cursor-pointer items-center justify-between rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white hover:border-slate-600 focus-within:border-amber-400"
+                onClick={() => setIsHighwayDropdownOpen((prev) => !prev)}
+              >
+                <span className={`truncate ${!routeNo ? "text-slate-400" : "font-semibold text-amber-300"}`}>
+                  {routeNo ? (availableHighways.find((h) => h.no === routeNo)?.name || `ทล.${routeNo}`) : "-- เลือกหมายเลขทางหลวง --"}
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 ml-2" />
+              </div>
+
+              {/* Hidden select to preserve standard form/accessible value if queried */}
               <select
                 value={routeNo}
                 onChange={(e) => setRouteNo(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden="true"
               >
                 {!routeNo && <option value="">-- เลือกหมายเลขทางหลวง --</option>}
                 {availableHighways.map((h) => (
-                  <option key={h.no} value={h.no}>
+                  <option key={`${h.no}_${h.name}`} value={h.no}>
                     {h.name}
                   </option>
                 ))}
               </select>
+
+              {/* Smart Search Filterable Dropdown */}
+              {isHighwayDropdownOpen && (
+                <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-full sm:min-w-[320px] overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-2xl backdrop-blur-md flex flex-col">
+                  <div className="p-2 border-b border-slate-800 bg-slate-900/90 flex items-center gap-2">
+                    <Search className="h-4 w-4 text-slate-400 shrink-0" />
+                    <input
+                      type="text"
+                      autoFocus
+                      value={highwaySearchQuery}
+                      onChange={(e) => setHighwaySearchQuery(e.target.value)}
+                      placeholder="พิมพ์ค้นหาเลขทางหลวง หรือชื่อตอน..."
+                      className="w-full bg-transparent text-xs text-white placeholder:text-slate-500 focus:outline-none"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    {highwaySearchQuery && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setHighwaySearchQuery("");
+                        }}
+                        className="text-slate-400 hover:text-white"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="overflow-y-auto max-h-52 divide-y divide-slate-850">
+                    {(() => {
+                      const query = highwaySearchQuery.trim().toLowerCase();
+                      const filtered = availableHighways.filter(
+                        (h) => h.no.toLowerCase().includes(query) || h.name.toLowerCase().includes(query)
+                      );
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="p-3 text-center text-xs text-slate-500">
+                            ไม่พบสายทางหลวงที่ตรงกับ &quot;{highwaySearchQuery}&quot;
+                          </div>
+                        );
+                      }
+                      return filtered.map((h) => (
+                        <div
+                          key={`${h.no}_${h.name}_${h.kmStart || ""}`}
+                          onClick={() => {
+                            setRouteNo(h.no);
+                            if (h.sectionName && !sectionNameManuallyEdited.current) {
+                              setSectionName(h.sectionName);
+                            }
+                            if (h.kmStart && !kmStart) {
+                              setKmStart(h.kmStart);
+                            }
+                            if (h.kmEnd && !kmEnd) {
+                              setKmEnd(h.kmEnd);
+                            }
+                            setIsHighwayDropdownOpen(false);
+                            setHighwaySearchQuery("");
+                          }}
+                          className={`cursor-pointer px-3 py-2 text-xs transition hover:bg-slate-800/80 flex items-center justify-between ${
+                            routeNo === h.no ? "bg-amber-500/15 text-amber-300 font-semibold" : "text-slate-200"
+                          }`}
+                        >
+                          <span className="truncate">{h.name}</span>
+                          {h.kmStart && h.kmEnd && (
+                            <span className="text-[10px] text-slate-500 font-mono shrink-0 ml-2">
+                              {h.kmStart} - {h.kmEnd}
+                            </span>
+                          )}
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
             <div>
                 <label className="text-xs text-slate-300">กม. เริ่มต้น</label>
