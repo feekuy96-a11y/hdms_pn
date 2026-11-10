@@ -107,6 +107,9 @@ Deno.serve(async (req) => {
         const table = typeTable(p.recordType);
         const id = p.id || `${p.recordType === "FLOOD" ? "F" : "D"}-${crypto.randomUUID()}`;
         const existing = p.id ? await check(db.from(table).select("*").eq("id", id).is("deleted_at", null).maybeSingle()) || {} : {};
+        if (p.expectedUpdatedAt && existing.updated_at && new Date(existing.updated_at).getTime() > new Date(p.expectedUpdatedAt).getTime()) {
+          fail("ข้อมูลนี้เพิ่งถูกแก้ไขโดยเจ้าหน้าที่ท่านอื่น กรุณารีเฟรชข้อมูลล่าสุดก่อนบันทึก", 409);
+        }
         const geometry = p.coordinates ?? existing.coordinates_json ?? [];
         if (!Array.isArray(geometry) || geometry.length < 2) fail("At least two route points required");
         geometry.forEach((point: any) => { number(point[0], -180, 180); number(point[1], -90, 90); });

@@ -276,6 +276,13 @@ export function MapManagementTab({
   const [affectedParts, setAffectedParts] = useState<AffectedRoadPart[]>(["ALL_LANES"]);
   const [detailedPhotos, setDetailedPhotos] = useState<FloodPhotoItem[]>([]);
 
+  // Phase 4: Dual Direction quick create
+  const [isDualDirectionMode, setIsDualDirectionMode] = useState<boolean>(false);
+  const [reverseRouteWaterLevel, setReverseRouteWaterLevel] = useState<number | string>("");
+  const [reverseRouteStatus, setReverseRouteStatus] = useState<"WARNING" | "CLOSED" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE">("WARNING");
+  const [reverseWaterLevelKnown, setReverseWaterLevelKnown] = useState<boolean>(true);
+  const [reverseAffectedParts, setReverseAffectedParts] = useState<AffectedRoadPart[]>(["ALL_LANES"]);
+
   // Group existing flood routes into parent events
   const existingParentEvents = React.useMemo(() => {
     return groupFloodRoutesIntoEvents(systemData.floodRoutes || []);
@@ -788,6 +795,11 @@ export function MapManagementTab({
     setCauseAndNote("");
     setDirectionCode("A_TO_B");
     setAffectedParts(["ALL_LANES"]);
+    setIsDualDirectionMode(false);
+    setReverseRouteWaterLevel("");
+    setReverseRouteStatus("WARNING");
+    setReverseWaterLevelKnown(true);
+    setReverseAffectedParts(["ALL_LANES"]);
     setSaveAsDraft(false);
     setForceStraightThrough(false);
     originalRouteCoordinates.current = [];
@@ -927,13 +939,15 @@ export function MapManagementTab({
     for (let i = 0; i < filesToProcess.length; i++) {
       const file = filesToProcess[i];
       try {
-        const { dataUrl, sizeBytes } = await compressImageToAdaptiveBase64(file, 300 * 1024);
+        const { dataUrl, sizeBytes, format } = await compressImageToAdaptiveBase64(file, 300 * 1024);
         newPhotos.push({
           id: `photo-${Date.now()}-${i}`,
           dataUrl,
           sizeBytes,
           uploadedAt: new Date().toISOString(),
           caption: file.name || `ภาพถ่ายที่ ${detailedPhotos.length + i + 1}`,
+          format: format || "webp",
+          originalSizeBytes: file.size,
         });
       } catch (err) {
         console.warn("Failed to compress image:", err);
@@ -1136,6 +1150,128 @@ export function MapManagementTab({
         carriageway_type: useCarriagewaySnapping ? "DUAL_CARRIAGEWAY" : "SINGLE_CENTERLINE",
         water_level_known: waterLevelKnown,
       };
+
+      if (routeMode === "FLOOD" && isDualDirectionMode && !routeEditId) {
+        // 1. Forward segment (A -> B)
+        const forwardDirectionMeta: FloodSegmentDirectionMeta = {
+          ...floodDirectionMeta,
+          directionCode: "A_TO_B",
+          directionLabel: "ตามหลัก กม. (ขาไป A → B)",
+          arrow_direction: "FORWARD",
+          roadSide: "LEFT",
+        };
+
+        await upsertRouteAction({
+          recordType: "FLOOD",
+          routeNo: chosenRouteNo,
+          kmStart,
+          kmEnd,
+          sectionName: sectionName || "จุดรายงานน้ำท่วม",
+          waterLevelCm: waterLevelKnown ? numWaterLevel : 0,
+          trafficStatus: dbTrafficStatus,
+          isActive: !saveAsDraft,
+          latStart: numSLat || undefined,
+          lonStart: numSLon || undefined,
+          latEnd: numELat || undefined,
+          lonEnd: numELon || undefined,
+          coordinates: coords,
+          latestPhotoUrl: primaryPhoto,
+          roadSide: "LEFT",
+          affectedLanes: lanesSummary,
+          affectedShoulder: shoulderSummary,
+          reporterName: reporterName.trim() || "เจ้าหน้าที่แขวงทางหลวงปัตตานี",
+          directionMeta: forwardDirectionMeta,
+        });
+
+        // 2. Reverse segment (B -> A)
+        let reverseCoords: [number, number][] = [];
+        const cleanChosenRoute = chosenRouteNo.replace(/^ทล\.?/i, "").trim();
+        const layer = (systemData.highwayLayers || []).find((l) => {
+          const fc = l.geojson_data;
+          if (fc && Array.isArray(fc.features)) {
+            return fc.features.some((f: any) => {
+              const props = f.properties || {};
+              const no = props.route_no || props.route_code || props.ROAD_NO || props.route || props.code;
+              return no && String(no).replace(/^ทล\.?/i, "").trim() === cleanChosenRoute;
+            });
+          }
+          return l.layer_name?.includes(cleanChosenRoute || "");
+        });
+        if (layer?.geojson_data?.features?.[0]?.geometry?.coordinates) {
+          const hwCoords = layer.geojson_data.features[0].geometry.coordinates as [number, number][];
+          const hwProps = layer.geojson_data.features[0].properties || {};
+          reverseCoords = slicePolylineByKmRange(hwCoords, hwProps.km_start || kmStart, hwProps.km_end || kmEnd, kmStart, kmEnd, true);
+        }
+        if (reverseCoords.length < 2) {
+          reverseCoords = [...coords].reverse();
+        }
+
+        const revSLat = reverseCoords[0] ? reverseCoords[0][1] : numELat;
+        const revSLon = reverseCoords[0] ? reverseCoords[0][0] : numELon;
+        const revELat = reverseCoords[reverseCoords.length - 1] ? reverseCoords[reverseCoords.length - 1][1] : numSLat;
+        const revELon = reverseCoords[reverseCoords.length - 1] ? reverseCoords[reverseCoords.length - 1][0] : numSLon;
+
+        const numRevWaterLevel = Number(reverseRouteWaterLevel || 0);
+        const revLanesSummary = reverseAffectedParts.includes("ALL_LANES")
+          ? "ทุกช่องจราจร"
+          : reverseAffectedParts.map((p) => AFFECTED_ROAD_PART_LABELS[p]).join(", ") || "ไม่ระบุ";
+        const revShoulderSummary = (reverseAffectedParts.includes("LEFT_SHOULDER") && reverseAffectedParts.includes("RIGHT_SHOULDER"))
+          ? "BOTH"
+          : reverseAffectedParts.includes("LEFT_SHOULDER")
+            ? "LEFT"
+            : reverseAffectedParts.includes("RIGHT_SHOULDER")
+              ? "RIGHT"
+              : "NONE";
+        const revTrafficStatus = (reverseRouteStatus as string) === "PENDING_VERIFICATION" ? "WARNING" : reverseRouteStatus;
+
+        const reverseDirectionMeta: FloodSegmentDirectionMeta = {
+          ...floodDirectionMeta,
+          directionCode: "B_TO_A",
+          directionLabel: "ย้อนหลัก กม. (ขากลับ B → A)",
+          affectedParts: reverseAffectedParts,
+          trafficStatusDetail: (reverseRouteStatus as string) === "PENDING_VERIFICATION" ? "PENDING_VERIFICATION" : mapTrafficStatusToDetail(reverseRouteStatus),
+          waterLevelKnown: reverseWaterLevelKnown,
+          arrow_direction: "REVERSE",
+          roadSide: "RIGHT",
+          zeroConfirmedAt: reverseWaterLevelKnown && numRevWaterLevel === 0 ? new Date().toISOString() : null,
+        };
+
+        const res = await upsertRouteAction({
+          recordType: "FLOOD",
+          routeNo: chosenRouteNo,
+          kmStart,
+          kmEnd,
+          sectionName: sectionName || "จุดรายงานน้ำท่วม",
+          waterLevelCm: reverseWaterLevelKnown ? numRevWaterLevel : 0,
+          trafficStatus: revTrafficStatus,
+          isActive: !saveAsDraft,
+          latStart: revSLat || undefined,
+          lonStart: revSLon || undefined,
+          latEnd: revELat || undefined,
+          lonEnd: revELon || undefined,
+          coordinates: reverseCoords,
+          latestPhotoUrl: primaryPhoto,
+          roadSide: "RIGHT",
+          affectedLanes: revLanesSummary,
+          affectedShoulder: revShoulderSummary,
+          reporterName: reporterName.trim() || "เจ้าหน้าที่แขวงทางหลวงปัตตานี",
+          directionMeta: reverseDirectionMeta,
+        });
+
+        if (res.success) {
+          onDataRefresh(res.systemData);
+          showSuccessModal(
+            "บันทึกเหตุการณ์ ๒ ทิศทางสำเร็จ",
+            `สร้างช่วงน้ำท่วม ทล.${chosenRouteNo} ทั้งขาไป (A→B) และขากลับ (B→A) ในเหตุการณ์เดียวกันเรียบร้อยแล้ว`
+          );
+          setRouteEditId("");
+          setFieldImages([]);
+          handleClearRoute();
+          if (onClearEditingRoute) onClearEditingRoute();
+          if (onNavigateToIncidents) onNavigateToIncidents();
+        }
+        return;
+      }
 
       const res = await upsertRouteAction({
         id: routeEditId || undefined,
@@ -1870,33 +2006,60 @@ export function MapManagementTab({
             {/* Direction and Affected Road Parts */}
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-3">
               <div>
-                <label className="text-xs text-slate-300 block mb-1">ทิศทางการเดินรถของช่วงน้ำท่วมนี้</label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setDirectionCode("A_TO_B"); setRoadSide("LEFT"); }}
-                    className={`p-2 rounded-xl border text-left transition ${directionCode === "A_TO_B" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
-                  >
-                    <span className="text-xs font-heading font-bold block">🚗 ตามหลัก กม. (A → B)</span>
-                    <span className="text-[10px] text-slate-400">เดินรถทิศทาง กม. เพิ่มขึ้น</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setDirectionCode("B_TO_A"); setRoadSide("RIGHT"); }}
-                    className={`p-2 rounded-xl border text-left transition ${directionCode === "B_TO_A" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
-                  >
-                    <span className="text-xs font-heading font-bold block">🚙 ย้อนหลัก กม. (B → A)</span>
-                    <span className="text-[10px] text-slate-400">เดินรถทิศทาง กม. ลดลง</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setDirectionCode("BOTH"); setRoadSide("BOTH"); }}
-                    className={`p-2 rounded-xl border text-left transition ${directionCode === "BOTH" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
-                  >
-                    <span className="text-xs font-heading font-bold block">↔️ ทั้งสองทิศทาง</span>
-                    <span className="text-[10px] text-slate-400">น้ำท่วมทั้งคันทาง</span>
-                  </button>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-slate-300">ทิศทางการเดินรถของช่วงน้ำท่วมนี้</label>
+                  {!routeEditId && (
+                    <button
+                      type="button"
+                      onClick={() => setIsDualDirectionMode((prev) => !prev)}
+                      className={`text-[11px] font-heading font-bold px-2.5 py-1 rounded-lg border transition flex items-center gap-1.5 ${
+                        isDualDirectionMode
+                          ? "bg-amber-500 text-slate-950 border-amber-400 shadow"
+                          : "bg-slate-950 text-amber-300 border-amber-500/50 hover:bg-amber-950/40"
+                      }`}
+                    >
+                      <span>⚡ {isDualDirectionMode ? "✓ โหมด ๒ ทิศทางเปิดอยู่" : "บันทึก ๒ ทิศทาง (A→B และ B→A) พร้อมกัน"}</span>
+                    </button>
+                  )}
                 </div>
+
+                {isDualDirectionMode ? (
+                  <div className="rounded-xl border border-amber-400/60 bg-amber-500/10 p-2.5 text-xs text-amber-200 space-y-1">
+                    <div className="font-bold font-heading flex items-center gap-1.5 text-amber-300">
+                      <span>⚡ โหมดบันทึกคู่ ๒ ทิศทางพร้อมกัน (Dual-Direction Quick Create)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300">
+                      ระบบจะสร้างช่วงน้ำท่วม ๒ รายการภายใต้เหตุการณ์เดียวกันอัตโนมัติ: รายการที่ ๑ สำหรับ<strong>ขาไป (A → B)</strong> และรายการที่ ๒ สำหรับ<strong>ขากลับ (B → A)</strong> พร้อมตัดเส้น Geometry ตามทิศทางจริง
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setDirectionCode("A_TO_B"); setRoadSide("LEFT"); }}
+                      className={`p-2 rounded-xl border text-left transition ${directionCode === "A_TO_B" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
+                    >
+                      <span className="text-xs font-heading font-bold block">🚗 ตามหลัก กม. (A → B)</span>
+                      <span className="text-[10px] text-slate-400">เดินรถทิศทาง กม. เพิ่มขึ้น</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setDirectionCode("B_TO_A"); setRoadSide("RIGHT"); }}
+                      className={`p-2 rounded-xl border text-left transition ${directionCode === "B_TO_A" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
+                    >
+                      <span className="text-xs font-heading font-bold block">🚙 ย้อนหลัก กม. (B → A)</span>
+                      <span className="text-[10px] text-slate-400">เดินรถทิศทาง กม. ลดลง</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setDirectionCode("BOTH"); setRoadSide("BOTH"); }}
+                      className={`p-2 rounded-xl border text-left transition ${directionCode === "BOTH" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
+                    >
+                      <span className="text-xs font-heading font-bold block">↔️ ทั้งสองทิศทาง</span>
+                      <span className="text-[10px] text-slate-400">น้ำท่วมทั้งคันทาง</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1957,55 +2120,167 @@ export function MapManagementTab({
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <label className="text-xs text-slate-300">ระดับน้ำท่วมผิวทาง (ซม.) *</label>
-                  <label className="flex items-center gap-1.5 text-[11px] text-amber-300 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={!waterLevelKnown}
-                      onChange={(e) => {
-                        const unknown = e.target.checked;
-                        setWaterLevelKnown(!unknown);
-                        if (unknown) setRouteWaterLevel("");
-                      }}
-                      className="h-3.5 w-3.5 accent-amber-400"
-                    />
-                    <span>ยังไม่ทราบค่าระดับน้ำ</span>
-                  </label>
+            {isDualDirectionMode ? (
+              <div className="space-y-3">
+                {/* Direction 1: Forward A -> B */}
+                <div className="rounded-xl border border-amber-500/40 bg-amber-950/20 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-heading font-bold text-xs text-amber-300">
+                      🚗 ๑. ทิศทางตามหลัก กม. (ขาไป A → B)
+                    </span>
+                    <span className="text-[10px] text-slate-400">ฝั่งซ้ายของทางหลวง</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <label className="text-[11px] text-slate-300">ระดับน้ำขาไป (ซม.) *</label>
+                        <label className="flex items-center gap-1 text-[10px] text-amber-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!waterLevelKnown}
+                            onChange={(e) => {
+                              const unknown = e.target.checked;
+                              setWaterLevelKnown(!unknown);
+                              if (unknown) setRouteWaterLevel("");
+                            }}
+                            className="h-3 w-3 accent-amber-400"
+                          />
+                          <span>ไม่ทราบค่า</span>
+                        </label>
+                      </div>
+                      <input
+                        type="number"
+                        min={0}
+                        disabled={!waterLevelKnown}
+                        value={routeWaterLevel}
+                        onChange={(e) => setRouteWaterLevel(e.target.value === "" ? "" : Number(e.target.value))}
+                        placeholder={waterLevelKnown ? "เช่น 30" : "ยังไม่ทราบระดับน้ำ"}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono disabled:opacity-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-300 block mb-1">สถานะจราจรขาไป</label>
+                      <select
+                        value={routeStatus}
+                        onChange={(e: any) => setRouteStatus(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white"
+                      >
+                        <option value="PASSABLE">ผ่านได้ปกติ</option>
+                        <option value="LIGHT_VEHICLES_ONLY">รถเล็กผ่านได้</option>
+                        <option value="ONE_LANE">รถเล็กผ่านได้ ๑ ช่องทาง</option>
+                        <option value="CLOSED">ผ่านไม่ได้</option>
+                        <option value="WARNING">เฝ้าระวัง / ผ่านได้ด้วยความระมัดระวัง</option>
+                        <option value="PENDING_VERIFICATION">รอตรวจสอบสถานะ</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
-                <input
-                  type="number"
-                  min={0}
-                  disabled={!waterLevelKnown}
-                  value={routeWaterLevel}
-                  onChange={(e) => setRouteWaterLevel(e.target.value === "" ? "" : Number(e.target.value))}
-                  placeholder={waterLevelKnown ? "เช่น 35 (ระบุ 0 เมื่อน้ำแห้งแต่คงประวัติ)" : "ยังไม่ทราบระดับน้ำ (รอวัดหน้างาน)"}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 font-mono disabled:opacity-50"
-                />
-                {waterLevelKnown && Number(routeWaterLevel) === 0 && routeWaterLevel !== "" && (
-                  <p className="mt-1 text-[11px] text-emerald-300">
-                    💡 ระดับน้ำ 0 ซม.: ระบบจะซ่อนเส้นน้ำท่วมจากแผนที่สถานการณ์ปัจจุบันโดยเก็บประวัติไว้ และ<strong>ไม่เปลี่ยนสถานะจราจรเป็นเปิดอัตโนมัติ</strong>
-                  </p>
-                )}
+
+                {/* Direction 2: Reverse B -> A */}
+                <div className="rounded-xl border border-sky-500/40 bg-sky-950/20 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-heading font-bold text-xs text-sky-300">
+                      🚙 ๒. ทิศทางย้อนหลัก กม. (ขากลับ B → A)
+                    </span>
+                    <span className="text-[10px] text-slate-400">ฝั่งขวาของทางหลวง</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <label className="text-[11px] text-slate-300">ระดับน้ำขากลับ (ซม.) *</label>
+                        <label className="flex items-center gap-1 text-[10px] text-sky-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!reverseWaterLevelKnown}
+                            onChange={(e) => {
+                              const unknown = e.target.checked;
+                              setReverseWaterLevelKnown(!unknown);
+                              if (unknown) setReverseRouteWaterLevel("");
+                            }}
+                            className="h-3 w-3 accent-sky-400"
+                          />
+                          <span>ไม่ทราบค่า</span>
+                        </label>
+                      </div>
+                      <input
+                        type="number"
+                        min={0}
+                        disabled={!reverseWaterLevelKnown}
+                        value={reverseRouteWaterLevel}
+                        onChange={(e) => setReverseRouteWaterLevel(e.target.value === "" ? "" : Number(e.target.value))}
+                        placeholder={reverseWaterLevelKnown ? "เช่น 15 (หรือระบุ 0)" : "ยังไม่ทราบระดับน้ำ"}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono disabled:opacity-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-300 block mb-1">สถานะจราจรขากลับ</label>
+                      <select
+                        value={reverseRouteStatus}
+                        onChange={(e: any) => setReverseRouteStatus(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white"
+                      >
+                        <option value="PASSABLE">ผ่านได้ปกติ</option>
+                        <option value="LIGHT_VEHICLES_ONLY">รถเล็กผ่านได้</option>
+                        <option value="ONE_LANE">รถเล็กผ่านได้ ๑ ช่องทาง</option>
+                        <option value="CLOSED">ผ่านไม่ได้</option>
+                        <option value="WARNING">เฝ้าระวัง / ผ่านได้ด้วยความระมัดระวัง</option>
+                        <option value="PENDING_VERIFICATION">รอตรวจสอบสถานะ</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="text-xs text-slate-300">สถานะสภาพการจราจร (๕ สถานะ)</label>
-                <select
-                  value={routeStatus}
-                  onChange={(e: any) => setRouteStatus(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                >
-                  <option value="PASSABLE">ผ่านได้ปกติ</option>
-                  <option value="LIGHT_VEHICLES_ONLY">รถเล็กผ่านได้</option>
-                  <option value="ONE_LANE">รถเล็กผ่านได้ ๑ ช่องทาง</option>
-                  <option value="CLOSED">ผ่านไม่ได้</option>
-                  <option value="WARNING">เฝ้าระวัง / ผ่านได้ด้วยความระมัดระวัง</option>
-                  <option value="PENDING_VERIFICATION">รอตรวจสอบสถานะ</option>
-                </select>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <label className="text-xs text-slate-300">ระดับน้ำท่วมผิวทาง (ซม.) *</label>
+                    <label className="flex items-center gap-1.5 text-[11px] text-amber-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!waterLevelKnown}
+                        onChange={(e) => {
+                          const unknown = e.target.checked;
+                          setWaterLevelKnown(!unknown);
+                          if (unknown) setRouteWaterLevel("");
+                        }}
+                        className="h-3.5 w-3.5 accent-amber-400"
+                      />
+                      <span>ยังไม่ทราบค่าระดับน้ำ</span>
+                    </label>
+                  </div>
+                  <input
+                    type="number"
+                    min={0}
+                    disabled={!waterLevelKnown}
+                    value={routeWaterLevel}
+                    onChange={(e) => setRouteWaterLevel(e.target.value === "" ? "" : Number(e.target.value))}
+                    placeholder={waterLevelKnown ? "เช่น 35 (ระบุ 0 เมื่อน้ำแห้งแต่คงประวัติ)" : "ยังไม่ทราบระดับน้ำ (รอวัดหน้างาน)"}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 font-mono disabled:opacity-50"
+                  />
+                  {waterLevelKnown && Number(routeWaterLevel) === 0 && routeWaterLevel !== "" && (
+                    <p className="mt-1 text-[11px] text-emerald-300">
+                      💡 ระดับน้ำ 0 ซม.: ระบบจะซ่อนเส้นน้ำท่วมจากแผนที่สถานการณ์ปัจจุบันโดยเก็บประวัติไว้ และ<strong>ไม่เปลี่ยนสถานะจราจรเป็นเปิดอัตโนมัติ</strong>
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs text-slate-300">สถานะสภาพการจราจร (๕ สถานะ)</label>
+                  <select
+                    value={routeStatus}
+                    onChange={(e: any) => setRouteStatus(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                  >
+                    <option value="PASSABLE">ผ่านได้ปกติ</option>
+                    <option value="LIGHT_VEHICLES_ONLY">รถเล็กผ่านได้</option>
+                    <option value="ONE_LANE">รถเล็กผ่านได้ ๑ ช่องทาง</option>
+                    <option value="CLOSED">ผ่านไม่ได้</option>
+                    <option value="WARNING">เฝ้าระวัง / ผ่านได้ด้วยความระมัดระวัง</option>
+                    <option value="PENDING_VERIFICATION">รอตรวจสอบสถานะ</option>
+                  </select>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
@@ -2086,9 +2361,19 @@ export function MapManagementTab({
                       <div className="h-20 w-full overflow-hidden rounded bg-slate-900">
                         <img src={photo.dataUrl} className="w-full h-full object-cover" alt={`field-${i + 1}`} />
                       </div>
-                      <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
-                        <span>{i === 0 ? "ภาพหลัก" : `ภาพที่ ${i + 1}`}</span>
-                        <span className="font-mono text-emerald-400">{(photo.sizeBytes / 1024).toFixed(0)} KB</span>
+                      <div className="mt-1 flex flex-col gap-0.5 text-[10px] text-slate-400">
+                        <div className="flex items-center justify-between">
+                          <span>{i === 0 ? "ภาพหลัก" : `ภาพที่ ${i + 1}`}</span>
+                          <span className="font-mono text-emerald-400 font-bold">
+                            {(photo.sizeBytes / 1024).toFixed(0)} KB
+                            <span className="text-[9px] text-sky-300 ml-1 uppercase">({photo.format || "img"})</span>
+                          </span>
+                        </div>
+                        {photo.originalSizeBytes && photo.originalSizeBytes > photo.sizeBytes && (
+                          <div className="text-[9px] text-slate-500 font-mono text-right">
+                            ลดจาก {(photo.originalSizeBytes / (1024 * 1024)).toFixed(1)} MB (-{Math.round((1 - photo.sizeBytes / photo.originalSizeBytes) * 100)}%)
+                          </div>
+                        )}
                       </div>
                       <button
                         type="button"

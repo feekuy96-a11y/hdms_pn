@@ -136,6 +136,8 @@ export interface FloodPhotoItem {
   sizeBytes: number;
   uploadedAt: string;
   caption?: string;
+  format?: "webp" | "jpeg";
+  originalSizeBytes?: number;
   exifGps?: { latitude: number; longitude: number };
 }
 
@@ -288,6 +290,8 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
       sizeBytes: Number(p.sizeBytes) || Math.round((p.dataUrl.length * 3) / 4),
       uploadedAt: p.uploadedAt || new Date().toISOString(),
       caption: p.caption || "",
+      format: p.format || (p.dataUrl.startsWith("data:image/webp") ? "webp" : "jpeg"),
+      originalSizeBytes: p.originalSizeBytes ? Number(p.originalSizeBytes) : undefined,
       exifGps: p.exifGps || undefined,
     }))
     .slice(0, 5);

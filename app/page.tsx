@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { getPublicSystemDataAction } from "@/app/actions/doh-actions";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload, FloodRoute, DetourRoute } from "@/db/default-data";
+import { createClient } from "@/lib/supabase/client";
 
 const LongdoGisMap = dynamic(
   () => import("@/components/map/LongdoGisMap").then((mod) => mod.LongdoGisMap),
@@ -349,6 +350,7 @@ export default function HomePage() {
   }, [systemData.floodRoutes]);
   const activeFloodCount = situationCounts.red + situationCounts.orange + situationCounts.amber + situationCounts.sky + situationCounts.emerald + situationCounts.slate;
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
+  const [onDemandPhotos, setOnDemandPhotos] = useState<Record<string, any[]>>({});
   const dossierStatus = getTrafficPresentation(
     (selectedFlood?.traffic_status ?? "PASSABLE") as TrafficStatus,
     selectedFlood?.water_level_cm ?? 0,
@@ -366,6 +368,25 @@ export default function HomePage() {
     setShowDossier(true);
     setIsMobileDrawerOpen(false);
     if (flood.lat_start && flood.lon_start) setFocusCoordinates([flood.lon_start, flood.lat_start]);
+
+    // Phase 4: On-demand load of full photo album (photos 1..4) without bloating initial page payload
+    if (!onDemandPhotos[flood.id]) {
+      (async () => {
+        try {
+          const client = createClient();
+          const { data } = await client
+            .from("doh_flood_routes")
+            .select("direction_meta")
+            .eq("id", flood.id)
+            .maybeSingle();
+          if (data?.direction_meta?.photos && Array.isArray(data.direction_meta.photos) && data.direction_meta.photos.length > 0) {
+            setOnDemandPhotos((prev) => ({ ...prev, [flood.id]: data.direction_meta.photos }));
+          }
+        } catch {
+          // Fallback to primary photo already available
+        }
+      })();
+    }
   };
   const activeDetours = (systemData.detourRoutes || []).filter((route) => route.is_active);
   const filteredDetours = activeDetours.filter((route) => `${route.route_name} ${route.description || ""}`.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase()));
@@ -1219,7 +1240,7 @@ export default function HomePage() {
                   <div className="sm:col-start-1 sm:row-start-1">
                   {/* Left: Photo with GPS overlay & Multi-photo thumbnail gallery */}
                   {(() => {
-                    const photos = selectedFloodMeta.photos || [];
+                    const photos = (selectedFlood && onDemandPhotos[selectedFlood.id]) || selectedFloodMeta.photos || [];
                     const displayPhotoUrl = photos[activePhotoIdx]?.dataUrl || selectedFlood.latest_photo_url;
                     return (
                       <div className="space-y-2">

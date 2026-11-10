@@ -76,6 +76,7 @@ export async function upsertRouteAction(payload: {
   affectedShoulder?: "NONE" | "LEFT" | "RIGHT" | "BOTH" | "AFFECTED" | "UNKNOWN";
   reporterName?: string;
   directionMeta?: Record<string, any>;
+  expectedUpdatedAt?: string;
 }): Promise<{ success: boolean; systemData: SystemDataPayload }> {
   return invokeHdms("upsertRouteAction", [payload]);
 }

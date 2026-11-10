@@ -13,6 +13,7 @@ import {
   Waves,
   Layers,
   Split,
+  Merge,
   ChevronDown,
   ChevronUp,
   Camera,
@@ -37,6 +38,8 @@ import {
   FloodSegmentDirectionMeta,
   DetailedTrafficStatus,
   ParentFloodEventGroup,
+  parseKmPostMeters,
+  formatKmPostString,
 } from "@/lib/flood-event-schema";
 
 interface IncidentRegistryTabProps {
@@ -75,12 +78,16 @@ export function IncidentRegistryTab({
   const [selectedIncidentIds, setSelectedIncidentIds] = useState<Set<string>>(() => new Set());
   const [exportScope, setExportScope] = useState<"FILTERED" | "ALL" | "SELECTED">("FILTERED");
 
-  // Phase 2: Hierarchy & Split states
+  // Phase 2 & Phase 4: Hierarchy, Split & Merge states
   const [collapsedEvents, setCollapsedEvents] = useState<Set<string>>(() => new Set());
   const [splitModalIncident, setSplitModalIncident] = useState<FloodRoute | null>(null);
   const [splitKm, setSplitKm] = useState<string>("");
   const [splitNewWaterLevel, setSplitNewWaterLevel] = useState<number>(0);
   const [splitNewTrafficStatus, setSplitNewTrafficStatus] = useState<FloodRoute["traffic_status"]>("WARNING");
+
+  // Phase 4: Merge Segments states
+  const [mergeModalIncident, setMergeModalIncident] = useState<FloodRoute | null>(null);
+  const [targetMergeIncidentId, setTargetMergeIncidentId] = useState<string>("");
 
   const activeCount = (systemData.floodRoutes || []).filter((r) => r.is_active).length;
   const resolvedCount = (systemData.floodRoutes || []).filter((r) => !r.is_active).length;
@@ -236,6 +243,144 @@ export function IncidentRegistryTab({
       }
     } catch (e: any) {
       onToast("เกิดข้อผิดพลาดในการแบ่งช่วง: " + e.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const mergeCandidates = React.useMemo(() => {
+    if (!mergeModalIncident) return [];
+    const origMeta = parseFloodDirectionMeta(mergeModalIncident.direction_meta, mergeModalIncident);
+    return (systemData.floodRoutes || []).filter((r) => {
+      if (r.id === mergeModalIncident.id || !r.is_active) return false;
+      if (r.route_no !== mergeModalIncident.route_no) return false;
+      const rMeta = parseFloodDirectionMeta(r.direction_meta, r);
+      return rMeta.directionCode === origMeta.directionCode || rMeta.eventId === origMeta.eventId;
+    });
+  }, [mergeModalIncident, systemData.floodRoutes]);
+
+  const handleMergeSegments = async () => {
+    if (!mergeModalIncident || !targetMergeIncidentId) {
+      onToast("กรุณาเลือกช่วงน้ำท่วมที่ต้องการรวมเข้าด้วยกัน");
+      return;
+    }
+    const targetIncident = mergeCandidates.find((c) => c.id === targetMergeIncidentId);
+    if (!targetIncident) {
+      onToast("ไม่พบข้อมูลช่วงน้ำท่วมที่เลือก");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const segA = mergeModalIncident;
+      const segB = targetIncident;
+      const metaA = parseFloodDirectionMeta(segA.direction_meta, segA);
+      const metaB = parseFloodDirectionMeta(segB.direction_meta, segB);
+
+      // 1. Calculate combined KM start and end
+      const kmA1 = parseKmPostMeters(segA.km_start) ?? 0;
+      const kmA2 = parseKmPostMeters(segA.km_end) ?? 0;
+      const kmB1 = parseKmPostMeters(segB.km_start) ?? 0;
+      const kmB2 = parseKmPostMeters(segB.km_end) ?? 0;
+      const minMeters = Math.min(kmA1, kmA2, kmB1, kmB2);
+      const maxMeters = Math.max(kmA1, kmA2, kmB1, kmB2);
+      const combinedKmStart = formatKmPostString(minMeters);
+      const combinedKmEnd = formatKmPostString(maxMeters);
+
+      // 2. Derive combined geometry
+      let combinedCoords: [number, number][] = [];
+      const cleanTargetRoute = segA.route_no?.replace(/^ทล\.?/i, "").trim();
+      const layer = (systemData.highwayLayers || []).find((l) => {
+        const fc = l.geojson_data;
+        if (fc && Array.isArray(fc.features)) {
+          return fc.features.some((f: any) => {
+            const props = f.properties || {};
+            const no = props.route_no || props.route_code || props.ROAD_NO || props.route || props.code;
+            return no && String(no).replace(/^ทล\.?/i, "").trim() === cleanTargetRoute;
+          });
+        }
+        return l.layer_name?.includes(cleanTargetRoute || "");
+      });
+      const isReverse = metaA.directionCode === "B_TO_A";
+      if (layer?.geojson_data?.features?.[0]?.geometry?.coordinates) {
+        const hwCoords = layer.geojson_data.features[0].geometry.coordinates as [number, number][];
+        const hwProps = layer.geojson_data.features[0].properties || {};
+        combinedCoords = slicePolylineByKmRange(
+          hwCoords,
+          hwProps.km_start || combinedKmStart,
+          hwProps.km_end || combinedKmEnd,
+          combinedKmStart,
+          combinedKmEnd,
+          isReverse
+        );
+      }
+      if (combinedCoords.length < 2) {
+        const cA = (Array.isArray(segA.coordinates_json) ? segA.coordinates_json : []) as [number, number][];
+        const cB = (Array.isArray(segB.coordinates_json) ? segB.coordinates_json : []) as [number, number][];
+        combinedCoords = isReverse ? [...cB, ...cA] : [...cA, ...cB];
+      }
+
+      const pStart = combinedCoords[0] || [segA.lon_start, segA.lat_start];
+      const pEnd = combinedCoords[combinedCoords.length - 1] || [segA.lon_end, segA.lat_end];
+
+      const combinedWaterLevel = Math.max(segA.water_level_cm, segB.water_level_cm);
+      const severityOrder: Record<string, number> = { CLOSED: 5, LIGHT_VEHICLES_ONLY: 4, ONE_LANE: 3, WARNING: 2, PASSABLE: 1 };
+      const combinedStatus =
+        (severityOrder[segA.traffic_status] || 0) >= (severityOrder[segB.traffic_status] || 0)
+          ? segA.traffic_status
+          : segB.traffic_status;
+
+      // 3. Update segA to be the merged span
+      await upsertRouteAction({
+        id: segA.id,
+        recordType: "FLOOD",
+        routeNo: segA.route_no,
+        kmStart: combinedKmStart,
+        kmEnd: combinedKmEnd,
+        sectionName: segA.section_name,
+        waterLevelCm: combinedWaterLevel,
+        trafficStatus: combinedStatus,
+        isActive: true,
+        latStart: pStart[1],
+        lonStart: pStart[0],
+        latEnd: pEnd[1],
+        lonEnd: pEnd[0],
+        coordinates: combinedCoords,
+        latestPhotoUrl: segA.latest_photo_url || segB.latest_photo_url || undefined,
+        roadSide: segA.road_side,
+        affectedLanes: segA.affected_lanes || segB.affected_lanes,
+        affectedShoulder: segA.affected_shoulder || segB.affected_shoulder,
+        reporterName: segA.reporter_name || segB.reporter_name,
+        directionMeta: {
+          ...metaA,
+          updatedAt: new Date().toISOString(),
+          causeAndNote: `${metaA.causeAndNote || ""} (รวมช่วงกับ กม.${segB.km_start}–${segB.km_end})`.trim(),
+        },
+      });
+
+      // 4. Deactivate segB
+      await setIncidentStatusAction(segB.id, false);
+
+      // 5. Timeline update
+      await saveTimelineUpdateAction({
+        floodId: segA.id,
+        waterLevelCm: combinedWaterLevel,
+        trafficStatus: combinedStatus,
+        latitude: pStart[1],
+        longitude: pStart[0],
+        reporterName: "เจ้าหน้าที่",
+        remark: `รวมช่วงน้ำท่วม กม.${segA.km_start}-${segA.km_end} เข้ากับ กม.${segB.km_start}-${segB.km_end} เป็นช่วง กม.${combinedKmStart}-${combinedKmEnd}`,
+      });
+
+      await onDataRefresh();
+      showSuccessModal(
+        "รวมช่วงสำเร็จ",
+        `รวมช่วงน้ำท่วม ทล.${segA.route_no} เป็นช่วง กม.${combinedKmStart} ถึง ${combinedKmEnd} สำเร็จเรียบร้อยแล้ว`
+      );
+      setMergeModalIncident(null);
+      setTargetMergeIncidentId("");
+    } catch (err: any) {
+      onToast("เกิดข้อผิดพลาดในการรวมช่วง: " + (err?.message || "ไม่สามารถรวมช่วงได้"));
     } finally {
       setIsSubmitting(false);
     }
@@ -597,6 +742,17 @@ export function IncidentRegistryTab({
                             </button>
                             <button
                               type="button"
+                              onClick={() => {
+                                setMergeModalIncident(r);
+                                setTargetMergeIncidentId("");
+                              }}
+                              className="bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-800 px-2.5 py-1.5 rounded-xl text-xs font-heading font-bold flex items-center gap-1 transition"
+                              title="รวมช่วง กม. นี้เข้ากับช่วงย่อยอื่นในสายทางเดียวกัน"
+                            >
+                              <Merge className="w-3.5 h-3.5" /> รวมช่วง
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => handleToggleIncidentStatus(r.id, r.is_active)}
                               className={`px-2.5 py-1.5 rounded-xl text-xs font-heading font-semibold transition border ${
                                 r.is_active
@@ -791,6 +947,91 @@ export function IncidentRegistryTab({
                 className="bg-sky-500 hover:bg-sky-400 text-slate-950 font-heading font-bold px-4 py-2 rounded-xl text-xs shadow disabled:opacity-50"
               >
                 ยืนยันการแบ่งช่วง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merge Segments Modal (Phase 4) */}
+      {mergeModalIncident && (
+        <div className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border-2 border-indigo-500/80 rounded-2xl p-5 max-w-md w-full space-y-4 shadow-2xl animate-scale-up">
+            <div className="border-b border-slate-800 pb-2">
+              <h3 className="font-heading font-bold text-sm text-white flex items-center gap-1.5">
+                <Merge className="w-4 h-4 text-indigo-400" /> รวมช่วงกิโลเมตรน้ำท่วม (Merge Segments)
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                ทล.{mergeModalIncident.route_no} {mergeModalIncident.section_name} (ช่วงหลัก: กม.{mergeModalIncident.km_start} - {mergeModalIncident.km_end})
+              </p>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-slate-300 block mb-1 font-semibold">เลือกช่วงที่ต้องการนำมารวมกับช่วงนี้ *</label>
+                {mergeCandidates.length === 0 ? (
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 text-xs text-center">
+                    ไม่พบช่วงน้ำท่วมอื่นที่เปิดใช้งานอยู่ใน ทล.{mergeModalIncident.route_no} เดียวกัน
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {mergeCandidates.map((c) => {
+                      const cMeta = parseFloodDirectionMeta(c.direction_meta, c);
+                      const isSelected = targetMergeIncidentId === c.id;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setTargetMergeIncidentId(c.id)}
+                          className={`w-full text-left p-2.5 rounded-xl border transition flex items-center justify-between gap-2 cursor-pointer ${
+                            isSelected
+                              ? "bg-indigo-950/90 border-indigo-400 text-white ring-1 ring-indigo-400"
+                              : "bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-300"
+                          }`}
+                        >
+                          <div>
+                            <div className="font-bold text-amber-300 font-mono">
+                              กม.{c.km_start} - {c.km_end}
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              {cMeta.directionCode === "B_TO_A" ? "ขากลับ (B→A)" : "ขาไป (A→B)"} | น้ำท่วม {c.water_level_cm} ซม.
+                            </div>
+                          </div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${isSelected ? "bg-indigo-500 text-slate-950" : "bg-slate-800 text-slate-400"}`}>
+                            {isSelected ? "เลือกแล้ว" : "เลือกรวม"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {targetMergeIncidentId && (
+                <div className="p-2.5 rounded-xl bg-indigo-950/50 border border-indigo-900/60 text-[11px] text-indigo-200">
+                  ℹ️ ระบบจะรวมช่วง กม. จากจุดเริ่มต้นน้อยที่สุดถึงจุดสิ้นสุดมากที่สุด ปรับแนวเส้น Geometry อัตโนมัติ และปรับสถานะช่วงที่ถูกรวมเป็นซ่อน/ยุติ
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setMergeModalIncident(null);
+                  setTargetMergeIncidentId("");
+                }}
+                className="bg-slate-800 text-slate-300 px-3.5 py-2 rounded-xl text-xs"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting || !targetMergeIncidentId}
+                onClick={handleMergeSegments}
+                className="bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-heading font-bold px-4 py-2 rounded-xl text-xs shadow disabled:opacity-50"
+              >
+                ยืนยันการรวมช่วง
               </button>
             </div>
           </div>

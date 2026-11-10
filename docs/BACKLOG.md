@@ -8,7 +8,7 @@
 | B-001 | **วิกฤต** | Edge Function เขียนข้อมูลด้วย service role โดยไม่ตรวจสิทธิ์ผู้เรียก | เปิด (ต้องตัดสินใจ) |
 | B-002 | สูง | `.mcp.json` ให้ AI เข้าถึง Supabase production พร้อมสิทธิ์ฐานข้อมูล ขัด ADR-001 | เปิด (ต้องตัดสินใจ) |
 | B-003 | สูง | Deploy ไม่รอ CI/e2e และเจ้าของ push ตรงเข้า main | เปิด (ต้องตัดสินใจ) |
-| B-004 | กลาง | หน้าแอดมินยังโหลด GeoJSON ทางหลวงเต็มความละเอียดทุกครั้ง | เปิด |
+| B-004 | กลาง | หน้าแอดมินยังโหลด GeoJSON ทางหลวงเต็มความละเอียดทุกครั้ง | ปิด (2026-11-10, ดู UPDATE-063) |
 | B-005 | กลาง | ไฟล์ใหญ่เกิน: `GisDataImportTab.tsx` (~1.9k บรรทัด), `MapManagementTab.tsx` (~1.1k) | เปิด |
 | B-006 | กลาง | `SUPPLEMENTAL_RULES.md` ~120 KB ถูกบังคับให้อ่านทุกเซสชัน | ปิดบางส่วน (ยกเลิกบังคับใน AGENTS.md; ยังไม่ได้ย้ายไฟล์) |
 | B-007 | ต่ำ | โค้ดค้างที่ไม่อยู่ใน path จริง (better-auth, supabase-server, routing-service, Docker Postgres) | เปิด (ต้องยืนยันก่อนลบ) |
@@ -50,9 +50,8 @@
 - **ร่างสำหรับ A (ยังไม่ใช้งาน):** ใน `deploy.yml` เปลี่ยน trigger เป็น `workflow_run: { workflows: ["CI"], types: [completed], branches: [main] }` + `workflow_dispatch`; เพิ่ม `if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'` ที่ job `build`; ใส่ `ref: ${{ github.event.workflow_run.head_sha || github.sha }}` ใน `actions/checkout`
 
 ## B-004 [กลาง] หน้าแอดมินยังโหลด GeoJSON เต็ม
-- **หลักฐาน:** `app/admin/page.tsx` ใช้ `getSystemDataAction` (เส้นเต็ม) หน้าประชาชนใช้แบบเบาแล้ว
-- **ทางเลือก:** A) โหลดเส้นเต็มเฉพาะเลเยอร์ที่กำลังแก้ ตอนกด "แก้แนวถนน" · B) กรองตามกรอบแผนที่ด้วย RPC `ST_Intersects` · C) vector tiles (`ST_AsMVT`) · D) แคชเส้นใน IndexedDB ตาม `updated_at`
-- **คำแนะนำ:** A ก่อน (ถูกและปลอดภัย) แล้ววัดขนาดจริง; C เมื่อข้อมูลโตมาก
+- **สถานะ:** ปิดแล้ว (2026-11-10, ดู `UPDATE-063`) — หน้า `/admin` โหลดเริ่มต้นด้วย `getPublicSystemDataAction` (Geometry แบบลดจุด) และดึง `getSystemDataAction` ความละเอียดเต็มอัตโนมัติเฉพาะเมื่อเปิดแท็บ GIS หรือแก้ไขจุด Vertex
+- **หลักฐาน:** `app/admin/page.tsx`, `components/admin/AdminConsole.tsx`
 
 ## B-005 [กลาง] ไฟล์ใหญ่เกินไป
 - แยกส่วนที่เป็นกลุ่มชัดเจนก่อน (เช่น ตัวแก้ไขแนวเส้น, ตารางสายทาง, modal คุณสมบัติ) **หลังมี e2e ครอบคลุม (B-011)** และห้ามรีแฟคเตอร์ระหว่างงานฟีเจอร์ (R8)

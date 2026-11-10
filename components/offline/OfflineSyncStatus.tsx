@@ -62,6 +62,10 @@ export function OfflineSyncStatus({ onSyncComplete }: { onSyncComplete?: () => v
           reporterName: item.reporterName,
           remark: item.remark,
           photoUrl: item.photoUrl,
+          roadSide: item.roadSide as any,
+          affectedLanes: item.affectedLanes,
+          affectedShoulder: item.affectedShoulder as any,
+          directionMeta: item.directionMeta,
         });
         await markReportAsSynced(item.id);
       }

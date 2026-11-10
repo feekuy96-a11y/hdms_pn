@@ -4,7 +4,7 @@ import React, { useCallback, useRef, useState } from "react";
 import type { LonLat, VertexEditEvent } from "@/lib/line-edit";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
-import { getSystemDataAction, snapRouteAction } from "@/app/actions/doh-actions";
+import { getSystemDataAction, getPublicSystemDataAction, snapRouteAction } from "@/app/actions/doh-actions";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload } from "@/db/default-data";
 import { AdminConsole } from "@/components/admin/AdminConsole";
 
@@ -78,10 +78,11 @@ export default function AdminPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [editableOfficeId, setEditableOfficeId] = useState<string | null>(null);
 
+  const [needsFullGeometry, setNeedsFullGeometry] = useState(false);
   const { data: systemData = INITIAL_SYSTEM_DATA, refetch, isFetching, isError } = useQuery<SystemDataPayload>({
-    queryKey: ["dohAdminSystemData"],
+    queryKey: ["dohAdminSystemData", needsFullGeometry],
     queryFn: async () => {
-      return await getSystemDataAction();
+      return needsFullGeometry ? await getSystemDataAction() : await getPublicSystemDataAction();
     },
     staleTime: 0,
     refetchOnMount: "always",
@@ -287,7 +288,11 @@ export default function AdminPage() {
               setIncomingGisLines={setIncomingGisLines}
               setDraftPickMarkers={setDraftPickMarkers}
               vertexEvent={vertexEvent}
-              onVertexEditChange={setVertexEditable}
+              onVertexEditChange={(active) => {
+                setVertexEditable(active);
+                if (active) setNeedsFullGeometry(true);
+              }}
+              onRequestFullGeometry={() => setNeedsFullGeometry(true)}
               onOfficeEditModeChange={setEditableOfficeId}
               isPaneCollapsed={isSidebarCollapsed}
               onTogglePaneCollapse={() => {

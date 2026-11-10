@@ -65,6 +65,7 @@ interface AdminConsoleProps {
   onVertexEditChange?: (active: boolean) => void;
   isPaneCollapsed?: boolean;
   onTogglePaneCollapse?: () => void;
+  onRequestFullGeometry?: () => void;
 }
 
 export function AdminConsole({
@@ -95,6 +96,7 @@ export function AdminConsole({
   onVertexEditChange,
   isPaneCollapsed,
   onTogglePaneCollapse,
+  onRequestFullGeometry,
 }: AdminConsoleProps) {
   // Navigation & View
   const [activeTab, setActiveTab] = useState<
@@ -282,6 +284,9 @@ export function AdminConsole({
                       aria-current={isActive ? "page" : undefined}
                       onClick={() => {
                         setActiveTab(item.id);
+                        if (item.id === "routes") {
+                          onRequestFullGeometry?.();
+                        }
                         if (item.id !== "map") {
                           setEditingRoute(null);
                         }
@@ -370,6 +375,7 @@ export function AdminConsole({
                 type="button"
                 onClick={() => {
                   setActiveTab(item.id);
+                  if (item.id === "routes") onRequestFullGeometry?.();
                   if (item.id !== "map") setEditingRoute(null);
                   if (item.id !== "system") onOfficeEditModeChange?.(null);
                 }}

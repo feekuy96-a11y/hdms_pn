@@ -10,6 +10,10 @@ export interface OfflineReportItem {
   reporterName: string;
   remark: string;
   photoUrl?: string;
+  roadSide?: string;
+  affectedLanes?: string;
+  affectedShoulder?: string;
+  directionMeta?: Record<string, unknown>;
   createdAt: string;
   synced: boolean;
 }

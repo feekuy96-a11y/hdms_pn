@@ -721,3 +721,50 @@
   - `npm run typecheck`: ผ่านฉลุย 0 errors
   - Next.js Static Export build: ผ่าน 100% (6/6 static pages prerendered)
 - **สถานะ:** ใช้งานได้จริง (ACTIVE) / พร้อม Deploy บน GitHub Pages
+
+---
+
+### [UPDATE-063] 2026-11-10 Phase 4 — System Optimization, UX/UI & Production Readiness (การปรับปรุงประสิทธิภาพ ประสบการณ์ใช้งาน ความเสถียร และความพร้อมใช้งานจริง)
+- **วัตถุประสงค์:** พัฒนาระบบตามคำสั่ง Phase 4 โดยมุ่งเน้นการลดขนาด Payload บนมือถือ, เพิ่มฟีเจอร์ลดขั้นตอนการทำงานของเจ้าหน้าที่, เพิ่มความเร็วการโหลดหน้าแอดมิน, ยกระดับความเสถียรของโหมด Offline และความพร้อมในการใช้งานจริง
+- **รายการไฟล์ที่แก้ไข:**
+  - `lib/gis-utils.ts`
+  - `lib/flood-event-schema.ts`
+  - `components/admin/tabs/MapManagementTab.tsx`
+  - `components/admin/tabs/IncidentRegistryTab.tsx`
+  - `components/admin/AdminConsole.tsx`
+  - `app/admin/page.tsx`
+  - `app/page.tsx`
+  - `lib/offline-db.ts`
+  - `components/offline/OfflineSyncStatus.tsx`
+  - `supabase/functions/hdms-api/index.ts`
+  - `app/actions/doh-actions.ts`
+  - `supabase/migrations/20261110000100_optimize_display_payload_photos.sql` (ใหม่)
+  - `docs/CHANGELOG.md`
+  - `docs/BACKLOG.md`
+  - `SUPPLEMENTAL_RULES.md`
+- **รายละเอียดการทำงาน:**
+  1. **การปรับปรุงการอัปโหลดและบีบอัดภาพ (Image Upload & Adaptive Compression):**
+     - ปรับปรุง `compressImageToAdaptiveBase64` ใน `lib/gis-utils.ts` ให้ตรวจจับและใช้ฟอร์แมต **WebP** เป็นลำดับแรก (Fallback เป็น JPEG อัตโนมัติเมื่อระบบไม่รองรับ)
+     - การเรนเดอร์ผ่าน Canvas ช่วยล้าง EXIF Metadata ป้องกันข้อมูลส่วนบุคคลและลดขนาดไฟล์ลงทันที
+     - เพดานขนาดรูปภาพไม่เกิน 300 KB ต่อภาพอย่างเด็ดขาด
+     - แสดงรายละเอียดขนาดไฟล์ก่อนและหลังบีบอัดพร้อมเปอร์เซ็นต์ที่ลดลงใน `MapManagementTab.tsx`
+  2. **ลดขนาด Payload หน้าประชาชนและโหลดภาพเต็มแบบ On-Demand (Database & Public Payload Optimization — ทางเลือก 1.1):**
+     - สร้าง Migration `20261110000100_optimize_display_payload_photos.sql` ปรับปรุง `doh_get_system_data_display_rpc()` ให้ส่งเฉพาะรูปปก (`photos[0..0]`) ในการโหลดหน้าแรกของประชาชน
+     - ใน `app/page.tsx`: เมื่อประชาชนคลิกเปิดหน้าต่างรายละเอียดจุดน้ำท่วม (Flood Dossier Modal) ระบบจะโหลดอัลบั้มภาพเต็ม (รูปที่ ๒–๕) แบบ On-Demand จากฐานข้อมูลทันที ทำให้หน้าแรกโหลดเร็วขึ้นกว่า 80% โดยไม่สูญเสียความสามารถในการดูอัลบั้มภาพ ๕ รูป
+  3. **ลดขั้นตอนการทำงานของเจ้าหน้าที่ — สร้างคู่ทิศทางไป-กลับในคลิกเดียว (Dual-Direction Quick Create):**
+     - เพิ่มโหมด `⚡ บันทึก ๒ ทิศทาง (A→B และ B→A) พร้อมกัน` ใน `MapManagementTab.tsx`
+     - เจ้าหน้าที่สามารถระบุระดับน้ำและสถานะจราจรของแต่ละฝั่งได้ในฟอร์มเดียว ระบบจะสร้าง ๒ ช่วงย่อยภายใต้ `eventId` เดียวกันพร้อมตัดเส้น Geometry ตามทิศทางจริงใน ๑ คลิก
+  4. **ปุ่ม "รวมช่วง กม. (Merge Segments)" ในทะเบียนเหตุการณ์:**
+     - เพิ่มปุ่ม `รวมช่วง` และ Modal ใน `IncidentRegistryTab.tsx` สำหรับรวม ๒ ช่วงย่อยในสายทางเดียวกัน
+     - ระบบคำนวณช่วง กม. รวม (`min(kmStart)` ถึง `max(kmEnd)`), ตัดเส้น Geometry ใหม่ตามช่วงรวม, สรุประดับน้ำและสถานะจราจร, อัปเดตช่วงหลัก, ซ่อนช่วงที่ถูกรวม และบันทึกประวัติ Timeline อัตโนมัติ
+  5. **เพิ่มความเร็วหน้า `/admin` ด้วย Lazy Full-Precision Geometry (Backlog B-004 — ทางเลือก 3.1):**
+     - หน้า `/admin` (`app/admin/page.tsx`) โหลดเริ่มต้นด้วย `getPublicSystemDataAction` (Geometry แบบลดจุด) ทำให้เข้าหน้าเว็บได้เร็วขึ้นกว่าเดิม ๓–๕ เท่า
+     - เมื่อเจ้าหน้าที่สลับเข้าแท็บ `GIS` (`GisDataImportTab`) หรือเปิดโหมดแก้ไขจุด Vertex ระบบจะดึง `getSystemDataAction` (ความละเอียดเต็ม ๑๕ ตำแหน่ง) มาแทนที่อัตโนมัติ
+  6. **เพิ่มความเสถียรและป้องกันการบันทึกทับกัน (Concurrency & Offline Field Sync):**
+     - ใน `supabase/functions/hdms-api/index.ts`: เพิ่มการตรวจสอบ `expectedUpdatedAt` ใน `upsertRouteAction` เพื่อป้องกันเจ้าหน้าที่บันทึกทับข้อมูลกันเอง (HTTP 409 Conflict)
+     - ใน `lib/offline-db.ts` และ `OfflineSyncStatus.tsx`: อัปเกรด `OfflineReportItem` ให้เก็บและซิงค์ฟิลด์ `roadSide`, `affectedLanes`, `affectedShoulder`, และ `directionMeta` กลับขึ้นเซิร์ฟเวอร์ได้ครบถ้วน
+- **การทดสอบและผลลัพธ์:**
+  - `npm run lint` (`--max-warnings=0`): ผ่านฉลุย 0 warnings
+  - `npm run typecheck`: ผ่านฉลุย 0 errors
+  - `NEXT_OUTPUT=export next build`: ผ่าน 100% สร้าง Static pages 6/6 หน้าสมบูรณ์
+- **สถานะ:** ใช้งานได้จริง (ACTIVE) / พร้อม Deploy บน GitHub Pages

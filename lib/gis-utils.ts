@@ -1064,12 +1064,13 @@ export function compressImageToBase64(file: File, maxDimension = 1200, quality =
 
 /**
  * บีบอัดรูปภาพแบบ Adaptive รับประกันขนาดไม่เกินเพดานที่กำหนด (ค่าเริ่มต้น 300 KB)
- * ปรับลดความละเอียดและคุณภาพอย่างเป็นลำดับเพื่อรักษาความคมชัดของหลักฐานน้ำท่วม
+ * ปรับลดความละเอียดและคุณภาพอย่างเป็นลำดับ โดยใช้ WebP เป็นอันดับแรก (Fallback เป็น JPEG)
+ * การวาดผ่าน Canvas ช่วยล้าง EXIF metadata ป้องกันข้อมูลตำแหน่งส่วนตัวและลดขนาดไฟล์ลงทันที
  */
 export async function compressImageToAdaptiveBase64(
   file: File,
   maxSizeBytes = 300 * 1024
-): Promise<{ dataUrl: string; sizeBytes: number }> {
+): Promise<{ dataUrl: string; sizeBytes: number; format?: "webp" | "jpeg" }> {
   // สร้าง image element จากไฟล์
   const dataUrlOriginal = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -1085,6 +1086,18 @@ export async function compressImageToAdaptiveBase64(
     i.src = dataUrlOriginal;
   });
 
+  // ตรวจสอบการรองรับ WebP บน Canvas
+  let supportsWebp = false;
+  try {
+    const testCanvas = document.createElement("canvas");
+    testCanvas.width = 1;
+    testCanvas.height = 1;
+    supportsWebp = testCanvas.toDataURL("image/webp").startsWith("data:image/webp");
+  } catch {
+    supportsWebp = false;
+  }
+  const preferredMime = supportsWebp ? "image/webp" : "image/jpeg";
+
   // ลำดับขั้นตอนการลดขนาด: [maxDimension, quality]
   const stages: Array<[number, number]> = [
     [1280, 0.82],
@@ -1092,10 +1105,13 @@ export async function compressImageToAdaptiveBase64(
     [840, 0.65],
     [680, 0.55],
     [540, 0.45],
+    [420, 0.38],
+    [320, 0.32],
   ];
 
   let bestDataUrl = dataUrlOriginal;
   let bestSizeBytes = Math.round((bestDataUrl.length * 3) / 4);
+  let bestFormat: "webp" | "jpeg" = "jpeg";
 
   for (const [maxDim, quality] of stages) {
     const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
@@ -1109,18 +1125,26 @@ export async function compressImageToAdaptiveBase64(
     if (!ctx) continue;
 
     ctx.drawImage(img, 0, 0, targetW, targetH);
-    const candidateUrl = canvas.toDataURL("image/jpeg", quality);
+    let candidateUrl = canvas.toDataURL(preferredMime, quality);
+    let chosenFormat: "webp" | "jpeg" = candidateUrl.startsWith("data:image/webp") ? "webp" : "jpeg";
+
+    if (preferredMime === "image/webp" && !candidateUrl.startsWith("data:image/webp")) {
+      candidateUrl = canvas.toDataURL("image/jpeg", quality);
+      chosenFormat = "jpeg";
+    }
+
     const candidateSize = Math.round((candidateUrl.length * 3) / 4);
 
     bestDataUrl = candidateUrl;
     bestSizeBytes = candidateSize;
+    bestFormat = chosenFormat;
 
     if (candidateSize <= maxSizeBytes) {
       break;
     }
   }
 
-  return { dataUrl: bestDataUrl, sizeBytes: bestSizeBytes };
+  return { dataUrl: bestDataUrl, sizeBytes: bestSizeBytes, format: bestFormat };
 }
 
 /**
