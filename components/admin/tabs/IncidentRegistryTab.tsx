@@ -50,12 +50,15 @@ interface IncidentRegistryTabProps {
   showConfirmModal: (title: string, message: string, onConfirm: () => void) => void;
   showSuccessModal: (title: string, message: string) => void;
   onEditFlood: (floodId: string) => void;
-  onAddFlood: () => void;
+  onAddFlood: (context?: { routeNo?: string; sectionName?: string; eventId?: string }) => void;
 }
 
 const trafficLabel = (status: FloodRoute["traffic_status"]) => ({
-  CLOSED: "ผ่านไม่ได้", WARNING: "เฝ้าระวัง", PASSABLE: "ผ่านได้ปกติ",
-  LIGHT_VEHICLES_ONLY: "รถเล็กผ่านได้", ONE_LANE: "ผ่านได้ 1 ช่องทาง",
+  CLOSED: "ผ่านไม่ได้",
+  WARNING: "เฝ้าระวัง / รถเล็กไม่สามารถผ่านได้",
+  PASSABLE: "ผ่านได้ปกติ",
+  LIGHT_VEHICLES_ONLY: "รถเล็กผ่านได้",
+  ONE_LANE: "รถเล็กผ่านได้ ๑ ช่องทาง",
 }[status]);
 
 export function IncidentRegistryTab({
@@ -501,7 +504,7 @@ export function IncidentRegistryTab({
   const detourColor = systemData.mapStyles?.detour?.color || "#FBC02D";
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-5 w-full">
       {deleted && <div className="border border-slate-700 rounded-xl p-3 text-sm text-slate-300"><button type="button" onClick={() => setDeleted(null)}>ปิดรายการ</button>{deleted.length === 0 && <p>ไม่มีรายการที่ลบ</p>}{deleted.map((r) => <div key={r.id} className="flex justify-between py-2"><span>ทล.{r.route_no} {r.section_name}</span><button type="button" className="text-emerald-300" onClick={async () => { try { const res = await restoreRouteAction("FLOOD", r.id); onDataRefresh(res.systemData); setDeleted(await getDeletedRoutesAction()); } catch { onToast("กู้คืนไม่สำเร็จ"); } }}>กู้คืน</button></div>)}</div>}
       {/* Incident Header Stats */}
       <div className="border-b border-slate-800 pb-3 flex flex-wrap items-center justify-between gap-3">
@@ -529,7 +532,7 @@ export function IncidentRegistryTab({
           </label>
           <button
             type="button"
-            onClick={onAddFlood}
+            onClick={() => onAddFlood()}
             className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs min-h-10 px-4 rounded-xl flex items-center gap-1.5 shadow"
           >
             <Plus className="w-4 h-4" /> เพิ่มเหตุการณ์
@@ -626,8 +629,8 @@ export function IncidentRegistryTab({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => onAddFlood()}
-                      className="bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/50 px-2.5 py-1 rounded-xl text-xs font-heading font-bold flex items-center gap-1 transition"
+                      onClick={() => onAddFlood({ routeNo: ev.routeNo, sectionName: ev.sectionName, eventId: ev.eventId })}
+                      className="bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/50 px-2.5 py-1 rounded-xl text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap"
                       title="เพิ่มช่วง กม. ย่อยในเหตุการณ์หลักนี้"
                     >
                       <Plus className="w-3.5 h-3.5" /> เพิ่มช่วง กม.
@@ -721,70 +724,75 @@ export function IncidentRegistryTab({
                             </div>
                           </div>
 
-                          {/* Action Buttons Per Segment */}
-                          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setUpdateModalIncident(r);
-                                setNewWaterLevel(r.water_level_cm);
-                                setNewTrafficStatus(r.traffic_status);
-                              }}
-                              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 shadow transition"
-                              title="อัปเดตระดับน้ำและสถานะจราจรด่วน"
-                            >
-                              ⚡ อัปเดตด่วน
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSplitModalIncident(r);
-                                setSplitKm("");
-                                setSplitNewWaterLevel(Math.max(0, Math.round(r.water_level_cm / 2)));
-                                setSplitNewTrafficStatus(r.traffic_status);
-                              }}
-                              className="bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-800 px-2.5 py-1.5 rounded-xl text-xs font-heading font-bold flex items-center gap-1 transition"
-                              title="แบ่งช่วง กม. นี้ออกเป็น ๒ ช่วงย่อย"
-                            >
-                              <Split className="w-3.5 h-3.5" /> แบ่งช่วง
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMergeModalIncident(r);
-                                setTargetMergeIncidentId("");
-                              }}
-                              className="bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-800 px-2.5 py-1.5 rounded-xl text-xs font-heading font-bold flex items-center gap-1 transition"
-                              title="รวมช่วง กม. นี้เข้ากับช่วงย่อยอื่นในสายทางเดียวกัน"
-                            >
-                              <Merge className="w-3.5 h-3.5" /> รวมช่วง
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleToggleIncidentStatus(r.id, r.is_active)}
-                              className={`px-2.5 py-1.5 rounded-xl text-xs font-heading font-semibold transition border ${
-                                r.is_active
-                                  ? "bg-slate-800 text-slate-300 hover:bg-emerald-950 hover:text-emerald-300 border-slate-700"
-                                  : "bg-emerald-950 text-emerald-300 hover:bg-emerald-900 border-emerald-700"
-                              }`}
-                            >
-                              {r.is_active ? "คืนปกติ" : "เปิดใหม่"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onEditFlood(r.id)}
-                              className="bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-300 px-2.5 py-1.5 rounded-xl text-xs font-heading transition"
-                            >
-                              แก้ไข
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteRoute(r.id)}
-                              className="bg-red-950 hover:bg-red-800 text-red-300 p-1.5 rounded-xl text-xs transition"
-                              title="ลบช่วงนี้ (กู้คืนได้)"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                          {/* Action Buttons Per Segment: จัดกลุ่มปุ่มหลัก-รอง ป้องกันการซ้อนตกบรรทัด */}
+                          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
+                            <div className="inline-flex items-center gap-1 bg-slate-900/80 p-0.5 rounded-xl border border-slate-700/60">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setUpdateModalIncident(r);
+                                  setNewWaterLevel(r.water_level_cm);
+                                  setNewTrafficStatus(r.traffic_status);
+                                }}
+                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1 shadow transition whitespace-nowrap cursor-pointer"
+                                title="อัปเดตระดับน้ำและสถานะจราจรด่วน"
+                              >
+                                ⚡ อัปเดตด่วน
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onEditFlood(r.id)}
+                                className="bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-300 px-2 py-1.5 rounded-lg text-xs font-heading transition whitespace-nowrap cursor-pointer"
+                              >
+                                แก้ไข
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleIncidentStatus(r.id, r.is_active)}
+                                className={`px-2 py-1.5 rounded-lg text-xs font-heading font-semibold transition border whitespace-nowrap cursor-pointer ${
+                                  r.is_active
+                                    ? "bg-slate-800 text-slate-300 hover:bg-emerald-950 hover:text-emerald-300 border-slate-700"
+                                    : "bg-emerald-950 text-emerald-300 hover:bg-emerald-900 border-emerald-700"
+                                }`}
+                              >
+                                {r.is_active ? "คืนปกติ" : "เปิดใหม่"}
+                              </button>
+                            </div>
+
+                            <div className="inline-flex items-center gap-1 bg-slate-900/60 p-0.5 rounded-xl border border-slate-800">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSplitModalIncident(r);
+                                  setSplitKm("");
+                                  setSplitNewWaterLevel(Math.max(0, Math.round(r.water_level_cm / 2)));
+                                  setSplitNewTrafficStatus(r.traffic_status);
+                                }}
+                                className="bg-sky-950/70 hover:bg-sky-900 text-sky-300 border border-sky-800/80 px-2 py-1.5 rounded-lg text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap cursor-pointer"
+                                title="แบ่งช่วง กม. นี้ออกเป็น ๒ ช่วงย่อย"
+                              >
+                                <Split className="w-3.5 h-3.5" /> แบ่งช่วง
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMergeModalIncident(r);
+                                  setTargetMergeIncidentId("");
+                                }}
+                                className="bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 border border-indigo-800/80 px-2 py-1.5 rounded-lg text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap cursor-pointer"
+                                title="รวมช่วง กม. นี้เข้ากับช่วงย่อยอื่นในสายทางเดียวกัน"
+                              >
+                                <Merge className="w-3.5 h-3.5" /> รวมช่วง
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteRoute(r.id)}
+                                className="bg-red-950/70 hover:bg-red-800 text-red-300 p-1.5 rounded-lg text-xs transition border border-red-900/50 cursor-pointer"
+                                title="ลบช่วงนี้ (กู้คืนได้)"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );

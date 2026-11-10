@@ -460,6 +460,22 @@ export function MapManagementTab({
     }
   }, [editingRoute, systemData]);
 
+  // Listen to preset flood context when adding segment from parent event
+  useEffect(() => {
+    const handlePresetContext = (e: any) => {
+      const ctx = e.detail;
+      if (!ctx) return;
+      setRouteMode("FLOOD");
+      if (ctx.routeNo) setRouteNo(ctx.routeNo);
+      if (ctx.sectionName) {
+        setSectionName(ctx.sectionName);
+        sectionNameManuallyEdited.current = true;
+      }
+    };
+    window.addEventListener("doh:preset-flood-context", handlePresetContext);
+    return () => window.removeEventListener("doh:preset-flood-context", handlePresetContext);
+  }, []);
+
   // Listen to pickedCoordinate from map
   useEffect(() => {
     if (!pickedCoordinate) return;

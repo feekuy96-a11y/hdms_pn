@@ -246,3 +246,62 @@
   1. **Edge Function:** Deploy `hdms-api` (`supabase functions deploy hdms-api --no-verify-jwt`)
   2. **เว็บไซต์:** Push ขึ้น GitHub (GitHub Pages deploy ผ่าน GitHub Actions)
   (ขั้นตอน SQL ไม่ต้องทำ)
+
+### [UPDATE-066] 2026-11-11 Phase 5 เต็มรูปแบบ — Adaptive GIS Markers 3 ระดับ, Popup Layout มาตรฐานสูง, Google Maps ทางเลี่ยง, แก้ปุ่มนำทางลงน้ำท่วม, ปรับปรุง UI แอดมิน & เอกสารกลาง
+- **ไฟล์:**
+  - `lib/detour-navigation.ts` (ใหม่)
+  - `docs/KNOWN_ISSUES.md` (ใหม่)
+  - `tests/e2e/detour-navigation.spec.ts` (ใหม่)
+  - `app/globals.css` (แก้)
+  - `app/page.tsx` (แก้)
+  - `components/map/LongdoGisMap.tsx` (แก้)
+  - `components/admin/tabs/GisDataImportTab.tsx` (แก้)
+  - `components/admin/tabs/DetourManagementTab.tsx` (แก้)
+  - `components/admin/tabs/IncidentRegistryTab.tsx` (แก้)
+  - `components/admin/tabs/MapManagementTab.tsx` (แก้)
+  - `components/admin/AdminConsole.tsx` (แก้)
+  - `db/default-data.ts` (แก้)
+  - `AGENTS.md` (แก้)
+  - `docs/UI_CONTRACT.md` (แก้)
+  - `docs/BACKLOG.md` (แก้)
+  - `docs/CHANGELOG.md` (แก้)
+- **ทำอะไร:**
+  1. **แก้ไขข้อเสนอแนะเชิงรุกข้อที่ 1 (Proactive Finding #1):**
+     - ใน `app/page.tsx`: แก้ไขปุ่ม "นำทาง" ใน Dialog รายละเอียดจุดน้ำท่วมของประชาชน (`selectedFlood`) จากเดิมที่นำทางตรงไปยังพิกัดจุดน้ำท่วม (`selectedFlood.lat_start`) ซึ่งเป็นอันตรายต่อประชาชน ให้เปลี่ยนเป็นการคำนวณและเปิดเส้นทางเลี่ยงที่ปลอดภัยที่ผูกไว้แทน โดยส่งต่อไปยัง Universal Google Maps Navigation
+  2. **แก้ไขข้อเสนอแนะเชิงรุกข้อที่ 2 (Proactive Finding #2):**
+     - ซิงค์ 5 สถานะการจราจร (`PASSABLE`, `LIGHT_VEHICLES_ONLY`, `ONE_LANE`, `CLOSED`, `WARNING`) ระหว่างหมุด Adaptive GIS Markers, Popup บนแผนที่, และการ์ดข้อมูล ให้ตรงกัน 100% ตามกฎ R1
+  3. **ข้อบังคับสูงสุด Popup Layout (Highest Directive):**
+     - ใน `app/globals.css`: ปรับ `.leaflet-popup-content-wrapper` ให้ `padding: 0` ขอบเดี่ยวคมชัด 1px slate-800 ไร้กรอบซ้อนกรอบ (No double borders/cards)
+     - ใน `components/map/LongdoGisMap.tsx`: ปรับแต่ง HTML Popup ทุกประเภท (ทางหลวง, ทางเลี่ยง, จุดน้ำท่วม, สำนักงาน) ให้หัวเรื่อง รหัสสายทาง และประเภททางหลวง แสดงผลเป็นข้อความชุดเดียวกันในบรรทัดเดียวเมื่อพื้นที่พอเพียง ไม่ตัดบรรทัดแปลกแยก
+  4. **Task 5.1 Adaptive GIS Markers 3 ระดับ Zoom:**
+     - ซูมไกล (Zoom <= 10): แสดงเฉพาะไอคอนสถานะน้ำท่วม/การจราจรแบบกะทัดรัด
+     - ซูมกลาง (Zoom 11..13): แสดงไอคอน + หมายเลขทางหลวง
+     - ซูมใกล้ (Zoom >= 14): แสดงแคปซูลข้อมูลเต็มรูปแบบ (ไอคอน, หมายเลขทางหลวง, ระดับน้ำ ซม., สถานะการจราจร)
+     - เพิ่มกลไก Screen-space De-overlapping คำนวณ offset ป้องกันป้ายซ้อนทับกันเมื่อมีหลายจุดน้ำท่วมใกล้กัน
+  5. **Task 5.2 Flood Report UX/UI:**
+     - ใน `IncidentRegistryTab.tsx`: ขยายตารางเต็มความกว้างหน้าจอ จัดกลุ่มปุ่มคำสั่งหลักและปุ่มบริหารจัดการช่วงอย่างเป็นระเบียบด้วย `whitespace-nowrap` ไม่ตกบรรทัด
+     - ส่ง Context เหตุการณ์น้ำท่วมไปยังฟอร์มเพิ่มช่วงเหตุการณ์อัตโนมัติ เพื่อความสะดวกรวดเร็วของเจ้าหน้าที่
+  6. **Task 5.3 Highway Management UI:**
+     - ใน `GisDataImportTab.tsx`: เพิ่มช่องค้นหาอัจฉริยะ (ค้นหาเลขหรือชื่อสายทาง) และตัวกรอง 3 มิติ (ประเภททางหลวง, หมวดทางหลวง/หน่วยงาน, สถานะการแสดงผล)
+     - ตรึงคอลัมน์สำคัญ (Sticky columns): ลำดับ `#`, ปุ่มเปิด/ปิดตา `Eye/EyeOff`, และคอลัมน์ปุ่ม `จัดการ`
+     - รวมคอลัมน์ช่วง กม. และระยะทางเป็นคอลัมน์เดียว รวมคอลัมน์ช่องจราจรและชนิดผิวทางเป็นคอลัมน์เดียว
+  7. **Task 5.4 Detour Management UI:**
+     - ใน `DetourManagementTab.tsx`: เพิ่มการแสดงผลแบบ Responsive Card View บนมือถือ และตาราง Compact บนเดสก์ท็อป
+     - เพิ่มแท็บตรวจสอบคำแนะนำการเดินทาง Turn-by-Turn ตามทิศทาง A ➔ B และ B ➔ A พร้อมปุ่มทดสอบเปิด Google Maps Navigation
+     - เพิ่มช่องกรอกและจัดเก็บ Google Maps URLs ที่ผ่านการอนุมัติล่วงหน้าใน `detour_meta`
+  8. **Task 5.5 GIS Popup Improvements:**
+     - Popup ของทางเลี่ยงแสดงทิศทาง A ➔ B และ B ➔ A ชัดเจน พร้อมปุ่มนำทาง Google Maps และปุ่มเปิดหน้าต่างรายละเอียดทางเลี่ยงฉบับเต็ม
+     - ควบคุมความสูงสูงสุด `max-h-[75vh]` พร้อม Scrollbar อัตโนมัติ ป้องกันการบังพื้นที่แผนที่
+  9. **Task 5.7 Google Maps Detour Navigation Architecture:**
+     - สร้าง `lib/detour-navigation.ts` รองรับกระบวนการ 5 ขั้นตอน (Approved URL -> Geometry with Waypoints -> Reversed Direction -> Conflict Detection -> Fallback Guard)
+     - ป้องกัน URL ล้นด้วยการตัดทอน Waypoints สำคัญไม่เกิน 8 จุด และตรวจจับกรณีเส้นทางเลี่ยงตัดผ่านถนนที่ถูกสั่งปิด
+  10. **Task 5.8 AI Rules & Documentation:**
+     - สร้าง `docs/KNOWN_ISSUES.md` บันทึกข้อจำกัดเชิงเทคนิคและหลักฐานการทดสอบ
+     - อัปเดต `AGENTS.md`, `docs/UI_CONTRACT.md`, `docs/BACKLOG.md`
+- **ตรวจแล้ว:**
+  - `npm run lint` (`--max-warnings=0`): ผ่าน 100%
+  - `npm run typecheck` (`tsc --noEmit`): ผ่าน 100%
+  - `NEXT_OUTPUT=export next build`: ผ่าน 100% สร้าง Static pages 6/6 หน้าสมบูรณ์
+  - `npx playwright test tests/e2e/detour-navigation.spec.ts`: ผ่าน 12/12 ข้อ
+  - `npx playwright test tests/e2e/smoke.spec.ts`: ผ่าน 8/8 ข้อ (Phase 1–4 regression ทดสอบสมบูรณ์)
+- **ลำดับ deploy:** เว็บไซต์ (GitHub Pages) ขั้นเดียว ไม่กระทบ Database หรือ Edge Function

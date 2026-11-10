@@ -20,6 +20,7 @@ import {
   Save,
   Compass,
   Route,
+  Navigation,
 } from "lucide-react";
 import {
   deleteRouteAction,
@@ -29,7 +30,9 @@ import {
 import {
   extractDirectionalAdvice,
   generateAutoDetourAdvice,
+  splitDetourAdviceByDirection,
 } from "@/lib/gis-utils";
+import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
 import { parseFloodDirectionMeta } from "@/lib/flood-event-schema";
 import { exportLineFeatures, GisExportFormat, parseLineCoordinates } from "@/lib/gis-export";
 
@@ -60,6 +63,7 @@ export function DetourManagementTab({
   const [floodFilter, setFloodFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewingDetour, setViewingDetour] = useState<DetourRoute | null>(null);
+  const [viewingDetourDir, setViewingDetourDir] = useState<"FORWARD" | "REVERSE">("FORWARD");
 
   // Quick In-Modal Editor State
   const [editingDetour, setEditingDetour] = useState<DetourRoute | null>(null);
@@ -67,6 +71,8 @@ export function DetourManagementTab({
   const [editDetourRefId, setEditDetourRefId] = useState("");
   const [editDetourDesc, setEditDetourDesc] = useState("");
   const [editDetourAdviceView, setEditDetourAdviceView] = useState<"FORWARD" | "REVERSE" | "COMBINED">("COMBINED");
+  const [editDetourGoogleMapsUrlFwd, setEditDetourGoogleMapsUrlFwd] = useState("");
+  const [editDetourGoogleMapsUrlRev, setEditDetourGoogleMapsUrlRev] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedDetourIds, setSelectedDetourIds] = useState<Set<string>>(() => new Set());
@@ -130,6 +136,8 @@ export function DetourManagementTab({
     setEditDetourDesc(d.description || "");
     setEditIsActive(d.is_active !== false);
     setEditDetourAdviceView("COMBINED");
+    setEditDetourGoogleMapsUrlFwd(d.detour_meta?.google_maps_url_forward || d.detour_meta?.google_maps_url || "");
+    setEditDetourGoogleMapsUrlRev(d.detour_meta?.google_maps_url_reverse || "");
   };
 
   // Auto Generate Advice inside Modal
@@ -172,6 +180,9 @@ export function DetourManagementTab({
       const updatedDetourMeta = {
         ...(editingDetour.detour_meta || {}),
         eventId: linkedEventId,
+        google_maps_url_forward: editDetourGoogleMapsUrlFwd.trim() || undefined,
+        google_maps_url_reverse: editDetourGoogleMapsUrlRev.trim() || undefined,
+        google_maps_url: editDetourGoogleMapsUrlFwd.trim() || undefined,
       };
 
       const res = await upsertRouteAction({
@@ -423,170 +434,422 @@ export function DetourManagementTab({
           </button>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-xl">
-          <table className="w-full text-left text-xs text-slate-300">
-            <thead className="bg-[#091122] text-slate-400 font-heading border-b border-slate-800">
-              <tr>
-                <th className="p-3 w-10 text-center">#</th>
-                <th className="p-3 w-20 text-center">สถานะ</th>
-                <th className="p-3 min-w-[180px]">ชื่อเส้นทางเลี่ยง</th>
-                <th className="p-3 min-w-[160px]">ผูกกับจุดน้ำท่วม</th>
-                <th className="p-3 min-w-[220px]">คำแนะนำการเดินทาง (ไป-กลับ)</th>
-                <th className="p-3 w-24 text-center">พิกัด/โหนด</th>
-                <th className="p-3 w-24 text-center">อัปเดต</th>
-                <th className="p-3 text-right min-w-[140px]">การจัดการ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/80 font-body">
-              {filteredDetours.map((item, idx) => {
-                const linkedFlood = floodList.find((f) => f.id === item.flood_id_ref);
-                const ext = extractDirectionalAdvice(item.description || "");
-                const coordsCount = Array.isArray(item.coordinates_json) ? item.coordinates_json.length : 0;
+        <div className="space-y-3">
+          {/* Mobile Card View (จอแคบ / มือถือ) */}
+          <div className="block md:hidden space-y-3">
+            {filteredDetours.map((item, idx) => {
+              const linkedFlood = floodList.find((f) => f.id === item.flood_id_ref);
+              const ext = extractDirectionalAdvice(item.description || "");
 
-                return (
-                  <tr
-                    key={item.id}
-                    onClick={() => setViewingDetour(item)}
-                    className={`hover:bg-slate-900/60 transition ${
-                      !item.is_active ? "opacity-50 bg-slate-950/40" : ""
-                    }`}
-                  >
-                    <td className="p-3 text-center font-mono text-slate-400"><div className="flex items-center justify-center gap-2"><input type="checkbox" aria-label={`เลือกทางเลี่ยง ${item.route_name}`} checked={selectedDetourIds.has(item.id)} onClick={(event) => event.stopPropagation()} onChange={(event) => setSelectedDetourIds((previous) => { const next = new Set(previous); if (event.target.checked) next.add(item.id); else next.delete(item.id); return next; })} className="h-4 w-4 accent-amber-500" />{idx + 1}</div></td>
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => setViewingDetour(item)}
+                  className={`p-3.5 rounded-2xl border border-slate-800 bg-slate-950/80 shadow-md space-y-2.5 cursor-pointer hover:border-slate-700 transition ${
+                    !item.is_active ? "opacity-60" : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`เลือกทางเลี่ยง ${item.route_name}`}
+                        checked={selectedDetourIds.has(item.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) =>
+                          setSelectedDetourIds((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(item.id);
+                            else next.delete(item.id);
+                            return next;
+                          })
+                        }
+                        className="h-4 w-4 accent-amber-500 rounded"
+                      />
+                      <span className="font-heading font-black text-sm text-white">{item.route_name}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleStatus(item.id, item.is_active);
+                      }}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border whitespace-nowrap transition ${
+                        item.is_active
+                          ? "bg-emerald-950 text-emerald-300 border-emerald-600"
+                          : "bg-slate-900 text-slate-400 border-slate-700"
+                      }`}
+                    >
+                      {item.is_active ? "เปิดใช้งาน" : "ปิดชั่วคราว"}
+                    </button>
+                  </div>
 
-                    {/* Status Toggle Switch */}
-                    <td className="p-3 text-center" onClick={(event) => event.stopPropagation()}>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className="text-sky-300 font-medium">
+                      {item.direction_mode === "FORWARD_ONLY"
+                        ? "→ เฉพาะขาไป (A → B)"
+                        : item.direction_mode === "REVERSE_ONLY"
+                        ? "→ เฉพาะขากลับ (B → A)"
+                        : "⇄ เดินรถ ๒ ทิศทาง (A ⇄ B)"}
+                    </span>
+                    {linkedFlood && (
+                      <span className="bg-amber-400/20 text-amber-300 border border-amber-500/40 text-[10px] px-1.5 py-0.2 rounded font-bold">
+                        ผูก ทล.{linkedFlood.route_no} ({linkedFlood.section_name})
+                      </span>
+                    )}
+                  </div>
+
+                  {ext.hasBoth ? (
+                    <div className="text-[11px] space-y-1 bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                      <div className="text-amber-200 line-clamp-1">
+                        <strong className="text-amber-400">🚗 ขาไป:</strong> {ext.forward}
+                      </div>
+                      <div className="text-sky-200 line-clamp-1">
+                        <strong className="text-sky-400">🚙 ขากลับ:</strong> {ext.reverse}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed">
+                      {item.description || "-"}
+                    </p>
+                  )}
+
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400 font-mono">
+                      {Array.isArray(item.coordinates_json) ? item.coordinates_json.length : 0} จุดโหนด
+                    </span>
+                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        onClick={() => handleToggleStatus(item.id, item.is_active)}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border transition ${
-                          item.is_active
-                            ? "bg-emerald-950 text-emerald-300 border-emerald-600 hover:bg-emerald-900"
-                            : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"
-                        }`}
-                        title={item.is_active ? "คลิกเพื่อปิดใช้งานชั่วคราว" : "คลิกเพื่อเปิดใช้งาน"}
+                        onClick={() => handleOpenEditModal(item)}
+                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg font-heading font-bold text-xs border border-slate-700"
                       >
-                        {item.is_active ? "เปิดใช้งาน" : "ปิดชั่วคราว"}
+                        แก้ไข
                       </button>
-                    </td>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDetour(item)}
+                        className="p-1 bg-red-950/60 text-red-400 hover:bg-red-900 rounded-lg border border-red-900/40"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
-                    {/* Detour Name */}
-                    <td className="p-3">
-                      <div className="font-heading font-bold text-white text-xs flex items-center gap-1.5">
-                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-slate-950" title="เส้นทางเลี่ยง"><Route className="h-4 w-4" /></span>
-                        <div>
-                          <span>{item.route_name}</span>
-                          <span className="block text-[10px] font-normal text-sky-300 mt-0.5">
-                            {item.direction_mode === "FORWARD_ONLY"
-                              ? "→ เฉพาะขาไป (A → B)"
-                              : item.direction_mode === "REVERSE_ONLY"
-                              ? "→ เฉพาะขากลับ (B → A)"
-                              : "⇄ เดินรถ 2 ทิศทาง (A-B / B-A)"}
-                          </span>
+          {/* Desktop & Tablet Table View */}
+          <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-xl">
+            <table className="w-full text-left text-xs text-slate-300">
+              <thead className="bg-[#091122] text-slate-400 font-heading border-b border-slate-800">
+                <tr>
+                  <th className="p-3 w-10 text-center">#</th>
+                  <th className="p-3 w-20 text-center whitespace-nowrap">สถานะ</th>
+                  <th className="p-3 min-w-[170px] whitespace-nowrap">ชื่อเส้นทางเลี่ยง</th>
+                  <th className="p-3 min-w-[150px] whitespace-nowrap">ผูกกับจุดน้ำท่วม</th>
+                  <th className="p-3 min-w-[200px]">คำแนะนำการเดินทาง (ไป-กลับ)</th>
+                  <th className="p-3 w-20 text-center whitespace-nowrap">พิกัด/โหนด</th>
+                  <th className="p-3 w-20 text-center whitespace-nowrap">อัปเดต</th>
+                  <th className="p-3 text-right min-w-[130px] whitespace-nowrap">การจัดการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/80 font-body">
+                {filteredDetours.map((item, idx) => {
+                  const linkedFlood = floodList.find((f) => f.id === item.flood_id_ref);
+                  const ext = extractDirectionalAdvice(item.description || "");
+                  const coordsCount = Array.isArray(item.coordinates_json) ? item.coordinates_json.length : 0;
+
+                  return (
+                    <tr
+                      key={item.id}
+                      onClick={() => setViewingDetour(item)}
+                      className={`hover:bg-slate-900/60 transition ${
+                        !item.is_active ? "opacity-50 bg-slate-950/40" : ""
+                      }`}
+                    >
+                      <td className="p-3 text-center font-mono text-slate-400">
+                        <div className="flex items-center justify-center gap-2">
+                          <input
+                            type="checkbox"
+                            aria-label={`เลือกทางเลี่ยง ${item.route_name}`}
+                            checked={selectedDetourIds.has(item.id)}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) =>
+                              setSelectedDetourIds((previous) => {
+                                const next = new Set(previous);
+                                if (event.target.checked) next.add(item.id);
+                                else next.delete(item.id);
+                                return next;
+                              })
+                            }
+                            className="h-4 w-4 accent-amber-500 rounded"
+                          />
+                          {idx + 1}
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Linked Flood Incident */}
-                    <td className="p-3">
-                      {linkedFlood ? (
-                        <div>
-                          <span className="bg-amber-400/20 text-amber-300 border border-amber-500/40 text-[10px] font-heading font-bold px-1.5 py-0.5 rounded">
-                            ทล.{linkedFlood.route_no}
+                      {/* Status Toggle Switch */}
+                      <td className="p-3 text-center whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(item.id, item.is_active)}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border whitespace-nowrap transition cursor-pointer ${
+                            item.is_active
+                              ? "bg-emerald-950 text-emerald-300 border-emerald-600 hover:bg-emerald-900"
+                              : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"
+                          }`}
+                          title={item.is_active ? "คลิกเพื่อปิดใช้งานชั่วคราว" : "คลิกเพื่อเปิดใช้งาน"}
+                        >
+                          {item.is_active ? "เปิดใช้งาน" : "ปิดชั่วคราว"}
+                        </button>
+                      </td>
+
+                      {/* Detour Name */}
+                      <td className="p-3">
+                        <div className="font-heading font-bold text-white text-xs flex items-center gap-1.5">
+                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-slate-950" title="เส้นทางเลี่ยง">
+                            <Route className="h-4 w-4" />
                           </span>
-                          <span className="block text-[11px] text-slate-200 mt-1 truncate max-w-[160px]" title={linkedFlood.section_name}>
-                            {linkedFlood.section_name}
-                          </span>
+                          <div>
+                            <span>{item.route_name}</span>
+                            <span className="block text-[10px] font-normal text-sky-300 mt-0.5">
+                              {item.direction_mode === "FORWARD_ONLY"
+                                ? "→ เฉพาะขาไป (A → B)"
+                                : item.direction_mode === "REVERSE_ONLY"
+                                ? "→ เฉพาะขากลับ (B → A)"
+                                : "⇄ เดินรถ ๒ ทิศทาง (A ⇄ B)"}
+                            </span>
+                          </div>
                         </div>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 italic">-- ไม่ได้ผูก --</span>
-                      )}
-                    </td>
+                      </td>
 
-                    {/* Directional Advice */}
-                    <td className="p-3">
-                      <div className="space-y-1">
-                        {ext.hasBoth ? (
-                          <>
-                            <div className="text-[11px] text-amber-200 line-clamp-1" title={ext.forward}>
-                              <span className="text-amber-400 font-bold">🚗 ขาไป:</span> {ext.forward}
-                            </div>
-                            <div className="text-[11px] text-sky-200 line-clamp-1" title={ext.reverse}>
-                              <span className="text-sky-400 font-bold">🚙 ขากลับ:</span> {ext.reverse}
-                            </div>
-                          </>
+                      {/* Linked Flood Incident */}
+                      <td className="p-3">
+                        {linkedFlood ? (
+                          <div>
+                            <span className="bg-amber-400/20 text-amber-300 border border-amber-500/40 text-[10px] font-heading font-bold px-1.5 py-0.5 rounded">
+                              ทล.{linkedFlood.route_no}
+                            </span>
+                            <span className="block text-[11px] text-slate-200 mt-1 truncate max-w-[160px]" title={linkedFlood.section_name}>
+                              {linkedFlood.section_name}
+                            </span>
+                          </div>
                         ) : (
-                          <div className="text-[11px] text-slate-300 line-clamp-2" title={item.description}>
-                            {item.description || "-"}
+                          <span className="text-[11px] text-slate-400 italic">-- ไม่ได้ผูก --</span>
+                        )}
+                      </td>
+
+                      {/* Directional Advice */}
+                      <td className="p-3">
+                        <div className="space-y-1">
+                          {ext.hasBoth ? (
+                            <>
+                              <div className="text-[11px] text-amber-200 line-clamp-1" title={ext.forward}>
+                                <span className="text-amber-400 font-bold">🚗 ขาไป:</span> {ext.forward}
+                              </div>
+                              <div className="text-[11px] text-sky-200 line-clamp-1" title={ext.reverse}>
+                                <span className="text-sky-400 font-bold">🚙 ขากลับ:</span> {ext.reverse}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-[11px] text-slate-300 line-clamp-2" title={item.description}>
+                              {item.description || "-"}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Coordinates / Nodes */}
+                      <td className="p-3 text-center font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                        <div>{coordsCount} จุด</div>
+                        {item.lat_start && item.lon_start && (
+                          <div className="text-[9px] text-slate-400">
+                            {item.lat_start.toFixed(2)}, {item.lon_start.toFixed(2)}
                           </div>
                         )}
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Coordinates / Nodes */}
-                    <td className="p-3 text-center font-mono text-[11px] text-slate-400">
-                      <div>{coordsCount} จุด</div>
-                      {item.lat_start && item.lon_start && (
-                        <div className="text-[9px] text-slate-400">
-                          {item.lat_start.toFixed(2)}, {item.lon_start.toFixed(2)}
-                        </div>
-                      )}
-                    </td>
+                      {/* Updated At */}
+                      <td className="p-3 text-center text-[10px] text-slate-400 whitespace-nowrap">
+                        {item.updated_at ? new Date(item.updated_at).toLocaleDateString("th-TH") : "-"}
+                      </td>
 
-                    {/* Updated At */}
-                    <td className="p-3 text-center text-[10px] text-slate-400 whitespace-nowrap">
-                      {item.updated_at ? new Date(item.updated_at).toLocaleDateString("th-TH") : "-"}
-                    </td>
+                      {/* Actions */}
+                      <td className="p-3 text-right whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+                        <div className="inline-flex items-center gap-1">
+                          {/* Focus on map */}
+                          {item.lat_start && item.lon_start && onFocusCoordinates && (
+                            <button
+                              type="button"
+                              onClick={() => onFocusCoordinates([item.lon_start, item.lat_start])}
+                              title="ซูมไปยังเส้นทางบนแผนที่"
+                              className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-sky-400 border border-slate-700 transition cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                          )}
 
-                    {/* Actions */}
-                    <td className="p-3 text-right whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                      <div className="inline-flex items-center gap-1">
-                        {/* Focus on map */}
-                        {item.lat_start && item.lon_start && onFocusCoordinates && (
+                          {/* Quick Edit Modal */}
                           <button
                             type="button"
-                            onClick={() => onFocusCoordinates([item.lon_start, item.lat_start])}
-                            title="ซูมไปยังเส้นทางบนแผนที่"
-                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-sky-400 border border-slate-700 transition"
+                            onClick={() => handleOpenEditModal(item)}
+                            title="แก้ไขรายละเอียด & คำแนะนำ"
+                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-700 transition cursor-pointer"
                           >
-                            <Eye className="w-3.5 h-3.5" />
+                            <Edit className="w-3.5 h-3.5" />
                           </button>
-                        )}
 
-                        {/* Quick Edit Modal */}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditModal(item)}
-                          title="แก้ไขรายละเอียด & คำแนะนำ"
-                          className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-700 transition"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* Delete Detour */}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteDetour(item)}
-                          title="ลบเส้นทางเลี่ยง"
-                          className="p-1.5 rounded-lg bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 hover:border-rose-600 transition"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                          {/* Delete */}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDetour(item)}
+                            title="ลบเส้นทางเลี่ยง"
+                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 hover:border-rose-600 transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {viewingDetour && (
-        <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/70 p-2 sm:items-center sm:p-4" onClick={() => setViewingDetour(null)}>
-          <section role="dialog" aria-modal="true" aria-label="รายละเอียดเส้นทางเลี่ยง" className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5 text-slate-100 shadow-xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">{viewingDetour.route_name}</h2><p className="mt-1 text-sm text-slate-400">รายละเอียดเส้นทางเลี่ยง</p></div><button type="button" aria-label="ปิดรายละเอียด" onClick={() => setViewingDetour(null)} className="rounded-lg p-2 hover:bg-slate-800"><X className="h-5 w-5" /></button></div>
-            <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2"><div><dt className="text-slate-400">สถานะ</dt><dd>{viewingDetour.is_active ? "เปิดใช้งาน" : "ปิดชั่วคราว"}</dd></div><div><dt className="text-slate-400">จุดน้ำท่วมที่เกี่ยวข้อง</dt><dd>{(() => { const flood = floodList.find((item) => item.id === viewingDetour.flood_id_ref); return flood ? `ทล.${flood.route_no} ${flood.section_name}` : "ทางเลี่ยงอิสระ"; })()}</dd></div><div><dt className="text-slate-400">พิกัดจุด A</dt><dd>{viewingDetour.lat_start}, {viewingDetour.lon_start}</dd></div><div><dt className="text-slate-400">พิกัดจุด B</dt><dd>{viewingDetour.lat_end}, {viewingDetour.lon_end}</dd></div><div className="sm:col-span-2"><dt className="text-slate-400">คำแนะนำการเดินทาง</dt><dd className="whitespace-pre-wrap">{viewingDetour.description || "ยังไม่มีคำแนะนำการเดินทาง"}</dd></div><div className="sm:col-span-2"><dt className="text-slate-400">อัปเดตล่าสุด</dt><dd>{new Date(viewingDetour.updated_at).toLocaleString("th-TH")}</dd></div></dl>
-            <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => { const item = viewingDetour; setViewingDetour(null); handleOpenEditModal(item); }} className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950">แก้ไข</button><button type="button" onClick={() => { const item = viewingDetour; setViewingDetour(null); handleDeleteDetour(item); }} className="rounded-lg border border-rose-500 px-4 py-2 text-sm text-rose-300">ลบ</button></div>
+        <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/75 backdrop-blur-sm p-2 sm:items-center sm:p-4" onClick={() => setViewingDetour(null)}>
+          <section role="dialog" aria-modal="true" aria-label="รายละเอียดเส้นทางเลี่ยง" className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5 text-slate-100 shadow-2xl space-y-4" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
+              <div>
+                <h2 className="text-lg font-heading font-black text-white flex items-center gap-2">
+                  <Signpost className="w-5 h-5 text-amber-400" />
+                  <span>{viewingDetour.route_name}</span>
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {viewingDetour.direction_mode === "FORWARD_ONLY" ? "เฉพาะขาไป (A → B)" : viewingDetour.direction_mode === "REVERSE_ONLY" ? "เฉพาะขากลับ (B → A)" : "เดินรถ ๒ ทิศทาง (A ⇄ B)"}
+                </p>
+              </div>
+              <button type="button" aria-label="ปิดรายละเอียด" onClick={() => setViewingDetour(null)} className="rounded-xl p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <dl className="grid grid-cols-1 gap-2.5 text-xs sm:grid-cols-2">
+              <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                <dt className="text-slate-400">สถานะการใช้งาน</dt>
+                <dd className="font-bold text-white mt-0.5">
+                  <span className={`inline-block px-2 py-0.5 rounded text-[10px] ${viewingDetour.is_active ? "bg-emerald-950 text-emerald-300 border border-emerald-600" : "bg-slate-800 text-slate-400 border border-slate-700"}`}>
+                    {viewingDetour.is_active ? "เปิดใช้งาน" : "ปิดชั่วคราว"}
+                  </span>
+                </dd>
+              </div>
+              <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                <dt className="text-slate-400">จุดน้ำท่วมที่ผูกไว้</dt>
+                <dd className="font-bold text-amber-300 mt-0.5">
+                  {(() => {
+                    const flood = floodList.find((item) => item.id === viewingDetour.flood_id_ref);
+                    return flood ? `ทล.${flood.route_no} ${flood.section_name}` : "ทางเลี่ยงอิสระ (ไม่ผูกจุดน้ำท่วม)";
+                  })()}
+                </dd>
+              </div>
+              <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 font-mono">
+                <dt className="text-slate-400 font-sans">พิกัดจุด A (เริ่มต้น)</dt>
+                <dd className="text-white mt-0.5">{viewingDetour.lat_start}, {viewingDetour.lon_start}</dd>
+              </div>
+              <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 font-mono">
+                <dt className="text-slate-400 font-sans">พิกัดจุด B (สิ้นสุด)</dt>
+                <dd className="text-white mt-0.5">{viewingDetour.lat_end}, {viewingDetour.lon_end}</dd>
+              </div>
+            </dl>
+
+            {/* Directional Tabs for Turn-by-Turn Advice */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-heading font-bold text-amber-300">คำแนะนำการเดินทางทีละขั้นตอน:</span>
+                <div className="flex bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-[10px] font-heading font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setViewingDetourDir("FORWARD")}
+                    className={`px-2.5 py-1 rounded transition cursor-pointer ${viewingDetourDir === "FORWARD" ? "bg-amber-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"}`}
+                  >
+                    🚗 ขาไป (A → B)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewingDetourDir("REVERSE")}
+                    className={`px-2.5 py-1 rounded transition cursor-pointer ${viewingDetourDir === "REVERSE" ? "bg-amber-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"}`}
+                  >
+                    🚙 ขากลับ (B → A)
+                  </button>
+                </div>
+              </div>
+              {(() => {
+                const parsed = splitDetourAdviceByDirection(viewingDetour.description || "", viewingDetour.direction_mode);
+                const adviceText = viewingDetourDir === "FORWARD" ? parsed.forwardText : parsed.reverseText;
+                return (
+                  <div className="rounded-xl border border-amber-500/20 bg-slate-950/80 p-3 text-xs text-amber-100/95 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto font-sans">
+                    {adviceText || "ไม่มีคำแนะนำการเดินทางเฉพาะทิศทาง"}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Google Maps Test Navigation */}
+            {(() => {
+              const nav = resolveDetourGoogleMapsNavigation(viewingDetour, viewingDetourDir, floodList);
+              return (
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-heading text-slate-300">
+                      {nav.source === "APPROVED_URL" ? "✅ ใช้ลิงก์ที่เจ้าหน้าที่อนุมัติไว้" : "🧭 สร้างเส้นทางและจุดผ่านทางอัตโนมัติ"}
+                    </span>
+                    {nav.isValid && nav.url ? (
+                      <a
+                        href={nav.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition"
+                      >
+                        <Navigation className="w-3.5 h-3.5" /> ทดสอบเปิด Google Maps ({viewingDetourDir === "FORWARD" ? "A → B" : "B → A"})
+                      </a>
+                    ) : (
+                      <span className="text-xs text-rose-400 font-medium">⚠️ {nav.warning}</span>
+                    )}
+                  </div>
+                  {nav.disclaimer && <p className="text-[10px] text-slate-400">{nav.disclaimer}</p>}
+                </div>
+              );
+            })()}
+
+            <div className="pt-3 border-t border-slate-800 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const item = viewingDetour;
+                  setViewingDetour(null);
+                  handleOpenEditModal(item);
+                }}
+                className="rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-heading font-bold text-slate-950 transition"
+              >
+                แก้ไขข้อมูล
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const item = viewingDetour;
+                  setViewingDetour(null);
+                  handleDeleteDetour(item);
+                }}
+                className="rounded-xl border border-rose-500/60 bg-rose-950/40 hover:bg-rose-900 px-4 py-2 text-xs font-heading font-bold text-rose-300 transition"
+              >
+                ลบทางเลี่ยง
+              </button>
+            </div>
           </section>
         </div>
       )}
@@ -726,6 +989,39 @@ export function DetourManagementTab({
                   placeholder="กรอกคำแนะนำการเดินทาง หรือกด 'วิเคราะห์คำแนะนำอัตโนมัติ'..."
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-mono leading-relaxed"
                 />
+              </div>
+
+              {/* Row 2.5: Approved Google Maps Navigation URLs */}
+              <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-heading font-bold text-emerald-400 flex items-center gap-1.5">
+                    <Navigation className="w-3.5 h-3.5" />
+                    <span>Google Maps URL ที่เจ้าหน้าที่ตรวจสอบและอนุมัติแล้ว (Optional)</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400">ถ้ามี จะใช้นำทางแทนการคำนวณอัตโนมัติ</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <span className="text-[11px] text-slate-300 block mb-1">ลิงก์ขาไป (A → B):</span>
+                    <input
+                      type="url"
+                      value={editDetourGoogleMapsUrlFwd}
+                      onChange={(e) => setEditDetourGoogleMapsUrlFwd(e.target.value)}
+                      placeholder="https://maps.app.goo.gl/... หรือ Google Maps URL"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-slate-300 block mb-1">ลิงก์ขากลับ (B → A):</span>
+                    <input
+                      type="url"
+                      value={editDetourGoogleMapsUrlRev}
+                      onChange={(e) => setEditDetourGoogleMapsUrlRev(e.target.value)}
+                      placeholder="https://maps.app.goo.gl/... หรือ Google Maps URL"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 font-mono"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Row 3: Active Status Switch */}

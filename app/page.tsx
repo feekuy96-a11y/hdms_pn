@@ -56,6 +56,7 @@ import {
   Droplets,
 } from "lucide-react";
 import { extractDirectionalAdvice, splitDetourAdviceByDirection } from "@/lib/gis-utils";
+import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
 import { parseFloodDirectionMeta, resolveEffectiveRoadSide, AFFECTED_ROAD_PART_LABELS } from "@/lib/flood-event-schema";
 import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
@@ -244,6 +245,19 @@ export default function HomePage() {
     }
     previousDataFingerprint.current = currentFingerprint;
   }, [systemData]);
+
+  // Listener for opening Detour Modal from map popups
+  useEffect(() => {
+    const handleOpenDetourModal = (e: any) => {
+      const detourId = e.detail;
+      const found = systemData.detourRoutes.find((d) => d.id === detourId);
+      if (found) {
+        setViewingDetourModal(found);
+      }
+    };
+    window.addEventListener("doh:open-detour-modal", handleOpenDetourModal);
+    return () => window.removeEventListener("doh:open-detour-modal", handleOpenDetourModal);
+  }, [systemData.detourRoutes]);
 
   useEffect(() => {
     if (!showDossier) return;
@@ -1202,14 +1216,33 @@ export default function HomePage() {
                         </div>
                       )}
 
-                      <a
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${selectedFlood.lat_start},${selectedFlood.lon_start}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-md shrink-0 transition"
-                      >
-                        <Navigation className="w-3.5 h-3.5" /> นำทาง
-                      </a>
+                      {(() => {
+                        const linkedDetour = selectedFloodDetours[0] || null;
+                        const detourNav = linkedDetour
+                          ? resolveDetourGoogleMapsNavigation(linkedDetour, citizenDetourDirection, systemData.floodRoutes)
+                          : null;
+
+                        if (detourNav && detourNav.isValid && detourNav.url) {
+                          return (
+                            <a
+                              href={detourNav.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-black text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-md shrink-0 transition"
+                            >
+                              <Navigation className="w-3.5 h-3.5" /> นำทางด้วยทางเลี่ยง
+                            </a>
+                          );
+                        }
+                        return (
+                          <span
+                            className="bg-slate-800 text-slate-400 font-heading text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 shrink-0 border border-slate-700"
+                            title="ยังไม่มีเส้นทางเลี่ยงที่ยืนยันสำหรับการนำทางอัตโนมัติ โปรดศึกษาคำแนะนำด้านล่างหรือโทร 1586"
+                          >
+                            <Navigation className="w-3.5 h-3.5 opacity-50" /> ยังไม่ยืนยันนำทาง
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -1490,29 +1523,51 @@ export default function HomePage() {
                   </div>
 
                   {/* Navigation and Actions */}
-                  <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center gap-2">
-                    <a
-                      href={`https://www.google.com/maps/dir/?api=1&destination=${modalDetourDirection === "FORWARD" ? viewingDetourModal.lat_start : viewingDetourModal.lat_end || viewingDetourModal.lat_start},${modalDetourDirection === "FORWARD" ? viewingDetourModal.lon_start : viewingDetourModal.lon_end || viewingDetourModal.lon_start}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 min-h-11 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black text-xs px-4 py-2.5 rounded-xl shadow-md transition flex items-center justify-center gap-2"
-                    >
-                      <Navigation className="w-4 h-4" /> นำทาง Google Maps ({modalDetourDirection === "FORWARD" ? "ไปจุด A" : "ไปจุด B"})
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (Number.isFinite(viewingDetourModal.lon_start) && Number.isFinite(viewingDetourModal.lat_start)) {
-                          setFocusCoordinates([viewingDetourModal.lon_start, viewingDetourModal.lat_start]);
-                        }
-                        setViewingDetourModal(null);
-                        setIsMobileDrawerOpen(false);
-                      }}
-                      className="min-h-11 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 font-heading font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      📍 ดูตำแหน่งบนแผนที่
-                    </button>
-                  </div>
+                  {(() => {
+                    const nav = resolveDetourGoogleMapsNavigation(
+                      viewingDetourModal,
+                      modalDetourDirection,
+                      systemData.floodRoutes
+                    );
+                    return (
+                      <div className="pt-2 border-t border-slate-800 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {nav.isValid && nav.url ? (
+                            <a
+                              href={nav.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 min-h-11 bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-black text-xs px-4 py-2.5 rounded-xl shadow-md transition flex items-center justify-center gap-2"
+                            >
+                              <Navigation className="w-4 h-4" /> นำทาง Google Maps ({modalDetourDirection === "FORWARD" ? "ขาไป A → B" : "ขากลับ B → A"})
+                            </a>
+                          ) : (
+                            <div className="flex-1 min-h-11 bg-slate-900 border border-amber-500/30 text-amber-300 font-heading text-xs px-3 py-2 rounded-xl flex items-center justify-center text-center">
+                              ⚠️ {nav.warning || "เส้นทางเลี่ยงในทิศทางนี้ยังไม่พร้อมสำหรับการนำทาง"}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (Number.isFinite(viewingDetourModal.lon_start) && Number.isFinite(viewingDetourModal.lat_start)) {
+                                setFocusCoordinates([viewingDetourModal.lon_start, viewingDetourModal.lat_start]);
+                              }
+                              setViewingDetourModal(null);
+                              setIsMobileDrawerOpen(false);
+                            }}
+                            className="min-h-11 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 font-heading font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            📍 ดูตำแหน่งบนแผนที่
+                          </button>
+                        </div>
+                        {nav.disclaimer && (
+                          <p className="text-[10px] text-slate-400 text-center leading-tight">
+                            {nav.disclaimer}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>

@@ -78,22 +78,30 @@
 
 /* Leaflet & Map Popups */
 .leaflet-popup-content-wrapper {
-  background: #0f172a !important;
+  background: #090d16 !important;
   color: #f8fafc !important;
-  border: 1px solid #f59e0b !important;
+  border: 1px solid #d97706 !important;
   border-radius: 12px !important;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.65), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.4 !important;
 }
 
 .leaflet-popup-tip {
-  background: #0f172a !important;
+  background: #090d16 !important;
 }
 
 .leaflet-popup-close-button {
-  color: #94a3b8 !important;
-  padding: 6px !important;
-  top: 4px !important;
+  color: #cbd5e1 !important;
+  padding: 8px !important;
+  top: 6px !important;
   right: 6px !important;
+  z-index: 20 !important;
 }
 
 .leaflet-popup-close-button:hover {
@@ -265,7 +273,7 @@
   animation: warningPulseGlow 2s infinite;
 }
 
-/* Map Capsule Pin Styling */
+/* Map Capsule Pin Styling & Adaptive Markers */
 .doh-map-capsule-pin {
   background: transparent !important;
   border: none !important;
@@ -274,27 +282,57 @@
 .doh-capsule-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   padding: 3px 8px;
   border-radius: 9999px;
   font-family: inherit;
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
   cursor: pointer;
-  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  user-select: none;
 }
 
 .doh-capsule-tag:hover {
-  transform: translateY(-2px) scale(1.08);
+  transform: translateY(-2px) scale(1.06);
+  z-index: 9999 !important;
 }
 
+/* Adaptive Zoom Sizes */
+.doh-capsule-zoom-far {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 9999px;
+}
+
+.doh-capsule-zoom-mid {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+.doh-capsule-zoom-near {
+  padding: 4px 10px;
+  font-size: 12px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.65);
+}
+
+/* 5 Traffic Status Colors + Pending */
 .doh-capsule-red {
   background: #b91c1c;
   color: #ffffff;
   border: 1.5px solid #fca5a5;
   animation: alertPulseGlow 1.8s infinite;
+}
+
+.doh-capsule-orange {
+  background: #c2410c;
+  color: #ffffff;
+  border: 1.5px solid #fed7aa;
+  animation: warningPulseGlow 2s infinite;
 }
 
 .doh-capsule-amber {
@@ -304,17 +342,17 @@
   animation: warningPulseGlow 2s infinite;
 }
 
-.doh-capsule-green {
-  background: #047857;
+.doh-capsule-sky {
+  background: #0284c7;
   color: #ffffff;
-  border: 1.5px solid #a7f3d0;
+  border: 1.5px solid #bae6fd;
 }
 
-.doh-capsule-orange {
-  background: #ea580c;
+.doh-capsule-emerald,
+.doh-capsule-green {
+  background: #059669;
   color: #ffffff;
-  border: 1.5px solid #fed7aa;
-  animation: warningPulseGlow 2s infinite;
+  border: 1.5px solid #a7f3d0;
 }
 
 .doh-capsule-slate {

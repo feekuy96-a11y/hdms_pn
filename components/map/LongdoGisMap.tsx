@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { SystemDataPayload, FloodRoute, DetourRoute, TimelineUpdate, DohOfficeLocation } from "@/db/default-data";
 import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { splitDetourAdviceByDirection } from "@/lib/gis-utils";
+import { getUnifiedTrafficStatus, resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
 import {
   groupFloodRoutesIntoEvents,
   ParentFloodEventGroup,
@@ -160,26 +161,30 @@ function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color: string
   const name = routeNameOf(props);
   const lengthKm = props.length_km || "";
   return `
-    <div class="text-xs p-2.5 min-w-[270px] font-body bg-slate-950 text-white rounded-xl border-2 shadow-2xl" style="border-color: ${color}">
-      <div class="flex items-center justify-between pb-1.5 border-b border-slate-800 gap-2">
-        <span class="text-white text-base font-bold font-heading tracking-wide">
-          ${code ? `ทล.${escapeHtml(code)} ` : ""}${escapeHtml(name)}
+    <div class="text-xs p-3 min-w-[280px] sm:min-w-[320px] max-w-[360px] font-body bg-slate-950 text-white shadow-2xl">
+      <!-- Header: สายทาง + ชื่อตอน + ประเภททางหลวง จัดวางต่อเนื่องในแถวเดียวกันเมื่อพื้นที่พอ -->
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800 gap-2 flex-wrap sm:flex-nowrap">
+        <div class="flex items-center gap-1.5 min-w-0">
+          ${code ? `<span class="bg-amber-400 text-slate-950 text-[11px] font-extrabold px-1.5 py-0.5 rounded font-heading whitespace-nowrap">ทล.${escapeHtml(code)}</span>` : ""}
+          <span class="text-white text-sm font-bold font-heading truncate">${escapeHtml(name)}</span>
+        </div>
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${featureIsMain ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-sky-500/20 text-sky-300 border border-sky-500/40"}">
+          ${featureIsMain ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"}
         </span>
       </div>
-      <div class="mt-2">
-        ${props.km_start !== undefined && props.km_start !== null && String(props.km_start).trim() !== "" ? `<p class="text-amber-300 text-[11px] mt-0.5 font-mono">ระหว่าง กม.${escapeHtml(formatKmPost(props.km_start))}${props.km_end !== undefined && props.km_end !== null && String(props.km_end).trim() !== "" ? ` ถึง กม.${escapeHtml(formatKmPost(props.km_end))}` : ""}</p>` : ""}
+
+      <div class="mt-2 text-slate-300 text-[11px]">
+        ${props.km_start !== undefined && props.km_start !== null && String(props.km_start).trim() !== "" ? `<p class="text-amber-300 text-[11px] font-mono">ช่วง กม.${escapeHtml(formatKmPost(props.km_start))}${props.km_end !== undefined && props.km_end !== null && String(props.km_end).trim() !== "" ? ` ถึง กม.${escapeHtml(formatKmPost(props.km_end))}` : ""}</p>` : ""}
       </div>
-      <div class="grid grid-cols-2 gap-1.5 mt-2.5 pt-2 border-t border-slate-800 text-[11px]">
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+
+      <div class="grid grid-cols-2 gap-2 mt-2.5 pt-2 border-t border-slate-800 text-[11px]">
+        <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
           <span class="text-slate-400 block text-[10px]">ระยะทาง</span>
           <strong class="text-amber-400 font-mono">${lengthKm ? `${escapeHtml(lengthKm)} กม.` : "ตามโครงข่าย"}</strong>
         </div>
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
+        <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
           <span class="text-slate-400 block text-[10px]">ช่องจราจร</span>
-          <strong class="text-sky-400 font-mono text-[10px]">${escapeHtml(props.lanes || "๔ ช่องจราจร")}</strong>
-        </div>
-        <div class="col-span-2 mt-0.5 rounded-lg border border-slate-700 bg-slate-900/90 px-2 py-1.5 text-center text-[10px] font-semibold text-amber-300">
-          ${featureIsMain ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"}
+          <strong class="text-sky-400 font-mono">${escapeHtml(props.lanes || "๔ ช่องจราจร")}</strong>
         </div>
       </div>
     </div>
@@ -193,24 +198,33 @@ function buildDetourPopupHtml(detour: DetourRoute, color: string, defaultDir: "F
   const isRev = defaultDir === "REVERSE";
 
   return `
-    <div class="text-xs p-2.5 min-w-[260px] max-w-[290px] font-body bg-slate-950 text-white rounded-xl border shadow-2xl" style="border-color: ${color}">
-      <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
-        <span style="color:${color}" class="text-base font-bold" aria-hidden="true">↪</span>
-        <h4 class="font-bold text-white text-sm font-heading leading-tight">${escapeHtml(detour.route_name)}</h4>
-      </div>
-      <div class="mt-2 flex flex-wrap gap-1">
-        <span class="rounded bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">${escapeHtml(detourDirectionLabel(dirMode))}</span>
-        <span class="rounded bg-slate-900 border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-300">${detour.flood_id_ref ? "เชื่อมโยงจุดน้ำท่วม" : "ทางเลี่ยงอิสระ"}</span>
+    <div class="text-xs p-3 min-w-[280px] sm:min-w-[320px] max-w-[360px] font-body bg-slate-950 text-white shadow-2xl">
+      <!-- Header: ไอคอน + ชื่อเส้นทางเลี่ยง -->
+      <div class="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <span style="color:${color}" class="text-base font-bold shrink-0" aria-hidden="true">↪</span>
+          <h4 class="font-bold text-white text-sm font-heading leading-tight truncate">${escapeHtml(detour.route_name)}</h4>
+        </div>
+        <span class="rounded bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold text-amber-300 whitespace-nowrap shrink-0">
+          ${escapeHtml(detourDirectionLabel(dirMode))}
+        </span>
       </div>
 
-      <!-- ปุ่มสลับทิศทางคำอธิบายทางเลี่ยง (A → B และ B → A) พร้อมเลือกทิศทางเริ่มต้นตามจุดน้ำท่วมอัตโนมัติ -->
+      <div class="mt-2 flex items-center justify-between text-[11px] text-slate-300">
+        <span class="rounded bg-slate-900 border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-300">
+          ${detour.flood_id_ref ? "เชื่อมโยงจุดน้ำท่วม" : "ทางเลี่ยงอิสระ"}
+        </span>
+        ${detour.detour_meta?.forward_distance_km ? `<span class="text-amber-400 font-mono text-[10px]">ระยะทาง ~${detour.detour_meta.forward_distance_km} กม.</span>` : ""}
+      </div>
+
+      <!-- ปุ่มสลับทิศทางคำอธิบายทางเลี่ยง (A → B และ B → A) -->
       <div class="mt-2.5 flex rounded-lg bg-slate-900 p-0.5 border border-slate-700/80">
         <button
           type="button"
           id="detour-btn-fwd-${safeId}"
           onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'FORWARD')"
           class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md transition cursor-pointer text-center ${
-            !isRev ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
+            !isRev ? "bg-amber-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"
           }"
         >
           ขาไป (A → B)
@@ -220,18 +234,38 @@ function buildDetourPopupHtml(detour: DetourRoute, color: string, defaultDir: "F
           id="detour-btn-rev-${safeId}"
           onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'REVERSE')"
           class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md transition cursor-pointer text-center ${
-            isRev ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
+            isRev ? "bg-amber-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"
           }"
         >
           ขากลับ (B → A)
         </button>
       </div>
 
-      <div id="detour-desc-fwd-${safeId}" class="${!isRev ? "block" : "hidden"} text-slate-200 mt-2 whitespace-pre-wrap text-[11px] max-h-48 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2 bg-slate-900/60">
-        ${escapeHtml(forwardText)}
+      <!-- กล่องคำแนะนำการเดินทาง พร้อมจำกัดความสูงและ Scrollbar เรียบเนียน -->
+      <div id="detour-desc-fwd-${safeId}" class="${!isRev ? "block" : "hidden"} text-slate-200 mt-2 whitespace-pre-wrap text-[11px] max-h-36 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2.5 bg-slate-900/60">
+        ${escapeHtml(forwardText || "ไม่มีคำแนะนำการเดินทางเฉพาะทิศทาง")}
       </div>
-      <div id="detour-desc-rev-${safeId}" class="${isRev ? "block" : "hidden"} text-slate-200 mt-2 whitespace-pre-wrap text-[11px] max-h-48 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2 bg-slate-900/60">
-        ${escapeHtml(reverseText)}
+      <div id="detour-desc-rev-${safeId}" class="${isRev ? "block" : "hidden"} text-slate-200 mt-2 whitespace-pre-wrap text-[11px] max-h-36 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2.5 bg-slate-900/60">
+        ${escapeHtml(reverseText || "ไม่มีคำแนะนำการเดินทางเฉพาะทิศทาง")}
+      </div>
+
+      <!-- Action Buttons: นำทาง Google Maps และ ดูรายละเอียดเต็ม -->
+      <div class="mt-3 pt-2 border-t border-slate-800 flex items-center gap-2">
+        <button
+          type="button"
+          id="detour-nav-btn-${safeId}"
+          onclick="window.__openDetourGoogleMaps && window.__openDetourGoogleMaps('${safeId}', window.__getDetourCurrentDir ? window.__getDetourCurrentDir('${safeId}') : '${defaultDir}')"
+          class="flex-1 min-h-[34px] py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow"
+        >
+          <span>🧭</span><span>นำทาง Google Maps</span>
+        </button>
+        <button
+          type="button"
+          onclick="window.__openDetourModal && window.__openDetourModal('${escapeHtml(detour.id)}')"
+          class="min-h-[34px] py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-lg transition flex items-center justify-center cursor-pointer border border-slate-700"
+        >
+          ดูรายละเอียด
+        </button>
       </div>
     </div>
   `;
@@ -257,20 +291,23 @@ function buildFloodPopupHtml(flood: FloodRoute, updates: TimelineUpdate[]): stri
     : "";
   const lanesDisplay = flood.affected_lanes ? ` · ช่องจราจร: ${escapeHtml(flood.affected_lanes)}` : "";
   const shoulderDisplay = flood.affected_shoulder && flood.affected_shoulder !== "NONE" ? ` · ไหล่ทาง: ${escapeHtml(shoulderLabel(flood.affected_shoulder))}` : "";
-  const statusLabel = trafficStatusLabel(flood.traffic_status);
-  const statusBg = flood.traffic_status === "CLOSED" ? "bg-red-500 text-white" : flood.traffic_status === "PASSABLE" ? "bg-emerald-500 text-white" : "bg-amber-400 text-slate-950";
+
+  // ใช้สถานะมาตรฐานเดียวกันทั้งระบบ 5 สถานะ + รอตรวจสอบ
+  const unified = getUnifiedTrafficStatus(flood.traffic_status, flood.water_level_cm, flood.direction_meta?.trafficStatusDetail);
 
   return `
-    <div class="text-xs p-1 min-w-[250px] max-w-[280px] font-body text-slate-100">
-      <div class="flex items-center justify-between gap-1.5 pb-1 border-b border-slate-800">
-        <span class="bg-[#f59e0b] text-slate-950 text-[11px] font-extrabold px-2 py-0.5 rounded font-heading">
+    <div class="text-xs p-3 min-w-[280px] sm:min-w-[320px] max-w-[360px] max-h-[80vh] overflow-y-auto font-body text-slate-100 bg-slate-950">
+      <!-- Header: ทล.XX + ป้ายสถานะ 5 สี -->
+      <div class="flex items-center justify-between gap-1.5 pb-2 border-b border-slate-800 flex-wrap sm:flex-nowrap">
+        <span class="bg-[#f59e0b] text-slate-950 text-[11px] font-extrabold px-2 py-0.5 rounded font-heading whitespace-nowrap">
           ทล.${escapeHtml(flood.route_no)}
         </span>
-        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${statusBg}">
-          ${escapeHtml(statusLabel)}
+        <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${unified.popupBadgeClass} whitespace-nowrap flex items-center gap-1">
+          <span>${unified.icon}</span><span>${escapeHtml(unified.label)}</span>
         </span>
       </div>
-      <h4 class="font-bold text-white text-sm font-heading mt-1.5 leading-snug">${escapeHtml(flood.section_name)}</h4>
+
+      <h4 class="font-bold text-white text-sm font-heading mt-2 leading-snug">${escapeHtml(flood.section_name)}</h4>
       <div class="text-slate-300 text-[11px] mt-0.5">
         ระหว่าง กม.${escapeHtml(formatKmPost(flood.km_start))} ถึง กม.${escapeHtml(formatKmPost(flood.km_end))}
       </div>
@@ -311,19 +348,19 @@ function buildFloodPopupHtml(flood: FloodRoute, updates: TimelineUpdate[]): stri
 function buildOfficePopupHtml(office: DohOfficeLocation): string {
   const isHq = office.type === "HEADQUARTERS";
   return `
-    <div class="text-xs p-1 min-w-[220px] font-body text-slate-100">
-      <div class="flex items-center gap-1.5 mb-1">
-        <span class="bg-amber-400 text-slate-950 text-[10px] font-bold px-1.5 py-0.2 rounded font-heading">
+    <div class="text-xs p-3 min-w-[240px] max-w-[280px] font-body text-slate-100 bg-slate-950">
+      <div class="flex items-center gap-1.5 mb-1.5">
+        <span class="bg-amber-400 text-slate-950 text-[10px] font-bold px-1.5 py-0.5 rounded font-heading">
           ${isHq ? "สำนักงานใหญ่" : "หมวดทางหลวง"}
         </span>
       </div>
       <h4 class="font-bold text-white text-sm font-heading">${escapeHtml(office.name)}</h4>
-      <p class="text-slate-300 text-[11px] mt-1">${escapeHtml(office.address)}</p>
-      <div class="mt-2 pt-1.5 border-t border-slate-700 flex items-center justify-between">
+      <p class="text-slate-300 text-[11px] mt-1 leading-relaxed">${escapeHtml(office.address)}</p>
+      <div class="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-between">
         <a href="tel:${String(office.phone ?? "").replace(/[^0-9]/g, "")}" class="text-amber-300 hover:underline font-bold text-xs flex items-center gap-1">
           📞 ${escapeHtml(office.phone)}
         </a>
-        <a href="https://www.google.com/maps/dir/?api=1&destination=${office.lat},${office.lon}" target="_blank" rel="noopener noreferrer" class="bg-amber-500 text-slate-950 px-2 py-0.5 rounded text-[10px] font-bold hover:bg-amber-400">
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${office.lat},${office.lon}" target="_blank" rel="noopener noreferrer" class="bg-amber-500 text-slate-950 px-2.5 py-1 rounded-md text-[11px] font-bold hover:bg-amber-400 shadow">
           นำทาง
         </a>
       </div>
@@ -487,12 +524,40 @@ export function LongdoGisMap({
   const selectedFloodIdRef = useRef(selectedFloodId);
   selectedFloodIdRef.current = selectedFloodId;
 
-  // Global popup handlers for direction toggling and opening flood dossier
+  // Global popup handlers for direction toggling, navigation, and opening modals
   useEffect(() => {
+    const activeDirMap: Record<string, "FORWARD" | "REVERSE"> = {};
+
     (window as any).__openFloodDossier = (id: string) => {
       onSelectFloodRef.current?.(id);
     };
+
+    (window as any).__getDetourCurrentDir = (id: string): "FORWARD" | "REVERSE" => {
+      return activeDirMap[id] || "FORWARD";
+    };
+
+    (window as any).__openDetourModal = (id: string) => {
+      window.dispatchEvent(new CustomEvent("doh:open-detour-modal", { detail: id }));
+    };
+
+    (window as any).__openDetourGoogleMaps = (safeId: string, dir: "FORWARD" | "REVERSE") => {
+      const detour = systemData.detourRoutes.find(
+        (d) => String(d.id || "").replace(/[^a-zA-Z0-9_-]/g, "_") === safeId || d.id === safeId
+      );
+      if (!detour) {
+        alert("ไม่พบข้อมูลเส้นทางเลี่ยง");
+        return;
+      }
+      const nav = resolveDetourGoogleMapsNavigation(detour, dir, systemData.floodRoutes);
+      if (nav.isValid && nav.url) {
+        window.open(nav.url, "_blank", "noopener,noreferrer");
+      } else {
+        alert(nav.warning || "เส้นทางเลี่ยงในทิศทางนี้ยังไม่ได้รับการยืนยันการนำทางที่ปลอดภัย");
+      }
+    };
+
     (window as any).__toggleDetourPopupDir = (id: string, dir: "FORWARD" | "REVERSE") => {
+      activeDirMap[id] = dir;
       const fwdBtn = document.getElementById(`detour-btn-fwd-${id}`);
       const revBtn = document.getElementById(`detour-btn-rev-${id}`);
       const fwdDesc = document.getElementById(`detour-desc-fwd-${id}`);
@@ -500,14 +565,14 @@ export function LongdoGisMap({
       if (!fwdBtn || !revBtn || !fwdDesc || !revDesc) return;
 
       if (dir === "FORWARD") {
-        fwdBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 transition cursor-pointer text-center";
+        fwdBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 shadow transition cursor-pointer text-center";
         revBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md text-slate-400 hover:text-white transition cursor-pointer text-center";
         fwdDesc.classList.remove("hidden");
         fwdDesc.classList.add("block");
         revDesc.classList.remove("block");
         revDesc.classList.add("hidden");
       } else {
-        revBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 transition cursor-pointer text-center";
+        revBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 shadow transition cursor-pointer text-center";
         fwdBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md text-slate-400 hover:text-white transition cursor-pointer text-center";
         revDesc.classList.remove("hidden");
         revDesc.classList.add("block");
@@ -515,11 +580,15 @@ export function LongdoGisMap({
         fwdDesc.classList.add("hidden");
       }
     };
+
     return () => {
       delete (window as any).__openFloodDossier;
       delete (window as any).__toggleDetourPopupDir;
+      delete (window as any).__openDetourModal;
+      delete (window as any).__openDetourGoogleMaps;
+      delete (window as any).__getDetourCurrentDir;
     };
-  }, []);
+  }, [systemData.detourRoutes, systemData.floodRoutes]);
 
   // 1. Initialize Leaflet Map Instance
   useEffect(() => {
@@ -1043,7 +1112,7 @@ export function LongdoGisMap({
     });
 
     if (floodDisplayMode === "EVENTS") {
-      // Merged parent event capsule markers
+      // Merged parent event capsule markers with zoom-adaptive layout
       const parentEvents = groupFloodRoutesIntoEvents(visibleFloods);
       parentEvents.forEach((ev) => {
         let sumLat = 0;
@@ -1061,48 +1130,70 @@ export function LongdoGisMap({
         const centerLat = count > 0 ? sumLat / count : APP_CONFIG.DEFAULT_CENTER.lat;
         const centerLon = count > 0 ? sumLon / count : APP_CONFIG.DEFAULT_CENTER.lon;
 
-        let zIndex = 200;
-        let capsuleClass = "doh-capsule-tag doh-capsule-amber";
-        let glyphIcon = "⚠️";
+        const unified = getUnifiedTrafficStatus(
+          ev.mostSevereStatus === "CLOSED" ? "CLOSED" : ev.mostSevereStatus === "NO_SMALL_VEHICLES" ? "WARNING" : ev.mostSevereStatus,
+          ev.maxWaterLevelCm,
+          ev.mostSevereStatus === "NO_SMALL_VEHICLES" ? "NO_SMALL_VEHICLES" : undefined
+        );
 
-        if (ev.mostSevereStatus === "CLOSED") {
-          capsuleClass = "doh-capsule-tag doh-capsule-red";
-          glyphIcon = "⛔";
-          zIndex = 1000;
-        } else if (ev.mostSevereStatus === "NO_SMALL_VEHICLES") {
-          capsuleClass = "doh-capsule-tag doh-capsule-orange";
-          glyphIcon = "🚗";
-          zIndex = 800;
-        } else if (ev.mostSevereStatus === "CAUTION") {
-          capsuleClass = "doh-capsule-tag doh-capsule-amber";
-          glyphIcon = "⚠️";
-          zIndex = 600;
-        } else if (ev.mostSevereStatus === "PASSABLE") {
-          capsuleClass = "doh-capsule-tag doh-capsule-green";
-          glyphIcon = "✅";
-          zIndex = 200;
-        } else if (ev.mostSevereStatus === "PENDING_VERIFICATION") {
-          capsuleClass = "doh-capsule-tag doh-capsule-slate";
-          glyphIcon = "⏳";
-          zIndex = 400;
+        let zIndex = 200;
+        if (ev.mostSevereStatus === "CLOSED") zIndex = 1000;
+        else if (ev.mostSevereStatus === "NO_SMALL_VEHICLES") zIndex = 800;
+        else if (ev.mostSevereStatus === "CAUTION") zIndex = 600;
+        else if (ev.mostSevereStatus === "PENDING_VERIFICATION") zIndex = 400;
+
+        // 3-Tier Zoom Adaptive Markers
+        let pinHtml = "";
+        let pinSize: [number, number] = [140, 28];
+        let pinAnchor: [number, number] = [70, 14];
+
+        if (currentZoom <= 10) {
+          // ซูมไกล: แสดงเฉพาะไอคอนสถานะในทรงกลมกะทัดรัด
+          pinSize = [28, 28];
+          pinAnchor = [14, 14];
+          pinHtml = `
+            <div class="doh-capsule-tag ${unified.capsuleClass} doh-capsule-zoom-far" title="ทล.${escapeHtml(ev.routeNo)} [${ev.segments.length} ช่วง] - ${escapeHtml(unified.label)}">
+              <span class="text-xs font-bold leading-none" aria-hidden="true">${unified.icon}</span>
+            </div>
+          `;
+        } else if (currentZoom >= 11 && currentZoom <= 13) {
+          // ซูมกลาง: แสดงไอคอนสถานะ + หมายเลขทางหลวง
+          pinSize = [110, 28];
+          pinAnchor = [55, 14];
+          pinHtml = `
+            <div class="doh-capsule-tag ${unified.capsuleClass} doh-capsule-zoom-mid">
+              <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${unified.icon}</span>
+              <span>ทล.${escapeHtml(ev.routeNo)}</span>
+              <span class="opacity-90 font-mono text-[10px]">(${ev.segments.length})</span>
+            </div>
+          `;
+        } else {
+          // ซูมใกล้: แสดงไอคอนสถานะ + หมายเลขทางหลวง + ระดับน้ำ + สถานะ
+          pinSize = [210, 30];
+          pinAnchor = [105, 15];
+          pinHtml = `
+            <div class="doh-capsule-tag ${unified.capsuleClass} doh-capsule-zoom-near">
+              <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${unified.icon}</span>
+              <span>ทล.${escapeHtml(ev.routeNo)} [${ev.segments.length} ช่วง]</span>
+              <span class="opacity-90 font-mono text-[11px]">(${escapeHtml(ev.maxWaterLevelCm)} ซม.)</span>
+              <span class="bg-black/25 px-1.5 py-0.5 rounded text-[10px] font-bold">${escapeHtml(unified.label)}</span>
+            </div>
+          `;
         }
 
         const pinIcon = L.divIcon({
-          html: `
-            <div class="${capsuleClass}">
-              <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${glyphIcon}</span>
-              <span>ทล.${escapeHtml(ev.routeNo)} [${ev.segments.length} ช่วง]</span>
-              <span class="opacity-90">(${escapeHtml(ev.maxWaterLevelCm)} ซม.)</span>
-            </div>
-          `,
+          html: pinHtml,
           className: "doh-map-capsule-pin",
-          iconSize: [140, 28],
-          iconAnchor: [70, 14],
+          iconSize: pinSize,
+          iconAnchor: pinAnchor,
         });
 
         const primarySeg = ev.segments[0];
         const marker = L.marker([centerLat, centerLon], { icon: pinIcon, zIndexOffset: zIndex }).addTo(group);
-        marker.bindPopup(() => buildFloodPopupHtml(primarySeg, updatesByFlood[primarySeg.id] || []), { maxWidth: 280 });
+        marker.bindPopup(() => buildFloodPopupHtml(primarySeg, updatesByFlood[primarySeg.id] || []), {
+          maxWidth: 360,
+          minWidth: 280,
+        });
         marker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           onSelectFloodRef.current(primarySeg.id);
@@ -1118,6 +1209,7 @@ export function LongdoGisMap({
         zIndex: number;
         capsuleClass: string;
         glyphIcon: string;
+        statusLabel: string;
         sideBadge: string;
         levelText: string;
       };
@@ -1129,35 +1221,17 @@ export function LongdoGisMap({
         const lon = midCoord ? midCoord[0] : (flood.lon_start || APP_CONFIG.DEFAULT_CENTER.lon);
 
         const meta = flood.direction_meta;
-        const trafficDetail = meta?.trafficStatusDetail;
         const waterKnown = meta?.water_level_known !== false;
         const levelText = waterKnown ? `${flood.water_level_cm} ซม.` : "รอวัดระดับน้ำ";
 
-        let zIndex = 200;
-        let capsuleClass = "doh-capsule-tag doh-capsule-amber";
-        let glyphIcon = "⚠️";
+        const unified = getUnifiedTrafficStatus(flood.traffic_status, flood.water_level_cm, meta?.trafficStatusDetail);
 
-        if (flood.traffic_status === "CLOSED" || trafficDetail === "CLOSED") {
-          capsuleClass = "doh-capsule-tag doh-capsule-red";
-          glyphIcon = "⛔";
-          zIndex = 1000;
-        } else if (trafficDetail === "NO_SMALL_VEHICLES" || flood.traffic_status === "LIGHT_VEHICLES_ONLY") {
-          capsuleClass = "doh-capsule-tag doh-capsule-orange";
-          glyphIcon = "🚗";
-          zIndex = 800;
-        } else if (trafficDetail === "CAUTION" || flood.traffic_status === "ONE_LANE" || flood.traffic_status === "WARNING") {
-          capsuleClass = "doh-capsule-tag doh-capsule-amber";
-          glyphIcon = "⚠️";
-          zIndex = 600;
-        } else if (flood.traffic_status === "PASSABLE" || trafficDetail === "PASSABLE") {
-          capsuleClass = "doh-capsule-tag doh-capsule-green";
-          glyphIcon = "✅";
-          zIndex = 200;
-        } else if (trafficDetail === "PENDING_VERIFICATION") {
-          capsuleClass = "doh-capsule-tag doh-capsule-slate";
-          glyphIcon = "⏳";
-          zIndex = 400;
-        }
+        let zIndex = 200;
+        if (unified.key === "CLOSED") zIndex = 1000;
+        else if (unified.key === "WARNING") zIndex = 800;
+        else if (unified.key === "ONE_LANE") zIndex = 700;
+        else if (unified.key === "LIGHT_VEHICLES_ONLY") zIndex = 600;
+        else if (unified.key === "PENDING_VERIFICATION") zIndex = 400;
 
         const dirCode = meta?.directionCode || (flood.road_side === "LEFT" ? "A_TO_B" : flood.road_side === "RIGHT" ? "B_TO_A" : "BOTH");
         const sideBadge = dirCode === "A_TO_B"
@@ -1176,16 +1250,22 @@ export function LongdoGisMap({
           lon,
           dirCode,
           zIndex,
-          capsuleClass,
-          glyphIcon,
+          capsuleClass: `doh-capsule-tag ${unified.capsuleClass}`,
+          glyphIcon: unified.icon,
+          statusLabel: unified.label,
           sideBadge,
           levelText,
         };
       });
 
-      // Cluster candidates within proximity (< ~35m or 0.00035 deg) to prevent stacking
+      // Cluster candidates within proximity to prevent stacking
       const clusters: MarkerCandidate[][] = [];
       const assigned = new Set<number>();
+
+      // ปรับระยะห่างในการจัดกลุ่มตามระดับ Zoom
+      const zoomFactor = Math.pow(2, Math.max(0, 14 - currentZoom));
+      const clusterThresholdLat = Math.min(0.003, 0.00035 * zoomFactor);
+      const clusterThresholdLon = Math.min(0.0035, 0.00045 * zoomFactor);
 
       for (let i = 0; i < candidates.length; i++) {
         if (assigned.has(i)) continue;
@@ -1199,7 +1279,7 @@ export function LongdoGisMap({
           const distLat = Math.abs(c1.lat - c2.lat);
           const distLon = Math.abs(c1.lon - c2.lon);
           const isSameEvent = Boolean(c1.flood.direction_meta?.eventId && c1.flood.direction_meta.eventId === c2.flood.direction_meta?.eventId);
-          if ((distLat < 0.00035 && distLon < 0.00045) || (isSameEvent && distLat < 0.0008 && distLon < 0.0008)) {
+          if ((distLat < clusterThresholdLat && distLon < clusterThresholdLon) || (isSameEvent && distLat < clusterThresholdLat * 1.5 && distLon < clusterThresholdLon * 1.5)) {
             groupList.push(c2);
             assigned.add(j);
           }
@@ -1213,34 +1293,70 @@ export function LongdoGisMap({
           let renderLat = item.lat;
           let renderLon = item.lon;
 
+          // คำนวณ lateral offset โดยปรับ scale ตามระดับ zoom เพื่อป้องกันหมุดทับกันบนหน้าจอ
+          const offsetBaseLat = Math.min(0.0018, 0.00018 * Math.pow(2, Math.max(0, 14 - currentZoom) * 0.7));
+          const offsetBaseLon = Math.min(0.0015, 0.00012 * Math.pow(2, Math.max(0, 14 - currentZoom) * 0.7));
+
           if (count === 2) {
             // Smart lateral offset for dual carriageways (A->B vs B->A)
             if (item.dirCode === "A_TO_B") {
-              renderLat += 0.00018;
-              renderLon -= 0.00012;
+              renderLat += offsetBaseLat;
+              renderLon -= offsetBaseLon;
             } else if (item.dirCode === "B_TO_A") {
-              renderLat -= 0.00018;
-              renderLon += 0.00012;
+              renderLat -= offsetBaseLat;
+              renderLon += offsetBaseLon;
             } else {
-              renderLat += idx === 0 ? 0.00018 : -0.00018;
+              renderLat += idx === 0 ? offsetBaseLat : -offsetBaseLat;
             }
           } else if (count > 2) {
             const factor = idx - (count - 1) / 2;
-            renderLat += factor * 0.00022;
-            renderLon += factor * 0.00012;
+            renderLat += factor * (offsetBaseLat * 1.2);
+            renderLon += factor * offsetBaseLon;
+          }
+
+          // 3-Tier Zoom Adaptive Markers
+          let pinHtml = "";
+          let pinSize: [number, number] = [130, 28];
+          let pinAnchor: [number, number] = [65, 14];
+
+          if (currentZoom <= 10) {
+            // ซูมไกล: แสดงเฉพาะไอคอนสถานะในทรงกลมกะทัดรัด 28x28px
+            pinSize = [28, 28];
+            pinAnchor = [14, 14];
+            pinHtml = `
+              <div class="${item.capsuleClass} doh-capsule-zoom-far" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
+                <span class="text-xs font-bold leading-none" aria-hidden="true">${item.glyphIcon}</span>
+              </div>
+            `;
+          } else if (currentZoom >= 11 && currentZoom <= 13) {
+            // ซูมกลาง: แสดงไอคอนสถานะ + หมายเลขทางหลวง
+            pinSize = [96, 28];
+            pinAnchor = [48, 14];
+            pinHtml = `
+              <div class="${item.capsuleClass} doh-capsule-zoom-mid">
+                <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${item.glyphIcon}</span>
+                <span>ทล.${escapeHtml(item.flood.route_no)}</span>
+              </div>
+            `;
+          } else {
+            // ซูมใกล้: แสดงไอคอนสถานะ + หมายเลขทางหลวง (ฝั่ง) + ระดับน้ำ + สถานะสัญจร ตลอดเวลาโดยไม่ต้องรอ hover
+            pinSize = [230, 30];
+            pinAnchor = [115, 15];
+            pinHtml = `
+              <div class="${item.capsuleClass} doh-capsule-zoom-near">
+                <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${item.glyphIcon}</span>
+                <span>ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)}</span>
+                <span class="opacity-90 font-mono text-[11px]">(${escapeHtml(item.levelText)})</span>
+                <span class="bg-black/25 px-1.5 py-0.5 rounded text-[10px] font-bold">${escapeHtml(item.statusLabel)}</span>
+              </div>
+            `;
           }
 
           const pinIcon = L.divIcon({
-            html: `
-              <div class="${item.capsuleClass}">
-                <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${item.glyphIcon}</span>
-                <span>ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)}</span>
-                <span class="opacity-90">(${escapeHtml(item.levelText)})</span>
-              </div>
-            `,
+            html: pinHtml,
             className: "doh-map-capsule-pin",
-            iconSize: [130, 28],
-            iconAnchor: [65, 14],
+            iconSize: pinSize,
+            iconAnchor: pinAnchor,
           });
 
           const marker = L.marker([renderLat, renderLon], {
@@ -1248,7 +1364,10 @@ export function LongdoGisMap({
             zIndexOffset: item.zIndex,
           }).addTo(group);
 
-          marker.bindPopup(() => buildFloodPopupHtml(item.flood, updatesByFlood[item.flood.id] || []), { maxWidth: 280 });
+          marker.bindPopup(() => buildFloodPopupHtml(item.flood, updatesByFlood[item.flood.id] || []), {
+            maxWidth: 360,
+            minWidth: 280,
+          });
           marker.on("click", (e: any) => {
             L.DomEvent.stopPropagation(e);
             onSelectFloodRef.current(item.flood.id);
@@ -1262,7 +1381,7 @@ export function LongdoGisMap({
       group.clearLayers();
       floodLinesRef.current = {};
     };
-  }, [mapReady, systemData.floodRoutes, systemData.timelineUpdates, showFloodLayer, floodDisplayMode, mapStyles]);
+  }, [mapReady, systemData.floodRoutes, systemData.timelineUpdates, showFloodLayer, floodDisplayMode, mapStyles, currentZoom]);
 
   // 4e. Selected flood: restyle one polyline in place instead of redrawing the map.
   useEffect(() => {

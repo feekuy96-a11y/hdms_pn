@@ -452,9 +452,15 @@ export function AdminConsole({
                 setEditingRoute({ type: "FLOOD", id: floodId });
                 setActiveTab("map");
               }}
-              onAddFlood={() => {
+              onAddFlood={(ctx) => {
                 setEditingRoute(null);
                 setActiveTab("map");
+                if (ctx?.routeNo) {
+                  // ส่ง event ให้ MapManagementTab เลือกสายทางและกรอกข้อมูลเหตุการณ์แม่อัตโนมัติ
+                  setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent("doh:preset-flood-context", { detail: ctx }));
+                  }, 150);
+                }
               }}
             />
           )}

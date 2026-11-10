@@ -954,6 +954,19 @@ export function GisDataImportTab({
   }, [systemData.highwayLayers]);
 
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
+  const [highwayFilterVisibility, setHighwayFilterVisibility] = useState<"ALL" | "VISIBLE" | "HIDDEN">("ALL");
+  const [highwayFilterType, setHighwayFilterType] = useState<"ALL" | "MAIN" | "SECONDARY">("ALL");
+  const [highwayFilterOffice, setHighwayFilterOffice] = useState<string>("ALL");
+
+  const availableOffices = useMemo(() => {
+    const set = new Set<string>();
+    highwaySectionGroups.forEach((g) => {
+      if (g.responsibleOffice && g.responsibleOffice.trim()) {
+        set.add(g.responsibleOffice.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [highwaySectionGroups]);
 
   const toggleGroupExpand = (groupId: string) => {
     setExpandedGroupIds((prev) => {
@@ -966,8 +979,20 @@ export function GisDataImportTab({
 
   const matchingHighwayGroups = useMemo(() => {
     const query = routeSearch.trim().toLocaleLowerCase("th");
-    if (!query) return highwaySectionGroups;
     return highwaySectionGroups.filter((group) => {
+      // 1. Visibility filter
+      if (highwayFilterVisibility === "VISIBLE" && !group.isVisible) return false;
+      if (highwayFilterVisibility === "HIDDEN" && group.isVisible) return false;
+
+      // 2. Highway Type filter
+      if (highwayFilterType === "MAIN" && group.highwayType !== "MAIN_HIGHWAY") return false;
+      if (highwayFilterType === "SECONDARY" && group.highwayType !== "SECOND_HIGHWAY") return false;
+
+      // 3. Responsible Office filter
+      if (highwayFilterOffice !== "ALL" && group.responsibleOffice !== highwayFilterOffice) return false;
+
+      // 4. Text Search
+      if (!query) return true;
       const fields = [
         group.routeNo,
         group.sectionName,
@@ -979,7 +1004,7 @@ export function GisDataImportTab({
       ];
       return fields.some((val) => String(val).toLocaleLowerCase("th").includes(query));
     });
-  }, [highwaySectionGroups, routeSearch]);
+  }, [highwaySectionGroups, routeSearch, highwayFilterVisibility, highwayFilterType, highwayFilterOffice]);
 
   // Handle GIS File Upload (KML, KMZ, Shapefile .zip, GeoJSON, GPX)
   const handleGisUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1554,29 +1579,81 @@ export function GisDataImportTab({
           </div>
         </div>
 
-        <label className="block text-xs text-slate-300">ค้นหาสายทาง
-          <input type="search" value={routeSearch} onChange={(event) => setRouteSearch(event.target.value)} placeholder="หมายเลข ชื่อตอน ก.ม. หรือหน่วยงาน" className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
-        </label>
+        {/* Search & Filter Bar */}
+        <div className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            <label className="block text-xs text-slate-300">
+              <span className="font-heading font-medium">ค้นหาสายทาง</span>
+              <input
+                type="search"
+                value={routeSearch}
+                onChange={(event) => setRouteSearch(event.target.value)}
+                placeholder="หมายเลข ชื่อตอน ก.ม. หรือหน่วยงาน"
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
+              />
+            </label>
+            <label className="block text-xs text-slate-300">
+              <span className="font-heading font-medium">สถานะแสดงผลบนแผนที่</span>
+              <select
+                aria-label="กรองสถานะแสดงผลบนแผนที่"
+                value={highwayFilterVisibility}
+                onChange={(e) => setHighwayFilterVisibility(e.target.value as any)}
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:border-amber-400 focus:outline-none"
+              >
+                <option value="ALL">ทั้งหมด (แสดงและซ่อน)</option>
+                <option value="VISIBLE">เฉพาะที่แสดงบนแผนที่ (Eye)</option>
+                <option value="HIDDEN">เฉพาะที่ซ่อนอยู่ (EyeOff)</option>
+              </select>
+            </label>
+            <label className="block text-xs text-slate-300">
+              <span className="font-heading font-medium">ประเภทสายทาง</span>
+              <select
+                aria-label="กรองประเภทสายทาง"
+                value={highwayFilterType}
+                onChange={(e) => setHighwayFilterType(e.target.value as any)}
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:border-amber-400 focus:outline-none"
+              >
+                <option value="ALL">ทุกประเภททางหลวง</option>
+                <option value="MAIN">ทางหลวงสายหลัก</option>
+                <option value="SECONDARY">ทางหลวงสายรอง</option>
+              </select>
+            </label>
+            <label className="block text-xs text-slate-300">
+              <span className="font-heading font-medium">หน่วยงานรับผิดชอบ</span>
+              <select
+                aria-label="กรองหน่วยงานรับผิดชอบ"
+                value={highwayFilterOffice}
+                onChange={(e) => setHighwayFilterOffice(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-amber-300 focus:border-amber-400 focus:outline-none font-medium"
+              >
+                <option value="ALL">ทุกหน่วยงาน/หมวดทางหลวง</option>
+                {availableOffices.map((off) => (
+                  <option key={off} value={off}>
+                    {off}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
         {matchingHighwayGroups.length === 0 ? (
           <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center text-xs text-slate-400">
-            {highwaySectionGroups.length === 0 ? "ยังไม่มีรายการเส้นทางในระบบ กรุณาอัปโหลดไฟล์ด้านบน" : "ไม่พบสายทางที่ตรงกับคำค้นหา"}
+            {highwaySectionGroups.length === 0 ? "ยังไม่มีรายการเส้นทางในระบบ กรุณาอัปโหลดไฟล์ด้านบน" : "ไม่พบสายทางที่ตรงกับคำค้นหาและตัวกรองที่เลือก"}
           </div>
         ) : (
-          <div className="w-full min-w-0 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950">
-            <table className="w-full min-w-[1120px] text-left text-xs text-slate-300">
+          <div className="w-full min-w-0 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-inner">
+            <table className="w-full min-w-[880px] text-left text-xs text-slate-300">
               <thead className="bg-[#091122] text-slate-400 font-heading border-b border-slate-800">
                 <tr>
-                  <th className="p-3 w-10 text-center">#</th>
-                  <th className="p-3 w-16 text-center">แสดงผล</th>
-                  <th className="p-3 whitespace-nowrap min-w-[130px]">หมายเลขทางหลวง</th>
-                  <th className="p-3 whitespace-nowrap min-w-[220px]">ชื่อสายทาง / ตอนควบคุม</th>
-                  <th className="p-3 whitespace-nowrap">ช่วง กม.</th>
-                  <th className="p-3 whitespace-nowrap">ระยะทาง</th>
-                  <th className="p-3 whitespace-nowrap">ช่องจราจร (แผนที่)</th>
-                  <th className="p-3 whitespace-nowrap">ชนิดผิวจราจร</th>
-                  <th className="p-3 whitespace-nowrap">หน่วยงานรับผิดชอบ</th>
-                  <th className="p-3">หมายเหตุ</th>
-                  <th className="p-3 text-right whitespace-nowrap">การจัดการ</th>
+                  <th className="p-3 w-10 text-center sticky left-0 bg-[#091122] z-10">#</th>
+                  <th className="p-3 w-16 text-center sticky left-10 bg-[#091122] z-10 whitespace-nowrap">แสดงผล</th>
+                  <th className="p-3 whitespace-nowrap min-w-[120px]">หมายเลขทางหลวง</th>
+                  <th className="p-3 whitespace-nowrap min-w-[200px]">ชื่อสายทาง / ตอนควบคุม</th>
+                  <th className="p-3 whitespace-nowrap min-w-[140px]">ช่วง กม. & ระยะทาง</th>
+                  <th className="p-3 whitespace-nowrap min-w-[130px]">ช่องจราจร & ผิวทาง</th>
+                  <th className="p-3 whitespace-nowrap min-w-[140px]">หน่วยงานรับผิดชอบ</th>
+                  <th className="p-3 min-w-[120px]">หมายเหตุ</th>
+                  <th className="p-3 text-right whitespace-nowrap sticky right-0 bg-[#091122] z-10">การจัดการ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80 font-body">
@@ -1603,8 +1680,8 @@ export function GisDataImportTab({
                           !group.isVisible ? "opacity-50 bg-slate-950/40" : isExpanded ? "bg-slate-900/30" : ""
                         }`}
                       >
-                        <td className="p-3 text-center font-mono text-slate-400">{gIdx + 1}</td>
-                        <td className="p-3 text-center">
+                        <td className="p-3 text-center font-mono text-slate-400 sticky left-0 bg-[#090d16] z-10">{gIdx + 1}</td>
+                        <td className="p-3 text-center sticky left-10 bg-[#090d16] z-10">
                           <button
                             type="button"
                             onClick={() => handleToggleGroupVisibility(group)}
@@ -1619,7 +1696,7 @@ export function GisDataImportTab({
                           </button>
                         </td>
                         <td className="p-3">
-                          <span className="font-heading font-black text-xs px-2 py-0.5 rounded bg-amber-400 text-slate-950 shadow-sm inline-block">
+                          <span className="font-heading font-black text-xs px-2 py-0.5 rounded bg-amber-400 text-slate-950 shadow-sm inline-block whitespace-nowrap">
                             ทล.{group.routeNo}
                           </span>
                         </td>
@@ -1635,32 +1712,28 @@ export function GisDataImportTab({
                                   e.stopPropagation();
                                   toggleGroupExpand(group.groupId);
                                 }}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-sky-950/90 text-sky-300 border border-sky-600/70 hover:bg-sky-900 transition font-medium"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-sky-950/90 text-sky-300 border border-sky-600/70 hover:bg-sky-900 transition font-medium whitespace-nowrap"
                                 title={isExpanded ? "คลิกเพื่อย่อรายละเอียด ๒ ฝั่ง" : "คลิกเพื่อดูรายละเอียดเส้นทางทั้ง ๒ ฝั่ง"}
                               >
                                 {isExpanded ? <ChevronDown className="w-3 h-3 text-sky-400" /> : <ChevronRight className="w-3 h-3 text-sky-400" />}
                                 <span>{group.branches.length} ฝั่ง ({group.branches.map((b) => b.directionCode === "A_TO_B" ? "A→B" : b.directionCode === "B_TO_A" ? "B→A" : "A⇄B").join(", ")})</span>
                               </button>
                             ) : (
-                              <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-900 text-slate-400 border border-slate-700">
+                              <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-900 text-slate-400 border border-slate-700 whitespace-nowrap">
                                 คันทางเดี่ยว
                               </span>
                             )}
                           </div>
                         </td>
-                        <td className="p-3 font-mono text-[11px] text-amber-300 whitespace-nowrap">
-                          {group.kmStart} - {group.kmEnd}
+                        <td className="p-3 font-mono text-[11px] whitespace-nowrap">
+                          <div className="text-amber-300">{group.kmStart} - {group.kmEnd}</div>
+                          <div className="text-emerald-400 text-[10px]">{group.lengthKm ? `${group.lengthKm} กม.` : "-"}</div>
                         </td>
-                        <td className="p-3 font-mono text-emerald-400 whitespace-nowrap">
-                          {group.lengthKm ? `${group.lengthKm} กม.` : "-"}
-                        </td>
-                        <td className="p-3">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-sky-950 text-sky-300 border border-sky-700 whitespace-nowrap">
+                        <td className="p-3 whitespace-nowrap">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-sky-950 text-sky-300 border border-sky-700 font-mono">
                             {group.lanes}
                           </span>
-                        </td>
-                        <td className="p-3 text-[11px] text-slate-300 max-w-[140px] truncate" title={group.surface}>
-                          {group.surface}
+                          <span className="ml-1 text-[11px] text-slate-300 font-mono">{group.surface}</span>
                         </td>
                         <td className="p-3 text-[11px] text-slate-300 whitespace-nowrap">
                           {group.responsibleOffice}
@@ -1668,7 +1741,7 @@ export function GisDataImportTab({
                         <td className="p-3 text-[11px] text-slate-400 max-w-[120px] truncate" title={group.remarks}>
                           {group.remarks || "-"}
                         </td>
-                        <td className="p-3 text-right whitespace-nowrap">
+                        <td className="p-3 text-right whitespace-nowrap sticky right-0 bg-[#090d16] z-10">
                           <div className="inline-flex items-center gap-1.5">
                             {isMultiBranch && (
                               <button
@@ -1750,10 +1823,10 @@ export function GisDataImportTab({
                                 : "border-l-amber-500"
                             } ${!isBranchVis ? "opacity-50" : ""}`}
                           >
-                            <td className="p-2.5 text-center font-mono text-slate-500 text-[11px]">
+                            <td className="p-2.5 text-center font-mono text-slate-500 text-[11px] sticky left-0 bg-[#0c1322] z-10">
                               ↳ {bIdx + 1}
                             </td>
-                            <td className="p-2.5 text-center">
+                            <td className="p-2.5 text-center sticky left-10 bg-[#0c1322] z-10">
                               <button
                                 type="button"
                                 onClick={() => handleToggleFeatureVisibility(group.layerId, branch.featureIdx)}
@@ -1781,25 +1854,21 @@ export function GisDataImportTab({
                             <td className="p-2.5 whitespace-nowrap">
                               <span className="text-slate-300 font-medium">{branch.branchLabel}</span>
                             </td>
-                            <td className="p-2.5 font-mono text-[11px] text-amber-300/90 whitespace-nowrap">
-                              {formatKilometerPost(branch.properties?.km_start) || group.kmStart} - {formatKilometerPost(branch.properties?.km_end) || group.kmEnd}
+                            <td className="p-2.5 font-mono text-[11px] whitespace-nowrap">
+                              <div className="text-amber-300/90">{formatKilometerPost(branch.properties?.km_start) || group.kmStart} - {formatKilometerPost(branch.properties?.km_end) || group.kmEnd}</div>
+                              <div className="text-emerald-400/90 text-[10px]">{branch.geometricLengthKm ? `${branch.geometricLengthKm} กม.` : `${group.lengthKm} กม.`}</div>
                             </td>
-                            <td className="p-2.5 font-mono text-emerald-400/90 whitespace-nowrap">
-                              {branch.geometricLengthKm ? `${branch.geometricLengthKm} กม.` : `${group.lengthKm} กม.`}
-                            </td>
-                            <td className="p-2.5 text-[11px] text-slate-400 whitespace-nowrap">
-                              {group.lanes}
-                            </td>
-                            <td className="p-2.5 text-[11px] text-slate-400 truncate max-w-[140px]">
-                              {group.surface}
+                            <td className="p-2.5 text-[11px] whitespace-nowrap">
+                              <span className="font-mono text-slate-300">{group.lanes}</span>
+                              <span className="ml-1 text-[10px] text-slate-500 font-mono">{group.surface}</span>
                             </td>
                             <td className="p-2.5 text-[11px] text-slate-400 whitespace-nowrap">
                               {group.responsibleOffice}
                             </td>
-                            <td className="p-2.5 text-[11px] text-slate-500 truncate max-w-[120px]">
+                            <td className="p-2.5 text-[11px] text-slate-500 truncate max-w-[120px]" title={branch.properties?.remarks}>
                               {branch.properties?.remarks || "-"}
                             </td>
-                            <td className="p-2.5 text-right whitespace-nowrap">
+                            <td className="p-2.5 text-right whitespace-nowrap sticky right-0 bg-[#0c1322] z-10">
                               <div className="inline-flex items-center gap-1.5">
                                 <button
                                   type="button"

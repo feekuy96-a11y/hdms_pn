@@ -62,6 +62,9 @@ export interface DetourMeta {
   arrow_color_forward?: string;
   arrow_color_reverse?: string;
   show_arrows?: boolean;
+  google_maps_url_forward?: string;
+  google_maps_url_reverse?: string;
+  google_maps_url?: string;
   [key: string]: any;
 }
 
