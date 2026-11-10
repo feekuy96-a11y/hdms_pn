@@ -185,3 +185,18 @@
   1. **SQL Migration:** รัน `supabase/migrations/20261110000100_optimize_display_payload_photos.sql` บน Supabase SQL Editor
   2. **Edge Function:** Deploy `hdms-api` (`supabase functions deploy hdms-api --no-verify-jwt`)
   3. **เว็บไซต์:** Push โค้ดขึ้น GitHub เพื่อให้ GitHub Actions Deploy Static Pages
+
+### [UPDATE-064] 2026-11-10 ปรับปรุงตารางโครงข่ายทางหลวงเป็นแบบ Parent–Child จัดกลุ่มสายทางและขยายดู ๒ ฝั่ง
+- **ไฟล์:** `components/admin/tabs/GisDataImportTab.tsx`
+- **ทำอะไร:**
+  1. ปรับปรุงตารางคุณสมบัติทางวิศวกรรมในแท็บ "นำเข้าโครงข่ายสายทาง" ให้แสดงผลแบบ **Parent Control Section** (1 สายทาง/ตอนควบคุมต่อ 1 บรรทัดหลัก) โดยใช้ฟังก์ชัน `groupHighwayFeatures`
+  2. รวมสายทางที่มี 2 ทิศทาง (`A_TO_B` และ `B_TO_A`) ที่เคยแสดงแยกเป็น 2 แถวซ้ำซ้อน ให้ยุบเหลือ 1 แถวหลักที่สรุปภาพรวมตอนควบคุม (ช่วง กม., ระยะทาง, ช่องจราจร)
+  3. เพิ่มปุ่ม/แถบขยายรายละเอียด **`[ ๒ ฝั่ง (A⇄B) ]`** ในแต่ละแถว เมื่อคลิกจะคลี่แสดงแถวย่อย (Child Branches) ของฝั่งขาไปและฝั่งขากลับ พร้อมรายละเอียดจำนวนจุดพิกัด, ทิศทาง และปุ่มจัดการ (แนวถนน, ตั้งค่า, ลบ) แยกเฉพาะแต่ละฝั่ง
+  4. เพิ่มฟังก์ชัน `handleToggleGroupVisibility` สลับเปิด/ปิดตาบนแผนที่ของทั้งตอนควบคุมในคลิกเดียว และ `handleDeleteHighwayGroup` ลบทั้งตอนควบคุมอย่างปลอดภัย
+  5. ซิงค์คุณสมบัติทางวิศวกรรม (เช่น จำนวนช่องจราจร, ชนิดผิว, หน่วยงานรับผิดชอบ) ข้ามฝั่งคันทางในตอนควบคุมเดียวกันเมื่อมีการบันทึก เพื่อให้ข้อมูลสองฝั่งสอดคล้องกันเสมอ
+- **ตรวจแล้ว:**
+  - `npm run lint` (`--max-warnings=0`): ผ่าน 0 warnings
+  - `npm run typecheck`: ผ่าน 0 errors
+  - `NEXT_OUTPUT=export next build`: ผ่าน 100% สร้าง Static pages 6/6 หน้าสมบูรณ์
+  - สัญญากับ E2E (Rule R7): ปุ่ม `แนวถนน`, `ตั้งค่า`, `+ เพิ่มสายทางใหม่` ยังคงมี accessible name ครบถ้วน
+- **ลำดับ deploy:** เว็บไซต์ (GitHub Pages) ขั้นเดียว ไม่กระทบ Database หรือ Edge Function

@@ -768,3 +768,22 @@
   - `npm run typecheck`: ผ่านฉลุย 0 errors
   - `NEXT_OUTPUT=export next build`: ผ่าน 100% สร้าง Static pages 6/6 หน้าสมบูรณ์
 - **สถานะ:** ใช้งานได้จริง (ACTIVE) / พร้อม Deploy บน GitHub Pages
+
+---
+
+### บันทึกประวัติการพัฒนา: [UPDATE-064] (2026-11-10)
+- **วัตถุประสงค์:** ปรับปรุงตารางโครงข่ายทางหลวงในหน้าแอดมินให้เป็นแบบ Parent–Child รวมสายทางและขยายดู ๒ ฝั่ง (A→B และ B→A)
+- **รายการไฟล์ที่แก้ไข:**
+  - `components/admin/tabs/GisDataImportTab.tsx`
+  - `docs/CHANGELOG.md`
+  - `SUPPLEMENTAL_RULES.md`
+- **รายละเอียดการทำงาน:**
+  1. ใช้ `groupHighwayFeatures` จัดกลุ่มสายทางที่มี 2 ทิศทาง (A_TO_B และ B_TO_A) เข้าเป็น 1 ตอนควบคุมหลัก (Parent Control Section) ลดแถวซ้ำซ้อนในตารางลง 50%
+  2. เพิ่มปุ่มขยายดู ๒ ฝั่ง `[ ๒ ฝั่ง (A⇄B) ]` และแถวลูก (Child Branches) สีแยกทิศทาง พร้อมรายละเอียดจำนวนจุดพิกัด และปุ่มจัดการ (แนวถนน, ตั้งค่า, ลบ) แยกเฉพาะแต่ละฝั่ง
+  3. เพิ่ม `handleToggleGroupVisibility` สลับเปิด/ปิดตาทั้งตอนควบคุม และ `handleDeleteHighwayGroup` ลบทั้งตอนควบคุมอย่างปลอดภัย
+  4. ซิงค์คุณสมบัติทางวิศวกรรม (ช่องจราจร, ผิวทาง, หน่วยงานรับผิดชอบ) ข้ามฝั่งคันทางในตอนควบคุมเดียวกันเมื่อมีการบันทึก
+- **การทดสอบและผลลัพธ์:**
+  - `npm run lint` (`--max-warnings=0`): 0 warnings
+  - `npm run typecheck`: 0 errors
+  - `NEXT_OUTPUT=export next build`: 6/6 static pages สำเร็จ 100%
+- **สถานะ:** พร้อมใช้งานจริง (ACTIVE)
