@@ -48,7 +48,6 @@ import {
 } from "@/lib/gis-utils";
 import {
   groupHighwayFeatures,
-  normalizeHighwayFeature,
   HighwaySectionGroup,
   HighwayBranchItem,
   HighwayBranchType,
@@ -237,35 +236,6 @@ export function GisDataImportTab({
   const [arrowDirectionSetting, setArrowDirectionSetting] = useState<"TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN">("TWO_WAY");
   const [showFeatureArrows, setShowFeatureArrows] = useState<boolean>(true);
   const [dualReverseCoords, setDualReverseCoords] = useState<[number, number][]>([]);
-
-  // Phase 1: Parent-Child Section Groups & Dual Direction GIS (HDMS_PN Context Pack)
-  const [highwayTableView, setHighwayTableView] = useState<"grouped" | "flat">("grouped");
-  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(() => new Set());
-
-  const groupedHighwaySections = useMemo(() => {
-    return groupHighwayFeatures(systemData.highwayLayers);
-  }, [systemData.highwayLayers]);
-
-  const toggleGroupExpand = (groupId: string) => {
-    setExpandedGroupIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupId)) next.delete(groupId);
-      else next.add(groupId);
-      return next;
-    });
-  };
-
-  const handleFlipCoordinates = () => {
-    if (!editingGeometry || draftCoordinates.length < 2) return;
-    const flipped = [...draftCoordinates].reverse();
-    setDraftCoordinates(flipped);
-    setEditingGeometry((current) => current ? {
-      ...current,
-      start: [flipped[0][0], flipped[0][1]],
-      end: [flipped[flipped.length - 1][0], flipped[flipped.length - 1][1]],
-    } : null);
-    onToast("สลับทิศทางจุดหัว-ท้ายของแนวเส้นทางเรียบร้อยแล้ว");
-  };
 
   useEffect(() => {
     if (!editingGeometry) return;
@@ -687,69 +657,29 @@ export function GisDataImportTab({
             : "FORWARD"
           : arrowDirectionSetting;
 
-    const { feature: normFeature } = normalizeHighwayFeature(
-      geojson.features[editingGeometry.featureIdx],
-      editingGeometry.layerId,
-      editingGeometry.featureIdx
-    );
-    const sectionGroupId = currentProps.section_group_id || normFeature.properties.section_group_id;
-    const stableFeatureId = currentProps.feature_id || normFeature.properties.feature_id;
-
     geojson.features[editingGeometry.featureIdx].geometry = { type: "LineString", coordinates: draftCoordinates };
     geojson.features[editingGeometry.featureIdx].properties = {
       ...currentProps,
-      section_group_id: sectionGroupId,
-      feature_id: stableFeatureId,
       carriageway_type: carriagewayStructure === "DUAL_CARRIAGEWAY" && dualReverseCoords.length >= 2 ? "DUAL_CARRIAGEWAY" : carriagewayStructure,
       arrow_direction: effectiveArrowDir,
       show_arrows: showFeatureArrows && effectiveArrowDir !== "UNKNOWN",
       direction_verified: effectiveArrowDir !== "UNKNOWN",
-      direction_code: carriagewayStructure === "DUAL_CARRIAGEWAY" ? "A_TO_B" : (currentProps.direction_code || "BOTH"),
-      branch_type: currentProps.branch_type || "MAIN_CARRIAGEWAY",
     };
 
     if (carriagewayStructure === "DUAL_CARRIAGEWAY" && dualReverseCoords.length >= 2) {
+      const reverseProps = JSON.parse(JSON.stringify(geojson.features[editingGeometry.featureIdx].properties || {}));
       const baseSection = String(currentProps.section_name || currentProps.route_name || "").replace(/\s*\(ขาไป.*\)|\s*\(ขากลับ.*\)/g, "").trim();
       geojson.features[editingGeometry.featureIdx].properties.section_name = baseSection ? `${baseSection} (ขาไป A→B)` : "ขาไป A→B";
-      geojson.features[editingGeometry.featureIdx].properties.direction_code = "A_TO_B";
-
-      // ค้นหา reverse feature (B_TO_A) ภายใต้ section_group_id เดียวกัน เพื่ออัปเดตแทนการ push ซ้ำ
-      const existingRevIdx = geojson.features.findIndex((f: any, idx: number) => {
-        if (idx === editingGeometry.featureIdx) return false;
-        const p = f.properties || {};
-        return (p.section_group_id === sectionGroupId && p.direction_code === "B_TO_A") ||
-               (p.route_no === currentProps.route_no && String(p.section_name).includes("ขากลับ B→A"));
-      });
-
-      const reverseProps = existingRevIdx >= 0
-        ? JSON.parse(JSON.stringify(geojson.features[existingRevIdx].properties || {}))
-        : JSON.parse(JSON.stringify(geojson.features[editingGeometry.featureIdx].properties || {}));
-
       reverseProps.section_name = baseSection ? `${baseSection} (ขากลับ B→A)` : "ขากลับ B→A";
       reverseProps.arrow_direction = "FORWARD"; // vertices of dualReverseCoords are already ordered B -> A
       reverseProps.carriageway_type = "DUAL_CARRIAGEWAY";
       reverseProps.show_arrows = showFeatureArrows;
       reverseProps.direction_verified = true;
-      reverseProps.direction_code = "B_TO_A";
-      reverseProps.branch_type = "MAIN_CARRIAGEWAY";
-      reverseProps.section_group_id = sectionGroupId;
-      reverseProps.feature_id = reverseProps.feature_id || generateStableFeatureId(
-        sectionGroupId,
-        "MAIN_CARRIAGEWAY",
-        "B_TO_A",
-        1
-      );
-
-      if (existingRevIdx >= 0) {
-        geojson.features[existingRevIdx].geometry = { type: "LineString", coordinates: dualReverseCoords };
-        geojson.features[existingRevIdx].properties = reverseProps;
-      } else {
-        geojson.features.push({
-          type: "Feature",
-          properties: reverseProps,
-          geometry: { type: "LineString", coordinates: dualReverseCoords },
-        });
-      }
+      geojson.features.push({
+        type: "Feature",
+        properties: reverseProps,
+        geometry: { type: "LineString", coordinates: dualReverseCoords },
+      });
     }
 
     if (splitRemainder && splitRemainder.length >= 2) {
@@ -1514,266 +1444,10 @@ export function GisDataImportTab({
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <label className="block text-xs text-slate-300 flex-1">ค้นหาสายทาง
-            <input type="search" value={routeSearch} onChange={(event) => setRouteSearch(event.target.value)} placeholder="หมายเลข ชื่อตอน ก.ม. หรือหน่วยงาน" className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
-          </label>
-          <div className="flex items-center gap-1 self-end sm:self-auto sm:pt-4">
-            <span className="text-[11px] text-slate-400 mr-1">มุมมอง:</span>
-            <button
-              type="button"
-              onClick={() => setHighwayTableView("grouped")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-heading font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                highwayTableView === "grouped"
-                  ? "bg-amber-500 text-slate-950 shadow"
-                  : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
-              }`}
-            >
-              <GitBranch className="w-3.5 h-3.5" /> จัดกลุ่มตอนควบคุม ({groupedHighwaySections.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setHighwayTableView("flat")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-heading font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                highwayTableView === "flat"
-                  ? "bg-amber-500 text-slate-950 shadow"
-                  : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
-              }`}
-            >
-              รายการเดี่ยว ({allHighwayFeatures.length})
-            </button>
-          </div>
-        </div>
-
-        {highwayTableView === "grouped" ? (
-          <div className="space-y-3">
-            {groupedHighwaySections.length === 0 ? (
-              <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center text-xs text-slate-400">
-                {allHighwayFeatures.length === 0 ? "ยังไม่มีรายการเส้นทางในระบบ กรุณาอัปโหลดไฟล์ด้านบน" : "ไม่พบสายทางที่ตรงกับคำค้นหา"}
-              </div>
-            ) : (
-              groupedHighwaySections
-                .filter((g) => {
-                  if (!routeSearch.trim()) return true;
-                  const q = routeSearch.trim().toLowerCase();
-                  return (
-                    g.routeNo.toLowerCase().includes(q) ||
-                    g.sectionName.toLowerCase().includes(q) ||
-                    g.kmStart.toLowerCase().includes(q) ||
-                    g.kmEnd.toLowerCase().includes(q) ||
-                    (g.responsibleOffice || "").toLowerCase().includes(q)
-                  );
-                })
-                .map((group) => {
-                  const isExpanded = expandedGroupIds.has(group.groupId);
-                  const forwardBranch = group.branches.find((b) => b.directionCode === "A_TO_B" && b.branchType === "MAIN_CARRIAGEWAY");
-                  const reverseBranch = group.branches.find((b) => b.directionCode === "B_TO_A" && b.branchType === "MAIN_CARRIAGEWAY");
-                  const frontageBranches = group.branches.filter((b) => b.branchType === "FRONTAGE_ROAD" || b.branchType === "PARALLEL_ROAD");
-                  const primaryBranch = forwardBranch || group.primaryBranch || group.branches[0];
-
-                  return (
-                    <div
-                      key={group.groupId}
-                      className="rounded-2xl border border-slate-800 bg-slate-950/90 shadow-md transition hover:border-slate-700 overflow-hidden"
-                    >
-                      {/* Group Header Card */}
-                      <div className="p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gradient-to-r from-[#091122] to-slate-950">
-                        <div className="flex items-start sm:items-center gap-2.5">
-                          <button
-                            type="button"
-                            onClick={() => toggleGroupExpand(group.groupId)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition mt-0.5 sm:mt-0"
-                            title={isExpanded ? "ย่อรายละเอียดเส้นย่อย" : "ขยายดูเส้นย่อยในตอนควบคุมนี้"}
-                          >
-                            {isExpanded ? <ChevronDown className="w-4 h-4 text-amber-400" /> : <ChevronRight className="w-4 h-4" />}
-                          </button>
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-heading font-black text-xs px-2 py-0.5 rounded bg-amber-400 text-slate-950 shadow-sm">
-                                ทล.{group.routeNo}
-                              </span>
-                              <h4 className="font-heading font-bold text-sm text-white">{group.sectionName}</h4>
-                              <span className="rounded bg-slate-900 border border-slate-700 px-2 py-0.5 font-mono text-[11px] text-amber-300">
-                                กม. {group.kmStart} - {group.kmEnd}
-                              </span>
-                              {group.lengthKm && (
-                                <span className="font-mono text-[11px] text-emerald-400">
-                                  {group.lengthKm} กม.
-                                </span>
-                              )}
-                            </div>
-                            {/* Directional & Parallel Chips */}
-                            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px]">
-                              {forwardBranch ? (
-                                <span className="rounded bg-sky-950/80 border border-sky-600/60 px-2 py-0.5 text-sky-200 font-medium">
-                                  🚗 ขาไป (A → B) · {forwardBranch.properties.length_km ? `${forwardBranch.properties.length_km} กม.` : `${forwardBranch.coordinates.length} จุด`}
-                                </span>
-                              ) : (
-                                <span className="rounded bg-slate-900 border border-slate-800 px-2 py-0.5 text-slate-500">
-                                  ยังไม่มีเส้นขาไป (A→B)
-                                </span>
-                              )}
-                              {reverseBranch ? (
-                                <span className="rounded bg-purple-950/80 border border-purple-600/60 px-2 py-0.5 text-purple-200 font-medium">
-                                  🚙 ขากลับ (B → A) · {reverseBranch.properties.length_km ? `${reverseBranch.properties.length_km} กม.` : `${reverseBranch.coordinates.length} จุด`}
-                                </span>
-                              ) : (
-                                <span className="rounded bg-slate-900 border border-slate-800 px-2 py-0.5 text-slate-500">
-                                  ยังไม่มีเส้นขากลับ (B→A)
-                                </span>
-                              )}
-                              {frontageBranches.length > 0 && (
-                                <span className="rounded bg-amber-950/80 border border-amber-600/60 px-2 py-0.5 text-amber-200 font-medium">
-                                  🛣️ ทางขนาน ({frontageBranches.length} เส้น)
-                                </span>
-                              )}
-                              {group.responsibleOffice && (
-                                <span className="text-slate-400 ml-1">· {group.responsibleOffice}</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Group Actions */}
-                        <div className="flex flex-wrap items-center gap-1.5 self-end md:self-auto shrink-0">
-                          {primaryBranch && (
-                            <button
-                              type="button"
-                              onClick={() => openGeometryEditor(group.layerId, primaryBranch.featureIdx)}
-                              className="bg-slate-900 hover:bg-slate-800 text-sky-300 border border-slate-700 hover:border-sky-400 px-2.5 py-1.5 rounded-xl font-heading text-xs font-bold transition inline-flex items-center gap-1 shadow-sm"
-                              title="แก้แนวถนนเส้นทางหลักของตอนควบคุมนี้"
-                            >
-                              <MapPin className="w-3.5 h-3.5" /> แนวถนน
-                            </button>
-                          )}
-                          {primaryBranch && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const feat = allHighwayFeatures.find((f) => f.layerId === group.layerId && f.featureIdx === primaryBranch.featureIdx);
-                                if (feat) {
-                                  setEditingRouteSpecs({
-                                    layerId: feat.layerId,
-                                    featureIdx: feat.featureIdx,
-                                    routeNo: feat.routeNo,
-                                    sectionName: feat.sectionName,
-                                    kmStart: feat.kmStart !== "-" ? feat.kmStart : "",
-                                    kmEnd: feat.kmEnd !== "-" ? feat.kmEnd : "",
-                                    lengthKm: feat.lengthKm !== "-" ? feat.lengthKm : "",
-                                    responsibleOffice: feat.responsibleOffice,
-                                    highwayType: feat.highwayType,
-                                    lanes: feat.lanes,
-                                    surface: feat.surface,
-                                    remarks: feat.remarks !== "-" ? feat.remarks : "",
-                                    isVisible: feat.isVisible,
-                                  });
-                                }
-                              }}
-                              className="bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 hover:border-amber-400 px-2.5 py-1.5 rounded-xl font-heading text-xs font-bold transition inline-flex items-center gap-1 shadow-sm"
-                              title="ตั้งค่าคุณสมบัติทางวิศวกรรม"
-                            >
-                              <Sliders className="w-3.5 h-3.5 text-amber-400" /> ตั้งค่า
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => toggleGroupExpand(group.groupId)}
-                            className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 px-2.5 py-1.5 rounded-xl text-xs font-heading font-medium transition"
-                          >
-                            {isExpanded ? "ซ่อนเส้นย่อย" : `ดูเส้นย่อย (${group.branches.length})`}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Sub-Branches List (Expanded) */}
-                      {isExpanded && (
-                        <div className="border-t border-slate-800/80 bg-slate-950 p-3">
-                          <div className="text-[11px] font-heading font-bold text-slate-400 mb-2 flex items-center justify-between">
-                            <span>เส้นทางย่อยภายใต้ตอนควบคุมนี้ ({group.branches.length} เส้น)</span>
-                            <span className="text-[10px] text-slate-500">แต่ละเส้นสามารถปรับ Geometry แยกกันอย่างอิสระ</span>
-                          </div>
-                          <div className="space-y-1.5">
-                            {group.branches.map((branch) => {
-                              const dirText = branch.directionCode === "A_TO_B"
-                                ? "ขาไป (A → B)"
-                                : branch.directionCode === "B_TO_A"
-                                ? "ขากลับ (B → A)"
-                                : "2 ทิศทาง (A ⇄ B)";
-                              const branchTypeText = branch.branchType === "MAIN_CARRIAGEWAY"
-                                ? "คันทางหลัก"
-                                : branch.branchType === "FRONTAGE_ROAD"
-                                ? "ทางขนาน / ทางบริการ"
-                                : branch.branchType === "RAMP"
-                                ? "ทางเชื่อม / ทางขึ้นลง"
-                                : "ทางคู่ขนาน";
-                              const isVisible = branch.properties.is_visible !== false;
-
-                              return (
-                                <div
-                                  key={branch.featureId}
-                                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-slate-800/80 bg-slate-900/50 px-3 py-2 text-xs"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleToggleFeatureVisibility(group.layerId, branch.featureIdx)}
-                                      className={`p-1 rounded-md border transition ${
-                                        isVisible
-                                          ? "bg-emerald-950/80 text-emerald-300 border-emerald-600 hover:bg-emerald-900"
-                                          : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"
-                                      }`}
-                                      title={isVisible ? "คลิกเพื่อซ่อนเส้นนี้" : "คลิกเพื่อแสดงเส้นนี้"}
-                                    >
-                                      {isVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                                    </button>
-                                    <div>
-                                      <div className="flex items-center gap-1.5 font-heading font-bold text-white">
-                                        <span>{branchTypeText}</span>
-                                        <span className="rounded bg-slate-900 px-1.5 py-0.5 text-[10px] text-amber-300 border border-slate-700">
-                                          {dirText}
-                                        </span>
-                                      </div>
-                                      <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                                        ระยะทาง: {branch.properties.length_km ? `${branch.properties.length_km} กม.` : `${branch.geometricLengthKm} กม.`} · {branch.coordinates.length} จุดพิกัด · ID: {branch.featureId}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                                    <button
-                                      type="button"
-                                      onClick={() => openGeometryEditor(group.layerId, branch.featureIdx)}
-                                      className="bg-slate-900 hover:bg-slate-800 text-sky-300 border border-slate-700 hover:border-sky-400 px-2 py-1 rounded-lg font-heading text-xs font-bold transition inline-flex items-center gap-1"
-                                      title="ปรับแนวถนนเฉพาะเส้นนี้อย่างอิสระ"
-                                    >
-                                      <MapPin className="w-3 h-3" /> แนวถนน
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleDeleteHighwayFeature(
-                                          group.layerId,
-                                          branch.featureIdx,
-                                          `ทล.${group.routeNo} (${dirText})`
-                                        )
-                                      }
-                                      className="p-1 bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 hover:border-rose-600 rounded-lg transition"
-                                      title="ลบเส้นนี้"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-            )}
-          </div>
-        ) : matchingHighwayFeatures.length === 0 ? (
+        <label className="block text-xs text-slate-300">ค้นหาสายทาง
+          <input type="search" value={routeSearch} onChange={(event) => setRouteSearch(event.target.value)} placeholder="หมายเลข ชื่อตอน ก.ม. หรือหน่วยงาน" className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
+        </label>
+        {matchingHighwayFeatures.length === 0 ? (
           <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center text-xs text-slate-400">
             {allHighwayFeatures.length === 0 ? "ยังไม่มีรายการเส้นทางในระบบ กรุณาอัปโหลดไฟล์ด้านบน" : "ไม่พบสายทางที่ตรงกับคำค้นหา"}
           </div>
@@ -2240,49 +1914,7 @@ export function GisDataImportTab({
                 <p className="text-xs text-slate-400">{editorMode === "free" ? "ลากหมุดบนเส้นเพื่อย้ายจุด เพิ่ม/ลบจุด ตัดหรือเชื่อมเส้นได้อิสระเหมือน Google My Maps" : "กำหนดต้นทาง–ปลายทาง แล้วสร้างแนวเกาะถนน จากนั้นลากจุดสีส้มเพื่อปรับแนว"}</p>
                 {(() => {
                   const item = allHighwayFeatures.find((entry) => entry.layerId === editingGeometry.layerId && entry.featureIdx === editingGeometry.featureIdx);
-                  if (!item) return null;
-                  const geoDistKm = draftCoordinates.length >= 2 ? calculateGeodesicLengthKm(draftCoordinates) : 0;
-                  const kmDistStr = (item.kmStart && item.kmEnd && item.kmStart !== "-" && item.kmEnd !== "-")
-                    ? calculateKmDistanceKm(item.kmStart, item.kmEnd)
-                    : "";
-                  const kmDistKm = kmDistStr ? Number(kmDistStr) : null;
-                  const hasDiscrepancy = kmDistKm !== null && kmDistKm > 0 && geoDistKm > 0 && Math.abs(geoDistKm - kmDistKm) / kmDistKm > 0.1;
-
-                  return (
-                    <div className="mt-2 space-y-2">
-                      <p className="text-sm font-bold text-white">
-                        ทล.{item.routeNo} · {item.sectionName}
-                      </p>
-                      <div className="grid grid-cols-2 gap-2 text-[11px] rounded-xl bg-slate-900/90 border border-slate-800 p-2.5">
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">ช่วง กม. (หลักทางหลวง)</span>
-                          <span className="text-amber-300 font-mono font-bold">กม. {item.kmStart} - {item.kmEnd}</span>
-                          {kmDistKm !== null && <span className="text-slate-400 block text-[10px] mt-0.5">ระยะตาม กม.: {kmDistKm.toFixed(3)} กม.</span>}
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">ความยาวจริงตามเส้น GIS</span>
-                          <span className="text-emerald-400 font-mono font-bold">{geoDistKm > 0 ? `${geoDistKm.toFixed(3)} กม.` : "ยังไม่มีพิกัด"}</span>
-                          <span className="text-slate-400 block text-[10px] mt-0.5">จำนวนพิกัด: {draftCoordinates.length} จุด</span>
-                        </div>
-                      </div>
-                      {hasDiscrepancy && (
-                        <div className="rounded-lg bg-amber-950/60 border border-amber-600/70 p-2 text-[10px] text-amber-200 leading-relaxed">
-                          ⚠️ <b>ข้อสังเกต:</b> ความยาวเส้น GIS ({geoDistKm.toFixed(3)} กม.) ต่างจากช่วงหลักกิโลเมตร ({kmDistKm !== null ? `${kmDistKm.toFixed(3)} กม.` : "-"}) เกิน 10% โปรดตรวจสอบว่าแนวเส้นถูกทิศทาง หรือมีจุดวกกลับ
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={handleFlipCoordinates}
-                          disabled={draftCoordinates.length < 2}
-                          className="flex-1 py-1.5 px-2.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[11px] font-bold text-amber-300 hover:text-amber-200 transition flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-40"
-                          title="สลับลำดับพิกัดจากต้นไปท้าย หรือจากท้ายไปต้น (Flip Direction)"
-                        >
-                          <ArrowRightLeft className="w-3.5 h-3.5" /> สลับทิศทางจุดหัว-ท้าย (A ⇄ B)
-                        </button>
-                      </div>
-                    </div>
-                  );
+                  return item ? <p className="mt-2 text-sm text-white">ทล.{item.routeNo} · {item.sectionName}<br />ก.ม. {item.kmStart} ถึง {item.kmEnd} · ระยะทาง {item.lengthKm} กม.</p> : null;
                 })()}
               </div>
               <button type="button" aria-label="ปิดตัวแก้ไขแนวถนน" onClick={closeGeometryEditor} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><X className="h-5 w-5" /></button>

@@ -18,6 +18,10 @@ import {
   Search,
   ChevronDown,
   X,
+  Layers,
+  Split,
+  Clock,
+  Image as ImageIcon,
 } from "lucide-react";
 import { upsertRouteAction, snapRouteAction } from "@/app/actions/doh-actions";
 import {
@@ -26,6 +30,8 @@ import {
   extractDirectionalAdvice,
   reverseGeocodeTambonAmphoe,
   compressImageToBase64,
+  compressImageToAdaptiveBase64,
+  slicePolylineByKmRange,
   detectClosedRoadConflicts,
   analyzeCarriagewaySeparation,
 } from "@/lib/gis-utils";
@@ -41,6 +47,19 @@ import {
   DetourDirectionModeType,
 } from "@/lib/constants";
 import { readRouteFile } from "@/lib/route-import";
+import {
+  FloodDirectionCode,
+  AffectedRoadPart,
+  AFFECTED_ROAD_PARTS,
+  AFFECTED_ROAD_PART_LABELS,
+  DetailedTrafficStatus,
+  FloodPhotoItem,
+  FloodSegmentDirectionMeta,
+  parseFloodDirectionMeta,
+  groupFloodRoutesIntoEvents,
+  mapTrafficStatusToDetail,
+  mapDetailToDbStatus,
+} from "@/lib/flood-event-schema";
 
 function parseCoordinatePair(value: string): [number, number] | null {
   const numbers = value.match(/-?\d+(?:\.\d+)?/g)?.map(Number) || [];
@@ -242,6 +261,23 @@ export function MapManagementTab({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveAsDraft, setSaveAsDraft] = useState(false);
 
+  // Phase 2: Parent Event & Multi-Segment Management
+  const [parentEventMode, setParentEventMode] = useState<"NEW" | "EXISTING">("NEW");
+  const [selectedParentEventId, setSelectedParentEventId] = useState<string>("");
+  const [eventCode, setEventCode] = useState<string>("");
+  const [eventTitle, setEventTitle] = useState<string>("");
+  const [villageOrLandmark, setVillageOrLandmark] = useState<string>("");
+  const [startedAt, setStartedAt] = useState<string>(() => new Date().toISOString().slice(0, 16));
+  const [causeAndNote, setCauseAndNote] = useState<string>("");
+  const [directionCode, setDirectionCode] = useState<FloodDirectionCode>("A_TO_B");
+  const [affectedParts, setAffectedParts] = useState<AffectedRoadPart[]>(["ALL_LANES"]);
+  const [detailedPhotos, setDetailedPhotos] = useState<FloodPhotoItem[]>([]);
+
+  // Group existing flood routes into parent events
+  const existingParentEvents = React.useMemo(() => {
+    return groupFloodRoutesIntoEvents(systemData.floodRoutes || []);
+  }, [systemData.floodRoutes]);
+
   // Dynamic Highway Routes strictly from database matching Highway Engineering Specifications
   const availableHighways = React.useMemo(() => {
     type HighwayOption = {
@@ -357,7 +393,19 @@ export function MapManagementTab({
       setDraftReverseCoordinates?.([]);
       setDraftReverseWaypoints?.([]);
       setDraftConflictPoints?.([]);
-      setFieldImages(flood.latest_photo_url ? [flood.latest_photo_url] : []);
+
+      // Phase 2 Meta Hydration
+      const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
+      setSelectedParentEventId(meta.eventId);
+      setEventCode(meta.eventCode);
+      setEventTitle(meta.eventTitle || "");
+      setVillageOrLandmark(meta.villageOrLandmark || "");
+      if (meta.startedAt) setStartedAt(meta.startedAt.slice(0, 16));
+      setCauseAndNote(meta.causeAndNote || flood.detour_advice || "");
+      setDirectionCode(meta.directionCode || "A_TO_B");
+      setAffectedParts(meta.affectedParts && meta.affectedParts.length ? meta.affectedParts : ["ALL_LANES"]);
+      setDetailedPhotos(meta.photos || []);
+      setFieldImages(meta.photos?.length ? meta.photos.map((p) => p.dataUrl) : (flood.latest_photo_url ? [flood.latest_photo_url] : []));
     } else {
       const detour = systemData.detourRoutes.find((r) => r.id === id);
       if (!detour) return;
@@ -727,11 +775,114 @@ export function MapManagementTab({
     setDetourDirectionMode("TWO_WAY");
     setDetourDistanceMeters({ forward: 0, reverse: 0 });
     setFieldImages([]);
+    setDetailedPhotos([]);
+    setParentEventMode("NEW");
+    setSelectedParentEventId("");
+    setEventCode("");
+    setEventTitle("");
+    setVillageOrLandmark("");
+    setStartedAt(new Date().toISOString().slice(0, 16));
+    setCauseAndNote("");
+    setDirectionCode("A_TO_B");
+    setAffectedParts(["ALL_LANES"]);
     setSaveAsDraft(false);
     setForceStraightThrough(false);
     originalRouteCoordinates.current = [];
     onDraftPickMarkersChange?.([]);
     onToast("ล้างเส้นทางร่างและแบบฟอร์มแล้ว");
+  };
+
+  // Slice Polyline from Phase 1 GIS Highway Layers by KM Range
+  const handleSlicePolylineFromKm = () => {
+    if (!routeNo || !kmStart || !kmEnd) {
+      onToast("กรุณาระบุหมายเลขทางหลวง, กม.เริ่มต้น และ กม.สิ้นสุด ก่อนคำนวณแนวเส้น");
+      return;
+    }
+    let targetCoords: [number, number][] = [];
+    let secKmStart: any = null;
+    let secKmEnd: any = null;
+
+    for (const layer of systemData.highwayLayers || []) {
+      if (layer.geojson_data && Array.isArray(layer.geojson_data.features)) {
+        for (const f of layer.geojson_data.features) {
+          const props = f.properties || {};
+          const fRoute = String(props.route_no || props.route_code || props.ROAD_NO || props.route || props.code || "").replace(/^ทล\.?/i, "").trim();
+          if (fRoute === String(routeNo).trim()) {
+            if (f.geometry?.coordinates?.length >= 2) {
+              targetCoords = f.geometry.coordinates;
+              secKmStart = props.km_start || kmStart;
+              secKmEnd = props.km_end || kmEnd;
+              break;
+            }
+          }
+        }
+      }
+      if (targetCoords.length >= 2) break;
+    }
+
+    if (targetCoords.length < 2) {
+      onToast(`ไม่พบข้อมูลแนวเส้น GIS ของ ทล.${routeNo} ในระบบ กรุณาคลิกเลือกจุดบนแผนที่หรือคำนวณเส้นเกาะถนน`);
+      return;
+    }
+
+    const sliced = slicePolylineByKmRange(
+      targetCoords,
+      secKmStart,
+      secKmEnd,
+      kmStart,
+      kmEnd,
+      directionCode === "B_TO_A"
+    );
+
+    if (sliced.length >= 2) {
+      setDraftCoordinates(sliced);
+      const [firstLon, firstLat] = sliced[0];
+      const [lastLon, lastLat] = sliced[sliced.length - 1];
+      setStartLat(firstLat);
+      setStartLon(firstLon);
+      setEndLat(lastLat);
+      setEndLon(lastLon);
+      onToast(`คำนวณแนวเส้น ทล.${routeNo} ช่วง กม.${kmStart} - ${kmEnd} (${directionCode === "B_TO_A" ? "ย้อน กม." : "ตาม กม."}) สำเร็จ`);
+    } else {
+      onToast("ไม่สามารถตัดแนวเส้นจากช่วง กม. ที่ระบุได้");
+    }
+  };
+
+  // Adaptive Image Upload (Max 5 photos, <= 300 KB each)
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const remainingSlots = Math.max(0, 5 - detailedPhotos.length);
+    if (remainingSlots === 0) {
+      onToast("บันทึกภาพถ่ายได้สูงสุด ๕ ภาพต่อเหตุการณ์");
+      return;
+    }
+
+    const filesToProcess = Array.from(files).slice(0, remainingSlots);
+    onToast(`กำลังประมวลผลและบีบอัดภาพถ่าย ${filesToProcess.length} ภาพ (≤ 300 KB)...`);
+
+    const newPhotos: FloodPhotoItem[] = [];
+    for (let i = 0; i < filesToProcess.length; i++) {
+      const file = filesToProcess[i];
+      try {
+        const { dataUrl, sizeBytes } = await compressImageToAdaptiveBase64(file, 300 * 1024);
+        newPhotos.push({
+          id: `photo-${Date.now()}-${i}`,
+          dataUrl,
+          sizeBytes,
+          uploadedAt: new Date().toISOString(),
+          caption: file.name || `ภาพถ่ายที่ ${detailedPhotos.length + i + 1}`,
+        });
+      } catch (err) {
+        console.warn("Failed to compress image:", err);
+      }
+    }
+
+    const updated = [...detailedPhotos, ...newPhotos].slice(0, 5);
+    setDetailedPhotos(updated);
+    setFieldImages(updated.map((p) => p.dataUrl));
+    onToast(`เพิ่มภาพถ่ายหน้างานสำเร็จ (${newPhotos.length} ภาพ) รวมเป็น ${updated.length}/5 ภาพ`);
   };
 
   const requestClearRoute = () => {
@@ -768,27 +919,6 @@ export function MapManagementTab({
     );
     setDetourDesc(advice);
     onToast("วิเคราะห์คำแนะนำการเดินทางไป-กลับสำเร็จ");
-  };
-
-  // Image Upload
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    onToast(`กำลังประมวลผลรูปภาพ ${files.length} ไฟล์...`);
-    const newBase64s: string[] = [];
-
-    for (let i = 0; i < Math.min(files.length, 10); i++) {
-      try {
-        const compressed = await compressImageToBase64(files[i], 1280, 0.7);
-        newBase64s.push(compressed);
-      } catch {
-        // ignore single failed image
-      }
-    }
-
-    setFieldImages((prev) => [...prev, ...newBase64s].slice(0, 10));
-    onToast(`เพิ่มภาพถ่ายหน้างานสำเร็จ (${newBase64s.length} รูป)`);
   };
 
   const handleRouteFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -884,6 +1014,47 @@ export function MapManagementTab({
         ? analyzeCarriagewaySeparation(coords, draftReverseCoordinates)
         : null;
 
+      // Phase 2: Compute Parent Event, Direction, and Multi-Photo metadata
+      const currentEventId = selectedParentEventId || `EV-${chosenRouteNo}-${Date.now()}`;
+      const currentEventCode = eventCode.trim() || `FL-${chosenRouteNo}-001`;
+      const currentEventTitle = eventTitle.trim() || (sectionName ? `ทล.${chosenRouteNo} ตอน${sectionName}` : "เหตุการณ์น้ำท่วมทางหลวง");
+      const lanesSummary = affectedParts.includes("ALL_LANES")
+        ? "ทุกช่องจราจร"
+        : affectedParts.map((p) => AFFECTED_ROAD_PART_LABELS[p]).join(", ") || "ไม่ระบุ";
+      const shoulderSummary = (affectedParts.includes("LEFT_SHOULDER") && affectedParts.includes("RIGHT_SHOULDER"))
+        ? "BOTH"
+        : affectedParts.includes("LEFT_SHOULDER")
+          ? "LEFT"
+          : affectedParts.includes("RIGHT_SHOULDER")
+            ? "RIGHT"
+            : "NONE";
+      const primaryPhoto = detailedPhotos[0]?.dataUrl || fieldImages[0] || undefined;
+      const dbTrafficStatus = (routeStatus as string) === "PENDING_VERIFICATION" ? "WARNING" : routeStatus;
+
+      const floodDirectionMeta: FloodSegmentDirectionMeta = {
+        schemaVersion: 2,
+        eventId: currentEventId,
+        eventCode: currentEventCode,
+        eventTitle: currentEventTitle,
+        controlSectionId: "",
+        subdivisionName: reporterName.trim() || "เจ้าหน้าที่แขวงทางหลวงปัตตานี",
+        villageOrLandmark: villageOrLandmark.trim(),
+        directionCode,
+        directionLabel: directionCode === "A_TO_B" ? "ตามหลัก กม. (ขาไป A → B)" : directionCode === "B_TO_A" ? "ย้อนหลัก กม. (ขากลับ B → A)" : "ทั้งสองทิศทาง",
+        affectedParts,
+        trafficStatusDetail: (routeStatus as string) === "PENDING_VERIFICATION" ? "PENDING_VERIFICATION" : mapTrafficStatusToDetail(routeStatus),
+        waterLevelKnown,
+        startedAt: startedAt ? new Date(startedAt).toISOString() : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        zeroConfirmedAt: waterLevelKnown && numWaterLevel === 0 ? new Date().toISOString() : null,
+        causeAndNote: causeAndNote.trim(),
+        photos: detailedPhotos,
+        arrow_direction: directionCode === "A_TO_B" ? "FORWARD" : directionCode === "B_TO_A" ? "REVERSE" : "TWO_WAY",
+        show_arrows: true,
+        carriageway_type: useCarriagewaySnapping ? "DUAL_CARRIAGEWAY" : "SINGLE_CENTERLINE",
+        water_level_known: waterLevelKnown,
+      };
+
       const res = await upsertRouteAction({
         id: routeEditId || undefined,
         recordType: routeMode,
@@ -892,7 +1063,7 @@ export function MapManagementTab({
         kmEnd,
         sectionName: sectionName || "จุดรายงานน้ำท่วม",
         waterLevelCm: waterLevelKnown ? numWaterLevel : 0,
-        trafficStatus: routeStatus,
+        trafficStatus: dbTrafficStatus,
         detourRefId,
         detourName: detourName || "เส้นทางเลี่ยงน้ำท่วม",
         detourDesc,
@@ -902,20 +1073,13 @@ export function MapManagementTab({
         latEnd: numELat || undefined,
         lonEnd: numELon || undefined,
         coordinates: coords,
-        latestPhotoUrl: fieldImages[0] || undefined,
+        latestPhotoUrl: primaryPhoto,
         // Item 3: Flood Directional & Lane-Specific Fields
-        roadSide: routeMode === "FLOOD" ? roadSide : undefined,
-        affectedLanes: routeMode === "FLOOD" ? affectedLanes : undefined,
-        affectedShoulder: routeMode === "FLOOD" ? affectedShoulder : undefined,
+        roadSide: routeMode === "FLOOD" ? (directionCode === "A_TO_B" ? "LEFT" : directionCode === "B_TO_A" ? "RIGHT" : "BOTH") : undefined,
+        affectedLanes: routeMode === "FLOOD" ? lanesSummary : undefined,
+        affectedShoulder: routeMode === "FLOOD" ? shoulderSummary : undefined,
         reporterName: routeMode === "FLOOD" ? (reporterName.trim() || "เจ้าหน้าที่แขวงทางหลวงปัตตานี") : undefined,
-        directionMeta: routeMode === "FLOOD"
-          ? {
-            arrow_direction: roadSide === "LEFT" ? "FORWARD" : roadSide === "RIGHT" ? "REVERSE" : roadSide === "BOTH" ? "TWO_WAY" : "UNKNOWN",
-            show_arrows: roadSide === "LEFT" || roadSide === "RIGHT",
-            carriageway_type: useCarriagewaySnapping ? "DUAL_CARRIAGEWAY" : "SINGLE_CENTERLINE",
-            water_level_known: waterLevelKnown,
-          }
-          : undefined,
+        directionMeta: routeMode === "FLOOD" ? floodDirectionMeta : undefined,
         // Item 4: Detour Bidirectional & Asymmetric Fields
         reverseCoordinates: routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" ? draftReverseCoordinates : undefined,
         reverseWaypoints: routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" ? draftReverseWaypoints : undefined,
@@ -1007,129 +1171,223 @@ export function MapManagementTab({
       <div className="space-y-5">
         {/* 1. Highway Identification */}
         <FormSection step={1} title="ข้อมูลสายทางและพื้นที่" description="ระบุทางหลวง ช่วง กม. และบริเวณที่เกิดเหตุ">
-          {routeMode === "FLOOD" ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="relative" ref={highwayComboboxRef}>
-                <label className="text-xs text-slate-300">หมายเลขทางหลวง *</label>
-                <div
-                  className="relative mt-1 flex cursor-pointer items-center justify-between rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white hover:border-slate-600 focus-within:border-amber-400"
-                  onClick={() => setIsHighwayDropdownOpen((prev) => !prev)}
-                >
-                  <span className={`truncate ${!routeNo ? "text-slate-400" : "font-semibold text-amber-300"}`}>
-                    {selectedHighwayName || (routeNo ? (availableHighways.find((h) => h.no === routeNo)?.name || `ทล.${routeNo}`) : "-- เลือกหมายเลขทางหลวง --")}
-                  </span>
-                  <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 ml-2" />
+          {routeMode === "FLOOD" && (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 mb-3 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-heading font-bold text-amber-300 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-amber-400" /> การจัดกลุ่มเหตุการณ์หลัก (Parent Event)
+                </span>
+                <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => { setParentEventMode("NEW"); setSelectedParentEventId(""); setEventCode(""); }}
+                    className={`px-2.5 py-1 rounded font-heading font-bold transition ${parentEventMode === "NEW" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"}`}
+                  >
+                    + สร้างเหตุการณ์ใหม่
+                  </button>
+                  <button
+                    type="button"
+                    disabled={existingParentEvents.length === 0}
+                    onClick={() => setParentEventMode("EXISTING")}
+                    className={`px-2.5 py-1 rounded font-heading font-bold transition disabled:opacity-40 ${parentEventMode === "EXISTING" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"}`}
+                  >
+                    ผูกเหตุการณ์เดิม ({existingParentEvents.length})
+                  </button>
                 </div>
+              </div>
 
-                {/* Hidden select to preserve standard form/accessible value if queried */}
-                <select
-                  value={routeNo}
-                  onChange={(e) => setRouteNo(e.target.value)}
-                  className="sr-only"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                >
-                  {!routeNo && <option value="">-- เลือกหมายเลขทางหลวง --</option>}
-                  {availableHighways.map((h) => (
-                    <option key={`${h.no}_${h.name}`} value={h.no}>
-                      {h.name}
-                    </option>
-                  ))}
-                </select>
+              {parentEventMode === "EXISTING" && existingParentEvents.length > 0 && (
+                <div>
+                  <label className="text-xs text-slate-300 block mb-1">เลือกเหตุการณ์หลักที่ต้องการเพิ่มช่วง กม. ย่อย</label>
+                  <select
+                    value={selectedParentEventId}
+                    onChange={(e) => {
+                      const evId = e.target.value;
+                      setSelectedParentEventId(evId);
+                      const ev = existingParentEvents.find((item) => item.eventId === evId);
+                      if (ev) {
+                        setRouteNo(ev.routeNo);
+                        setSelectedHighwayName(`ทล.${ev.routeNo} - ${ev.sectionName}`);
+                        setSectionName(ev.sectionName);
+                        setEventCode(ev.eventCode);
+                        setEventTitle(ev.eventTitle);
+                        if (ev.villageOrLandmark) setVillageOrLandmark(ev.villageOrLandmark);
+                        if (ev.subdivisionName) setReporterName(ev.subdivisionName);
+                      }
+                    }}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-amber-300 font-heading font-semibold"
+                  >
+                    <option value="">-- เลือกเหตุการณ์หลัก --</option>
+                    {existingParentEvents.map((ev) => (
+                      <option key={ev.eventId} value={ev.eventId}>
+                        [{ev.eventCode}] ทล.{ev.routeNo} ตอน{ev.sectionName} ({ev.segments.length} ช่วงย่อย)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-                {/* Smart Search Filterable Dropdown */}
-                {isHighwayDropdownOpen && (
-                  <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-full sm:min-w-[320px] overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-2xl backdrop-blur-md flex flex-col">
-                    <div className="p-2 border-b border-slate-800 bg-slate-900/90 flex items-center gap-2">
-                      <Search className="h-4 w-4 text-slate-400 shrink-0" />
-                      <input
-                        type="text"
-                        autoFocus
-                        value={highwaySearchQuery}
-                        onChange={(e) => setHighwaySearchQuery(e.target.value)}
-                        placeholder="พิมพ์ค้นหาเลขทางหลวง หรือชื่อตอน..."
-                        className="w-full bg-transparent text-xs text-white placeholder:text-slate-500 focus:outline-none"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      {highwaySearchQuery && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setHighwaySearchQuery("");
-                          }}
-                          className="text-slate-400 hover:text-white"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                    <div className="overflow-y-auto max-h-52 divide-y divide-slate-850">
-                      {(() => {
-                        const query = highwaySearchQuery.trim().toLowerCase();
-                        const filtered = availableHighways.filter(
-                          (h) => h.no.toLowerCase().includes(query) || h.name.toLowerCase().includes(query)
-                        );
-                        if (filtered.length === 0) {
-                          return (
-                            <div className="p-3 text-center text-xs text-slate-500">
-                              ไม่พบสายทางหลวงที่ตรงกับ &quot;{highwaySearchQuery}&quot;
-                            </div>
-                          );
-                        }
-                        return filtered.map((h) => (
-                          <div
-                            key={`${h.no}_${h.name}_${h.kmStart || ""}`}
-                            onClick={() => {
-                              setRouteNo(h.no);
-                              setSelectedHighwayName(h.name);
-                              if (h.sectionName) {
-                                setSectionName(h.sectionName);
-                              }
-                              if (h.kmStart) {
-                                setKmStart(h.kmStart);
-                              }
-                              if (h.kmEnd) {
-                                setKmEnd(h.kmEnd);
-                              }
-                              setIsHighwayDropdownOpen(false);
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-slate-300 block mb-1">รหัสเหตุการณ์ (Event Code)</label>
+                  <input
+                    type="text"
+                    value={eventCode}
+                    onChange={(e) => setEventCode(e.target.value)}
+                    placeholder="เช่น FL-001 หรือ FL-42-01"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs text-slate-300 block mb-1">หมู่บ้าน / จุดสังเกตหน้างาน</label>
+                  <input
+                    type="text"
+                    value={villageOrLandmark}
+                    onChange={(e) => setVillageOrLandmark(e.target.value)}
+                    placeholder="เช่น บ.ดอนยาง ม.2 หน้ามัสยิด / สะพานคลองบานา"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {routeMode === "FLOOD" ? (
+            <div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="relative" ref={highwayComboboxRef}>
+                  <label className="text-xs text-slate-300">หมายเลขทางหลวง *</label>
+                  <div
+                    className="relative mt-1 flex cursor-pointer items-center justify-between rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white hover:border-slate-600 focus-within:border-amber-400"
+                    onClick={() => setIsHighwayDropdownOpen((prev) => !prev)}
+                  >
+                    <span className={`truncate ${!routeNo ? "text-slate-400" : "font-semibold text-amber-300"}`}>
+                      {selectedHighwayName || (routeNo ? (availableHighways.find((h) => h.no === routeNo)?.name || `ทล.${routeNo}`) : "-- เลือกหมายเลขทางหลวง --")}
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 ml-2" />
+                  </div>
+
+                  {/* Hidden select to preserve standard form/accessible value if queried */}
+                  <select
+                    value={routeNo}
+                    onChange={(e) => setRouteNo(e.target.value)}
+                    className="sr-only"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  >
+                    {!routeNo && <option value="">-- เลือกหมายเลขทางหลวง --</option>}
+                    {availableHighways.map((h) => (
+                      <option key={`${h.no}_${h.name}`} value={h.no}>
+                        {h.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Smart Search Filterable Dropdown */}
+                  {isHighwayDropdownOpen && (
+                    <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-full sm:min-w-[320px] overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-2xl backdrop-blur-md flex flex-col">
+                      <div className="p-2 border-b border-slate-800 bg-slate-900/90 flex items-center gap-2">
+                        <Search className="h-4 w-4 text-slate-400 shrink-0" />
+                        <input
+                          type="text"
+                          autoFocus
+                          value={highwaySearchQuery}
+                          onChange={(e) => setHighwaySearchQuery(e.target.value)}
+                          placeholder="พิมพ์ค้นหาเลขทางหลวง หรือชื่อตอน..."
+                          className="w-full bg-transparent text-xs text-white placeholder:text-slate-500 focus:outline-none"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        {highwaySearchQuery && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setHighwaySearchQuery("");
                             }}
-                            className={`cursor-pointer px-3 py-2 text-xs transition hover:bg-slate-800/80 flex items-center justify-between ${routeNo === h.no && selectedHighwayName === h.name ? "bg-amber-500/15 text-amber-300 font-semibold" : "text-slate-200"
-                              }`}
+                            className="text-slate-400 hover:text-white"
                           >
-                            <span className="truncate">{h.name}</span>
-                            {h.kmStart && h.kmEnd && (
-                              <span className="text-[10px] text-slate-500 font-mono shrink-0 ml-2">
-                                {h.kmStart} - {h.kmEnd}
-                              </span>
-                            )}
-                          </div>
-                        ));
-                      })()}
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="overflow-y-auto max-h-52 divide-y divide-slate-850">
+                        {(() => {
+                          const query = highwaySearchQuery.trim().toLowerCase();
+                          const filtered = availableHighways.filter(
+                            (h) => h.no.toLowerCase().includes(query) || h.name.toLowerCase().includes(query)
+                          );
+                          if (filtered.length === 0) {
+                            return (
+                              <div className="p-3 text-center text-xs text-slate-500">
+                                ไม่พบสายทางหลวงที่ตรงกับ &quot;{highwaySearchQuery}&quot;
+                              </div>
+                            );
+                          }
+                          return filtered.map((h) => (
+                            <div
+                              key={`${h.no}_${h.name}_${h.kmStart || ""}`}
+                              onClick={() => {
+                                setRouteNo(h.no);
+                                setSelectedHighwayName(h.name);
+                                if (h.sectionName) {
+                                  setSectionName(h.sectionName);
+                                }
+                                if (h.kmStart) {
+                                  setKmStart(h.kmStart);
+                                }
+                                if (h.kmEnd) {
+                                  setKmEnd(h.kmEnd);
+                                }
+                                setIsHighwayDropdownOpen(false);
+                                setHighwaySearchQuery("");
+                              }}
+                              className={`cursor-pointer px-3 py-2 text-xs transition hover:bg-slate-800/80 flex items-center justify-between ${routeNo === h.no && selectedHighwayName === h.name ? "bg-amber-500/15 text-amber-300 font-semibold" : "text-slate-200"
+                                }`}
+                            >
+                              <span className="truncate">{h.name}</span>
+                              {h.kmStart && h.kmEnd && (
+                                <span className="text-[10px] text-slate-500 font-mono shrink-0 ml-2">
+                                  {h.kmStart} - {h.kmEnd}
+                                </span>
+                              )}
+                            </div>
+                          ));
+                        })()}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs text-slate-300">กม. เริ่มต้น</label>
+                  <input
+                    type="text"
+                    value={kmStart}
+                    onChange={(e) => setKmStart(e.target.value)}
+                    placeholder="เช่น 12+500"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-300">กม. สิ้นสุด</label>
+                  <input
+                    type="text"
+                    value={kmEnd}
+                    onChange={(e) => setKmEnd(e.target.value)}
+                    placeholder="เช่น 14+200"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="text-xs text-slate-300">กม. เริ่มต้น</label>
-                <input
-                  type="text"
-                  value={kmStart}
-                  onChange={(e) => setKmStart(e.target.value)}
-                  placeholder="เช่น 12+500"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-300">กม. สิ้นสุด</label>
-                <input
-                  type="text"
-                  value={kmEnd}
-                  onChange={(e) => setKmEnd(e.target.value)}
-                  placeholder="เช่น 14+200"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                />
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={handleSlicePolylineFromKm}
+                  className="text-[11px] bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-700 px-3 py-1.5 rounded-xl font-heading font-semibold flex items-center gap-1.5 transition"
+                  title="คำนวณแนวเส้นและพิกัดเริ่มต้น-สิ้นสุดจากข้อมูล GIS ทางหลวงอัตโนมัติ"
+                >
+                  <Wand2 className="w-3.5 h-3.5 text-sky-400" /> คำนวณแนวเส้นจากช่วง กม. อัตโนมัติ (Linear Referencing)
+                </button>
+                <span className="text-[10px] text-slate-400">ระบบจะตัดเฉพาะช่วงเส้นทางหลวงตาม กม. เริ่มต้น–สิ้นสุด</span>
               </div>
             </div>
           ) : (
@@ -1170,8 +1428,8 @@ export function MapManagementTab({
                       type="button"
                       onClick={() => setDetourDirectionMode(mode.value)}
                       className={`p-2.5 rounded-xl border text-left transition ${detourDirectionMode === mode.value
-                          ? "border-amber-400 bg-amber-500/15 text-amber-200"
-                          : "border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-700"
+                        ? "border-amber-400 bg-amber-500/15 text-amber-200"
+                        : "border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-700"
                         }`}
                     >
                       <p className="text-xs font-heading font-bold">{mode.label}</p>
@@ -1525,55 +1783,80 @@ export function MapManagementTab({
 
         {/* 4. Water Level, Status & Safety Measures (If Flood) */}
         {routeMode === "FLOOD" && (
-          <FormSection step={3} title="สถานการณ์น้ำและมาตรการ" description="ฝั่งถนน ช่องจราจร ระดับน้ำ สถานะการจราจร มาตรการความปลอดภัย และภาพถ่ายหน้างาน">
-            {/* Item 3: Directional Road Side & Lane-Specific Reporting */}
+          <FormSection step={3} title="สถานการณ์น้ำและมาตรการ" description="ทิศทาง ส่วนของถนน ระดับน้ำ สถานะจราจร ๕ สถานะ วันเวลา และภาพถ่ายหน้างาน (สูงสุด ๕ ภาพ)">
+            {/* Direction and Affected Road Parts */}
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs text-slate-300 block mb-1">ฝั่งถนนที่เกิดน้ำท่วม (อ้างอิงทิศ กม. เพิ่มขึ้น)</label>
-                  <select
-                    value={roadSide}
-                    onChange={(e) => setRoadSide(e.target.value as RoadSideType)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-amber-300 font-heading font-semibold"
+              <div>
+                <label className="text-xs text-slate-300 block mb-1">ทิศทางการเดินรถของช่วงน้ำท่วมนี้</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setDirectionCode("A_TO_B"); setRoadSide("LEFT"); }}
+                    className={`p-2 rounded-xl border text-left transition ${directionCode === "A_TO_B" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
                   >
-                    {ROAD_SIDE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-300 block mb-1">ช่องจราจรที่ได้รับผลกระทบ</label>
-                  <select
-                    value={affectedLanes}
-                    onChange={(e) => setAffectedLanes(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                    <span className="text-xs font-heading font-bold block">🚗 ตามหลัก กม. (A → B)</span>
+                    <span className="text-[10px] text-slate-400">เดินรถทิศทาง กม. เพิ่มขึ้น</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDirectionCode("B_TO_A"); setRoadSide("RIGHT"); }}
+                    className={`p-2 rounded-xl border text-left transition ${directionCode === "B_TO_A" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
                   >
-                    {AFFECTED_LANES_OPTIONS.map((lane) => (
-                      <option key={lane} value={lane}>
-                        {lane}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-300 block mb-1">ไหล่ทางที่ได้รับผลกระทบ</label>
-                  <select
-                    value={affectedShoulder}
-                    onChange={(e) => setAffectedShoulder(e.target.value as AffectedShoulderType)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                    <span className="text-xs font-heading font-bold block">🚙 ย้อนหลัก กม. (B → A)</span>
+                    <span className="text-[10px] text-slate-400">เดินรถทิศทาง กม. ลดลง</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDirectionCode("BOTH"); setRoadSide("BOTH"); }}
+                    className={`p-2 rounded-xl border text-left transition ${directionCode === "BOTH" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
                   >
-                    {AFFECTED_SHOULDER_OPTIONS.map((sh) => (
-                      <option key={sh.value} value={sh.value}>
-                        {sh.label}
-                      </option>
-                    ))}
-                  </select>
+                    <span className="text-xs font-heading font-bold block">↔️ ทั้งสองทิศทาง</span>
+                    <span className="text-[10px] text-slate-400">น้ำท่วมทั้งคันทาง</span>
+                  </button>
                 </div>
               </div>
 
-              {(roadSide === "LEFT" || roadSide === "RIGHT") && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs text-slate-300 font-heading font-semibold">
+                    ส่วนของถนนที่ได้รับผลกระทบ (เลือกได้หลายส่วนตามสภาพจริง) *
+                  </label>
+                  <span className="text-[10px] text-amber-300 font-mono">เลือกแล้ว {affectedParts.length} ส่วน</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {AFFECTED_ROAD_PARTS.map((part) => {
+                    const isSelected = affectedParts.includes(part.value);
+                    return (
+                      <button
+                        key={part.value}
+                        type="button"
+                        onClick={() => {
+                          if (part.value === "ALL_LANES") {
+                            setAffectedParts(isSelected ? ["UNSPECIFIED"] : ["ALL_LANES"]);
+                          } else {
+                            const filtered = affectedParts.filter((p) => p !== "ALL_LANES" && p !== "UNSPECIFIED");
+                            if (isSelected) {
+                              const next = filtered.filter((p) => p !== part.value);
+                              setAffectedParts(next.length ? next : ["UNSPECIFIED"]);
+                            } else {
+                              setAffectedParts([...filtered, part.value]);
+                            }
+                          }
+                        }}
+                        title={part.desc}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-heading font-bold border transition ${isSelected
+                            ? "bg-amber-500 text-slate-950 border-amber-400 shadow"
+                            : "bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700"
+                          }`}
+                      >
+                        {part.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {(directionCode === "A_TO_B" || directionCode === "B_TO_A") && (
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80 text-xs">
                   <label className="flex items-center gap-2 cursor-pointer text-sky-300">
                     <input
@@ -1625,7 +1908,7 @@ export function MapManagementTab({
                 )}
               </div>
               <div>
-                <label className="text-xs text-slate-300">สถานะสภาพการจราจร</label>
+                <label className="text-xs text-slate-300">สถานะสภาพการจราจร (๕ สถานะ)</label>
                 <select
                   value={routeStatus}
                   onChange={(e: any) => setRouteStatus(e.target.value)}
@@ -1635,14 +1918,24 @@ export function MapManagementTab({
                   <option value="LIGHT_VEHICLES_ONLY">รถเล็กผ่านได้</option>
                   <option value="ONE_LANE">รถเล็กผ่านได้ ๑ ช่องทาง</option>
                   <option value="CLOSED">ผ่านไม่ได้</option>
-                  <option value="WARNING">เฝ้าระวัง</option>
+                  <option value="WARNING">เฝ้าระวัง / ผ่านได้ด้วยความระมัดระวัง</option>
+                  <option value="PENDING_VERIFICATION">รอตรวจสอบสถานะ</option>
                 </select>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="text-xs text-slate-300">มาตรการอำนวยความปลอดภัย</label>
+                <label className="text-xs text-slate-300 block mb-1">วันและเวลาเริ่มเกิดเหตุ</label>
+                <input
+                  type="datetime-local"
+                  value={startedAt}
+                  onChange={(e) => setStartedAt(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-300 block mb-1">มาตรการอำนวยความปลอดภัย</label>
                 <select
                   value={selectedMeasure}
                   onChange={(e) => setSelectedMeasure(e.target.value)}
@@ -1656,7 +1949,7 @@ export function MapManagementTab({
                 </select>
               </div>
               <div>
-                <label className="text-xs text-slate-300">ผู้รายงาน / หมวดทางหลวง</label>
+                <label className="text-xs text-slate-300 block mb-1">ผู้รายงาน / หมวดทางหลวง</label>
                 <input
                   type="text"
                   value={reporterName}
@@ -1667,37 +1960,64 @@ export function MapManagementTab({
               </div>
             </div>
 
-            {/* Image Upload Gallery */}
             <div>
-              <label className="text-xs text-slate-300 block mb-1">
-                ภาพถ่ายหน้างาน (ไม่เกิน ๑๐ ภาพ บีบอัดอัตโนมัติ &lt; 300KB)
-              </label>
+              <label className="text-xs text-slate-300 block mb-1">สาเหตุ / ลักษณะน้ำท่วม / หมายเหตุเจ้าหน้าที่</label>
+              <input
+                type="text"
+                value={causeAndNote}
+                onChange={(e) => setCauseAndNote(e.target.value)}
+                placeholder="เช่น ฝนตกหนักต่อเนื่อง น้ำล้นคลองชลประทาน / รถเล็กสามารถสัญจรด้วยความระมัดระวัง"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+              />
+            </div>
+
+            {/* Image Upload Gallery (Max 5 photos, <= 300 KB each) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-slate-300">
+                  ภาพถ่ายหน้างาน (สูงสุด ๕ ภาพ บีบอัดอัตโนมัติ ≤ 300 KB ต่อภาพ)
+                </label>
+                <span className="text-[11px] text-amber-300 font-mono">
+                  {detailedPhotos.length} / 5 ภาพ
+                </span>
+              </div>
               <div className="flex flex-wrap gap-2 items-center">
-                <label className="bg-slate-900 hover:bg-slate-800 border border-dashed border-slate-700 rounded-xl p-3 flex items-center gap-2 cursor-pointer text-xs text-amber-300">
+                <label className={`bg-slate-900 hover:bg-slate-800 border border-dashed border-slate-700 rounded-xl p-3 flex items-center gap-2 cursor-pointer text-xs text-amber-300 ${detailedPhotos.length >= 5 ? "opacity-50 pointer-events-none" : ""}`}>
                   <Camera className="w-4 h-4" />
-                  <span>เลือกรูปภาพจากเครื่อง / มือถือ</span>
+                  <span>{detailedPhotos.length >= 5 ? "ครบ ๕ ภาพแล้ว" : "เลือกรูปภาพจากเครื่อง / มือถือ"}</span>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
+                    disabled={detailedPhotos.length >= 5}
                     onChange={handleImageUpload}
                     className="hidden"
                   />
                 </label>
-                <span className="text-xs text-slate-400">เลือกแล้ว {fieldImages.length} รูป</span>
               </div>
 
-              {fieldImages.length > 0 && (
-                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 mt-2">
-                  {fieldImages.map((img, i) => (
-                    <div key={i} className="relative rounded-lg overflow-hidden border border-slate-700 h-16">
-                      <img src={img} className="w-full h-full object-cover" alt="field" />
+              {detailedPhotos.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-2">
+                  {detailedPhotos.map((photo, i) => (
+                    <div key={photo.id || i} className="relative rounded-lg overflow-hidden border border-slate-700 bg-slate-950 p-1 flex flex-col justify-between">
+                      <div className="h-20 w-full overflow-hidden rounded bg-slate-900">
+                        <img src={photo.dataUrl} className="w-full h-full object-cover" alt={`field-${i + 1}`} />
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
+                        <span>{i === 0 ? "ภาพหลัก" : `ภาพที่ ${i + 1}`}</span>
+                        <span className="font-mono text-emerald-400">{(photo.sizeBytes / 1024).toFixed(0)} KB</span>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => setFieldImages(fieldImages.filter((_, idx) => idx !== i))}
-                        className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded p-0.5 text-[10px]"
+                        onClick={() => {
+                          const nextPhotos = detailedPhotos.filter((_, idx) => idx !== i);
+                          setDetailedPhotos(nextPhotos);
+                          setFieldImages(nextPhotos.map((p) => p.dataUrl));
+                        }}
+                        className="absolute top-1 right-1 bg-red-600/90 hover:bg-red-500 text-white rounded p-1 text-[10px] leading-none shadow"
+                        title="ลบรูปภาพนี้"
                       >
-                        ×
+                        <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
                   ))}

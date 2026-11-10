@@ -1,4 +1,5 @@
 import { UTM_47N_PARAMS } from "./constants";
+import { parseKmPostMeters } from "./highway-schema";
 
 /**
  * แปลงพิกัดภูมิศาสตร์ (WGS84 Lat/Lon) เป็น UTM Zone 47N (EPSG:32647)
@@ -1059,6 +1060,168 @@ export function compressImageToBase64(file: File, maxDimension = 1200, quality =
     };
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * บีบอัดรูปภาพแบบ Adaptive รับประกันขนาดไม่เกินเพดานที่กำหนด (ค่าเริ่มต้น 300 KB)
+ * ปรับลดความละเอียดและคุณภาพอย่างเป็นลำดับเพื่อรักษาความคมชัดของหลักฐานน้ำท่วม
+ */
+export async function compressImageToAdaptiveBase64(
+  file: File,
+  maxSizeBytes = 300 * 1024
+): Promise<{ dataUrl: string; sizeBytes: number }> {
+  // สร้าง image element จากไฟล์
+  const dataUrlOriginal = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = reject;
+    i.src = dataUrlOriginal;
+  });
+
+  // ลำดับขั้นตอนการลดขนาด: [maxDimension, quality]
+  const stages: Array<[number, number]> = [
+    [1280, 0.82],
+    [1024, 0.75],
+    [840, 0.65],
+    [680, 0.55],
+    [540, 0.45],
+  ];
+
+  let bestDataUrl = dataUrlOriginal;
+  let bestSizeBytes = Math.round((bestDataUrl.length * 3) / 4);
+
+  for (const [maxDim, quality] of stages) {
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const targetW = Math.max(1, Math.round(img.width * scale));
+    const targetH = Math.max(1, Math.round(img.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) continue;
+
+    ctx.drawImage(img, 0, 0, targetW, targetH);
+    const candidateUrl = canvas.toDataURL("image/jpeg", quality);
+    const candidateSize = Math.round((candidateUrl.length * 3) / 4);
+
+    bestDataUrl = candidateUrl;
+    bestSizeBytes = candidateSize;
+
+    if (candidateSize <= maxSizeBytes) {
+      break;
+    }
+  }
+
+  return { dataUrl: bestDataUrl, sizeBytes: bestSizeBytes };
+}
+
+/**
+ * ตัดช่วงพิกัด (LineString) จากเส้นทางหลวงหลักตามช่วงกิโลเมตรและทิศทาง (Linear Referencing)
+ */
+export function slicePolylineByKmRange(
+  polylineCoords: [number, number][],
+  sectionKmStart: unknown,
+  sectionKmEnd: unknown,
+  targetKmStart: unknown,
+  targetKmEnd: unknown,
+  isReverseOrientation = false
+): [number, number][] {
+  if (!Array.isArray(polylineCoords) || polylineCoords.length < 2) {
+    return polylineCoords || [];
+  }
+
+  const sKm = parseKmPostMeters(sectionKmStart);
+  const eKm = parseKmPostMeters(sectionKmEnd);
+  const tStart = parseKmPostMeters(targetKmStart);
+  const tEnd = parseKmPostMeters(targetKmEnd);
+
+  if (sKm === null || eKm === null || tStart === null || tEnd === null || sKm === eKm) {
+    return polylineCoords;
+  }
+
+  // คำนวณระยะทางสะสมตามจุดพิกัดจริง (เมตร)
+  const cumDist: number[] = [0];
+  for (let i = 1; i < polylineCoords.length; i++) {
+    const d = haversineDistanceKm(polylineCoords[i - 1], polylineCoords[i]) * 1000;
+    cumDist.push(cumDist[i - 1] + d);
+  }
+  const totalGeomMeters = cumDist[cumDist.length - 1];
+  if (totalGeomMeters <= 0) return polylineCoords;
+
+  // คำนวณสัดส่วนความยาวตามกิโลเมตร (0.0 ถึง 1.0)
+  const kmSpan = Math.abs(eKm - sKm);
+  const minKm = Math.min(sKm, eKm);
+  const maxKm = Math.max(sKm, eKm);
+
+  // ตรวจสอบทิศทาง
+  const isReverse = isReverseOrientation || sKm > eKm;
+
+  let fStart = (tStart - minKm) / kmSpan;
+  let fEnd = (tEnd - minKm) / kmSpan;
+
+  if (isReverse) {
+    fStart = 1 - fStart;
+    fEnd = 1 - fEnd;
+  }
+
+  const clampedStart = Math.max(0, Math.min(1, fStart));
+  const clampedEnd = Math.max(0, Math.min(1, fEnd));
+
+  const minFraction = Math.min(clampedStart, clampedEnd);
+  const maxFraction = Math.max(clampedStart, clampedEnd);
+
+  const targetDistStart = minFraction * totalGeomMeters;
+  const targetDistEnd = maxFraction * totalGeomMeters;
+
+  // ฟังก์ชันหาพิกัด ณ ระยะทาง dMeters
+  const interpolateAtDist = (dMeters: number): [number, number] => {
+    if (dMeters <= 0) return polylineCoords[0];
+    if (dMeters >= totalGeomMeters) return polylineCoords[polylineCoords.length - 1];
+
+    let segIdx = 0;
+    for (let i = 0; i < cumDist.length - 1; i++) {
+      if (dMeters >= cumDist[i] && dMeters <= cumDist[i + 1]) {
+        segIdx = i;
+        break;
+      }
+    }
+
+    const segLen = cumDist[segIdx + 1] - cumDist[segIdx];
+    const segFrac = segLen > 0 ? (dMeters - cumDist[segIdx]) / segLen : 0;
+    const p1 = polylineCoords[segIdx];
+    const p2 = polylineCoords[segIdx + 1];
+
+    return [
+      Number((p1[0] + (p2[0] - p1[0]) * segFrac).toFixed(6)),
+      Number((p1[1] + (p2[1] - p1[1]) * segFrac).toFixed(6)),
+    ];
+  };
+
+  const sliced: [number, number][] = [];
+  sliced.push(interpolateAtDist(targetDistStart));
+
+  for (let i = 0; i < polylineCoords.length; i++) {
+    if (cumDist[i] > targetDistStart && cumDist[i] < targetDistEnd) {
+      sliced.push(polylineCoords[i]);
+    }
+  }
+
+  sliced.push(interpolateAtDist(targetDistEnd));
+
+  // หากทิศทางย้อนกลับ ให้สลับหัวท้ายให้ตรงกับทิศทางที่ผู้ใช้ต้องการ
+  if (clampedStart > clampedEnd) {
+    sliced.reverse();
+  }
+
+  return sliced.length >= 2 ? sliced : polylineCoords;
 }
 
 /**

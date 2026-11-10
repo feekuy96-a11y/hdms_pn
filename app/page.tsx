@@ -55,12 +55,19 @@ import {
   Droplets,
 } from "lucide-react";
 import { extractDirectionalAdvice, splitDetourAdviceByDirection } from "@/lib/gis-utils";
+import { parseFloodDirectionMeta, AFFECTED_ROAD_PART_LABELS } from "@/lib/flood-event-schema";
 import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
 
-type TrafficStatus = "CLOSED" | "WARNING" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE";
+type TrafficStatus = "CLOSED" | "WARNING" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE" | "PENDING_VERIFICATION";
 
-function getTrafficPresentation(status: TrafficStatus, waterLevelCm: number) {
+function getTrafficPresentation(status: string, waterLevelCm: number, detailStatus?: string) {
+  if (detailStatus === "PENDING_VERIFICATION" || status === "PENDING_VERIFICATION") {
+    return { label: "รอตรวจสอบสถานะ", detail: "อยู่ระหว่างตรวจสอบสถานการณ์หน้างาน", icon: "⏳", color: "slate" as const };
+  }
+  if (detailStatus === "NO_SMALL_VEHICLES") {
+    return { label: "รถเล็กไม่สามารถผ่านได้", detail: `ระดับน้ำ ${waterLevelCm} ซม. รถเล็กผ่านไม่ได้`, icon: "🚗", color: "orange" as const };
+  }
   switch (status) {
     case "CLOSED":
       return { label: "ผ่านไม่ได้", detail: "รถทุกชนิดผ่านไม่ได้", icon: "⛔", color: "red" as const };
@@ -75,22 +82,33 @@ function getTrafficPresentation(status: TrafficStatus, waterLevelCm: number) {
   }
 }
 
-type StatusColor = ReturnType<typeof getTrafficPresentation>["color"];
+type StatusColor = "red" | "orange" | "amber" | "sky" | "emerald" | "slate";
 
 // Most severe first, so the points citizens must avoid are always at the top of the list.
-const STATUS_ORDER: Record<StatusColor, number> = { red: 0, amber: 1, sky: 2, emerald: 3 };
-const STATUS_BAR: Record<StatusColor, string> = { red: "#ef4444", amber: "#f59e0b", sky: "#38bdf8", emerald: "#10b981" };
+const STATUS_ORDER: Record<StatusColor, number> = { red: 0, orange: 1, amber: 2, sky: 3, emerald: 4, slate: 5 };
+const STATUS_BAR: Record<StatusColor, string> = {
+  red: "#ef4444",
+  orange: "#f97316",
+  amber: "#f59e0b",
+  sky: "#38bdf8",
+  emerald: "#10b981",
+  slate: "#64748b",
+};
 const STATUS_CHIP: Record<StatusColor, string> = {
   red: "bg-red-500/15 text-red-300 border-red-500/50",
+  orange: "bg-orange-500/15 text-orange-200 border-orange-500/50",
   amber: "bg-amber-500/15 text-amber-200 border-amber-500/50",
   sky: "bg-sky-500/15 text-sky-200 border-sky-500/50",
   emerald: "bg-emerald-500/15 text-emerald-200 border-emerald-500/50",
+  slate: "bg-slate-500/15 text-slate-300 border-slate-500/50",
 };
 const SUMMARY_ITEMS: ReadonlyArray<{ color: StatusColor; label: string; dot: string }> = [
   { color: "red", label: "ผ่านไม่ได้", dot: "bg-red-500" },
-  { color: "amber", label: "เฝ้าระวัง", dot: "bg-amber-500" },
+  { color: "orange", label: "รถเล็กไม่สามารถผ่านได้", dot: "bg-orange-500" },
+  { color: "amber", label: "เฝ้าระวัง / ระมัดระวัง", dot: "bg-amber-500" },
   { color: "sky", label: "รถเล็กผ่านได้", dot: "bg-sky-400" },
   { color: "emerald", label: "ผ่านได้ปกติ", dot: "bg-emerald-500" },
+  { color: "slate", label: "รอตรวจสอบ", dot: "bg-slate-400" },
 ];
 
 function SituationSummary({ counts }: { counts: Record<StatusColor, number> }) {
@@ -110,7 +128,21 @@ function SituationSummary({ counts }: { counts: Record<StatusColor, number> }) {
 
 // One card for the desktop sidebar and the mobile sheet (they used to be two diverging copies).
 function FloodCard({ flood, selected, onSelect }: { flood: FloodRoute; selected: boolean; onSelect: (flood: FloodRoute) => void }) {
-  const status = getTrafficPresentation(flood.traffic_status as TrafficStatus, flood.water_level_cm);
+  const meta = parseFloodDirectionMeta(flood);
+  const status = getTrafficPresentation(
+    flood.traffic_status as TrafficStatus,
+    flood.water_level_cm,
+    meta.trafficStatusDetail
+  );
+  const dirBadge = meta.directionCode === "A_TO_B"
+    ? "A → B (ตาม กม.)"
+    : meta.directionCode === "B_TO_A"
+    ? "B → A (ย้อน กม.)"
+    : meta.directionCode === "BOTH"
+    ? "A ⇄ B (๒ ฝั่ง)"
+    : null;
+  const photoCount = Array.isArray(meta.photos) && meta.photos.length > 0 ? meta.photos.length : (flood.latest_photo_url ? 1 : 0);
+
   return (
     <button
       type="button"
@@ -122,9 +154,14 @@ function FloodCard({ flood, selected, onSelect }: { flood: FloodRoute; selected:
     >
       <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: STATUS_BAR[status.color] }} />
       <span className="flex items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 items-center gap-1.5 flex-wrap">
           <span className="shrink-0 rounded-md bg-amber-400 px-2 py-0.5 font-heading text-xs font-black text-slate-950">ทล.{flood.route_no}</span>
           <span className="truncate text-xs text-slate-300">กม.{flood.km_start} - {flood.km_end}</span>
+          {dirBadge && (
+            <span className="shrink-0 rounded bg-sky-950/80 border border-sky-800/80 px-1.5 py-0.2 text-[10px] font-bold text-sky-200">
+              {dirBadge}
+            </span>
+          )}
         </span>
         <span className={`shrink-0 rounded-full border px-2.5 py-1 font-heading text-xs font-bold ${STATUS_CHIP[status.color]}`}>
           {status.icon} {status.label}
@@ -135,6 +172,9 @@ function FloodCard({ flood, selected, onSelect }: { flood: FloodRoute; selected:
         <span className="inline-flex items-center gap-1.5">
           <Droplets aria-hidden="true" className="h-4 w-4 text-sky-300" />
           ระดับน้ำ <strong className="font-mono text-sm text-white">{flood.water_level_cm}</strong> ซม.
+          {photoCount > 1 && (
+            <span className="ml-1 text-[10px] text-amber-300 font-mono font-bold">📷 {photoCount} รูป</span>
+          )}
         </span>
         <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-amber-300">
           รายละเอียด <ChevronRight aria-hidden="true" className="h-4 w-4" />
@@ -220,6 +260,7 @@ export default function HomePage() {
 
   const selectedFlood =
     systemData.floodRoutes.find((r) => r.id === selectedFloodId) || systemData.floodRoutes[0];
+  const selectedFloodMeta = React.useMemo(() => parseFloodDirectionMeta(selectedFlood), [selectedFlood]);
 
   // Parsing the advice text is regex heavy; do it once per advice text, not on every render.
   const selectedFloodKey = selectedFlood?.id;
@@ -273,20 +314,26 @@ export default function HomePage() {
     return matchSearch && matchChip;
   }).sort(
     (a, b) =>
-      STATUS_ORDER[getTrafficPresentation(a.traffic_status as TrafficStatus, a.water_level_cm).color] -
-      STATUS_ORDER[getTrafficPresentation(b.traffic_status as TrafficStatus, b.water_level_cm).color]
+      STATUS_ORDER[getTrafficPresentation(a.traffic_status as TrafficStatus, a.water_level_cm, a.direction_meta?.trafficStatusDetail).color] -
+      STATUS_ORDER[getTrafficPresentation(b.traffic_status as TrafficStatus, b.water_level_cm, b.direction_meta?.trafficStatusDetail).color]
   );
   const situationCounts = React.useMemo(() => {
-    const counts: Record<StatusColor, number> = { red: 0, amber: 0, sky: 0, emerald: 0 };
+    const counts: Record<StatusColor, number> = { red: 0, orange: 0, amber: 0, sky: 0, emerald: 0, slate: 0 };
     (systemData.floodRoutes || []).forEach((route) => {
-      if (route.is_active) counts[getTrafficPresentation(route.traffic_status as TrafficStatus, route.water_level_cm).color] += 1;
+      if (route.is_active) counts[getTrafficPresentation(route.traffic_status as TrafficStatus, route.water_level_cm, route.direction_meta?.trafficStatusDetail).color] += 1;
     });
     return counts;
   }, [systemData.floodRoutes]);
-  const activeFloodCount = situationCounts.red + situationCounts.amber + situationCounts.sky + situationCounts.emerald;
-  const dossierStatus = getTrafficPresentation((selectedFlood?.traffic_status ?? "PASSABLE") as TrafficStatus, selectedFlood?.water_level_cm ?? 0);
+  const activeFloodCount = situationCounts.red + situationCounts.orange + situationCounts.amber + situationCounts.sky + situationCounts.emerald + situationCounts.slate;
+  const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
+  const dossierStatus = getTrafficPresentation(
+    (selectedFlood?.traffic_status ?? "PASSABLE") as TrafficStatus,
+    selectedFlood?.water_level_cm ?? 0,
+    selectedFlood?.direction_meta?.trafficStatusDetail
+  );
   const handleSelectFlood = (flood: FloodRoute) => {
     setSelectedFloodId(flood.id);
+    setActivePhotoIdx(0);
     setShowDossier(true);
     setIsMobileDrawerOpen(false);
     if (flood.lat_start && flood.lon_start) setFocusCoordinates([flood.lon_start, flood.lat_start]);
@@ -838,11 +885,33 @@ export default function HomePage() {
                         <span className={`rounded-full border px-2.5 py-1 font-heading text-xs font-bold ${STATUS_CHIP[dossierStatus.color]}`}>
                           {dossierStatus.icon} {dossierStatus.label}
                         </span>
+                        {selectedFloodMeta.directionCode && (
+                          <span className="rounded bg-sky-950/90 border border-sky-700/80 px-2 py-0.5 text-sky-200 text-xs font-semibold">
+                            {selectedFloodMeta.directionCode === "A_TO_B"
+                              ? "ตามหลัก กม. (ขาไป A → B)"
+                              : selectedFloodMeta.directionCode === "B_TO_A"
+                              ? "ย้อนหลัก กม. (ขากลับ B → A)"
+                              : "ไป-กลับ ๒ ทิศทาง (A ⇄ B)"}
+                          </span>
+                        )}
                       </div>
                       <h3 className="font-heading text-base font-bold leading-snug text-white">{selectedFlood.section_name}</h3>
                       <p className="text-xs text-slate-300">
                         กม.{selectedFlood.km_start} ถึง กม.{selectedFlood.km_end} ({selectedFlood.subdistrict || selectedFlood.district || "อ.หนองจิก"})
                       </p>
+                      {selectedFloodMeta.villageOrLandmark && (
+                        <p className="text-xs text-amber-300 font-medium">📍 {selectedFloodMeta.villageOrLandmark}</p>
+                      )}
+                      {selectedFloodMeta.affectedParts && selectedFloodMeta.affectedParts.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] mt-1">
+                          <span className="text-slate-400 font-medium">ส่วนถนนที่ท่วม:</span>
+                          {selectedFloodMeta.affectedParts.map((part) => (
+                            <span key={part} className="rounded bg-slate-800/90 border border-slate-700 px-2 py-0.5 text-amber-200">
+                              {AFFECTED_ROAD_PART_LABELS[part] || part}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       {(selectedFlood.road_side || selectedFlood.affected_lanes) && (
                         <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
                           {selectedFlood.road_side && (
@@ -1023,29 +1092,66 @@ export default function HomePage() {
 
                   </div>
                   <div className="sm:col-start-1 sm:row-start-1">
-                  {/* Left: Photo with GPS overlay */}
-                  <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900 group">
-                    {selectedFlood.latest_photo_url ? (
-                      <img
-                        src={selectedFlood.latest_photo_url}
-                        alt={`ภาพสถานการณ์ ${selectedFlood.section_name}`}
-                        className="w-full h-36 object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-36 items-center justify-center px-4 text-center text-xs text-slate-400">ยังไม่มีภาพถ่ายสถานการณ์ล่าสุด</div>
-                    )}
-                    {/* Animated Alert Badge Overlay on photo */}
-                    <div className="absolute top-2 left-2 z-10">
-                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/95 px-2.5 py-1 text-[10px] font-heading font-black text-white shadow-xl">
-                        {getTrafficPresentation(selectedFlood.traffic_status, selectedFlood.water_level_cm).icon} {getTrafficPresentation(selectedFlood.traffic_status, selectedFlood.water_level_cm).label}
-                      </span>
-                    </div>
-                    <div className="p-1.5 bg-slate-950/90 text-[10px] text-slate-400 flex items-center justify-between font-mono">
-                      <span>📍 ภาพถ่ายหน้างานพร้อมพิกัด GPS: {selectedFlood.lat_start.toFixed(3)}, {selectedFlood.lon_start.toFixed(3)}</span>
-                    </div>
-                  </div>
+                  {/* Left: Photo with GPS overlay & Multi-photo thumbnail gallery */}
+                  {(() => {
+                    const photos = selectedFloodMeta.photos || [];
+                    const displayPhotoUrl = photos[activePhotoIdx]?.dataUrl || selectedFlood.latest_photo_url;
+                    return (
+                      <div className="space-y-2">
+                        <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900 group">
+                          {displayPhotoUrl ? (
+                            <img
+                              src={displayPhotoUrl}
+                              alt={`ภาพสถานการณ์ ${selectedFlood.section_name}`}
+                              className="w-full h-36 sm:h-44 object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-36 items-center justify-center px-4 text-center text-xs text-slate-400">ยังไม่มีภาพถ่ายสถานการณ์ล่าสุด</div>
+                          )}
+                          {/* Animated Alert Badge Overlay on photo */}
+                          <div className="absolute top-2 left-2 z-10">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/95 px-2.5 py-1 text-[10px] font-heading font-black text-white shadow-xl">
+                              {dossierStatus.icon} {dossierStatus.label}
+                            </span>
+                          </div>
+                          <div className="p-1.5 bg-slate-950/90 text-[10px] text-slate-400 flex items-center justify-between font-mono">
+                            <span>📍 ภาพถ่ายหน้างาน: {selectedFlood.lat_start?.toFixed(3)}, {selectedFlood.lon_start?.toFixed(3)}</span>
+                            {photos.length > 0 && (
+                              <span className="text-amber-300 font-bold">ภาพ {activePhotoIdx + 1}/{photos.length}</span>
+                            )}
+                          </div>
+                        </div>
 
-
+                        {/* Thumbnail gallery if multiple photos exist */}
+                        {photos.length > 1 && (
+                          <div className="flex items-center gap-2 overflow-x-auto pb-1" aria-label="ภาพถ่ายสถานการณ์เพิ่มเติม">
+                            {photos.map((photo, idx) => (
+                              <button
+                                key={photo.id || idx}
+                                type="button"
+                                onClick={() => setActivePhotoIdx(idx)}
+                                className={`relative w-14 h-14 rounded-lg overflow-hidden border-2 transition shrink-0 cursor-pointer ${
+                                  activePhotoIdx === idx
+                                    ? "border-amber-400 ring-2 ring-amber-400/50 shadow-md scale-105"
+                                    : "border-slate-700 opacity-60 hover:opacity-100"
+                                }`}
+                                aria-label={`ดูภาพที่ ${idx + 1}`}
+                              >
+                                <img
+                                  src={photo.dataUrl}
+                                  alt={`ภาพย่อที่ ${idx + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                                <span className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[8px] text-center text-white font-mono">
+                                  {Math.round(photo.sizeBytes / 1024)} KB
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   </div>
                   <div className="sm:col-span-2 sm:row-start-3">
                 {/* Timeline Section */}

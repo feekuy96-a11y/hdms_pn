@@ -435,3 +435,4 @@ export function interpolateKmFromCoordinate(
     confidence: "INTERPOLATED",
   };
 }
+

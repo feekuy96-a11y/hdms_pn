@@ -26,6 +26,12 @@
   z-index: 1;
 }
 
+/* Position Leaflet zoom controls to avoid colliding with top status bar badges on mobile */
+.leaflet-top.leaflet-left .leaflet-control-zoom {
+  margin-top: 52px !important;
+  margin-left: 12px !important;
+}
+
 .leaflet-tile-pane {
   opacity: 1 !important;
 }
@@ -302,6 +308,19 @@
   background: #047857;
   color: #ffffff;
   border: 1.5px solid #a7f3d0;
+}
+
+.doh-capsule-orange {
+  background: #ea580c;
+  color: #ffffff;
+  border: 1.5px solid #fed7aa;
+  animation: warningPulseGlow 2s infinite;
+}
+
+.doh-capsule-slate {
+  background: #475569;
+  color: #ffffff;
+  border: 1.5px solid #cbd5e1;
 }
 
 /* Accessibility: Respect prefers-reduced-motion */

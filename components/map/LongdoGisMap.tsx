@@ -267,6 +267,7 @@ function buildFloodPopupHtml(flood: FloodRoute, updates: TimelineUpdate[]): stri
       </div>
       ${unreportedSideNote}
       ${flood.latest_photo_url ? `<img src="${escapeHtml(flood.latest_photo_url)}" alt="ภาพสถานการณ์น้ำท่วม" class="w-full h-28 object-cover rounded-lg mt-2 border border-slate-700 shadow-inner"/>` : ""}
+      ${Array.isArray(flood.direction_meta?.photos) && flood.direction_meta.photos.length > 1 ? `<div class="mt-1 text-[10px] text-amber-300 font-mono text-right">📷 มีภาพถ่ายหน้างาน ${flood.direction_meta.photos.length} ภาพ (≤300KB)</div>` : ""}
       <div class="mt-2 pt-1.5 border-t border-slate-800 flex items-center justify-between">
         <span class="text-slate-300 text-xs">ระดับน้ำล่าสุด:</span>
         <strong class="text-amber-400 text-sm font-bold font-mono">${escapeHtml(levelDisplay)}</strong>
@@ -1021,15 +1022,35 @@ export function LongdoGisMap({
       const midLat = midCoord ? midCoord[1] : (flood.lat_start || APP_CONFIG.DEFAULT_CENTER.lat);
       const midLon = midCoord ? midCoord[0] : (flood.lon_start || APP_CONFIG.DEFAULT_CENTER.lon);
 
-      const waterKnown = flood.direction_meta?.water_level_known !== false;
-      let capsuleClass = "doh-capsule-tag doh-capsule-amber";
+      const meta = flood.direction_meta;
+      const trafficDetail = meta?.trafficStatusDetail;
+      const waterKnown = meta?.water_level_known !== false;
       const levelText = waterKnown ? `${flood.water_level_cm} ซม.` : "รอวัดระดับน้ำ";
-      if (flood.traffic_status === "CLOSED" || (waterKnown && flood.water_level_cm >= 40)) {
+
+      // 5-Color Traffic Status Presentation on Map Capsule Pins
+      let capsuleClass = "doh-capsule-tag doh-capsule-amber";
+      if (flood.traffic_status === "CLOSED" || trafficDetail === "CLOSED") {
         capsuleClass = "doh-capsule-tag doh-capsule-red";
-      } else if (["PASSABLE", "LIGHT_VEHICLES_ONLY"].includes(flood.traffic_status)) {
+      } else if (trafficDetail === "NO_SMALL_VEHICLES" || flood.traffic_status === "LIGHT_VEHICLES_ONLY") {
+        capsuleClass = "doh-capsule-tag doh-capsule-orange";
+      } else if (trafficDetail === "CAUTION" || flood.traffic_status === "ONE_LANE" || flood.traffic_status === "WARNING") {
+        capsuleClass = "doh-capsule-tag doh-capsule-amber";
+      } else if (flood.traffic_status === "PASSABLE" || trafficDetail === "PASSABLE") {
         capsuleClass = "doh-capsule-tag doh-capsule-green";
+      } else if (trafficDetail === "PENDING_VERIFICATION") {
+        capsuleClass = "doh-capsule-tag doh-capsule-slate";
       }
-      const sideBadge = flood.road_side === "LEFT" ? " [ซ้าย]" : flood.road_side === "RIGHT" ? " [ขวา]" : "";
+
+      const dirCode = meta?.directionCode;
+      const sideBadge = dirCode === "A_TO_B"
+        ? " [ขาไป]"
+        : dirCode === "B_TO_A"
+        ? " [ขากลับ]"
+        : flood.road_side === "LEFT"
+        ? " [ซ้าย]"
+        : flood.road_side === "RIGHT"
+        ? " [ขวา]"
+        : "";
 
       const pinIcon = L.divIcon({
         html: `

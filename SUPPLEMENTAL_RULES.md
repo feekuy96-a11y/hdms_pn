@@ -653,3 +653,32 @@
   - `npm run lint` (`--max-warnings=0`): ผ่าน (0 warnings)
   - `npm run typecheck`: ผ่าน (0 errors)
 - **สถานะ:** พร้อม deploy บน GitHub
+
+
+---
+
+### [UPDATE-061] Phase 2 — ระบบจัดการและรายงานสถานการณ์น้ำท่วม (Parent–Child Flood Management)
+- **วันที่:** 2026-11-10
+- **วัตถุประสงค์:** พัฒนาระบบจัดการและรายงานสถานการณ์น้ำท่วม Phase 2 รองรับโครงสร้างเหตุการณ์หลัก 1 รายการมีหลายช่วง กม. และหลายทิศทาง (Parent Event ↔ Child Segments), ระบบตัดแนวเส้น GIS อัตโนมัติ (Linear Referencing), สถานะจราจร 5 สีบนแผนที่, และระบบอัปโหลดรูปภาพหน้างานสูงสุด 5 รูป (<= 300 KB/รูป)
+- **ไฟล์ที่เกี่ยวข้อง:**
+  - `lib/flood-event-schema.ts` (ใหม่)
+  - `lib/gis-utils.ts`
+  - `app/globals.css`
+  - `components/admin/tabs/MapManagementTab.tsx`
+  - `components/admin/tabs/IncidentRegistryTab.tsx`
+  - `components/map/LongdoGisMap.tsx`
+  - `app/page.tsx`
+  - `eslint.config.mjs`
+  - `docs/CHANGELOG.md`
+- **รายละเอียดการทำงาน:**
+  1. ออกแบบสถาปัตยกรรมข้อมูล Parent–Child เหตุการณ์หลักและช่วงย่อย (ทางเลือก 1) ใน `lib/flood-event-schema.ts` เก็บใน `direction_meta` (JSONB) โดยไม่ต้อง Migrate Database
+  2. เพิ่มฟังก์ชัน `slicePolylineByKmRange` ใน `lib/gis-utils.ts` คำนวณตัดแนวเส้น GIS อัตโนมัติตามช่วง กม. และทิศทาง
+  3. เพิ่มระบบบีบอัดภาพหน้างาน `compressImageToAdaptiveBase64` รองรับสูงสุด 5 รูป บีบอัดขนาดไม่เกิน 300 KB ต่อรูป
+  4. แสดงผลป้ายแคปซูลและสถานะจราจร 5 สีตามมาตรฐาน (เขียว, เหลือง, ส้ม, แดง, เทา) ทั้งบนแผนที่และการ์ดสรุป พร้อมปรับ Leaflet Zoom Controls ไม่ให้ชนป้ายด้านบน
+  5. ปรับปรุงแผงจัดการสำหรับเจ้าหน้าที่ (`MapManagementTab.tsx` & `IncidentRegistryTab.tsx`) ให้เลือกเหตุการณ์หลัก, ทิศทาง, ส่วนถนนที่ท่วม, อัปโหลด 5 รูป, และมีปุ่ม "✂️ แบ่งช่วงน้ำท่วม" (Split Segment)
+  6. ปรับปรุงมุมมองประชาชน (`app/page.tsx`) แสดงป้ายชิปทิศทาง, แกลเลอรีรูปภาพขนาดย่อ, และรายละเอียดส่วนถนนที่ท่วม
+- **การทดสอบและผลลัพธ์:**
+  - `npm run lint` (`--max-warnings=0`): ผ่านฉลุย 0 warnings
+  - `npm run typecheck`: ผ่านฉลุย 0 errors
+  - Next.js Static Export build: ผ่าน 100% (6/6 static pages prerendered)
+- **สถานะ:** ใช้งานได้จริง (ACTIVE) / พร้อม Commit และ Deploy บน GitHub Pages

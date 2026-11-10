@@ -62,7 +62,25 @@
 - **ตรวจแล้ว:** `npm run lint` (`--max-warnings=0`), `npm run typecheck`, และ `NEXT_OUTPUT=export npm run build` ผ่านทั้งหมด (6/6 static pages) · **ยังไม่ได้ตรวจ:** รันไฟล์ SQL migration บนฐานข้อมูล Supabase จริง และรัน Edge Function บนคลาวด์จริง
 - **ลำดับ deploy:** 1) รัน SQL `supabase/migrations/20261109000100_directional_flood_and_detour.sql` → 2) Deploy Edge Function `supabase/functions/hdms-api/index.ts` → 3) Deploy เว็บ (ทั้ง Edge Function และเว็บมีระบบ fallback อัตโนมัติหากยังไม่ได้รัน SQL)
 
-### [UPDATE-060] 2026-11-10 Phase 1: จัดการสายทาง Parent–Child สองทิศทางและแก้ CI Empty State
+### [UPDATE-061] 2026-11-10 Phase 2: ระบบจัดการและรายงานสถานการณ์น้ำท่วม (Flood Event Management System)
+- **ไฟล์:** `lib/flood-event-schema.ts` (ใหม่), `lib/gis-utils.ts`, `app/globals.css`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/map/LongdoGisMap.tsx`, `app/page.tsx`, `eslint.config.mjs`
+- **ทำอะไร:**
+  1. **สถาปัตยกรรมข้อมูล Parent–Child เหตุการณ์หลักและช่วงย่อย (ทางเลือก 1):** ออกแบบ Schema ใน `lib/flood-event-schema.ts` เชื่อมโยงเหตุการณ์หลัก (Parent Event ID, Code, Title) กับช่วงย่อย (Child Segments) ผ่าน `direction_meta` (JSONB) บนตาราง `doh_flood_routes` เดิม 100% ไม่ต้อง Migrate Database ข้อมูลผูกกับ `doh_timeline_updates` และ `doh_detour_routes` ได้อย่างสมบูรณ์
+  2. **ระบบตัดแนวเส้น GIS ตามช่วง กม. อัตโนมัติ (Linear Referencing):** เพิ่มฟังก์ชัน `slicePolylineByKmRange` ใน `lib/gis-utils.ts` ตัดแนวเส้นเฉพาะช่วง กม. ที่ท่วมตามทิศทางสายทางจริง (`A_TO_B` หรือ `B_TO_A`) จากจุดเริ่ม กม. ถึงจุดสิ้นสุด กม. ไม่ต้องวาดเส้นซ้ำ
+  3. **การแสดงผล 5 สีสถานะจราจรบนแผนที่:** รองรับสถานะ 5 สีตามมาตรฐาน (เขียว `#16a34a`, เหลือง `#eab308`, ส้ม `#f97316`, แดง `#dc2626`, เทา `#64748b`) ทั้งบนป้ายแคปซูล (`LongdoGisMap.tsx`), การ์ดสรุปสถานการณ์, แถบสถานะ, และชิปแสดงผล พร้อมแก้ไข Leaflet Zoom Controls ไม่ให้ชนกับป้ายด้านบน
+  4. **ระบบอัปโหลดรูปภาพหน้างานสูงสุด 5 รูป (Adaptive Client-Side Compression):** ฟังก์ชัน `compressImageToAdaptiveBase64` บีบอัดภาพหน้างานอัตโนมัติให้มีขนาดไม่เกิน 300 KB ต่อรูป จัดเก็บรูปแรกใน `latest_photo_url` และอาเรย์ภาพทั้งหมดใน `direction_meta.photos` แสดงแกลเลอรีรูปขนาดย่อ (Thumbnail strip) ในหน้าต่างรายละเอียดฝั่งประชาชน
+  5. **แผงจัดการสำหรับเจ้าหน้าที่ (`MapManagementTab.tsx` & `IncidentRegistryTab.tsx`):**
+     - รองรับการเลือก/สร้างเหตุการณ์หลัก (Parent Event)
+     - เลือกทิศทาง (`A_TO_B`, `B_TO_A`, `BOTH`)
+     - เลือกส่วนของถนนที่ได้รับผลกระทบ (Multi-select chips: ผิวทางซ้าย/ขวา, ไหล่ทางซ้าย/ขวา, ทางขนาน)
+     - ปุ่ม "✂️ แบ่งช่วงน้ำท่วม" (Split Segment) สำหรับแบ่งช่วงกิโลเมตรและสถานะแยกอิสระ
+     - ยืนยันระดับน้ำลดเหลือ 0 ซม. โดยไม่เปลี่ยนสถานะเป็นผ่านได้ปกติอัตโนมัติ
+- **ตรวจแล้ว:**
+  - `npm run typecheck` (`tsc --noEmit`): ผ่าน Exit Code 0
+  - `npm run lint` (`eslint . --max-warnings=0`): ผ่าน Exit Code 0
+  - Static Export Build (`cmd /c "set NEXT_OUTPUT=export && npx next build"`): ผ่าน 100% (6/6 static routes prerendered)
+- **ยังไม่ได้ตรวจ:** Playwright E2E บนเครื่องนี้เนื่องจากไม่มี binary Chromium ของ Playwright ติดตั้งไว้ในเครื่องผู้ใช้ (ใช้ได้บน CI ของ GitHub Actions)
+- **ลำดับ deploy:** เว็บไซต์ (GitHub Pages) ขั้นเดียว ไม่ต้องรัน Migration ฐานข้อมูลหรือ Edge Function ใหม่
 - **ไฟล์:** `lib/highway-schema.ts` (ใหม่), `components/admin/tabs/GisDataImportTab.tsx`, `tests/e2e/admin-menus.spec.ts`
 - **ทำอะไร:**
   1. **แก้ปัญหา CI แดงจาก Empty State (`tests/e2e/admin-menus.spec.ts`):** ปรับปรุง assertion ของหมวดรายการเหตุการณ์ให้รองรับกรณีฐานข้อมูลว่างเปล่า (Empty State ขณะรอลงข้อมูลใหม่) ด้วย pattern `if (await floodSymbol.count()) ... else ...` เช่นเดียวกับฝั่งทางเลี่ยง เพื่อไม่ให้ CI timeout 5 วินาที
