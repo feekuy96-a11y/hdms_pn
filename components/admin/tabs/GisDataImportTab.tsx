@@ -1568,15 +1568,15 @@ export function GisDataImportTab({
                 <tr>
                   <th className="p-3 w-10 text-center">#</th>
                   <th className="p-3 w-16 text-center">แสดงผล</th>
-                  <th className="p-3">หมายเลขทางหลวง</th>
-                  <th className="p-3">ชื่อสายทาง / ตอนควบคุม</th>
-                  <th className="p-3">ช่วง กม.</th>
-                  <th className="p-3">ระยะทาง</th>
-                  <th className="p-3">ช่องจราจร (แผนที่)</th>
-                  <th className="p-3">ชนิดผิวจราจร</th>
-                  <th className="p-3">หน่วยงานรับผิดชอบ</th>
+                  <th className="p-3 whitespace-nowrap min-w-[130px]">หมายเลขทางหลวง</th>
+                  <th className="p-3 whitespace-nowrap min-w-[220px]">ชื่อสายทาง / ตอนควบคุม</th>
+                  <th className="p-3 whitespace-nowrap">ช่วง กม.</th>
+                  <th className="p-3 whitespace-nowrap">ระยะทาง</th>
+                  <th className="p-3 whitespace-nowrap">ช่องจราจร (แผนที่)</th>
+                  <th className="p-3 whitespace-nowrap">ชนิดผิวจราจร</th>
+                  <th className="p-3 whitespace-nowrap">หน่วยงานรับผิดชอบ</th>
                   <th className="p-3">หมายเหตุ</th>
-                  <th className="p-3 text-right">การจัดการ</th>
+                  <th className="p-3 text-right whitespace-nowrap">การจัดการ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80 font-body">
@@ -1767,8 +1767,8 @@ export function GisDataImportTab({
                                 {isBranchVis ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                               </button>
                             </td>
-                            <td className="p-2.5">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            <td className="p-2.5 whitespace-nowrap">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap inline-block ${
                                 branch.directionCode === "A_TO_B"
                                   ? "bg-sky-950 text-sky-300 border border-sky-600"
                                   : branch.directionCode === "B_TO_A"
@@ -1778,11 +1778,8 @@ export function GisDataImportTab({
                                 {branch.directionCode === "A_TO_B" ? "ขาไป (A → B)" : branch.directionCode === "B_TO_A" ? "ขากลับ (B → A)" : "๒ ทิศทาง"}
                               </span>
                             </td>
-                            <td className="p-2.5">
-                              <div className="flex items-center gap-1.5 text-slate-300">
-                                <span>{branch.branchLabel}</span>
-                                <span className="text-[10px] text-slate-400 font-mono">({branch.coordinates.length} จุด)</span>
-                              </div>
+                            <td className="p-2.5 whitespace-nowrap">
+                              <span className="text-slate-300 font-medium">{branch.branchLabel}</span>
                             </td>
                             <td className="p-2.5 font-mono text-[11px] text-amber-300/90 whitespace-nowrap">
                               {formatKilometerPost(branch.properties?.km_start) || group.kmStart} - {formatKilometerPost(branch.properties?.km_end) || group.kmEnd}

@@ -3,11 +3,12 @@ import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 const headers = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Content-Type": "application/json",
   "Cache-Control": "no-store",
 };
-const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
+const reply = (body: unknown, status = 200, customHeaders?: Record<string, string>) =>
+  new Response(JSON.stringify(body), { status, headers: { ...headers, ...customHeaders } });
 const fail = (message: string, status = 400): never => { throw Object.assign(new Error(message), { status }); };
 const text = (value: unknown, label: string) => typeof value === "string" && value.trim() ? value.trim() : fail(`${label} required`);
 const number = (value: unknown, min: number, max: number) => typeof value === "number" && Number.isFinite(value) && value >= min && value <= max ? value : fail("Invalid numeric value");
@@ -19,14 +20,30 @@ const typeTable = (type: unknown) => type === "FLOOD" ? "doh_flood_routes" : typ
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
-  if (req.method !== "POST") return reply({ error: "Method not allowed" }, 405);
   try {
-    const raw = await req.text();
-    if (raw.length > 25 * 1024 * 1024) return reply({ error: "Request too large" }, 413);
-    // `light: true` (sent by the web app for writes) means the caller will reload the data itself, so
-    // the response only needs to confirm success instead of re-sending the whole system payload.
-    const { action, args = [], light = false } = JSON.parse(raw);
-    if (!Array.isArray(args)) fail("Invalid arguments");
+    let action = "";
+    let args: any[] = [];
+    let light = false;
+
+    if (req.method === "GET") {
+      const reqUrl = new URL(req.url);
+      action = reqUrl.searchParams.get("action") || "";
+      if (action !== "getPublicSystemDataAction" && action !== "getSystemDataAction") {
+        return reply({ error: "Method not allowed" }, 405);
+      }
+    } else if (req.method === "POST") {
+      const raw = await req.text();
+      if (raw.length > 25 * 1024 * 1024) return reply({ error: "Request too large" }, 413);
+      // `light: true` (sent by the web app for writes) means the caller will reload the data itself, so
+      // the response only needs to confirm success instead of re-sending the whole system payload.
+      const parsed = JSON.parse(raw);
+      action = parsed.action;
+      args = parsed.args || [];
+      light = parsed.light || false;
+      if (!Array.isArray(args)) fail("Invalid arguments");
+    } else {
+      return reply({ error: "Method not allowed" }, 405);
+    }
     const url = Deno.env.get("SUPABASE_URL")!;
     const key = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -63,7 +80,11 @@ Deno.serve(async (req) => {
       return data;
     };
     if (action === "getSystemDataAction") return reply(await system());
-    if (action === "getPublicSystemDataAction") return reply(await system(true));
+    if (action === "getPublicSystemDataAction") {
+      return reply(await system(true), 200, {
+        "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
+      });
+    }
     if (mutation && !serviceKey) return reply({ error: "Server mutation key is not configured" }, 503);
     const [p, second] = args;
     const now = new Date().toISOString();
@@ -117,7 +138,15 @@ Deno.serve(async (req) => {
         const extRow: Record<string, unknown> = {};
         if (p.recordType === "FLOOD") {
           Object.assign(baseRow, { route_no: text(p.routeNo ?? existing.route_no, "Route"), section_name: text(p.sectionName ?? existing.section_name, "Section"), km_start: text(p.kmStart ?? existing.km_start, "Start KM"), km_end: text(p.kmEnd ?? existing.km_end, "End KM"), water_level_cm: number(p.waterLevelCm ?? existing.water_level_cm ?? 0, 0, 10000), traffic_status: traffic(p.trafficStatus ?? existing.traffic_status ?? "WARNING"), latest_photo_url: p.photoUrl ?? p.latestPhotoUrl ?? existing.latest_photo_url ?? "", district: p.district ?? existing.district ?? "", subdistrict: p.subdistrict ?? existing.subdistrict ?? "", detour_advice: p.detourAdvice ?? existing.detour_advice ?? "" });
-          Object.assign(extRow, { road_side: roadSide(p.roadSide ?? existing.road_side ?? "UNKNOWN"), affected_lanes: String(p.affectedLanes ?? existing.affected_lanes ?? ""), affected_shoulder: shoulder(p.affectedShoulder ?? existing.affected_shoulder ?? "NONE"), reporter_name: String(p.reporterName ?? existing.reporter_name ?? ""), direction_meta: (p.directionMeta && typeof p.directionMeta === "object") ? p.directionMeta : (existing.direction_meta ?? {}) });
+          const resolvedSide = roadSide(
+            p.roadSide ??
+            p.directionMeta?.roadSide ??
+            (p.directionMeta?.directionCode === "A_TO_B" ? "LEFT" : p.directionMeta?.directionCode === "B_TO_A" ? "RIGHT" : p.directionMeta?.directionCode === "BOTH" ? "BOTH" : undefined) ??
+            existing.road_side ??
+            "BOTH"
+          );
+          const metaObj = (p.directionMeta && typeof p.directionMeta === "object") ? { ...p.directionMeta, roadSide: resolvedSide } : (existing.direction_meta ?? {});
+          Object.assign(extRow, { road_side: resolvedSide, affected_lanes: String(p.affectedLanes ?? existing.affected_lanes ?? ""), affected_shoulder: shoulder(p.affectedShoulder ?? existing.affected_shoulder ?? "NONE"), reporter_name: String(p.reporterName ?? existing.reporter_name ?? ""), direction_meta: metaObj });
         } else {
           const revGeometry = Array.isArray(p.reverseCoordinates) ? p.reverseCoordinates : (existing.reverse_coordinates_json ?? []);
           if (Array.isArray(revGeometry) && revGeometry.length > 0) {

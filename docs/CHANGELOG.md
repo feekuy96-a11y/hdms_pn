@@ -200,3 +200,49 @@
   - `NEXT_OUTPUT=export next build`: ผ่าน 100% สร้าง Static pages 6/6 หน้าสมบูรณ์
   - สัญญากับ E2E (Rule R7): ปุ่ม `แนวถนน`, `ตั้งค่า`, `+ เพิ่มสายทางใหม่` ยังคงมี accessible name ครบถ้วน
 - **ลำดับ deploy:** เว็บไซต์ (GitHub Pages) ขั้นเดียว ไม่กระทบ Database หรือ Edge Function
+
+### [UPDATE-065] 2026-11-10 ปรับปรุง UI นำเข้า GIS, ลบ Header แอดมิน, ลบโค้ดค้าง, เพิ่มแคช Edge Function, สร้าง Event Code และตำแหน่งอัตโนมัติ, แก้บั๊กฝั่งถนน
+- **ไฟล์:**
+  - `components/admin/tabs/GisDataImportTab.tsx` (แก้)
+  - `app/admin/page.tsx` (แก้)
+  - `db/supabase-server.ts` (ลบ - Dead code B-007)
+  - `lib/auth.ts` (ลบ - Dead code B-007)
+  - `server/routing-service.mjs` (ลบ - Dead code B-007)
+  - `supabase/functions/hdms-api/index.ts` (แก้)
+  - `lib/flood-event-schema.ts` (แก้)
+  - `components/map/LongdoGisMap.tsx` (แก้)
+  - `app/page.tsx` (แก้)
+  - `components/admin/tabs/MapManagementTab.tsx` (แก้)
+  - `components/admin/tabs/IncidentRegistryTab.tsx` (แก้)
+  - `docs/BACKLOG.md` (แก้)
+  - `docs/CHANGELOG.md` (แก้)
+- **ทำอะไร:**
+  1. **ตารางนำเข้า GIS (`GisDataImportTab.tsx`):**
+     - ปรับ table `thead` และ `tbody` ให้มี `whitespace-nowrap` ป้องกันข้อความถูกบีบขึ้นบรรทัดใหม่
+     - นำข้อความแสดงจำนวนจุดพิกัด `({branch.coordinates.length} จุด)` ออกจากแถวย่อยตามภาพที่ 1
+  2. **Header หน้าแอดมิน (`app/admin/page.tsx`):**
+     - ลบปุ่มออกจากระบบ (`LogOut`), ปุ่มสีแดง `รายงานผู้ว่าฯ ด่วน`, และปุ่มแสดงสถานะ `OfflineSyncStatus` ออกจาก Header ตามภาพที่ 2
+  3. **ล้าง Dead Code (B-007):**
+     - ลบ `lib/auth.ts` (better-auth ที่ไม่ได้ใช้งาน), `db/supabase-server.ts` (service key เก่า), และ `server/routing-service.mjs` พร้อมโฟลเดอร์ `server/` ออกจากระบบ
+  4. **แคชข้อมูลสาธารณะใน Edge Function (B-010):**
+     - ใน `supabase/functions/hdms-api/index.ts`: เพิ่มการรองรับ HTTP GET method สำหรับ `action=getPublicSystemDataAction`
+     - ส่ง Header `Cache-Control: public, s-maxage=15, stale-while-revalidate=30` เมื่อเรียกดูข้อมูลสาธารณะ เพื่อลดภาระการ query Database ซ้ำๆ ในช่วงวิกฤตที่มีประชาชนเข้าชมจำนวนมาก
+  5. **สร้างรหัสเหตุการณ์และดึงตำแหน่งจากพิกัดอัตโนมัติ:**
+     - ใน `lib/flood-event-schema.ts`: เพิ่มฟังก์ชัน `generateNextEventCode` คำนวณรหัสถัดไปตามสายทาง (เช่น `FL-42-01`)
+     - ใน `MapManagementTab.tsx`:
+       - สร้างรหัสเหตุการณ์อัตโนมัติทันทีที่เลือกสายทาง พร้อมปุ่ม `⚡ สร้างอัตโนมัติ`
+       - ดึงชื่อหมู่บ้าน/ตำบล/อำเภออัตโนมัติเมื่อตัดเส้นจาก กม. (`getDetailedPattaniAddress`) พร้อมปุ่ม `📍 ดึงจากพิกัด` ให้เจ้าหน้าที่กดได้ตลอดเวลา
+  6. **แก้ปัญหา "ฝั่ง ไม่ระบุฝั่ง" (Road Side Resolution):**
+     - ใน `lib/flood-event-schema.ts`: เพิ่ม `resolveEffectiveRoadSide(flood)` ตรวจสอบฝั่งถนนแบบครบวงจร ทั้งจาก `road_side`, `direction_meta.roadSide`, `direction_meta.directionCode` (A_TO_B -> LEFT, B_TO_A -> RIGHT, BOTH -> BOTH), และ `affectedParts`
+     - ใน `MapManagementTab.tsx`: เชื่อมโยง `effectiveRoadSide` บันทึกเข้าทั้งฟิลด์ `roadSide` และ `directionMeta.roadSide` และปรับปุ่มเลือกฝั่งให้แสดงข้อความชัดเจน
+     - ใน `IncidentRegistryTab.tsx`: รักษาค่า `effectiveRoadSide` เมื่อแบ่งช่วง, รวมช่วง, และอัปเดตสถานการณ์ด่วน
+     - ใน `supabase/functions/hdms-api/index.ts`: ตรวจสอบและซิงค์ `road_side` เข้า `doh_flood_routes` และ `direction_meta` เสมอ
+     - ใน `components/map/LongdoGisMap.tsx` และ `app/page.tsx`: แสดงผลข้อความฝั่งถนนที่ถูกต้อง ชัดเจน และไม่มีคำว่า "ไม่ระบุฝั่ง" อีกต่อไป
+- **ตรวจแล้ว:**
+  - `npm run lint` (`--max-warnings=0`)
+  - `npm run typecheck` (`tsc --noEmit`)
+  - `NEXT_OUTPUT=export next build` (Static export 6/6 หน้า)
+- **ลำดับ deploy:**
+  1. **Edge Function:** Deploy `hdms-api` (`supabase functions deploy hdms-api --no-verify-jwt`)
+  2. **เว็บไซต์:** Push ขึ้น GitHub (GitHub Pages deploy ผ่าน GitHub Actions)
+  (ขั้นตอน SQL ไม่ต้องทำ)

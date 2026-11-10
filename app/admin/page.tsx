@@ -33,7 +33,7 @@ import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { ArrowLeft, RotateCw, LogOut, FileText, PieChart, Settings, Smartphone, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ArrowLeft, RotateCw, FileText, PieChart, Settings, Smartphone, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 import { ExecutiveDashboard } from "@/components/executive/ExecutiveDashboard";
 import { usePollingActivity } from "@/lib/use-polling-activity";
@@ -217,17 +217,6 @@ export default function AdminPage() {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          <button type="button" title="ออกจากระบบ" className="p-2 text-slate-300 hover:text-amber-400" onClick={async () => { await createClient().auth.signOut(); }}><LogOut className="w-4 h-4" /></button>
-          <button
-            type="button"
-            onClick={() => setIsDispatchModalOpen(true)}
-            className="bg-red-600 hover:bg-red-500 text-white font-heading font-black text-xs px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition shrink-0"
-            title="ออกรายงานสถานการณ์เสนอผู้ว่าราชการจังหวัด (ด่วนที่สุด)"
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">รายงานผู้ว่าฯ ด่วน</span>
-          </button>
-          <OfflineSyncStatus onSyncComplete={() => refetch()} />
           {isError && <span role="status" className="rounded-lg border border-red-700/70 bg-red-950/80 px-2 py-1 text-[10px] text-red-200">โหลดข้อมูลฐานข้อมูลไม่สำเร็จ</span>}
           <button
             type="button"

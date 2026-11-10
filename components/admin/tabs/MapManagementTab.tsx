@@ -22,6 +22,8 @@ import {
   Split,
   Clock,
   Image as ImageIcon,
+  MapPin,
+  RotateCw,
 } from "lucide-react";
 import { upsertRouteAction, snapRouteAction } from "@/app/actions/doh-actions";
 import {
@@ -29,6 +31,7 @@ import {
   generateAutoDetourAdvice,
   extractDirectionalAdvice,
   reverseGeocodeTambonAmphoe,
+  getDetailedPattaniAddress,
   compressImageToBase64,
   compressImageToAdaptiveBase64,
   slicePolylineByKmRange,
@@ -57,6 +60,8 @@ import {
   FloodSegmentDirectionMeta,
   parseFloodDirectionMeta,
   groupFloodRoutesIntoEvents,
+  generateNextEventCode,
+  resolveEffectiveRoadSide,
   mapTrafficStatusToDetail,
   mapDetailToDbStatus,
   detectOverlappingFloodSegments,
@@ -270,6 +275,7 @@ export function MapManagementTab({
   const [eventCode, setEventCode] = useState<string>("");
   const [eventTitle, setEventTitle] = useState<string>("");
   const [villageOrLandmark, setVillageOrLandmark] = useState<string>("");
+  const [isFetchingAddress, setIsFetchingAddress] = useState<boolean>(false);
   const [startedAt, setStartedAt] = useState<string>(() => new Date().toISOString().slice(0, 16));
   const [causeAndNote, setCauseAndNote] = useState<string>("");
   const [directionCode, setDirectionCode] = useState<FloodDirectionCode>("A_TO_B");
@@ -383,7 +389,9 @@ export function MapManagementTab({
       sectionNameManuallyEdited.current = true;
       setRouteWaterLevel(flood.water_level_cm);
       setRouteStatus(flood.traffic_status);
-      setRoadSide((flood.road_side as RoadSideType) || "BOTH");
+      const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
+      const effectiveSide = resolveEffectiveRoadSide(flood);
+      setRoadSide(effectiveSide);
       setAffectedLanes(flood.affected_lanes || AFFECTED_LANES_OPTIONS[0]);
       setAffectedShoulder((flood.affected_shoulder as AffectedShoulderType) || "NONE");
       setReporterName(flood.reporter_name || "");
@@ -405,14 +413,13 @@ export function MapManagementTab({
       setDraftConflictPoints?.([]);
 
       // Phase 2 Meta Hydration
-      const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
       setSelectedParentEventId(meta.eventId);
       setEventCode(meta.eventCode);
       setEventTitle(meta.eventTitle || "");
       setVillageOrLandmark(meta.villageOrLandmark || "");
       if (meta.startedAt) setStartedAt(meta.startedAt.slice(0, 16));
       setCauseAndNote(meta.causeAndNote || flood.detour_advice || "");
-      setDirectionCode(meta.directionCode || "A_TO_B");
+      setDirectionCode(meta.directionCode || (effectiveSide === "RIGHT" ? "B_TO_A" : effectiveSide === "LEFT" ? "A_TO_B" : "BOTH"));
       setAffectedParts(meta.affectedParts && meta.affectedParts.length ? meta.affectedParts : ["ALL_LANES"]);
       setDetailedPhotos(meta.photos || []);
       setFieldImages(meta.photos?.length ? meta.photos.map((p) => p.dataUrl) : (flood.latest_photo_url ? [flood.latest_photo_url] : []));
@@ -807,6 +814,32 @@ export function MapManagementTab({
     onToast("ล้างเส้นทางร่างและแบบฟอร์มแล้ว");
   };
 
+  // ดึงชื่อหมู่บ้าน/ตำบลจากพิกัดจุดเริ่มต้น
+  const handleFetchLocationFromCoords = async () => {
+    const lon = startLon || (draftCoordinates.length > 0 ? draftCoordinates[0][0] : undefined);
+    const lat = startLat || (draftCoordinates.length > 0 ? draftCoordinates[0][1] : undefined);
+    if (lon === undefined || lat === undefined || (Number(lon) === 0 && Number(lat) === 0)) {
+      onToast("กรุณาระบุพิกัดหรือคำนวณแนวเส้นก่อนดึงตำแหน่ง");
+      return;
+    }
+    try {
+      setIsFetchingAddress(true);
+      const addr = await getDetailedPattaniAddress(Number(lon), Number(lat));
+      const cleanTag = addr.tag ? addr.tag.replace(/^\(|\)$/g, "").trim() : "";
+      const displayLoc = [cleanTag, addr.road].filter(Boolean).join(" ") || (addr.tambon ? `ต.${addr.tambon} อ.${addr.amphoe}` : "");
+      if (displayLoc.trim()) {
+        setVillageOrLandmark(displayLoc.trim());
+        onToast(`ดึงตำแหน่งสำเร็จ: ${displayLoc.trim()}`);
+      } else {
+        onToast("ไม่พบชื่อหมู่บ้านจากพิกัดดังกล่าว");
+      }
+    } catch {
+      onToast("ไม่สามารถดึงข้อมูลตำแหน่งจากพิกัดได้");
+    } finally {
+      setIsFetchingAddress(false);
+    }
+  };
+
   // Slice Polyline from Phase 1 GIS Highway Layers by KM Range & Direction
   const handleSlicePolylineFromKm = () => {
     if (!routeNo || !kmStart || !kmEnd) {
@@ -915,6 +948,15 @@ export function MapManagementTab({
       setStartLon(firstLon);
       setEndLat(lastLat);
       setEndLon(lastLon);
+      if (!villageOrLandmark.trim()) {
+        getDetailedPattaniAddress(firstLon, firstLat).then((addr) => {
+          if (addr && addr.tag) {
+            const cleanTag = addr.tag.replace(/^\(|\)$/g, "").trim();
+            const displayLoc = [cleanTag, addr.road].filter(Boolean).join(" ") || (addr.tambon ? `ต.${addr.tambon} อ.${addr.amphoe}` : "");
+            if (displayLoc.trim()) setVillageOrLandmark(displayLoc.trim());
+          }
+        }).catch(() => {});
+      }
       onToast(`คำนวณแนวเส้น ทล.${routeNo} ช่วง กม.${kmStart} - ${kmEnd} (${directionCode === "B_TO_A" ? "ย้อน กม." : "ตาม กม."}) สำเร็จ`);
     } else {
       onToast("ไม่สามารถตัดแนวเส้นจากช่วง กม. ที่ระบุได้");
@@ -1112,8 +1154,16 @@ export function MapManagementTab({
 
       // Phase 2: Compute Parent Event, Direction, and Multi-Photo metadata
       const currentEventId = selectedParentEventId || `EV-${chosenRouteNo}-${Date.now()}`;
-      const currentEventCode = eventCode.trim() || `FL-${chosenRouteNo}-001`;
+      const currentEventCode = eventCode.trim() || generateNextEventCode(chosenRouteNo, existingParentEvents);
       const currentEventTitle = eventTitle.trim() || (sectionName ? `ทล.${chosenRouteNo} ตอน${sectionName}` : "เหตุการณ์น้ำท่วมทางหลวง");
+      const effectiveRoadSide: RoadSideType =
+        roadSide && roadSide !== "UNKNOWN"
+          ? roadSide
+          : directionCode === "A_TO_B"
+          ? "LEFT"
+          : directionCode === "B_TO_A"
+          ? "RIGHT"
+          : "BOTH";
       const lanesSummary = affectedParts.includes("ALL_LANES")
         ? "ทุกช่องจราจร"
         : affectedParts.map((p) => AFFECTED_ROAD_PART_LABELS[p]).join(", ") || "ไม่ระบุ";
@@ -1137,6 +1187,7 @@ export function MapManagementTab({
         villageOrLandmark: villageOrLandmark.trim(),
         directionCode,
         directionLabel: directionCode === "A_TO_B" ? "ตามหลัก กม. (ขาไป A → B)" : directionCode === "B_TO_A" ? "ย้อนหลัก กม. (ขากลับ B → A)" : "ทั้งสองทิศทาง",
+        roadSide: effectiveRoadSide,
         affectedParts,
         trafficStatusDetail: (routeStatus as string) === "PENDING_VERIFICATION" ? "PENDING_VERIFICATION" : mapTrafficStatusToDetail(routeStatus),
         waterLevelKnown,
@@ -1293,7 +1344,7 @@ export function MapManagementTab({
         coordinates: coords,
         latestPhotoUrl: primaryPhoto,
         // Item 3: Flood Directional & Lane-Specific Fields
-        roadSide: routeMode === "FLOOD" ? (directionCode === "A_TO_B" ? "LEFT" : directionCode === "B_TO_A" ? "RIGHT" : "BOTH") : undefined,
+        roadSide: routeMode === "FLOOD" ? effectiveRoadSide : undefined,
         affectedLanes: routeMode === "FLOOD" ? lanesSummary : undefined,
         affectedShoulder: routeMode === "FLOOD" ? shoulderSummary : undefined,
         reporterName: routeMode === "FLOOD" ? (reporterName.trim() || "เจ้าหน้าที่แขวงทางหลวงปัตตานี") : undefined,
@@ -1448,22 +1499,49 @@ export function MapManagementTab({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs text-slate-300 block mb-1">รหัสเหตุการณ์ (Event Code)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-slate-300">รหัสเหตุการณ์ (Event Code)</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const code = generateNextEventCode(routeNo || "42", existingParentEvents);
+                        setEventCode(code);
+                        onToast(`สร้างรหัสอัตโนมัติ: ${code}`);
+                      }}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 font-heading cursor-pointer"
+                      title="สร้างรหัสเหตุการณ์อัตโนมัติตามสายทาง"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>⚡ สร้างอัตโนมัติ</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={eventCode}
                     onChange={(e) => setEventCode(e.target.value)}
-                    placeholder="เช่น FL-001 หรือ FL-42-01"
+                    placeholder="เช่น FL-42-01"
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-xs text-slate-300 block mb-1">หมู่บ้าน / จุดสังเกตหน้างาน</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-slate-300">หมู่บ้าน / จุดสังเกตหน้างาน</label>
+                    <button
+                      type="button"
+                      onClick={handleFetchLocationFromCoords}
+                      disabled={isFetchingAddress}
+                      className="text-[10px] text-sky-400 hover:text-sky-300 flex items-center gap-1 font-heading cursor-pointer disabled:opacity-50"
+                      title="ดึงชื่อหมู่บ้านและตำบลจากพิกัด"
+                    >
+                      {isFetchingAddress ? <RotateCw className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3" />}
+                      <span>{isFetchingAddress ? "กำลังดึง..." : "📍 ดึงจากพิกัด"}</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={villageOrLandmark}
                     onChange={(e) => setVillageOrLandmark(e.target.value)}
-                    placeholder="เช่น บ.ดอนยาง ม.2 หน้ามัสยิด / สะพานคลองบานา"
+                    placeholder="เช่น บ.ดอนยาง ม.2 ต.ดอนยาง อ.หนองจิก"
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                   />
                 </div>
@@ -1556,6 +1634,9 @@ export function MapManagementTab({
                                 }
                                 if (h.kmEnd) {
                                   setKmEnd(h.kmEnd);
+                                }
+                                if (!routeEditId && (!eventCode || eventCode.startsWith("FL-"))) {
+                                  setEventCode(generateNextEventCode(h.no, existingParentEvents));
                                 }
                                 setIsHighwayDropdownOpen(false);
                                 setHighwaySearchQuery("");
@@ -2037,26 +2118,26 @@ export function MapManagementTab({
                     <button
                       type="button"
                       onClick={() => { setDirectionCode("A_TO_B"); setRoadSide("LEFT"); }}
-                      className={`p-2 rounded-xl border text-left transition ${directionCode === "A_TO_B" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
+                      className={`p-2 rounded-xl border text-left transition ${(directionCode === "A_TO_B" || roadSide === "LEFT") && roadSide !== "BOTH" && directionCode !== "BOTH" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
                     >
-                      <span className="text-xs font-heading font-bold block">🚗 ตามหลัก กม. (A → B)</span>
+                      <span className="text-xs font-heading font-bold block">🚗 ฝั่งซ้ายทาง (ขาไป A → B)</span>
                       <span className="text-[10px] text-slate-400">เดินรถทิศทาง กม. เพิ่มขึ้น</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => { setDirectionCode("B_TO_A"); setRoadSide("RIGHT"); }}
-                      className={`p-2 rounded-xl border text-left transition ${directionCode === "B_TO_A" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
+                      className={`p-2 rounded-xl border text-left transition ${(directionCode === "B_TO_A" || roadSide === "RIGHT") && roadSide !== "BOTH" && directionCode !== "BOTH" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
                     >
-                      <span className="text-xs font-heading font-bold block">🚙 ย้อนหลัก กม. (B → A)</span>
+                      <span className="text-xs font-heading font-bold block">🚙 ฝั่งขวาทาง (ขากลับ B → A)</span>
                       <span className="text-[10px] text-slate-400">เดินรถทิศทาง กม. ลดลง</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => { setDirectionCode("BOTH"); setRoadSide("BOTH"); }}
-                      className={`p-2 rounded-xl border text-left transition ${directionCode === "BOTH" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
+                      className={`p-2 rounded-xl border text-left transition ${directionCode === "BOTH" || roadSide === "BOTH" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
                     >
-                      <span className="text-xs font-heading font-bold block">↔️ ทั้งสองทิศทาง</span>
-                      <span className="text-[10px] text-slate-400">น้ำท่วมทั้งคันทาง</span>
+                      <span className="text-xs font-heading font-bold block">↔️ ท่วมทั้งสองฝั่งจราจร</span>
+                      <span className="text-[10px] text-slate-400">น้ำท่วมเต็มทั้งสองคันทาง</span>
                     </button>
                   </div>
                 )}

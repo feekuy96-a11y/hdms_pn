@@ -9,6 +9,7 @@ import {
   groupFloodRoutesIntoEvents,
   ParentFloodEventGroup,
   parseFloodDirectionMeta,
+  resolveEffectiveRoadSide,
   DetailedTrafficStatus,
 } from "@/lib/flood-event-schema";
 import { Layers, Navigation, Building2, Map, ChevronUp, ChevronDown } from "lucide-react";
@@ -38,11 +39,11 @@ const trafficStatusLabel = (status: unknown) => ({
 }[String(status)] || "ไม่ระบุสถานะ");
 
 const roadSideLabel = (side: unknown) => ({
-  LEFT: "ฝั่งซ้ายทาง (ตามทิศ กม. เพิ่มขึ้น)",
-  RIGHT: "ฝั่งขวาทาง (ตามทิศ กม. เพิ่มขึ้น)",
-  BOTH: "ทั้งสองฝั่งจราจร",
-  UNKNOWN: "ไม่ระบุฝั่ง",
-}[String(side || "UNKNOWN")] || "ไม่ระบุฝั่ง");
+  LEFT: "ฝั่งซ้ายทาง (ขาไป A → B)",
+  RIGHT: "ฝั่งขวาทาง (ขากลับ B → A)",
+  BOTH: "ทั้งสองฝั่งจราจร (A ⇄ B)",
+  UNKNOWN: "ทุกทิศทาง/ตามสภาพจริง",
+}[String(side || "UNKNOWN")] || "ทุกทิศทาง/ตามสภาพจริง");
 
 const shoulderLabel = (shoulder: unknown) => ({
   NONE: "ปกติ",
@@ -249,7 +250,7 @@ function buildFloodPopupHtml(flood: FloodRoute, updates: TimelineUpdate[]): stri
   const linePoints = updates.map((update, index) => `${xFor(index)},${yFor(update.water_level_cm)}`).join(" ");
   const waterKnown = flood.direction_meta?.water_level_known !== false;
   const levelDisplay = waterKnown ? `${flood.water_level_cm} ซม.` : "รอวัดระดับน้ำหน้างาน";
-  const sideCode = flood.road_side || "UNKNOWN";
+  const sideCode = resolveEffectiveRoadSide(flood);
   const sideDisplay = roadSideLabel(sideCode);
   const unreportedSideNote = (sideCode === "LEFT" || sideCode === "RIGHT")
     ? `<div class="mt-1.5 p-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 text-[10px] leading-tight">⚠️ อีกฝั่งจราจรที่ไม่ได้รายงาน ยังไม่ยืนยันความปลอดภัย</div>`

@@ -33,6 +33,7 @@ import { slicePolylineByKmRange } from "@/lib/gis-utils";
 import {
   groupFloodRoutesIntoEvents,
   parseFloodDirectionMeta,
+  resolveEffectiveRoadSide,
   getDetailedTrafficPresentation,
   AFFECTED_ROAD_PART_LABELS,
   FloodSegmentDirectionMeta,
@@ -173,6 +174,8 @@ export function IncidentRegistryTab({
       const p2Start = part2Coords[0] || [p1End[0], p1End[1]];
       const p2End = part2Coords[part2Coords.length - 1] || [orig.lon_end, orig.lat_end];
 
+      const origSide = resolveEffectiveRoadSide(orig);
+
       // 1. Update original segment to end at splitKm with sliced geometry
       await upsertRouteAction({
         id: orig.id,
@@ -190,12 +193,13 @@ export function IncidentRegistryTab({
         lonEnd: p1End[0],
         coordinates: part1Coords,
         latestPhotoUrl: orig.latest_photo_url || undefined,
-        roadSide: orig.road_side,
+        roadSide: origSide,
         affectedLanes: orig.affected_lanes,
         affectedShoulder: orig.affected_shoulder,
         reporterName: orig.reporter_name,
         directionMeta: {
           ...meta,
+          roadSide: origSide,
           updatedAt: new Date().toISOString(),
           causeAndNote: `${meta.causeAndNote || ""} (แบ่งช่วงที่ กม.${splitKm.trim()})`.trim(),
         },
@@ -204,6 +208,7 @@ export function IncidentRegistryTab({
       // 2. Insert new segment from splitKm to origKmEnd with sliced geometry
       const newMeta: FloodSegmentDirectionMeta = {
         ...meta,
+        roadSide: origSide,
         startedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         splitFromSegmentId: orig.id,
@@ -225,7 +230,7 @@ export function IncidentRegistryTab({
         lonEnd: p2End[0],
         coordinates: part2Coords,
         latestPhotoUrl: orig.latest_photo_url || undefined,
-        roadSide: orig.road_side,
+        roadSide: origSide,
         affectedLanes: orig.affected_lanes,
         affectedShoulder: orig.affected_shoulder,
         reporterName: orig.reporter_name,
@@ -331,32 +336,34 @@ export function IncidentRegistryTab({
           : segB.traffic_status;
 
       // 3. Update segA to be the merged span
-      await upsertRouteAction({
-        id: segA.id,
-        recordType: "FLOOD",
-        routeNo: segA.route_no,
-        kmStart: combinedKmStart,
-        kmEnd: combinedKmEnd,
-        sectionName: segA.section_name,
-        waterLevelCm: combinedWaterLevel,
-        trafficStatus: combinedStatus,
-        isActive: true,
-        latStart: pStart[1],
-        lonStart: pStart[0],
-        latEnd: pEnd[1],
-        lonEnd: pEnd[0],
-        coordinates: combinedCoords,
-        latestPhotoUrl: segA.latest_photo_url || segB.latest_photo_url || undefined,
-        roadSide: segA.road_side,
-        affectedLanes: segA.affected_lanes || segB.affected_lanes,
-        affectedShoulder: segA.affected_shoulder || segB.affected_shoulder,
-        reporterName: segA.reporter_name || segB.reporter_name,
-        directionMeta: {
-          ...metaA,
-          updatedAt: new Date().toISOString(),
-          causeAndNote: `${metaA.causeAndNote || ""} (รวมช่วงกับ กม.${segB.km_start}–${segB.km_end})`.trim(),
-        },
-      });
+        const mergedSide = resolveEffectiveRoadSide(segA);
+        await upsertRouteAction({
+          id: segA.id,
+          recordType: "FLOOD",
+          routeNo: segA.route_no,
+          kmStart: combinedKmStart,
+          kmEnd: combinedKmEnd,
+          sectionName: segA.section_name,
+          waterLevelCm: combinedWaterLevel,
+          trafficStatus: combinedStatus,
+          isActive: true,
+          latStart: pStart[1],
+          lonStart: pStart[0],
+          latEnd: pEnd[1],
+          lonEnd: pEnd[0],
+          coordinates: combinedCoords,
+          latestPhotoUrl: segA.latest_photo_url || segB.latest_photo_url || undefined,
+          roadSide: mergedSide,
+          affectedLanes: segA.affected_lanes || segB.affected_lanes,
+          affectedShoulder: segA.affected_shoulder || segB.affected_shoulder,
+          reporterName: segA.reporter_name || segB.reporter_name,
+          directionMeta: {
+            ...metaA,
+            roadSide: mergedSide,
+            updatedAt: new Date().toISOString(),
+            causeAndNote: `${metaA.causeAndNote || ""} (รวมช่วงกับ กม.${segB.km_start}–${segB.km_end})`.trim(),
+          },
+        });
 
       // 4. Deactivate segB
       await setIncidentStatusAction(segB.id, false);
@@ -395,6 +402,7 @@ export function IncidentRegistryTab({
       // Use the explicit traffic status selected by the officer (initialized to flood.traffic_status).
       const trafficStatus = newTrafficStatus || flood.traffic_status;
 
+      const effectiveSide = resolveEffectiveRoadSide(flood);
       const res = await saveTimelineUpdateAction({
         floodId: flood.id,
         waterLevelCm: newWaterLevel,
@@ -404,7 +412,7 @@ export function IncidentRegistryTab({
         photoUrl: flood.latest_photo_url || "",
         reporterName: flood.reporter_name || "เจ้าหน้าที่ศูนย์ฯ 24 ชม.",
         remark: updateNote || `อัปเดตระดับน้ำเป็น ${newWaterLevel} ซม. (${trafficLabel(trafficStatus)})`,
-        roadSide: flood.road_side,
+        roadSide: effectiveSide,
         affectedLanes: flood.affected_lanes,
         affectedShoulder: flood.affected_shoulder,
       });

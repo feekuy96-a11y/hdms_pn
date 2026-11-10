@@ -154,6 +154,7 @@ export interface FloodSegmentDirectionMeta {
   // Child Segment Details
   directionCode: FloodDirectionCode;
   directionLabel?: string;     // เช่น "ตามหลัก กม. (ขาไป A → B)"
+  roadSide?: "LEFT" | "RIGHT" | "BOTH" | "UNKNOWN";
   affectedParts: AffectedRoadPart[];
   trafficStatusDetail: DetailedTrafficStatus;
   waterLevelKnown: boolean;
@@ -307,6 +308,11 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
     });
   }
 
+  const fallbackRoadSide =
+    (parsed.roadSide && parsed.roadSide !== "UNKNOWN" ? parsed.roadSide : undefined) ||
+    (route?.road_side && route?.road_side !== "UNKNOWN" ? route.road_side : undefined) ||
+    (fallbackDirection === "A_TO_B" ? "LEFT" : fallbackDirection === "B_TO_A" ? "RIGHT" : fallbackDirection === "BOTH" ? "BOTH" : "UNKNOWN");
+
   return {
     schemaVersion: 2,
     eventId: fallbackEventId,
@@ -317,6 +323,7 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
     villageOrLandmark: parsed.villageOrLandmark || "",
     directionCode: fallbackDirection,
     directionLabel: parsed.directionLabel || (fallbackDirection === "A_TO_B" ? "ตามหลัก กม. (ขาไป A → B)" : fallbackDirection === "B_TO_A" ? "ย้อนหลัก กม. (ขากลับ B → A)" : "ทั้งสองทิศทาง"),
+    roadSide: fallbackRoadSide,
     affectedParts,
     trafficStatusDetail: mapTrafficStatusToDetail(route?.traffic_status, parsed.trafficStatusDetail),
     waterLevelKnown: parsed.waterLevelKnown !== undefined ? Boolean(parsed.waterLevelKnown) : route?.water_level_cm !== null && route?.water_level_cm !== undefined,
@@ -329,6 +336,36 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
     status_verified: parsed.status_verified !== undefined ? Boolean(parsed.status_verified) : true,
     ...parsed,
   };
+}
+
+/**
+ * ดึงสถานะฝั่งถนนจริง (Effective Road Side) โดยค้นหาทั้งในฟิลด์หลัก road_side และ direction_meta
+ */
+export function resolveEffectiveRoadSide(flood: any): "LEFT" | "RIGHT" | "BOTH" | "UNKNOWN" {
+  if (!flood) return "UNKNOWN";
+  if (flood.road_side && flood.road_side !== "UNKNOWN") return flood.road_side;
+  const meta = flood.direction_meta;
+  if (meta && typeof meta === "object") {
+    if (meta.roadSide && meta.roadSide !== "UNKNOWN") return meta.roadSide;
+    if (meta.directionCode === "A_TO_B") return "LEFT";
+    if (meta.directionCode === "B_TO_A") return "RIGHT";
+    if (meta.directionCode === "BOTH") return "BOTH";
+    if (Array.isArray(meta.affectedParts)) {
+      if (meta.affectedParts.some((p: string) => String(p).includes("LEFT"))) return "LEFT";
+      if (meta.affectedParts.some((p: string) => String(p).includes("RIGHT"))) return "RIGHT";
+    }
+  }
+  return "UNKNOWN";
+}
+
+/**
+ * สร้างรหัสเหตุการณ์อัตโนมัติ (เช่น FL-42-01, FL-42-02)
+ */
+export function generateNextEventCode(routeNo: string, events: ParentFloodEventGroup[]): string {
+  const clean = String(routeNo || "").replace(/^ทล\.?/i, "").trim() || "42";
+  const matching = (events || []).filter((e) => e.routeNo === clean || e.eventCode.includes(`FL-${clean}`));
+  const nextNum = matching.length + 1;
+  return `FL-${clean}-${String(nextNum).padStart(2, "0")}`;
 }
 
 /**

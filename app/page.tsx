@@ -56,7 +56,7 @@ import {
   Droplets,
 } from "lucide-react";
 import { extractDirectionalAdvice, splitDetourAdviceByDirection } from "@/lib/gis-utils";
-import { parseFloodDirectionMeta, AFFECTED_ROAD_PART_LABELS } from "@/lib/flood-event-schema";
+import { parseFloodDirectionMeta, resolveEffectiveRoadSide, AFFECTED_ROAD_PART_LABELS } from "@/lib/flood-event-schema";
 import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
 
@@ -973,36 +973,38 @@ export default function HomePage() {
                           ))}
                         </div>
                       )}
-                      {(selectedFlood.road_side || selectedFlood.affected_lanes) && (
-                        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                          {selectedFlood.road_side && (
-                            <span className="rounded bg-sky-950/90 border border-sky-700/80 px-2 py-0.5 text-sky-200 font-semibold">
-                              {selectedFlood.road_side === "LEFT"
-                                ? "ฝั่งซ้ายทาง (ตามทิศ กม. เพิ่มขึ้น)"
-                                : selectedFlood.road_side === "RIGHT"
-                                ? "ฝั่งขวาทาง (ตามทิศ กม. เพิ่มขึ้น)"
-                                : selectedFlood.road_side === "BOTH"
-                                ? "ท่วมทั้งสองฝั่งจราจร"
-                                : "ไม่ระบุฝั่งถนน"}
-                            </span>
-                          )}
-                          {selectedFlood.affected_lanes && (
-                            <span className="rounded bg-slate-800 border border-slate-700 px-2 py-0.5 text-slate-200">
-                              {selectedFlood.affected_lanes}
-                            </span>
-                          )}
-                          {selectedFlood.affected_shoulder && selectedFlood.affected_shoulder !== "NONE" && (
-                            <span className="rounded bg-amber-950/80 border border-amber-700/70 px-2 py-0.5 text-amber-200">
-                              ไหล่ทางได้รับผลกระทบ
-                            </span>
-                          )}
-                          {(selectedFlood.road_side === "LEFT" || selectedFlood.road_side === "RIGHT") && (
-                            <span className="text-[11px] text-amber-300 block w-full mt-0.5">
-                              ⚠️ อีกฝั่งจราจรที่ไม่มีรายงานน้ำท่วม ยังไม่ถือว่าปลอดภัยอัตโนมัติ โปรดสังเกตป้ายเตือนหน้างาน
-                            </span>
-                          )}
-                        </div>
-                      )}
+                      {(() => {
+                        const sideCode = resolveEffectiveRoadSide(selectedFlood);
+
+                        return (sideCode !== "UNKNOWN" || selectedFlood.affected_lanes) ? (
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                            {sideCode !== "UNKNOWN" && (
+                              <span className="rounded bg-sky-950/90 border border-sky-700/80 px-2 py-0.5 text-sky-200 font-semibold">
+                                {sideCode === "LEFT"
+                                  ? "ฝั่งซ้ายทาง (ขาไป A → B)"
+                                  : sideCode === "RIGHT"
+                                  ? "ฝั่งขวาทาง (ขากลับ B → A)"
+                                  : "ท่วมทั้งสองฝั่งจราจร"}
+                              </span>
+                            )}
+                            {selectedFlood.affected_lanes && (
+                              <span className="rounded bg-slate-800 border border-slate-700 px-2 py-0.5 text-slate-200">
+                                {selectedFlood.affected_lanes}
+                              </span>
+                            )}
+                            {selectedFlood.affected_shoulder && selectedFlood.affected_shoulder !== "NONE" && (
+                              <span className="rounded bg-amber-950/80 border border-amber-700/70 px-2 py-0.5 text-amber-200">
+                                ไหล่ทางได้รับผลกระทบ
+                              </span>
+                            )}
+                            {(sideCode === "LEFT" || sideCode === "RIGHT") && (
+                              <span className="text-[11px] text-amber-300 block w-full mt-0.5">
+                                ⚠️ อีกฝั่งจราจรยังไม่ยืนยันความปลอดภัย โปรดใช้ความระมัดระวัง
+                              </span>
+                            )}
+                          </div>
+                        ) : null;
+                      })()}
                       <p className="text-xs text-slate-400">อัปเดตล่าสุด: {selectedFlood.updated_at ? new Date(selectedFlood.updated_at).toLocaleString("th-TH") : "ไม่ระบุ"}</p>
                     </div>
                     <button
