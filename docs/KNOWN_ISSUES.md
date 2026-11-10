@@ -1,6 +1,7 @@
 # KNOWN_ISSUES.md — ทะเบียนปัญหาที่ทราบ ข้อจำกัดทางเทคนิค และหลักฐานการทดสอบ
 
 **ระบบ:** ศูนย์ข้อมูลน้ำท่วมและโครงข่ายทางหลวง แขวงทางหลวงปัตตานี (HDMS_PN)  
+**Production URLs:** [https://feekuy96-a11y.github.io/hdms_pn/](https://feekuy96-a11y.github.io/hdms_pn/) (หน้าประชาชน) \| [https://feekuy96-a11y.github.io/hdms_pn/admin](https://feekuy96-a11y.github.io/hdms_pn/admin) (หน้าแอดมิน)  
 **อัปเดตล่าสุด:** 2026-11-11 (Phase 5 Completion / UPDATE-066)
 
 ---
