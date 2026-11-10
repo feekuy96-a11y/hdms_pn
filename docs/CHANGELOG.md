@@ -62,6 +62,15 @@
 - **ตรวจแล้ว:** `npm run lint` (`--max-warnings=0`), `npm run typecheck`, และ `NEXT_OUTPUT=export npm run build` ผ่านทั้งหมด (6/6 static pages) · **ยังไม่ได้ตรวจ:** รันไฟล์ SQL migration บนฐานข้อมูล Supabase จริง และรัน Edge Function บนคลาวด์จริง
 - **ลำดับ deploy:** 1) รัน SQL `supabase/migrations/20261109000100_directional_flood_and_detour.sql` → 2) Deploy Edge Function `supabase/functions/hdms-api/index.ts` → 3) Deploy เว็บ (ทั้ง Edge Function และเว็บมีระบบ fallback อัตโนมัติหากยังไม่ได้รัน SQL)
 
+### [UPDATE-060] 2026-11-10 Phase 1: จัดการสายทาง Parent–Child สองทิศทางและแก้ CI Empty State
+- **ไฟล์:** `lib/highway-schema.ts` (ใหม่), `components/admin/tabs/GisDataImportTab.tsx`, `tests/e2e/admin-menus.spec.ts`
+- **ทำอะไร:**
+  1. **แก้ปัญหา CI แดงจาก Empty State (`tests/e2e/admin-menus.spec.ts`):** ปรับปรุง assertion ของหมวดรายการเหตุการณ์ให้รองรับกรณีฐานข้อมูลว่างเปล่า (Empty State ขณะรอลงข้อมูลใหม่) ด้วย pattern `if (await floodSymbol.count()) ... else ...` เช่นเดียวกับฝั่งทางเลี่ยง เพื่อไม่ให้ CI timeout 5 วินาที
+  2. **มาตรฐาน Parent–Child สายทาง & Stable ID (`lib/highway-schema.ts`):** กำหนด Types/Interfaces และฟังก์ชันคำนวณ `groupHighwayFeatures`, `generateSectionGroupId`, `generateStableFeatureId`, `calculateGeodesicLengthKm`, `calculateKmDistanceKm`, `haversineDistanceMeters` โดยอิง GeoJSON properties เดิม 100% ไม่ต้อง Migrate Database
+  3. **ตารางจัดกลุ่มตอนควบคุมหลักและเส้นย่อย (`components/admin/tabs/GisDataImportTab.tsx`):** เพิ่มปุ่มสลับมุมมอง `[ 📑 จัดกลุ่มตอนควบคุม (Parent–Child) ]` และ `[ 📋 รายการเดี่ยวทั้งหมด ]` ในมุมมองจัดกลุ่ม แสดงชิปทิศทาง `🚗 ขาไป (A→B)`, `🚙 ขากลับ (B→A)`, `🛣️ ทางขนาน` และขยายดูเส้นย่อยเพื่อเปิดแก้ไขแนวถนนเฉพาะเส้นได้อิสระ
+  4. **ตัวแก้ไขแนวถนนแยกทิศทาง & ป้องกันบั๊กซ้ำซ้อน:** ปรับปรุง `saveEditedGeometry` ให้อัปเดต `DUAL_CARRIAGEWAY` ในตำแหน่งเดิมแทนการ push ซ้ำซ้อน และเพิ่มการ์ดตรวจสอบความยาวจริง GIS vs ช่วง กม. พร้อมปุ่ม `"สลับทิศทางจุดหัว-ท้าย (A ⇄ B)"`
+- **ตรวจแล้ว:** `npm run lint` (`--max-warnings=0`), `npm run typecheck`, และ Next.js Static Export build (`6/6 static pages`) ผ่านฉลุย 100%
+
 ### [UPDATE-059] 2026-11-10 แก้ไขข้อผิดพลาด CI บน GitHub Actions (E2E Contract & Detour Routing Assertion)
 - **ไฟล์:** `app/page.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `docs/CHANGELOG.md`, `SUPPLEMENTAL_RULES.md`
 - **สาเหตุของข้อผิดพลาดบน GitHub CI (Run 42593837883):**
