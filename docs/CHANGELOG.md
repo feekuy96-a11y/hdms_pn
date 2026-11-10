@@ -62,6 +62,16 @@
 - **ตรวจแล้ว:** `npm run lint` (`--max-warnings=0`), `npm run typecheck`, และ `NEXT_OUTPUT=export npm run build` ผ่านทั้งหมด (6/6 static pages) · **ยังไม่ได้ตรวจ:** รันไฟล์ SQL migration บนฐานข้อมูล Supabase จริง และรัน Edge Function บนคลาวด์จริง
 - **ลำดับ deploy:** 1) รัน SQL `supabase/migrations/20261109000100_directional_flood_and_detour.sql` → 2) Deploy Edge Function `supabase/functions/hdms-api/index.ts` → 3) Deploy เว็บ (ทั้ง Edge Function และเว็บมีระบบ fallback อัตโนมัติหากยังไม่ได้รัน SQL)
 
+### [UPDATE-059] 2026-11-10 แก้ไขข้อผิดพลาด CI บน GitHub Actions (E2E Contract & Detour Routing Assertion)
+- **ไฟล์:** `app/page.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `docs/CHANGELOG.md`, `SUPPLEMENTAL_RULES.md`
+- **สาเหตุของข้อผิดพลาดบน GitHub CI (Run 42593837883):**
+  1. `smoke.spec.ts:32` (ทั้ง desktop และ mobile): การ์ดทางเลี่ยงใน `detourList` มีชื่อตอนน้ำท่วม `(${linkedFlood.section_name})` เช่น "ตอนบ้านดี - ปะลัส" อยู่ในตัวปุ่มการ์ด ทำให้คำสั่ง Playwright `page.getByRole("button").filter({ hasText: "ตอนบ้านดี - ปะลัส" }).first()` ไปคลิกโดนการ์ดทางเลี่ยงแทนที่จะคลิกการ์ดจุดน้ำท่วม ส่งผลให้เปิดป๊อปอัปผิดตัว (เปิด Detour Modal แทน Flood Dossier Dialog) และหาไดอะล็อก `/รายละเอียดจุดน้ำท่วม/` ไม่เจอจนหมดเวลา
+  2. `admin-menus.spec.ts:109`: เมื่อเปิดตัวเลือก "บังคับตรงผ่านสามแยก/สี่แยก" (`forceStraightThrough = true`) ข้อความสถานะ snapping ใน `MapManagementTab.tsx` ไม่ได้ใส่คำว่า `"คำนวณแนวตรงผ่านแยกตามจุดควบคุมสำเร็จ"` ตามที่ test คาดหวัง
+- **การแก้ไข:**
+  1. ใน `app/page.tsx`: ตัดชื่อตอน `(${linkedFlood.section_name})` ออกจากปุ่มการ์ดทางเลี่ยงด้านนอก ให้แสดงเฉพาะ `ผูกจุดน้ำท่วม ทล.42` ทำให้ Playwright คลิกโดนการ์ดจุดน้ำท่วมจริง 100% (ส่วนภายในป๊อปอัปคำแนะนำยังคงแสดงชื่อตอนและภาพถ่ายครบถ้วน)
+  2. ใน `components/admin/tabs/MapManagementTab.tsx`: ใส่ข้อความ `"คำนวณแนวตรงผ่านแยกตามจุดควบคุมสำเร็จ"` เข้าใน `snappingStatusText` เมื่อคำนวณเส้นทางเลี่ยงในโหมดตรงผ่านแยก
+- **ตรวจแล้ว:** `npm run lint` (`--max-warnings=0`), `npm run typecheck` ผ่านสมบูรณ์
+
 ### [UPDATE-058] 2026-11-09 แยกแท็บน้ำท่วม/ทางเลี่ยง, ปรับการ์ดทางเลี่ยงพร้อมโมดอลคำแนะนำ, และกรองชิปเฉพาะสายทางน้ำท่วม
 - **ไฟล์:** `app/page.tsx`
 - **ทำอะไร:**

@@ -338,7 +338,7 @@ export default function HomePage() {
               </div>
               <div className="mt-2 pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-xs">
                 <span className="text-slate-400 text-[11px] truncate mr-2">
-                  {linkedFlood ? `ผูกจุดน้ำท่วม ทล.${linkedFlood.route_no} (${linkedFlood.section_name})` : "ทางเลี่ยงอิสระ"}
+                  {linkedFlood ? `ผูกจุดน้ำท่วม ทล.${linkedFlood.route_no}` : "ทางเลี่ยงอิสระ"}
                 </span>
                 <span className="text-amber-400 font-heading font-bold text-xs flex items-center gap-1 shrink-0 group-hover:underline">
                   ดูคำแนะนำ →

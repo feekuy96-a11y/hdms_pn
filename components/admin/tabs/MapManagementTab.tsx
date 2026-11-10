@@ -539,10 +539,11 @@ export function MapManagementTab({
           );
           onToast(`คำเตือน: เส้นทางตัดผ่านจุดปิดการจราจร (${uniqueConflictMsgs.join(", ")})`);
         } else {
+          const straightLabel = forceStraightThrough ? "คำนวณแนวตรงผ่านแยกตามจุดควบคุมสำเร็จ" : "คำนวณทางเลี่ยงตามถนนสำเร็จ";
           setSnappingStatusText(
             detourDirectionMode === "TWO_WAY"
-              ? `✓ คำนวณทางเลี่ยง A→B (${pickedAB.coords.length} จุด) และ B→A (${pickedBA.coords.length} จุด) สำเร็จ — ปลอดจุดปิดจราจร`
-              : `✓ คำนวณทางเลี่ยงตามถนนสำเร็จ (${forwardCoords.length} จุด) — ปลอดจุดปิดจราจร`
+              ? `✓ ${straightLabel}: A→B (${pickedAB.coords.length} จุด) และ B→A (${pickedBA.coords.length} จุด) — ปลอดจุดปิดจราจร`
+              : `✓ ${straightLabel} (${forwardCoords.length} จุด) — ปลอดจุดปิดจราจร`
           );
         }
         return;

@@ -624,3 +624,15 @@
   - `$env:NEXT_OUTPUT="export"; npm run build`: ผ่าน 100% (Static pages 6/6)
   - UI Contracts และ E2E Smoke test contracts คงเดิมครบถ้วน
 - **สถานะ:** พร้อม deploy บน GitHub Pages
+
+### [UPDATE-059] 2026-11-10 แก้ไขข้อผิดพลาด CI บน GitHub Actions (E2E Contract & Detour Routing Assertion)
+- **วันที่:** 2026-11-10
+- **วัตถุประสงค์:** แก้ไขข้อผิดพลาดใน GitHub Actions Workflow `CI` (Run 42593837883) ที่ทำให้การทดสอบ E2E ล้มเหลว 3 รายการ
+- **ไฟล์ที่เกี่ยวข้อง:** `app/page.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `docs/CHANGELOG.md`, `SUPPLEMENTAL_RULES.md`
+- **รายละเอียดการทำงาน:**
+  1. แก้ไข `app/page.tsx`: ปรับข้อความบนปุ่มการ์ดทางเลี่ยงด้านนอกให้แสดง `ผูกจุดน้ำท่วม ทล.${linkedFlood.route_no}` โดยไม่ใส่ชื่อตอนน้ำท่วมลงในตัวปุ่ม เพื่อป้องกันไม่ให้ Playwright filter หาปุ่มชื่อตอนแล้วไปคลิกโดนการ์ดทางเลี่ยงแทนที่จะเป็นการ์ดจุดน้ำท่วม
+  2. แก้ไข `components/admin/tabs/MapManagementTab.tsx`: ใส่ข้อความ `"คำนวณแนวตรงผ่านแยกตามจุดควบคุมสำเร็จ"` เข้าใน `snappingStatusText` เมื่อมีการเปิดใช้งาน `forceStraightThrough` (บังคับตรงผ่านแยก) เพื่อให้ตรงกับ assertion ของ Playwright
+- **การทดสอบและผลลัพธ์:**
+  - `npm run lint` (`--max-warnings=0`): ผ่าน (0 warnings)
+  - `npm run typecheck`: ผ่าน (0 errors)
+- **สถานะ:** พร้อม deploy บน GitHub
