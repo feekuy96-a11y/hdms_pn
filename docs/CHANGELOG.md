@@ -116,3 +116,28 @@
   2. **แก้ไขป้ายซ้อนทับกันบนมือถือ (ภาพที่ 2):** ยุบรวมป้ายสรุปสถานะ (`น้ำท่วม x จุด`, `ทางเลี่ยง y เส้นทาง`) และปุ่ม `"สัญลักษณ์บนแผนที่"` เข้าใน Header Bar แถวเดียวกันด้านบนแผนที่ (`justify-between gap-1.5`) ป้องกันไม่ให้ป้ายชนหรือเกยทับกันบนจอมือถือ พร้อมเลื่อนปุ่ม Zoom Control ของ Leaflet ลงมาที่ `top: 54px` ไม่ให้ชนกับป้ายด้านบน
   3. **เพิ่มปุ่มสลับคำอธิบายทางเลี่ยง A→B และ B→A (ภาพที่ 3):** เพิ่มฟังก์ชัน `splitDetourAdviceByDirection` และปุ่ม Segmented Toggle `[ ขาไป (A → B) | ขากลับ (B → A) ]` ใน Detour Popup บนแผนที่ และกล่องแนะนำทางเลี่ยงในหน้าต่างรายละเอียดฝั่งประชาชน
 - **ตรวจแล้ว:** `npm run lint` (`--max-warnings=0`), `npm run typecheck`, และ `NEXT_OUTPUT=export npm run build` (Static pages 6/6) ผ่านสมบูรณ์ 100%
+
+### [UPDATE-062] 2026-11-10 Phase 3 — การเชื่อมโยงระบบรายงานน้ำท่วม ทางเลี่ยง และแผนที่ GIS (GIS Integration & Public Information)
+- **ไฟล์:** `lib/gis-utils.ts`, `lib/flood-event-schema.ts`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `components/map/LongdoGisMap.tsx`, `app/page.tsx`
+- **ทำอะไร:**
+  1. **แก้ไขการตัดเส้น Linear Referencing (`lib/gis-utils.ts`):** ปรับปรุง `slicePolylineByKmRange` ให้คำนวณตำแหน่งสัดส่วนตามแนวสายทางจริง (`sKm` ถึง `eKm`) ก่อน แล้วค่อยสลับลำดับจุดพิกัดผลลัพธ์ (Coordinate sequence order) ให้ตรงกับทิศทางการเดินทาง (`B_TO_A` หรือ high-to-low) ป้องกันไม่ให้พิกัดกระโดดไปอยู่อีกช่วงกิโลเมตรหนึ่ง
+  2. **เลือกเส้นทางหลวงและ Branch ตามทิศทางจริง (`components/admin/tabs/MapManagementTab.tsx`):** เชื่อมโยง `handleSlicePolylineFromKm` เข้ากับ `groupHighwayFeatures` เพื่อเลือกตอนควบคุมและเส้น Branch Geometry ที่ตรงกับทิศทางจราจร (`A_TO_B` vs `B_TO_A`), เพิ่มการตรวจจับช่วงกิโลเมตรซ้อนทับ (`detectOverlappingFloodSegments`) ก่อนบันทึก, และเชื่อมโยง `eventId` เข้ากับ `detour_meta`
+  3. **ตัดแบ่งพิกัดจริงเมื่อกดแบ่งช่วงน้ำท่วม (`components/admin/tabs/IncidentRegistryTab.tsx`):** ปรับปรุงฟังก์ชัน `handleSplitSegment` ให้ตัดแบ่งพิกัดจริงด้วย `slicePolylineByKmRange` ทั้งช่วงที่ 1 และช่วงที่ 2 ทำให้แต่ละช่วงย่อยมี Geometry, จุดเริ่มต้น-สิ้นสุด, และจุดกึ่งกลางของตนเองอย่างแท้จริง ไม่ซ้อนทับกัน
+  4. **เชื่อมโยงทางเลี่ยงกับ Parent Event (`components/admin/tabs/DetourManagementTab.tsx`):** แนบ `eventId` ของเหตุการณ์น้ำท่วมเข้ากับ `detour_meta` เมื่อมีการผูกจุดน้ำท่วม เพื่อให้ทางเลี่ยงเชื่อมโยงกับทุกช่วงย่อยภายใต้เหตุการณ์เดียวกัน
+  5. **ป้องกันหมุดแคปซูลซ้อนทับและเพิ่มสัญลักษณ์ตาบอดสี (`components/map/LongdoGisMap.tsx`):**
+     - คงสีเส้นน้ำท่วมตามสไตล์กลางของแผนที่ (`fColor`) ตามทางเลือกที่ 2 ที่ผู้ใช้อนุมัติ
+     - จัดการหมุดแคปซูลไม่ให้ซ้อนทับกัน (De-overlapping): เพิ่มระบบตรวจจับระยะใกล้เคียง (< 35 ม.) และขยับแบบ Lateral Offset สำหรับสองทิศทาง (`A_TO_B` ขยับขึ้นเหนือ/ตะวันตกเล็กน้อย, `B_TO_A` ขยับลงใต้/ตะวันออกเล็กน้อย)
+     - กำหนด `zIndexOffset` ตามความรุนแรงของสถานะจราจร (`CLOSED`: 1000, `NO_SMALL_VEHICLES`: 800, `CAUTION`: 600, `PENDING_VERIFICATION`: 400, `PASSABLE`: 200)
+     - เพิ่มสัญลักษณ์ที่เข้าถึงได้สำหรับผู้มีภาวะตาบอดสี (Colorblind Accessible Glyphs: `⛔`, `🚗`, `⚠️`, `✅`, `⏳`) บนป้ายแคปซูล
+     - เพิ่มปุ่มสลับโหมดมุมมองในแถบสัญลักษณ์: "แยกช่วงย่อย (ค่าเริ่มต้น) / รวมเหตุการณ์"
+  6. **ตารางเปรียบเทียบทุกช่วงและทิศทางในหน้าประชาชน (`app/page.tsx`):**
+     - เพิ่มกล่องตารางเปรียบเทียบทุกช่วงและทิศทางในเหตุการณ์เดียวกัน (`siblingSegments`) ในหน้าต่างรายละเอียดจุดน้ำท่วมฝั่งประชาชน พร้อมปุ่มสลับดูแต่ละช่วงได้ใน 1 คลิก
+     - เชื่อมโยงทางเลี่ยงผ่าน `eventId` เพิ่มเติมจาก `flood_id_ref`
+     - ใส่ `loading="lazy"` และ `decoding="async"` สำหรับรูปภาพสถานการณ์เพื่อถนอมหน่วยความจำและดาต้าบนมือถือตามทางเลือกที่ 2
+  7. **ปรับทิศทางทางเลี่ยง (FORWARD / REVERSE) ให้ตรงกับจุดน้ำท่วมอัตโนมัติ (`app/page.tsx` & `components/map/LongdoGisMap.tsx`):**
+     - เมื่อประชาชนเลือกดูจุดน้ำท่วมทิศทางใด (เช่น `B_TO_A` ขากลับ) ระบบจะปรับกล่องคำแนะนำทางเลี่ยงในหน้าต่างรายละเอียด และป๊อปอัปทางเลี่ยงบนแผนที่ ให้แสดงทิศทางที่สอดคล้องกันโดยอัตโนมัติ พร้อมป้ายระบุสถานะชัดเจน โดยประชาชนยังคงสลับทิศทางดูเองได้ทุกเมื่อ
+- **ตรวจแล้ว:**
+  - `npm run lint` (`--max-warnings=0`): ผ่านฉลุย 0 warnings
+  - `npm run typecheck`: ผ่านฉลุย 0 errors
+  - Next.js Static Export build: ผ่าน 100% (6/6 static pages prerendered)
+- **ลำดับ deploy:** เว็บไซต์ (GitHub Pages) ขั้นเดียว ไม่กระทบ Database หรือ Edge Function

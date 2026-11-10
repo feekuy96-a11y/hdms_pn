@@ -5,6 +5,12 @@ import "leaflet/dist/leaflet.css";
 import { SystemDataPayload, FloodRoute, DetourRoute, TimelineUpdate, DohOfficeLocation } from "@/db/default-data";
 import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { splitDetourAdviceByDirection } from "@/lib/gis-utils";
+import {
+  groupFloodRoutesIntoEvents,
+  ParentFloodEventGroup,
+  parseFloodDirectionMeta,
+  DetailedTrafficStatus,
+} from "@/lib/flood-event-schema";
 import { Layers, Navigation, Building2, Map, ChevronUp, ChevronDown } from "lucide-react";
 
 const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -179,10 +185,11 @@ function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color: string
   `;
 }
 
-function buildDetourPopupHtml(detour: DetourRoute, color: string): string {
+function buildDetourPopupHtml(detour: DetourRoute, color: string, defaultDir: "FORWARD" | "REVERSE" = "FORWARD"): string {
   const dirMode = detour.direction_mode || "TWO_WAY";
   const { forwardText, reverseText } = splitDetourAdviceByDirection(detour.description || "", dirMode);
   const safeId = String(detour.id || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+  const isRev = defaultDir === "REVERSE";
 
   return `
     <div class="text-xs p-2.5 min-w-[260px] max-w-[290px] font-body bg-slate-950 text-white rounded-xl border shadow-2xl" style="border-color: ${color}">
@@ -195,13 +202,15 @@ function buildDetourPopupHtml(detour: DetourRoute, color: string): string {
         <span class="rounded bg-slate-900 border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-300">${detour.flood_id_ref ? "เชื่อมโยงจุดน้ำท่วม" : "ทางเลี่ยงอิสระ"}</span>
       </div>
 
-      <!-- ปุ่มสลับทิศทางคำอธิบายทางเลี่ยง (A → B และ B → A) ตามข้อกำหนด -->
+      <!-- ปุ่มสลับทิศทางคำอธิบายทางเลี่ยง (A → B และ B → A) พร้อมเลือกทิศทางเริ่มต้นตามจุดน้ำท่วมอัตโนมัติ -->
       <div class="mt-2.5 flex rounded-lg bg-slate-900 p-0.5 border border-slate-700/80">
         <button
           type="button"
           id="detour-btn-fwd-${safeId}"
           onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'FORWARD')"
-          class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 transition cursor-pointer text-center"
+          class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md transition cursor-pointer text-center ${
+            !isRev ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
+          }"
         >
           ขาไป (A → B)
         </button>
@@ -209,16 +218,18 @@ function buildDetourPopupHtml(detour: DetourRoute, color: string): string {
           type="button"
           id="detour-btn-rev-${safeId}"
           onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'REVERSE')"
-          class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md text-slate-400 hover:text-white transition cursor-pointer text-center"
+          class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md transition cursor-pointer text-center ${
+            isRev ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
+          }"
         >
           ขากลับ (B → A)
         </button>
       </div>
 
-      <div id="detour-desc-fwd-${safeId}" class="block text-slate-200 mt-2 whitespace-pre-wrap text-[11px] max-h-48 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2 bg-slate-900/60">
+      <div id="detour-desc-fwd-${safeId}" class="${!isRev ? "block" : "hidden"} text-slate-200 mt-2 whitespace-pre-wrap text-[11px] max-h-48 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2 bg-slate-900/60">
         ${escapeHtml(forwardText)}
       </div>
-      <div id="detour-desc-rev-${safeId}" class="hidden text-slate-200 mt-2 whitespace-pre-wrap text-[11px] max-h-48 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2 bg-slate-900/60">
+      <div id="detour-desc-rev-${safeId}" class="${isRev ? "block" : "hidden"} text-slate-200 mt-2 whitespace-pre-wrap text-[11px] max-h-48 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2 bg-slate-900/60">
         ${escapeHtml(reverseText)}
       </div>
     </div>
@@ -399,6 +410,7 @@ export function LongdoGisMap({
   const [currentZoom, setCurrentZoom] = useState<number>(APP_CONFIG.DEFAULT_ZOOM);
   const [forceShowAllHighways, setForceShowAllHighways] = useState(false);
   const [showFloodLayer, setShowFloodLayer] = useState(true);
+  const [floodDisplayMode, setFloodDisplayMode] = useState<"SEGMENTS" | "EVENTS">("SEGMENTS");
   const [showDetourLayer, setShowDetourLayer] = useState(true);
   const [showMainHwy, setShowMainHwy] = useState(true);
   const [showSecHwy, setShowSecHwy] = useState(true);
@@ -926,6 +938,15 @@ export function LongdoGisMap({
       const fwdCoords = parseRouteCoordinates(detour.coordinates_json);
       const revCoords = parseRouteCoordinates(detour.reverse_coordinates_json);
 
+      const linkedFlood = detour.flood_id_ref
+        ? (systemData.floodRoutes || []).find((f) => f.id === detour.flood_id_ref)
+        : null;
+      const linkedMeta = linkedFlood ? parseFloodDirectionMeta(linkedFlood.direction_meta, linkedFlood) : null;
+      const defaultDir: "FORWARD" | "REVERSE" =
+        linkedMeta?.directionCode === "B_TO_A" || detour.direction_mode === "REVERSE_ONLY"
+          ? "REVERSE"
+          : "FORWARD";
+
       // Draw forward A->B line if mode is TWO_WAY or FORWARD_ONLY
       if (dirMode !== "REVERSE_ONLY" && fwdCoords.length >= 2) {
         const latLngs = fwdCoords.map(toLeafletLatLng);
@@ -937,7 +958,7 @@ export function LongdoGisMap({
           className,
           renderer,
         }).addTo(group);
-        polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor));
+        polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir));
 
         const midPoint = latLngs[Math.floor(latLngs.length / 2)];
         const detourIcon = L.divIcon({
@@ -946,7 +967,7 @@ export function LongdoGisMap({
           iconSize: [30, 30],
           iconAnchor: [15, 15],
         });
-        L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(() => buildDetourPopupHtml(detour, dColor)).addTo(group);
+        L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir)).addTo(group);
       }
 
       // Draw reverse B->A line if present and distinct (or when REVERSE_ONLY)
@@ -962,7 +983,7 @@ export function LongdoGisMap({
             opacity: detourStyle?.opacity ?? 0.9,
             renderer,
           }).addTo(group);
-          revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor));
+          revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir));
         }
       }
     });
@@ -997,10 +1018,12 @@ export function LongdoGisMap({
     });
     Object.values(updatesByFlood).forEach((list) => list.sort((a, b) => new Date(a.reported_at).getTime() - new Date(b.reported_at).getTime()));
 
-    (systemData.floodRoutes || []).forEach((flood) => {
-      if (!isFloodLineVisibleOnCurrentMap(flood)) return;
-      const coords = parseRouteCoordinates(flood.coordinates_json);
+    // 4d. Flood routes + capsule markers (with De-overlapping, Priority z-Index & Merged/Segment modes)
+    const visibleFloods = (systemData.floodRoutes || []).filter((flood) => isFloodLineVisibleOnCurrentMap(flood));
 
+    // First draw polylines for all visible flood routes using configured unified line style
+    visibleFloods.forEach((flood) => {
+      const coords = parseRouteCoordinates(flood.coordinates_json);
       if (coords.length >= 2) {
         const polyline = L.polyline(coords.map(toLeafletLatLng) as any, {
           color: fColor,
@@ -1016,69 +1039,229 @@ export function LongdoGisMap({
           onSelectFloodRef.current(flood.id);
         });
       }
+    });
 
-      // Flood location marker (capsule badge with route number, side badge, and level) - centered on line
-      const midCoord = coords.length > 0 ? coords[Math.floor(coords.length / 2)] : null;
-      const midLat = midCoord ? midCoord[1] : (flood.lat_start || APP_CONFIG.DEFAULT_CENTER.lat);
-      const midLon = midCoord ? midCoord[0] : (flood.lon_start || APP_CONFIG.DEFAULT_CENTER.lon);
+    if (floodDisplayMode === "EVENTS") {
+      // Merged parent event capsule markers
+      const parentEvents = groupFloodRoutesIntoEvents(visibleFloods);
+      parentEvents.forEach((ev) => {
+        let sumLat = 0;
+        let sumLon = 0;
+        let count = 0;
+        ev.segments.forEach((seg) => {
+          const coords = parseRouteCoordinates(seg.coordinates_json);
+          const mid = coords.length > 0 ? coords[Math.floor(coords.length / 2)] : null;
+          const lat = mid ? mid[1] : (seg.lat_start || APP_CONFIG.DEFAULT_CENTER.lat);
+          const lon = mid ? mid[0] : (seg.lon_start || APP_CONFIG.DEFAULT_CENTER.lon);
+          sumLat += lat;
+          sumLon += lon;
+          count++;
+        });
+        const centerLat = count > 0 ? sumLat / count : APP_CONFIG.DEFAULT_CENTER.lat;
+        const centerLon = count > 0 ? sumLon / count : APP_CONFIG.DEFAULT_CENTER.lon;
 
-      const meta = flood.direction_meta;
-      const trafficDetail = meta?.trafficStatusDetail;
-      const waterKnown = meta?.water_level_known !== false;
-      const levelText = waterKnown ? `${flood.water_level_cm} ซม.` : "รอวัดระดับน้ำ";
+        let zIndex = 200;
+        let capsuleClass = "doh-capsule-tag doh-capsule-amber";
+        let glyphIcon = "⚠️";
 
-      // 5-Color Traffic Status Presentation on Map Capsule Pins
-      let capsuleClass = "doh-capsule-tag doh-capsule-amber";
-      if (flood.traffic_status === "CLOSED" || trafficDetail === "CLOSED") {
-        capsuleClass = "doh-capsule-tag doh-capsule-red";
-      } else if (trafficDetail === "NO_SMALL_VEHICLES" || flood.traffic_status === "LIGHT_VEHICLES_ONLY") {
-        capsuleClass = "doh-capsule-tag doh-capsule-orange";
-      } else if (trafficDetail === "CAUTION" || flood.traffic_status === "ONE_LANE" || flood.traffic_status === "WARNING") {
-        capsuleClass = "doh-capsule-tag doh-capsule-amber";
-      } else if (flood.traffic_status === "PASSABLE" || trafficDetail === "PASSABLE") {
-        capsuleClass = "doh-capsule-tag doh-capsule-green";
-      } else if (trafficDetail === "PENDING_VERIFICATION") {
-        capsuleClass = "doh-capsule-tag doh-capsule-slate";
-      }
+        if (ev.mostSevereStatus === "CLOSED") {
+          capsuleClass = "doh-capsule-tag doh-capsule-red";
+          glyphIcon = "⛔";
+          zIndex = 1000;
+        } else if (ev.mostSevereStatus === "NO_SMALL_VEHICLES") {
+          capsuleClass = "doh-capsule-tag doh-capsule-orange";
+          glyphIcon = "🚗";
+          zIndex = 800;
+        } else if (ev.mostSevereStatus === "CAUTION") {
+          capsuleClass = "doh-capsule-tag doh-capsule-amber";
+          glyphIcon = "⚠️";
+          zIndex = 600;
+        } else if (ev.mostSevereStatus === "PASSABLE") {
+          capsuleClass = "doh-capsule-tag doh-capsule-green";
+          glyphIcon = "✅";
+          zIndex = 200;
+        } else if (ev.mostSevereStatus === "PENDING_VERIFICATION") {
+          capsuleClass = "doh-capsule-tag doh-capsule-slate";
+          glyphIcon = "⏳";
+          zIndex = 400;
+        }
 
-      const dirCode = meta?.directionCode;
-      const sideBadge = dirCode === "A_TO_B"
-        ? " [ขาไป]"
-        : dirCode === "B_TO_A"
-        ? " [ขากลับ]"
-        : flood.road_side === "LEFT"
-        ? " [ซ้าย]"
-        : flood.road_side === "RIGHT"
-        ? " [ขวา]"
-        : "";
-
-      const pinIcon = L.divIcon({
-        html: `
+        const pinIcon = L.divIcon({
+          html: `
             <div class="${capsuleClass}">
-              <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-sky-700" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M12 3v2"/></svg></span>
-              <span>ทล.${escapeHtml(flood.route_no)}${escapeHtml(sideBadge)}</span>
-              <span class="opacity-90">(${escapeHtml(levelText)})</span>
+              <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${glyphIcon}</span>
+              <span>ทล.${escapeHtml(ev.routeNo)} [${ev.segments.length} ช่วง]</span>
+              <span class="opacity-90">(${escapeHtml(ev.maxWaterLevelCm)} ซม.)</span>
             </div>
           `,
-        className: "doh-map-capsule-pin",
-        iconSize: [130, 28],
-        iconAnchor: [65, 14],
+          className: "doh-map-capsule-pin",
+          iconSize: [140, 28],
+          iconAnchor: [70, 14],
+        });
+
+        const primarySeg = ev.segments[0];
+        const marker = L.marker([centerLat, centerLon], { icon: pinIcon, zIndexOffset: zIndex }).addTo(group);
+        marker.bindPopup(() => buildFloodPopupHtml(primarySeg, updatesByFlood[primarySeg.id] || []), { maxWidth: 280 });
+        marker.on("click", (e: any) => {
+          L.DomEvent.stopPropagation(e);
+          onSelectFloodRef.current(primarySeg.id);
+        });
+      });
+    } else {
+      // Individual segment markers with smart de-overlapping & priority z-index
+      type MarkerCandidate = {
+        flood: FloodRoute;
+        lat: number;
+        lon: number;
+        dirCode: string;
+        zIndex: number;
+        capsuleClass: string;
+        glyphIcon: string;
+        sideBadge: string;
+        levelText: string;
+      };
+
+      const candidates: MarkerCandidate[] = visibleFloods.map((flood) => {
+        const coords = parseRouteCoordinates(flood.coordinates_json);
+        const midCoord = coords.length > 0 ? coords[Math.floor(coords.length / 2)] : null;
+        const lat = midCoord ? midCoord[1] : (flood.lat_start || APP_CONFIG.DEFAULT_CENTER.lat);
+        const lon = midCoord ? midCoord[0] : (flood.lon_start || APP_CONFIG.DEFAULT_CENTER.lon);
+
+        const meta = flood.direction_meta;
+        const trafficDetail = meta?.trafficStatusDetail;
+        const waterKnown = meta?.water_level_known !== false;
+        const levelText = waterKnown ? `${flood.water_level_cm} ซม.` : "รอวัดระดับน้ำ";
+
+        let zIndex = 200;
+        let capsuleClass = "doh-capsule-tag doh-capsule-amber";
+        let glyphIcon = "⚠️";
+
+        if (flood.traffic_status === "CLOSED" || trafficDetail === "CLOSED") {
+          capsuleClass = "doh-capsule-tag doh-capsule-red";
+          glyphIcon = "⛔";
+          zIndex = 1000;
+        } else if (trafficDetail === "NO_SMALL_VEHICLES" || flood.traffic_status === "LIGHT_VEHICLES_ONLY") {
+          capsuleClass = "doh-capsule-tag doh-capsule-orange";
+          glyphIcon = "🚗";
+          zIndex = 800;
+        } else if (trafficDetail === "CAUTION" || flood.traffic_status === "ONE_LANE" || flood.traffic_status === "WARNING") {
+          capsuleClass = "doh-capsule-tag doh-capsule-amber";
+          glyphIcon = "⚠️";
+          zIndex = 600;
+        } else if (flood.traffic_status === "PASSABLE" || trafficDetail === "PASSABLE") {
+          capsuleClass = "doh-capsule-tag doh-capsule-green";
+          glyphIcon = "✅";
+          zIndex = 200;
+        } else if (trafficDetail === "PENDING_VERIFICATION") {
+          capsuleClass = "doh-capsule-tag doh-capsule-slate";
+          glyphIcon = "⏳";
+          zIndex = 400;
+        }
+
+        const dirCode = meta?.directionCode || (flood.road_side === "LEFT" ? "A_TO_B" : flood.road_side === "RIGHT" ? "B_TO_A" : "BOTH");
+        const sideBadge = dirCode === "A_TO_B"
+          ? " [ขาไป]"
+          : dirCode === "B_TO_A"
+          ? " [ขากลับ]"
+          : flood.road_side === "LEFT"
+          ? " [ซ้าย]"
+          : flood.road_side === "RIGHT"
+          ? " [ขวา]"
+          : "";
+
+        return {
+          flood,
+          lat,
+          lon,
+          dirCode,
+          zIndex,
+          capsuleClass,
+          glyphIcon,
+          sideBadge,
+          levelText,
+        };
       });
 
-      const marker = L.marker([midLat, midLon], { icon: pinIcon }).addTo(group);
-      marker.bindPopup(() => buildFloodPopupHtml(flood, updatesByFlood[flood.id] || []), { maxWidth: 280 });
-      marker.on("click", (e: any) => {
-        L.DomEvent.stopPropagation(e);
-        onSelectFloodRef.current(flood.id);
+      // Cluster candidates within proximity (< ~35m or 0.00035 deg) to prevent stacking
+      const clusters: MarkerCandidate[][] = [];
+      const assigned = new Set<number>();
+
+      for (let i = 0; i < candidates.length; i++) {
+        if (assigned.has(i)) continue;
+        const c1 = candidates[i];
+        const groupList: MarkerCandidate[] = [c1];
+        assigned.add(i);
+
+        for (let j = i + 1; j < candidates.length; j++) {
+          if (assigned.has(j)) continue;
+          const c2 = candidates[j];
+          const distLat = Math.abs(c1.lat - c2.lat);
+          const distLon = Math.abs(c1.lon - c2.lon);
+          const isSameEvent = Boolean(c1.flood.direction_meta?.eventId && c1.flood.direction_meta.eventId === c2.flood.direction_meta?.eventId);
+          if ((distLat < 0.00035 && distLon < 0.00045) || (isSameEvent && distLat < 0.0008 && distLon < 0.0008)) {
+            groupList.push(c2);
+            assigned.add(j);
+          }
+        }
+        clusters.push(groupList);
+      }
+
+      clusters.forEach((cluster) => {
+        const count = cluster.length;
+        cluster.forEach((item, idx) => {
+          let renderLat = item.lat;
+          let renderLon = item.lon;
+
+          if (count === 2) {
+            // Smart lateral offset for dual carriageways (A->B vs B->A)
+            if (item.dirCode === "A_TO_B") {
+              renderLat += 0.00018;
+              renderLon -= 0.00012;
+            } else if (item.dirCode === "B_TO_A") {
+              renderLat -= 0.00018;
+              renderLon += 0.00012;
+            } else {
+              renderLat += idx === 0 ? 0.00018 : -0.00018;
+            }
+          } else if (count > 2) {
+            const factor = idx - (count - 1) / 2;
+            renderLat += factor * 0.00022;
+            renderLon += factor * 0.00012;
+          }
+
+          const pinIcon = L.divIcon({
+            html: `
+              <div class="${item.capsuleClass}">
+                <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${item.glyphIcon}</span>
+                <span>ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)}</span>
+                <span class="opacity-90">(${escapeHtml(item.levelText)})</span>
+              </div>
+            `,
+            className: "doh-map-capsule-pin",
+            iconSize: [130, 28],
+            iconAnchor: [65, 14],
+          });
+
+          const marker = L.marker([renderLat, renderLon], {
+            icon: pinIcon,
+            zIndexOffset: item.zIndex,
+          }).addTo(group);
+
+          marker.bindPopup(() => buildFloodPopupHtml(item.flood, updatesByFlood[item.flood.id] || []), { maxWidth: 280 });
+          marker.on("click", (e: any) => {
+            L.DomEvent.stopPropagation(e);
+            onSelectFloodRef.current(item.flood.id);
+          });
+        });
       });
-    });
+    }
 
     raisePathLayers(group, draftGroupRef.current);
     return () => {
       group.clearLayers();
       floodLinesRef.current = {};
     };
-  }, [mapReady, systemData.floodRoutes, systemData.timelineUpdates, showFloodLayer, mapStyles]);
+  }, [mapReady, systemData.floodRoutes, systemData.timelineUpdates, showFloodLayer, floodDisplayMode, mapStyles]);
 
   // 4e. Selected flood: restyle one polyline in place instead of redrawing the map.
   useEffect(() => {
@@ -1675,6 +1858,36 @@ export function LongdoGisMap({
                 className="accent-red-500 rounded"
               />
             </label>
+
+            {showFloodLayer && (
+              <div className="pl-6 pb-1 pt-0.5 flex items-center justify-between text-[11px] text-slate-300">
+                <span>รูปแบบหมุด:</span>
+                <div className="inline-flex rounded-lg bg-slate-900/90 p-0.5 border border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setFloodDisplayMode("SEGMENTS")}
+                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${
+                      floodDisplayMode === "SEGMENTS"
+                        ? "bg-amber-500 text-slate-950 font-bold"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    แยกช่วง
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFloodDisplayMode("EVENTS")}
+                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${
+                      floodDisplayMode === "EVENTS"
+                        ? "bg-amber-500 text-slate-950 font-bold"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    รวมเหตุการณ์
+                  </button>
+                </div>
+              </div>
+            )}
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">

@@ -1156,21 +1156,11 @@ export function slicePolylineByKmRange(
   const totalGeomMeters = cumDist[cumDist.length - 1];
   if (totalGeomMeters <= 0) return polylineCoords;
 
-  // คำนวณสัดส่วนความยาวตามกิโลเมตร (0.0 ถึง 1.0)
-  const kmSpan = Math.abs(eKm - sKm);
-  const minKm = Math.min(sKm, eKm);
-  const maxKm = Math.max(sKm, eKm);
-
-  // ตรวจสอบทิศทาง
-  const isReverse = isReverseOrientation || sKm > eKm;
-
-  let fStart = (tStart - minKm) / kmSpan;
-  let fEnd = (tEnd - minKm) / kmSpan;
-
-  if (isReverse) {
-    fStart = 1 - fStart;
-    fEnd = 1 - fEnd;
-  }
+  // คำนวณตำแหน่งสัดส่วนตามแนวสายทางจริง (Physical linear reference along the geometry from index 0 to last)
+  // ที่ index 0 มีค่าหลักกิโลเมตร = sKm, ที่ index สุดท้าย มีค่าหลักกิโลเมตร = eKm
+  const kmSpan = eKm - sKm;
+  const fStart = (tStart - sKm) / kmSpan;
+  const fEnd = (tEnd - sKm) / kmSpan;
 
   const clampedStart = Math.max(0, Math.min(1, fStart));
   const clampedEnd = Math.max(0, Math.min(1, fEnd));
@@ -1216,8 +1206,15 @@ export function slicePolylineByKmRange(
 
   sliced.push(interpolateAtDist(targetDistEnd));
 
-  // หากทิศทางย้อนกลับ ให้สลับหัวท้ายให้ตรงกับทิศทางที่ผู้ใช้ต้องการ
-  if (clampedStart > clampedEnd) {
+  // ตรวจสอบทิศทางการจัดเรียงพิกัดผลลัพธ์ (Coordinate sequence order):
+  // หากผู้ใช้ต้องการทิศทางย้อนกลับ (B_TO_A หรือ targetKmStart > targetKmEnd)
+  // ลำดับพิกัดต้องเริ่มจากจุด กม. มาก ไปหาจุด กม. น้อย เพื่อแสดงทิศทางการขับขี่ที่ถูกต้อง
+  const wantsHighToLow = isReverseOrientation || tStart > tEnd;
+  const isCurrentlyLowToHigh = sKm < eKm;
+
+  if (wantsHighToLow && isCurrentlyLowToHigh) {
+    sliced.reverse();
+  } else if (!wantsHighToLow && !isCurrentlyLowToHigh) {
     sliced.reverse();
   }
 

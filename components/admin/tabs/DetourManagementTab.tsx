@@ -30,6 +30,7 @@ import {
   extractDirectionalAdvice,
   generateAutoDetourAdvice,
 } from "@/lib/gis-utils";
+import { parseFloodDirectionMeta } from "@/lib/flood-event-schema";
 import { exportLineFeatures, GisExportFormat, parseLineCoordinates } from "@/lib/gis-export";
 
 interface DetourManagementTabProps {
@@ -166,6 +167,13 @@ export function DetourManagementTab({
 
     setIsSubmitting(true);
     try {
+      const linkedFlood = floodList.find((f) => f.id === editDetourRefId);
+      const linkedEventId = linkedFlood ? parseFloodDirectionMeta(linkedFlood.direction_meta, linkedFlood).eventId : undefined;
+      const updatedDetourMeta = {
+        ...(editingDetour.detour_meta || {}),
+        eventId: linkedEventId,
+      };
+
       const res = await upsertRouteAction({
         id: editingDetour.id,
         recordType: "DETOUR",
@@ -180,7 +188,7 @@ export function DetourManagementTab({
         reverseCoordinates: typeof editingDetour.reverse_coordinates_json === "string" ? JSON.parse(editingDetour.reverse_coordinates_json) : editingDetour.reverse_coordinates_json,
         reverseWaypoints: typeof editingDetour.reverse_waypoints_json === "string" ? JSON.parse(editingDetour.reverse_waypoints_json) : editingDetour.reverse_waypoints_json,
         directionMode: editingDetour.direction_mode || "TWO_WAY",
-        detourMeta: editingDetour.detour_meta,
+        detourMeta: updatedDetourMeta,
       });
 
       // Update active state if changed

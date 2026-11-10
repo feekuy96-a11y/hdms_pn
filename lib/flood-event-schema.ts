@@ -14,6 +14,7 @@
  */
 
 import { parseKmPostMeters, formatKmPostString } from "./highway-schema";
+export { parseKmPostMeters, formatKmPostString };
 
 export type FloodDirectionCode = "A_TO_B" | "B_TO_A" | "BOTH";
 

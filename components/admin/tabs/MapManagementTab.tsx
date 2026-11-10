@@ -59,7 +59,10 @@ import {
   groupFloodRoutesIntoEvents,
   mapTrafficStatusToDetail,
   mapDetailToDbStatus,
+  detectOverlappingFloodSegments,
+  parseKmPostMeters,
 } from "@/lib/flood-event-schema";
+import { groupHighwayFeatures, HighwaySectionGroup, HighwayBranchItem } from "@/lib/highway-schema";
 
 function parseCoordinatePair(value: string): [number, number] | null {
   const numbers = value.match(/-?\d+(?:\.\d+)?/g)?.map(Number) || [];
@@ -792,32 +795,90 @@ export function MapManagementTab({
     onToast("ล้างเส้นทางร่างและแบบฟอร์มแล้ว");
   };
 
-  // Slice Polyline from Phase 1 GIS Highway Layers by KM Range
+  // Slice Polyline from Phase 1 GIS Highway Layers by KM Range & Direction
   const handleSlicePolylineFromKm = () => {
     if (!routeNo || !kmStart || !kmEnd) {
       onToast("กรุณาระบุหมายเลขทางหลวง, กม.เริ่มต้น และ กม.สิ้นสุด ก่อนคำนวณแนวเส้น");
       return;
     }
+
+    const cleanRoute = String(routeNo).replace(/^ทล\.?/i, "").trim();
+    const tStartMeters = parseKmPostMeters(kmStart);
+    const tEndMeters = parseKmPostMeters(kmEnd);
+
     let targetCoords: [number, number][] = [];
     let secKmStart: any = null;
     let secKmEnd: any = null;
 
-    for (const layer of systemData.highwayLayers || []) {
-      if (layer.geojson_data && Array.isArray(layer.geojson_data.features)) {
-        for (const f of layer.geojson_data.features) {
-          const props = f.properties || {};
-          const fRoute = String(props.route_no || props.route_code || props.ROAD_NO || props.route || props.code || "").replace(/^ทล\.?/i, "").trim();
-          if (fRoute === String(routeNo).trim()) {
-            if (f.geometry?.coordinates?.length >= 2) {
-              targetCoords = f.geometry.coordinates;
-              secKmStart = props.km_start || kmStart;
-              secKmEnd = props.km_end || kmEnd;
+    // 1. ค้นหาผ่าน HighwaySectionGroup ที่จัดกลุ่มตามมาตรฐาน Phase 1
+    const sectionGroups = groupHighwayFeatures(systemData.highwayLayers || []);
+    const matchingGroups = sectionGroups.filter((g) => g.routeNo === cleanRoute);
+
+    if (matchingGroups.length > 0) {
+      // หากพบหลายตอนควบคุม ให้เลือกตอนที่ช่วง กม. ครอบคลุมเป้าหมายหรือใกล้เคียงที่สุด
+      let bestGroup = matchingGroups[0];
+      if (tStartMeters !== null && tEndMeters !== null) {
+        const targetMid = (tStartMeters + tEndMeters) / 2;
+        let minDiff = Infinity;
+        for (const g of matchingGroups) {
+          const sMeters = parseKmPostMeters(g.kmStart);
+          const eMeters = parseKmPostMeters(g.kmEnd);
+          if (sMeters !== null && eMeters !== null) {
+            const minKm = Math.min(sMeters, eMeters);
+            const maxKm = Math.max(sMeters, eMeters);
+            if (targetMid >= minKm && targetMid <= maxKm) {
+              bestGroup = g;
               break;
+            }
+            const diff = Math.min(Math.abs(targetMid - minKm), Math.abs(targetMid - maxKm));
+            if (diff < minDiff) {
+              minDiff = diff;
+              bestGroup = g;
             }
           }
         }
       }
-      if (targetCoords.length >= 2) break;
+
+      // เลือก Branch ที่ตรงกับทิศทางจราจรที่เลือก (Dual-carriageway branches)
+      let chosenBranch = bestGroup.primaryBranch;
+      if (directionCode === "B_TO_A") {
+        const reverseBranch = bestGroup.branches.find(
+          (b) => b.directionCode === "B_TO_A" && b.coordinates.length >= 2
+        );
+        if (reverseBranch) chosenBranch = reverseBranch;
+      } else if (directionCode === "A_TO_B") {
+        const forwardBranch = bestGroup.branches.find(
+          (b) => b.directionCode === "A_TO_B" && b.coordinates.length >= 2
+        );
+        if (forwardBranch) chosenBranch = forwardBranch;
+      }
+
+      if (chosenBranch && chosenBranch.coordinates.length >= 2) {
+        targetCoords = chosenBranch.coordinates;
+        secKmStart = chosenBranch.properties?.km_start || bestGroup.kmStart;
+        secKmEnd = chosenBranch.properties?.km_end || bestGroup.kmEnd;
+      }
+    }
+
+    // 2. Fallback: ค้นตรงจาก Features ใน highwayLayers หากยังไม่พบพิกัด
+    if (targetCoords.length < 2) {
+      for (const layer of systemData.highwayLayers || []) {
+        if (layer.geojson_data && Array.isArray(layer.geojson_data.features)) {
+          for (const f of layer.geojson_data.features) {
+            const props = f.properties || {};
+            const fRoute = String(props.route_no || props.route_code || props.ROAD_NO || props.route || props.code || "").replace(/^ทล\.?/i, "").trim();
+            if (fRoute === cleanRoute) {
+              if (f.geometry?.coordinates?.length >= 2) {
+                targetCoords = f.geometry.coordinates;
+                secKmStart = props.km_start || kmStart;
+                secKmEnd = props.km_end || kmEnd;
+                break;
+              }
+            }
+          }
+        }
+        if (targetCoords.length >= 2) break;
+      }
     }
 
     if (targetCoords.length < 2) {
@@ -998,6 +1059,24 @@ export function MapManagementTab({
       return;
     }
 
+    const chosenRouteNo = routeNo || (availableHighways[0]?.no || "43");
+
+    if (routeMode === "FLOOD" && !saveAsDraft && kmStart && kmEnd) {
+      const targetNewSeg = {
+        route_no: chosenRouteNo,
+        km_start: kmStart,
+        km_end: kmEnd,
+        direction_meta: { directionCode },
+      };
+      const existingActiveOnRoute = (systemData.floodRoutes || []).filter(
+        (r) => r.is_active && String(r.id) !== String(routeEditId) && String(r.route_no) === String(chosenRouteNo)
+      );
+      const overlaps = detectOverlappingFloodSegments([targetNewSeg, ...existingActiveOnRoute]);
+      if (overlaps.length > 0) {
+        onToast(`⚠️ แจ้งเตือน: ${overlaps[0].message}`);
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const coords = (
@@ -1009,10 +1088,13 @@ export function MapManagementTab({
           ]
       ) as [number, number][];
 
-      const chosenRouteNo = routeNo || (availableHighways[0]?.no || "43");
       const separation = routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" && draftReverseCoordinates.length >= 2
         ? analyzeCarriagewaySeparation(coords, draftReverseCoordinates)
         : null;
+
+      // Phase 3: Link Detour to Parent Flood Event if applicable
+      const linkedFlood = (systemData.floodRoutes || []).find((f) => String(f.id) === String(detourRefId));
+      const linkedEventId = linkedFlood ? parseFloodDirectionMeta(linkedFlood.direction_meta, linkedFlood).eventId : undefined;
 
       // Phase 2: Compute Parent Event, Direction, and Multi-Photo metadata
       const currentEventId = selectedParentEventId || `EV-${chosenRouteNo}-${Date.now()}`;
@@ -1091,6 +1173,7 @@ export function MapManagementTab({
             show_arrows: true,
             verified_no_closed_overlap: closedRoadConflicts.length === 0,
             carriageway_type: separation?.isSymmetricSingleLine ? "SINGLE_CENTERLINE" : "ASYMMETRIC_DETOUR",
+            eventId: linkedEventId,
           }
           : undefined,
       });

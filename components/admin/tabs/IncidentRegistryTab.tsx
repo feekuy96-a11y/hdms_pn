@@ -28,6 +28,7 @@ import {
   upsertRouteAction,
 } from "@/app/actions/doh-actions";
 import { exportLineFeatures, GisExportFormat, parseLineCoordinates } from "@/lib/gis-export";
+import { slicePolylineByKmRange } from "@/lib/gis-utils";
 import {
   groupFloodRoutesIntoEvents,
   parseFloodDirectionMeta,
@@ -138,7 +139,34 @@ export function IncidentRegistryTab({
       const origKmStart = orig.km_start;
       const origKmEnd = orig.km_end;
 
-      // 1. Update original segment to end at splitKm
+      const rawCoords = orig.coordinates_json;
+      let origCoords: [number, number][] = [];
+      if (Array.isArray(rawCoords)) {
+        origCoords = rawCoords as [number, number][];
+      } else if (typeof rawCoords === "string") {
+        try {
+          origCoords = JSON.parse(rawCoords);
+        } catch {
+          origCoords = [];
+        }
+      }
+
+      const isReverse = meta.directionCode === "B_TO_A";
+      let part1Coords = origCoords;
+      let part2Coords = origCoords;
+
+      if (origCoords.length >= 2) {
+        part1Coords = slicePolylineByKmRange(origCoords, origKmStart, origKmEnd, origKmStart, splitKm.trim(), isReverse);
+        part2Coords = slicePolylineByKmRange(origCoords, origKmStart, origKmEnd, splitKm.trim(), origKmEnd, isReverse);
+      }
+
+      const p1Start = part1Coords[0] || [orig.lon_start, orig.lat_start];
+      const p1End = part1Coords[part1Coords.length - 1] || [orig.lon_end, orig.lat_end];
+
+      const p2Start = part2Coords[0] || [p1End[0], p1End[1]];
+      const p2End = part2Coords[part2Coords.length - 1] || [orig.lon_end, orig.lat_end];
+
+      // 1. Update original segment to end at splitKm with sliced geometry
       await upsertRouteAction({
         id: orig.id,
         recordType: "FLOOD",
@@ -149,11 +177,11 @@ export function IncidentRegistryTab({
         waterLevelCm: orig.water_level_cm,
         trafficStatus: orig.traffic_status,
         isActive: orig.is_active,
-        latStart: orig.lat_start,
-        lonStart: orig.lon_start,
-        latEnd: orig.lat_end,
-        lonEnd: orig.lon_end,
-        coordinates: orig.coordinates_json as any,
+        latStart: p1Start[1],
+        lonStart: p1Start[0],
+        latEnd: p1End[1],
+        lonEnd: p1End[0],
+        coordinates: part1Coords,
         latestPhotoUrl: orig.latest_photo_url || undefined,
         roadSide: orig.road_side,
         affectedLanes: orig.affected_lanes,
@@ -166,7 +194,7 @@ export function IncidentRegistryTab({
         },
       });
 
-      // 2. Insert new segment from splitKm to origKmEnd
+      // 2. Insert new segment from splitKm to origKmEnd with sliced geometry
       const newMeta: FloodSegmentDirectionMeta = {
         ...meta,
         startedAt: new Date().toISOString(),
@@ -184,11 +212,11 @@ export function IncidentRegistryTab({
         waterLevelCm: splitNewWaterLevel,
         trafficStatus: splitNewTrafficStatus,
         isActive: orig.is_active,
-        latStart: orig.lat_start,
-        lonStart: orig.lon_start,
-        latEnd: orig.lat_end,
-        lonEnd: orig.lon_end,
-        coordinates: orig.coordinates_json as any,
+        latStart: p2Start[1],
+        lonStart: p2Start[0],
+        latEnd: p2End[1],
+        lonEnd: p2End[0],
+        coordinates: part2Coords,
         latestPhotoUrl: orig.latest_photo_url || undefined,
         roadSide: orig.road_side,
         affectedLanes: orig.affected_lanes,

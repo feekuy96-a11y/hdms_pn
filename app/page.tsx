@@ -272,6 +272,29 @@ export default function HomePage() {
     [systemData.timelineUpdates, selectedFloodKey]
   );
 
+  // Sibling segments under the same parent event or same control section
+  const siblingSegments = React.useMemo(() => {
+    if (!selectedFlood) return [];
+    const eventId = selectedFloodMeta?.eventId;
+    return (systemData.floodRoutes || []).filter(
+      (r) =>
+        r.is_active &&
+        ((eventId && r.direction_meta?.eventId === eventId) ||
+          (r.route_no === selectedFlood.route_no && r.section_name === selectedFlood.section_name))
+    );
+  }, [selectedFlood, selectedFloodMeta?.eventId, systemData.floodRoutes]);
+
+  // Auto-synchronize citizen detour direction to match the flood direction when selecting a flood segment
+  useEffect(() => {
+    if (!selectedFlood) return;
+    const meta = parseFloodDirectionMeta(selectedFlood.direction_meta, selectedFlood);
+    if (meta.directionCode === "B_TO_A") {
+      setCitizenDetourDirection("REVERSE");
+    } else if (meta.directionCode === "A_TO_B") {
+      setCitizenDetourDirection("FORWARD");
+    }
+  }, [selectedFlood]);
+
   // Dynamic route chips: ONLY active flood routes, sorted naturally by highway number
   const routeChips = React.useMemo(() => {
     const routeMap = new Map<string, string>();
@@ -333,6 +356,12 @@ export default function HomePage() {
   );
   const handleSelectFlood = (flood: FloodRoute) => {
     setSelectedFloodId(flood.id);
+    const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
+    if (meta.directionCode === "B_TO_A") {
+      setCitizenDetourDirection("REVERSE");
+    } else if (meta.directionCode === "A_TO_B") {
+      setCitizenDetourDirection("FORWARD");
+    }
     setActivePhotoIdx(0);
     setShowDossier(true);
     setIsMobileDrawerOpen(false);
@@ -341,7 +370,13 @@ export default function HomePage() {
   const activeDetours = (systemData.detourRoutes || []).filter((route) => route.is_active);
   const filteredDetours = activeDetours.filter((route) => `${route.route_name} ${route.description || ""}`.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase()));
   const selectedFloodDetours = selectedFlood
-    ? activeDetours.filter((route) => route.flood_id_ref === selectedFlood.id)
+    ? activeDetours.filter(
+        (route) =>
+          route.flood_id_ref === selectedFlood.id ||
+          (route.detour_meta?.eventId &&
+            selectedFloodMeta?.eventId &&
+            route.detour_meta.eventId === selectedFloodMeta.eventId)
+      )
     : [];
   const detourList = filteredDetours.length > 0 && (
     <section className="space-y-2.5 rounded-2xl border border-amber-500/40 bg-slate-900/90 p-3 shadow-lg" aria-label="รายการทางเลี่ยง">
@@ -369,7 +404,12 @@ export default function HomePage() {
               className="block min-h-11 w-full rounded-xl border border-slate-700/80 bg-slate-950/85 p-3 text-left text-sm text-white hover:bg-slate-800 hover:border-amber-400/70 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer shadow-sm group"
               onClick={() => {
                 setViewingDetourModal(route);
-                setModalDetourDirection("FORWARD");
+                const linkedMeta = linkedFlood ? parseFloodDirectionMeta(linkedFlood.direction_meta, linkedFlood) : null;
+                if (linkedMeta?.directionCode === "B_TO_A" || route.direction_mode === "REVERSE_ONLY") {
+                  setModalDetourDirection("REVERSE");
+                } else {
+                  setModalDetourDirection("FORWARD");
+                }
                 if (Number.isFinite(route.lon_start) && Number.isFinite(route.lat_start)) {
                   setFocusCoordinates([route.lon_start, route.lat_start]);
                 }
@@ -998,7 +1038,82 @@ export default function HomePage() {
                     </div>
                   </div>
                   </div>
-                  <div className="sm:col-span-2 sm:row-start-2">
+                  <div className="sm:col-span-2 sm:row-start-2 space-y-3">
+                  {/* Sibling Segments Comparative Summary (When Parent Event has multiple directions/stretches) */}
+                  {siblingSegments.length > 1 && (
+                    <div className="rounded-xl border border-sky-600/40 bg-sky-950/40 p-3 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-heading font-bold text-sky-200 flex items-center gap-1.5">
+                          <span>📊 ช่วงและทิศทางในเหตุการณ์นี้ ({siblingSegments.length} ช่วง)</span>
+                        </span>
+                        <span className="text-[11px] text-slate-400">แตะเพื่อสลับดูข้อมูล</span>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {siblingSegments.map((s) => {
+                          const sMeta = parseFloodDirectionMeta(s.direction_meta, s);
+                          const isCurrent = s.id === selectedFlood.id;
+                          const pres = getTrafficPresentation(s.traffic_status, s.water_level_cm);
+                          const dirName =
+                            sMeta.directionCode === "A_TO_B"
+                              ? "ขาไป (A → B)"
+                              : sMeta.directionCode === "B_TO_A"
+                              ? "ขากลับ (B → A)"
+                              : "ไป-กลับ (A ⇄ B)";
+
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedFloodId(s.id);
+                                if (s.lat_start && s.lon_start) {
+                                  setFocusCoordinates([s.lon_start, s.lat_start]);
+                                }
+                              }}
+                              className={`text-left p-2.5 rounded-lg border transition flex flex-col justify-between gap-1.5 cursor-pointer ${
+                                isCurrent
+                                  ? "bg-sky-900/80 border-sky-400 ring-1 ring-sky-400 text-white shadow"
+                                  : "bg-slate-900/70 border-slate-700/80 hover:bg-slate-800 text-slate-200"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1.5 w-full">
+                                <span className="font-heading text-xs font-bold text-amber-300">
+                                  {dirName}
+                                </span>
+                                {isCurrent ? (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-400 text-slate-950">
+                                    กำลังดูอยู่
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-sky-300 underline font-medium">
+                                    แตะเพื่อดู
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-300">
+                                ระหว่าง กม.{s.km_start}–{s.km_end}
+                              </div>
+                              <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[11px] w-full">
+                                <span className="font-mono font-bold text-amber-400">
+                                  {s.water_level_cm} ซม.
+                                </span>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                  s.traffic_status === "CLOSED"
+                                    ? "bg-red-500/80 text-white"
+                                    : s.traffic_status === "PASSABLE"
+                                    ? "bg-emerald-500/80 text-white"
+                                    : "bg-amber-500/80 text-slate-950"
+                                }`}>
+                                  {pres.icon} {pres.detail}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                 {/* Detour Recommendation Box (Yellow Banner) */}
                 <div className="bg-amber-500/10 border border-amber-400/50 rounded-xl p-3.5 space-y-2.5">
                   {selectedFloodDetours.map((route) => {
@@ -1023,6 +1138,16 @@ export default function HomePage() {
                     <div className="flex items-center gap-1.5 text-amber-300 text-xs font-heading font-bold">
                       <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                       <span>คำแนะนำเส้นทางเลี่ยงน้ำท่วม</span>
+                      {selectedFloodMeta.directionCode === "B_TO_A" && (
+                        <span className="text-[10px] font-normal text-amber-200/80 bg-amber-950/80 border border-amber-500/30 px-1.5 py-0.2 rounded">
+                          (ปรับทิศทางขากลับอัตโนมัติ)
+                        </span>
+                      )}
+                      {selectedFloodMeta.directionCode === "A_TO_B" && (
+                        <span className="text-[10px] font-normal text-amber-200/80 bg-amber-950/80 border border-amber-500/30 px-1.5 py-0.2 rounded">
+                          (ปรับทิศทางขาไปอัตโนมัติ)
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -1103,6 +1228,8 @@ export default function HomePage() {
                             <img
                               src={displayPhotoUrl}
                               alt={`ภาพสถานการณ์ ${selectedFlood.section_name}`}
+                              loading="lazy"
+                              decoding="async"
                               className="w-full h-36 sm:h-44 object-cover"
                             />
                           ) : (
@@ -1140,6 +1267,8 @@ export default function HomePage() {
                                 <img
                                   src={photo.dataUrl}
                                   alt={`ภาพย่อที่ ${idx + 1}`}
+                                  loading="lazy"
+                                  decoding="async"
                                   className="w-full h-full object-cover"
                                 />
                                 <span className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[8px] text-center text-white font-mono">
