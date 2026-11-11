@@ -91,3 +91,9 @@
 - **B-005 (กลาง):** การแยกไฟล์ขนาดใหญ่ในแอดมิน (`GisDataImportTab.tsx`, `MapManagementTab.tsx`)
 - **B-008 (กลาง):** การรองรับ OSRM ทางเลือกหรือ Caching Proxy
 
+
+
+---
+
+## อัปเดตหลักฐานใหม่: 2026-11-11 (Phase 6, ยังไม่ใช่ Release Verification)
+แม้ตารางด้านบนบันทึก Phase 5 ว่า 100% ตามผลทดสอบเดิม แต่การตรวจ Production แบบอ่านอย่างเดียวพบว่าข้อมูลทางเลี่ยง 8 รายการมี `direction_mode=TWO_WAY` ทั้งหมด และน้ำท่วม 4 รายการมี `road_side=UNKNOWN` ทั้งหมด ขณะที่ `hdms-api` ที่ deploy ยังขาดการบันทึกฟิลด์ส่วนขยาย ดังนั้นผลทดสอบ Phase 5 ไม่รับรองการทำงานจริงของช่องข้อมูลเหล่านี้ โปรดอ้างอิง `docs/PHASE6_VALIDATION.md` และ `docs/BACKLOG.md` (B-014) ก่อน Deploy

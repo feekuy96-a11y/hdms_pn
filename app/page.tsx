@@ -130,7 +130,7 @@ function SituationSummary({ counts }: { counts: Record<StatusColor, number> }) {
 
 // One card for the desktop sidebar and the mobile sheet (they used to be two diverging copies).
 function FloodCard({ flood, selected, onSelect }: { flood: FloodRoute; selected: boolean; onSelect: (flood: FloodRoute) => void }) {
-  const meta = parseFloodDirectionMeta(flood);
+  const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
   const status = getTrafficPresentation(
     flood.traffic_status as TrafficStatus,
     flood.water_level_cm,
@@ -142,7 +142,7 @@ function FloodCard({ flood, selected, onSelect }: { flood: FloodRoute; selected:
     ? "B → A (ย้อน กม.)"
     : meta.directionCode === "BOTH"
     ? "A ⇄ B (๒ ฝั่ง)"
-    : null;
+    : "ไม่ระบุทิศทาง";
   const photoCount = Array.isArray(meta.photos) && meta.photos.length > 0 ? meta.photos.length : (flood.latest_photo_url ? 1 : 0);
 
   return (
@@ -275,7 +275,7 @@ export default function HomePage() {
 
   const selectedFlood =
     systemData.floodRoutes.find((r) => r.id === selectedFloodId) || systemData.floodRoutes[0];
-  const selectedFloodMeta = React.useMemo(() => parseFloodDirectionMeta(selectedFlood), [selectedFlood]);
+  const selectedFloodMeta = React.useMemo(() => parseFloodDirectionMeta(selectedFlood?.direction_meta, selectedFlood), [selectedFlood]);
 
   // Parsing the advice text is regex heavy; do it once per advice text, not on every render.
   const selectedFloodKey = selectedFlood?.id;
@@ -966,7 +966,8 @@ export default function HomePage() {
                               ? "ตามหลัก กม. (ขาไป A → B)"
                               : selectedFloodMeta.directionCode === "B_TO_A"
                               ? "ย้อนหลัก กม. (ขากลับ B → A)"
-                              : "ไป-กลับ ๒ ทิศทาง (A ⇄ B)"}
+                              : selectedFloodMeta.directionCode === "BOTH"
+                              ? "ไป-กลับ ๒ ทิศทาง (A ⇄ B)" : "ไม่ระบุทิศทาง (รอตรวจสอบ)"}
                           </span>
                         )}
                       </div>
@@ -1095,7 +1096,7 @@ export default function HomePage() {
                               ? "ขาไป (A → B)"
                               : sMeta.directionCode === "B_TO_A"
                               ? "ขากลับ (B → A)"
-                              : "ไป-กลับ (A ⇄ B)";
+                              : sMeta.directionCode === "BOTH" ? "ไป-กลับ (A ⇄ B)" : "ไม่ระบุทิศทาง";
 
                           return (
                             <button

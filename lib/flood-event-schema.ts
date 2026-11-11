@@ -16,7 +16,7 @@
 import { parseKmPostMeters, formatKmPostString } from "./highway-schema";
 export { parseKmPostMeters, formatKmPostString };
 
-export type FloodDirectionCode = "A_TO_B" | "B_TO_A" | "BOTH";
+export type FloodDirectionCode = "A_TO_B" | "B_TO_A" | "BOTH" | "UNKNOWN";
 
 export type AffectedRoadPart =
   | "ALL_LANES"
@@ -258,13 +258,15 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
   const fallbackTitle = parsed.eventTitle || (route?.route_no && route?.section_name ? `ทล.${route.route_no} ตอน${route.section_name}` : "เหตุการณ์น้ำท่วมทางหลวง");
 
   const fallbackDirection: FloodDirectionCode =
-    parsed.directionCode === "A_TO_B" || parsed.directionCode === "B_TO_A" || parsed.directionCode === "BOTH"
+    parsed.directionCode === "A_TO_B" || parsed.directionCode === "B_TO_A" || parsed.directionCode === "BOTH" || parsed.directionCode === "UNKNOWN"
       ? parsed.directionCode
       : route?.road_side === "LEFT"
       ? "A_TO_B"
       : route?.road_side === "RIGHT"
       ? "B_TO_A"
-      : "A_TO_B";
+      : route?.road_side === "BOTH"
+      ? "BOTH"
+      : "UNKNOWN";
 
   const rawAffected = Array.isArray(parsed.affectedParts) ? parsed.affectedParts : [];
   const affectedParts: AffectedRoadPart[] = rawAffected.filter((p: any): p is AffectedRoadPart => p in AFFECTED_ROAD_PART_LABELS);
@@ -322,7 +324,7 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
     subdivisionName: parsed.subdivisionName || route?.reporter_name || "",
     villageOrLandmark: parsed.villageOrLandmark || "",
     directionCode: fallbackDirection,
-    directionLabel: parsed.directionLabel || (fallbackDirection === "A_TO_B" ? "ตามหลัก กม. (ขาไป A → B)" : fallbackDirection === "B_TO_A" ? "ย้อนหลัก กม. (ขากลับ B → A)" : "ทั้งสองทิศทาง"),
+    directionLabel: parsed.directionLabel || (fallbackDirection === "A_TO_B" ? "ตามหลัก กม. (ขาไป A → B)" : fallbackDirection === "B_TO_A" ? "ย้อนหลัก กม. (ขากลับ B → A)" : fallbackDirection === "BOTH" ? "ทั้งสองทิศทาง" : "ไม่ระบุทิศทาง (ต้องตรวจสอบ)"),
     roadSide: fallbackRoadSide,
     affectedParts,
     trafficStatusDetail: mapTrafficStatusToDetail(route?.traffic_status, parsed.trafficStatusDetail),

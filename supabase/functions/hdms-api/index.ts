@@ -15,7 +15,10 @@ const number = (value: unknown, min: number, max: number) => typeof value === "n
 const traffic = (value: unknown) => ["CLOSED", "WARNING", "PASSABLE", "LIGHT_VEHICLES_ONLY", "ONE_LANE"].includes(String(value)) ? value : fail("Invalid traffic status");
 const roadSide = (value: unknown) => ["LEFT", "RIGHT", "BOTH", "UNKNOWN"].includes(String(value || "UNKNOWN")) ? String(value || "UNKNOWN") : "UNKNOWN";
 const shoulder = (value: unknown) => ["NONE", "LEFT", "RIGHT", "BOTH", "AFFECTED", "UNKNOWN"].includes(String(value || "NONE")) ? String(value || "NONE") : "NONE";
-const detourDir = (value: unknown) => ["TWO_WAY", "FORWARD_ONLY", "REVERSE_ONLY"].includes(String(value || "TWO_WAY")) ? String(value || "TWO_WAY") : "TWO_WAY";
+const detourDir = (value: unknown) => {
+  if (value === "TWO_WAY" || value === "FORWARD_ONLY" || value === "REVERSE_ONLY") return value;
+  fail("Invalid detour direction; refusing to overwrite it with two-way", 422);
+};
 const typeTable = (type: unknown) => type === "FLOOD" ? "doh_flood_routes" : type === "DETOUR" ? "doh_detour_routes" : fail("Invalid record type");
 
 Deno.serve(async (req) => {
@@ -88,6 +91,7 @@ Deno.serve(async (req) => {
     if (mutation && !serviceKey) return reply({ error: "Server mutation key is not configured" }, 503);
     const [p, second] = args;
     const now = new Date().toISOString();
+    let savedRouteId: string | undefined;
     const patch = async (table: string, id: string, changes: Record<string, unknown>, idColumn = "id") => {
       const data = await check(db.from(table).update(changes).eq(idColumn, text(id, "ID")).select(idColumn).single());
       if (!data) fail("Record not found", 404);
@@ -119,8 +123,8 @@ Deno.serve(async (req) => {
           if (typeof p.affectedLanes === "string") { extFlood.affected_lanes = p.affectedLanes; extTimeline.affected_lanes = p.affectedLanes; }
           if (p.affectedShoulder) { extFlood.affected_shoulder = shoulder(p.affectedShoulder); extTimeline.affected_shoulder = shoulder(p.affectedShoulder); }
           if (p.directionMeta && typeof p.directionMeta === "object") { extFlood.direction_meta = p.directionMeta; extTimeline.direction_meta = p.directionMeta; }
-          await db.from("doh_flood_routes").update(extFlood).eq("id", floodId);
-          await db.from("doh_timeline_updates").update(extTimeline).eq("id", timelineId);
+          await check(db.from("doh_flood_routes").update(extFlood).eq("id", floodId));
+          await check(db.from("doh_timeline_updates").update(extTimeline).eq("id", timelineId));
         }
         break;
       }
@@ -154,14 +158,30 @@ Deno.serve(async (req) => {
           }
           const revWaypoints = Array.isArray(p.reverseWaypoints) ? p.reverseWaypoints : (existing.reverse_waypoints_json ?? []);
           Object.assign(baseRow, { flood_id_ref: (p.detourRefId === "" ? null : p.detourRefId ?? existing.flood_id_ref ?? null), route_name: text(p.detourName ?? existing.route_name, "Detour name"), description: p.detourDesc ?? existing.description ?? "" });
-          Object.assign(extRow, { reverse_coordinates_json: revGeometry, reverse_waypoints_json: revWaypoints, direction_mode: detourDir(p.directionMode ?? existing.direction_mode ?? "TWO_WAY"), detour_meta: (p.detourMeta && typeof p.detourMeta === "object") ? p.detourMeta : (existing.detour_meta ?? {}) });
+          Object.assign(extRow, { reverse_coordinates_json: revGeometry, reverse_waypoints_json: revWaypoints, direction_mode: detourDir(p.directionMode ?? existing.direction_mode), detour_meta: (p.detourMeta && typeof p.detourMeta === "object") ? p.detourMeta : (existing.detour_meta ?? {}) });
         }
-        // Perform validated upsert through the server-only service client, falling back cleanly if the additive migration hasn't been applied yet.
+        // Do not silently discard selected direction/lane fields on database errors.
         const fullUpsert = await db.from(table).upsert({ ...baseRow, ...extRow });
         if (fullUpsert.error) {
-          console.warn("Extended upsert fallback to base columns", fullUpsert.error.code, fullUpsert.error.message);
-          await check(db.from(table).upsert(baseRow));
+          console.error("Route upsert rejected", fullUpsert.error.code, fullUpsert.error.message);
+          fail("บันทึกไม่สำเร็จ: โปรดตรวจสอบ schema/migration ของช่องจราจรและทิศทาง", 422);
         }
+        // Verify persisted values rather than trusting a successful HTTP/database write alone.
+        // This detects schema defaults/triggers/serialization that silently change operator input.
+        const readColumns = p.recordType === "FLOOD"
+          ? "id,road_side,affected_lanes,affected_shoulder,direction_meta"
+          : "id,direction_mode,reverse_coordinates_json,detour_meta";
+        const persisted = await check(db.from(table).select(readColumns).eq("id", id).single());
+        if (p.recordType === "FLOOD") {
+          if (persisted.road_side !== extRow.road_side ||
+              persisted.affected_lanes !== extRow.affected_lanes ||
+              persisted.direction_meta?.directionCode !== (extRow.direction_meta as any)?.directionCode) {
+            fail("บันทึกแล้วแต่ค่าฝั่งถนน/ช่องจราจร/ทิศทางที่อ่านกลับมาไม่ตรง กรุณาตรวจสอบก่อนเผยแพร่", 409);
+          }
+        } else if (persisted.direction_mode !== extRow.direction_mode) {
+          fail("บันทึกแล้วแต่ทิศทางเดินรถที่อ่านกลับมาไม่ตรง กรุณาตรวจสอบก่อนเผยแพร่", 409);
+        }
+        savedRouteId = id;
         break;
       }
       case "upsertMitigationProjectAction":
@@ -180,7 +200,7 @@ Deno.serve(async (req) => {
       case "updateSystemSettingsAction": await check(db.from("doh_system_settings").upsert({ setting_key: "main", setting_value: { name: text(p.name, "Name"), org: p.org || "", desc: p.desc || "", phone: p.phone || "", logoUrl: p.logoUrl || "" }, updated_at: now })); break;
       default: return reply({ error: "Unknown operation" }, 400);
     }
-    return reply(light === true ? { success: true } : { success: true, systemData: await system() });
+    return reply(light === true ? { success: true, savedId: savedRouteId } : { success: true, savedId: savedRouteId, systemData: await system() });
   } catch (error: any) {
     return reply({ error: error.status ? error.message : "Invalid request" }, error.status || 400);
   }

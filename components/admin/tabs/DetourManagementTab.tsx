@@ -151,6 +151,11 @@ export function DetourManagementTab({
       ? JSON.parse(editingDetour.reverse_coordinates_json)
       : editingDetour.reverse_coordinates_json;
 
+    if (!["TWO_WAY", "FORWARD_ONLY", "REVERSE_ONLY"].includes(String(editingDetour.direction_mode || ""))) {
+      onToast("ไม่สามารถสร้างคำแนะนำได้: ไม่พบค่าทิศทางเดินรถที่ถูกต้อง");
+      return;
+    }
+
     const advice = await generateAutoDetourAdvice(
       [editingDetour.lon_start, editingDetour.lat_start],
       [editingDetour.lon_end, editingDetour.lat_end],
@@ -158,11 +163,11 @@ export function DetourManagementTab({
       linkedFlood?.route_no || "43",
       systemData.highwayLayers || [],
       reverseCoords,
-      editingDetour.direction_mode || "TWO_WAY"
+      editingDetour.direction_mode
     );
 
     setEditDetourDesc(advice);
-    onToast("วิเคราะห์คำแนะนำการเดินทาง ๒ ทิศทางสำเร็จ");
+    onToast("สร้างคำแนะนำการเดินทางตามทิศทางที่กำหนดสำเร็จ");
   };
 
   // Save Detour from Modal
@@ -170,6 +175,11 @@ export function DetourManagementTab({
     if (!editingDetour) return;
     if (!editDetourName.trim()) {
       onToast("กรุณาระบุชื่อเส้นทางเลี่ยง");
+      return;
+    }
+
+    if (!["TWO_WAY", "FORWARD_ONLY", "REVERSE_ONLY"].includes(String(editingDetour.direction_mode || ""))) {
+      onToast("ไม่พบข้อมูลทิศทางเดินรถที่ถูกต้อง กรุณากำหนดทิศทางใหม่จากตัวแก้ไขแผนที่ก่อนบันทึก");
       return;
     }
 
@@ -198,7 +208,7 @@ export function DetourManagementTab({
         coordinates: typeof editingDetour.coordinates_json === "string" ? JSON.parse(editingDetour.coordinates_json) : editingDetour.coordinates_json,
         reverseCoordinates: typeof editingDetour.reverse_coordinates_json === "string" ? JSON.parse(editingDetour.reverse_coordinates_json) : editingDetour.reverse_coordinates_json,
         reverseWaypoints: typeof editingDetour.reverse_waypoints_json === "string" ? JSON.parse(editingDetour.reverse_waypoints_json) : editingDetour.reverse_waypoints_json,
-        directionMode: editingDetour.direction_mode || "TWO_WAY",
+        directionMode: editingDetour.direction_mode,
         detourMeta: updatedDetourMeta,
       });
 
@@ -207,13 +217,15 @@ export function DetourManagementTab({
         ? await toggleDetourStatusAction(editingDetour.id, editIsActive)
         : res;
 
-      if (res.success) {
+      if (res.success && finalResult.success) {
         onDataRefresh(finalResult.systemData);
         setEditingDetour(null);
         showSuccessModal(
           "บันทึกข้อมูลเส้นทางเลี่ยงสำเร็จ",
           `ข้อมูล [${editDetourName}] ถูกจัดเก็บและอัปเดตลงระบบเรียบร้อย`
         );
+      } else {
+        onToast("บันทึกไม่สำเร็จ กรุณาตรวจสอบข้อมูลและลองใหม่");
       }
     } catch (err: any) {
       if (showErrorModal) {
@@ -434,9 +446,9 @@ export function DetourManagementTab({
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {/* Mobile Card View (จอแคบ / มือถือ) */}
-          <div className="block md:hidden space-y-3">
+        <div className="doh-auto-table space-y-3">
+          {/* Mobile Card View (จอแคบ / มือถือ / พื้นที่แสดงจริงแคบ) */}
+          <div className="doh-auto-table-cards block md:hidden space-y-3">
             {filteredDetours.map((item, idx) => {
               const linkedFlood = floodList.find((f) => f.id === item.flood_id_ref);
               const ext = extractDirectionalAdvice(item.description || "");
@@ -541,8 +553,8 @@ export function DetourManagementTab({
           </div>
 
           {/* Desktop & Tablet Table View */}
-          <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-xl">
-            <table className="w-full text-left text-xs text-slate-300">
+          <div className="doh-auto-table-desktop hidden md:block overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-xl">
+            <table className="w-full min-w-[880px] table-auto text-left text-xs text-slate-300">
               <thead className="bg-[#091122] text-slate-400 font-heading border-b border-slate-800">
                 <tr>
                   <th className="p-3 w-10 text-center">#</th>
@@ -731,7 +743,7 @@ export function DetourManagementTab({
                   <span>{viewingDetour.route_name}</span>
                 </h2>
                 <p className="mt-0.5 text-xs text-slate-400">
-                  {viewingDetour.direction_mode === "FORWARD_ONLY" ? "เฉพาะขาไป (A → B)" : viewingDetour.direction_mode === "REVERSE_ONLY" ? "เฉพาะขากลับ (B → A)" : "เดินรถ ๒ ทิศทาง (A ⇄ B)"}
+                  {viewingDetour.direction_mode === "FORWARD_ONLY" ? "เฉพาะขาไป (A → B)" : viewingDetour.direction_mode === "REVERSE_ONLY" ? "เฉพาะขากลับ (B → A)" : viewingDetour.direction_mode === "TWO_WAY" ? "เดินรถ ๒ ทิศทาง (A ⇄ B)" : "ไม่ระบุทิศทาง (ต้องตรวจสอบ)"}
                 </p>
               </div>
               <button type="button" aria-label="ปิดรายละเอียด" onClick={() => setViewingDetour(null)} className="rounded-xl p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white">

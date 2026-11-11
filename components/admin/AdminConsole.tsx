@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { SystemDataPayload } from "@/db/default-data";
 import { DEFAULT_MAP_STYLES } from "@/lib/constants";
 import {
@@ -63,6 +63,7 @@ interface AdminConsoleProps {
   onOfficeEditModeChange?: (officeId: string | null) => void;
   vertexEvent?: VertexEditEvent | null;
   onVertexEditChange?: (active: boolean) => void;
+  onVertexEditTargetChange?: (target: "FORWARD" | "REVERSE") => void;
   isPaneCollapsed?: boolean;
   onTogglePaneCollapse?: () => void;
   onRequestFullGeometry?: () => void;
@@ -94,6 +95,7 @@ export function AdminConsole({
   onOfficeEditModeChange,
   vertexEvent,
   onVertexEditChange,
+  onVertexEditTargetChange,
   isPaneCollapsed,
   onTogglePaneCollapse,
   onRequestFullGeometry,
@@ -103,6 +105,22 @@ export function AdminConsole({
     "system" | "map" | "incidents" | "detours" | "routes" | "style" | "projects"
   >("map");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // Desktop workspace width: drag the divider without changing the map's flex layout.
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const resizeState = useRef<{ startX: number; startWidth: number } | null>(null);
+  const startSidebarResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (isSidebarCollapsed || isPaneCollapsed) return;
+    event.preventDefault();
+    resizeState.current = { startX: event.clientX, startWidth: sidebarWidth };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [isSidebarCollapsed, isPaneCollapsed, sidebarWidth]);
+  const moveSidebarResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = resizeState.current;
+    if (!drag) return;
+    setSidebarWidth(Math.min(440, Math.max(220, drag.startWidth + event.clientX - drag.startX)));
+  }, []);
+  const stopSidebarResize = useCallback(() => { resizeState.current = null; }, []);
+
   // On laptop-width screens the menu starts as an icon rail so the forms get the room.
   // It runs once after mount (not during render) to stay hydration safe; the user can still toggle it.
   useEffect(() => {
@@ -237,9 +255,8 @@ export function AdminConsole({
       {/* 1. LEFT AUTHENTIC SIDEBAR (Matching reference site)                   */}
       {/* ===================================================================== */}
       <aside
-        className={`hidden shrink-0 flex-col text-white transition-[width] duration-200 lg:flex ${isPaneCollapsed ? "w-[72px]" : isSidebarCollapsed ? "w-[72px]" : "w-60"
-          }`}
-        style={{ background: "#071B3D" }}
+        className={`relative hidden shrink-0 flex-col text-white lg:flex ${isPaneCollapsed || isSidebarCollapsed ? "w-[72px] transition-[width] duration-200" : ""}`}
+        style={{ background: "#071B3D", width: isPaneCollapsed || isSidebarCollapsed ? 72 : sidebarWidth }}
       >
         {/* Sidebar Header Brand */}
         <div className="flex h-16 items-center border-b border-white/10 gap-3 px-4">
@@ -358,6 +375,30 @@ export function AdminConsole({
             )}
           </button>
         </div>
+        {!isPaneCollapsed && !isSidebarCollapsed && (
+          <div
+            role="separator"
+            aria-label="ปรับความกว้างแถบเมนู"
+            aria-orientation="vertical"
+            aria-valuemin={220}
+            aria-valuemax={440}
+            aria-valuenow={sidebarWidth}
+            tabIndex={0}
+            title="ลากเพื่อปรับความกว้างเมนู หรือใช้ปุ่มลูกศรซ้ายขวา"
+            onPointerDown={startSidebarResize}
+            onPointerMove={moveSidebarResize}
+            onPointerUp={stopSidebarResize}
+            onPointerCancel={stopSidebarResize}
+            onLostPointerCapture={stopSidebarResize}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                event.preventDefault();
+                setSidebarWidth((width) => Math.min(440, Math.max(220, width + (event.key === "ArrowRight" ? 16 : -16))));
+              }
+            }}
+            className="absolute right-0 top-0 z-30 h-full w-2 translate-x-1/2 cursor-col-resize touch-none bg-transparent hover:bg-amber-400/40 focus-visible:bg-amber-400/40 focus-visible:outline-none"
+          />
+        )}
       </aside>
 
       {/* ===================================================================== */}
@@ -435,6 +476,9 @@ export function AdminConsole({
               setDraftConflictPoints={setDraftConflictPoints}
               onDraftModeChange={onDraftModeChange}
               onDraftPickMarkersChange={handleDraftPickMarkersChange}
+              vertexEvent={vertexEvent}
+              onVertexEditChange={onVertexEditChange}
+              onVertexEditTargetChange={onVertexEditTargetChange}
               editingRoute={editingRoute}
               onClearEditingRoute={() => setEditingRoute(null)}
             />

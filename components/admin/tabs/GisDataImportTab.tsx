@@ -1196,10 +1196,10 @@ export function GisDataImportTab({
     <div className="space-y-6 w-full max-w-none min-w-0">
       <div className="border-b border-slate-800 pb-3">
         <h2 className="font-heading font-black text-lg text-white flex items-center gap-2">
-          <FileSpreadsheet className="w-5 h-5 text-amber-400" /> นำเข้าโครงข่ายสายทางและกำหนดฟิลด์แสดงผล
+          <FileSpreadsheet className="w-5 h-5 text-amber-400" /> โครงข่ายสายทาง
         </h2>
         <p className="text-xs text-slate-400 mt-0.5">
-          รองรับ KML, KMZ, Shapefile (.zip), GeoJSON, GPX พร้อมแผนที่ตรวจสอบ Dual-Color, การจับคู่ฟิลด์ชื่อสายทางเพื่อแสดงป้ายกำกับ/Popup และตัวตัดจุดความหนาแน่นเกิน (Douglas-Peucker)
+          จัดการสายทางและนำเข้าข้อมูล GIS
         </p>
       </div>
 

@@ -686,7 +686,7 @@ export function IncidentRegistryTab({
                                 {segStatusConfig.icon} {segStatusConfig.label}
                               </span>
                               <span className="text-xs font-mono font-bold text-amber-300">
-                                {meta.directionCode === "B_TO_A" ? "🚙 ขากลับ (B → A)" : meta.directionCode === "BOTH" ? "↔️ ไป-กลับ" : "🚗 ขาไป (A → B)"}
+                                {meta.directionCode === "B_TO_A" ? "🚙 ขากลับ (B → A)" : meta.directionCode === "BOTH" ? "↔️ ไป-กลับ" : meta.directionCode === "A_TO_B" ? "🚗 ขาไป (A → B)" : "รอตรวจสอบทิศทาง"}
                               </span>
                               <span className="text-xs font-bold text-white font-mono">
                                 กม.{r.km_start} ถึง กม.{r.km_end}
@@ -1010,7 +1010,7 @@ export function IncidentRegistryTab({
                               กม.{c.km_start} - {c.km_end}
                             </div>
                             <div className="text-[11px] text-slate-400">
-                              {cMeta.directionCode === "B_TO_A" ? "ขากลับ (B→A)" : "ขาไป (A→B)"} | น้ำท่วม {c.water_level_cm} ซม.
+                              {cMeta.directionCode === "B_TO_A" ? "ขากลับ (B→A)" : cMeta.directionCode === "A_TO_B" ? "ขาไป (A→B)" : cMeta.directionCode === "BOTH" ? "ไป-กลับ" : "ไม่ระบุทิศทาง"} | น้ำท่วม {c.water_level_cm} ซม.
                             </div>
                           </div>
                           <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${isSelected ? "bg-indigo-500 text-slate-950" : "bg-slate-800 text-slate-400"}`}>

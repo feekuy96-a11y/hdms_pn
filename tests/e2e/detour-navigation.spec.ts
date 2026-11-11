@@ -24,6 +24,7 @@ test.describe("Phase 5.7: Google Maps Detour Navigation Architecture (5 Steps)",
   test("Step 1: Uses approved Google Maps URL directly when available", () => {
     const detourWithApprovedUrl: DetourRoute = {
       id: "detour-1",
+      direction_mode: "TWO_WAY",
       flood_id_ref: null,
       route_name: "ทางเลี่ยงดอนยาง",
       lat_start: 6.84,
@@ -48,6 +49,7 @@ test.describe("Phase 5.7: Google Maps Detour Navigation Architecture (5 Steps)",
   test("Step 2 & 4: Blocks detour and warns when route conflicts with closed flood", () => {
     const detourThroughFlood: DetourRoute = {
       id: "detour-bad",
+      direction_mode: "TWO_WAY",
       flood_id_ref: null,
       route_name: "ทางเลี่ยงตัดผ่านน้ำท่วม",
       lat_start: 6.84,
@@ -75,6 +77,7 @@ test.describe("Phase 5.7: Google Maps Detour Navigation Architecture (5 Steps)",
   test("Step 3: Constructs correct A -> B URL with origin, destination, and waypoints", () => {
     const safeDetour: DetourRoute = {
       id: "detour-safe",
+      direction_mode: "TWO_WAY",
       flood_id_ref: null,
       route_name: "ทางเลี่ยงปลอดภัย",
       lat_start: 6.84,

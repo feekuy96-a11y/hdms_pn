@@ -305,3 +305,12 @@
   - `npx playwright test tests/e2e/detour-navigation.spec.ts`: ผ่าน 12/12 ข้อ
   - `npx playwright test tests/e2e/smoke.spec.ts`: ผ่าน 8/8 ข้อ (Phase 1–4 regression ทดสอบสมบูรณ์)
 - **ลำดับ deploy:** เว็บไซต์ (GitHub Pages) ขั้นเดียว ไม่กระทบ Database หรือ Edge Function
+
+
+### [UPDATE-067] 2026-11-11 Phase 6 Integrated Staging Patch — ตรวจค่าทิศทาง, Vertex Editor และแผง Responsive
+- **ฐาน:** `hdms_pn-main.zip` กับ Patch ก่อนหน้าที่เจ้าของส่งใน Library
+- **เพิ่ม:** Unified vertex UI บนเส้นน้ำท่วม/ทางเลี่ยง, แก้ขากลับแยก, คำนวณถนนหลัง A/B, ลากปรับแผงงาน, Auto Table เฉพาะตารางทางเลี่ยง, สีลูกศรตัดกับเส้น, ลดข้อความซ้ำซ้อน
+- **แก้ข้อมูล:** การอ่านค่า `UNKNOWN` ไม่เป็น A→B/TWO_WAY, ตรวจผลหลัง upsert, ป้องกันค่าฟิลด์หายจากขา Frontend/API, URL approved map ตรวจ hostname อย่างเข้มงวด
+- **ยืนยันจาก Production แบบ READ-ONLY:** Edge `hdms-api` เวอร์ชัน 9 ยังไม่เขียนช่องจราจร/ฝั่งถนน/ทิศทาง, ซึ่งเป็นสาเหตุหลักของการแสดง Default; ไม่มีการเปลี่ยนข้อมูลจริง
+- **ทดสอบ:** Syntax ผ่าน, pure TS compile ผ่าน, 9 standalone assertions ผ่าน; **ยังไม่ผ่าน full typecheck/build/E2E** เพราะ dependencies ขาด และไม่ได้ทดสอบ DB writes
+- **สถานะ:** Staging Patch / ห้ามใช้ Production จนกว่าจะปิด B-001, B-014, B-015; ดู `docs/PHASE6_VALIDATION.md`

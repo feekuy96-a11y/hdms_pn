@@ -45,6 +45,24 @@ export default function AdminPage() {
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
   const [adminViewMode, setAdminViewMode] = useState<"console" | "executive">("console");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [workspacePaneWidth, setWorkspacePaneWidth] = useState<number | null>(null);
+  const workspaceDrag = useRef<{ startX: number; startWidth: number } | null>(null);
+  const workspacePaneRef = useRef<HTMLDivElement>(null);
+  const clampWorkspaceWidth = (width: number) => Math.max(440, Math.min(width, window.innerWidth - 350));
+  const startWorkspaceDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (isSidebarCollapsed) return;
+    workspaceDrag.current = { startX: event.clientX, startWidth: workspacePaneRef.current?.getBoundingClientRect().width || 650 };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const moveWorkspaceDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!workspaceDrag.current) return;
+    setWorkspacePaneWidth(clampWorkspaceWidth(workspaceDrag.current.startWidth + event.clientX - workspaceDrag.current.startX));
+    window.dispatchEvent(new Event("resize"));
+  };
+  const stopWorkspaceDrag = () => {
+    workspaceDrag.current = null;
+    window.dispatchEvent(new Event("resize"));
+  };
   const [adminPickMode, setAdminPickMode] = useState<string | null>(null);
   const [draftCoordinates, setDraftCoordinates] = useState<[number, number][]>([]);
   const [draftWaypoints, setDraftWaypoints] = useState<[number, number][]>([]);
@@ -66,6 +84,7 @@ export default function AdminPage() {
   const waypointRequestRef = useRef(0);
   // Freeform line editor (vertex handles) - events travel map -> page -> AdminConsole -> GisDataImportTab
   const [vertexEditable, setVertexEditable] = useState(false);
+  const [vertexEditTarget, setVertexEditTarget] = useState<"FORWARD" | "REVERSE">("FORWARD");
   const [vertexEvent, setVertexEvent] = useState<VertexEditEvent | null>(null);
   const vertexSeqRef = useRef(0);
   const emitVertexEvent = useCallback((event: Omit<VertexEditEvent, "seq">) => {
@@ -245,6 +264,8 @@ export default function AdminPage() {
         <div className="flex-1 flex flex-col lg:flex-row lg:min-h-0 overflow-visible lg:overflow-hidden relative">
           {/* Left: Full Government Administrative Console (ฝั่งซ้ายมือ - รองรับการพับ/เปิด) */}
           <div
+            ref={workspacePaneRef}
+            style={!isSidebarCollapsed && workspacePaneWidth !== null ? { width: `${workspacePaneWidth}px`, maxWidth: "calc(100vw - 350px)" } : undefined}
             className={`transition-all duration-300 ease-in-out border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0 flex flex-col overflow-hidden ${
               isSidebarCollapsed
                 ? "w-full lg:w-[72px]"
@@ -253,8 +274,10 @@ export default function AdminPage() {
           >
             <AdminConsole
               systemData={systemData}
-              onDataRefresh={(newData) => {
-                refetch();
+              onDataRefresh={async () => {
+                const result = await refetch();
+                if (result.error) throw result.error;
+                return result.data;
               }}
               adminPickMode={adminPickMode}
               setAdminPickMode={setAdminPickMode}
@@ -277,6 +300,7 @@ export default function AdminPage() {
               setIncomingGisLines={setIncomingGisLines}
               setDraftPickMarkers={setDraftPickMarkers}
               vertexEvent={vertexEvent}
+              onVertexEditTargetChange={setVertexEditTarget}
               onVertexEditChange={(active) => {
                 setVertexEditable(active);
                 if (active) setNeedsFullGeometry(true);
@@ -290,6 +314,30 @@ export default function AdminPage() {
               }}
             />
           </div>
+
+          {/* Accessible resize grip: resize the actual admin workspace, not only the icon menu. */}
+          {!isSidebarCollapsed && <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="ลากเพื่อปรับความกว้างแผงจัดการและแผนที่"
+            aria-valuemin={440}
+            aria-valuemax={1200}
+            aria-valuenow={workspacePaneWidth ?? 720}
+            tabIndex={0}
+            onPointerDown={startWorkspaceDrag}
+            onPointerMove={moveWorkspaceDrag}
+            onPointerUp={stopWorkspaceDrag}
+            onPointerCancel={stopWorkspaceDrag}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                event.preventDefault();
+                setWorkspacePaneWidth(clampWorkspaceWidth((workspacePaneWidth ?? (workspacePaneRef.current?.getBoundingClientRect().width || 720)) + (event.key === "ArrowRight" ? 32 : -32)));
+                window.dispatchEvent(new Event("resize"));
+              }
+            }}
+            title="ลากแบ่งพื้นที่: แผงจัดการ ↔ แผนที่"
+            className="hidden lg:flex w-2 shrink-0 cursor-col-resize touch-none items-center justify-center bg-slate-800 hover:bg-amber-500 focus-visible:bg-amber-400 focus-visible:outline-none transition-colors"
+          ><span aria-hidden="true" className="h-12 w-0.5 rounded-full bg-slate-500" /></div>}
 
           {/* Right: Interactive GIS Map */}
           <div className="h-[44vh] min-h-[360px] lg:h-auto lg:min-h-0 lg:flex-1 relative">
@@ -359,6 +407,7 @@ export default function AdminPage() {
               onWaypointDragged={handleWaypointDragged}
               onReverseWaypointDragged={handleReverseWaypointDragged}
               vertexEditable={vertexEditable}
+              vertexEditCoordinates={vertexEditable && vertexEditTarget === "REVERSE" ? draftReverseCoordinates : draftCoordinates}
               onVertexMoved={(index, coord: LonLat) => emitVertexEvent({ type: "move", index, coord })}
               onVertexInserted={(index, coord: LonLat) => emitVertexEvent({ type: "insert", index, coord })}
               onVertexClicked={(index, via) => emitVertexEvent({ type: via, index })}

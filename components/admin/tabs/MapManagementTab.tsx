@@ -68,6 +68,8 @@ import {
   parseKmPostMeters,
 } from "@/lib/flood-event-schema";
 import { groupHighwayFeatures, HighwaySectionGroup, HighwayBranchItem } from "@/lib/highway-schema";
+import { insertVertex, moveVertex, removeVertex, nearestInsertIndex } from "@/lib/line-edit";
+import type { VertexEditEvent } from "@/lib/line-edit";
 
 function parseCoordinatePair(value: string): [number, number] | null {
   const numbers = value.match(/-?\d+(?:\.\d+)?/g)?.map(Number) || [];
@@ -131,6 +133,9 @@ interface MapManagementTabProps {
   setDraftConflictPoints?: (points: Array<{ coord: [number, number]; label: string }>) => void;
   onDraftModeChange?: (mode: "FLOOD" | "DETOUR") => void;
   onDraftPickMarkersChange?: (markers: { lat: number; lon: number; label: string; mode: string }[]) => void;
+  vertexEvent?: VertexEditEvent | null;
+  onVertexEditChange?: (active: boolean) => void;
+  onVertexEditTargetChange?: (target: "FORWARD" | "REVERSE") => void;
 
   // Editing state passed from parent
   editingRoute?: { type: "FLOOD" | "DETOUR"; id: string } | null;
@@ -162,6 +167,9 @@ export function MapManagementTab({
   setDraftConflictPoints,
   onDraftModeChange,
   onDraftPickMarkersChange,
+  vertexEvent,
+  onVertexEditChange,
+  onVertexEditTargetChange,
   editingRoute,
   onClearEditingRoute,
 }: MapManagementTabProps) {
@@ -182,7 +190,7 @@ export function MapManagementTab({
   const sectionNameManuallyEdited = useRef(false);
 
   // Item 3: Directional & Lane-Specific Flood Attributes
-  const [roadSide, setRoadSide] = useState<RoadSideType>("BOTH");
+  const [roadSide, setRoadSide] = useState<RoadSideType>("UNKNOWN");
   const [affectedLanes, setAffectedLanes] = useState<string>(AFFECTED_LANES_OPTIONS[0]);
   const [affectedShoulder, setAffectedShoulder] = useState<AffectedShoulderType>("NONE");
   const [reporterName, setReporterName] = useState<string>("");
@@ -213,6 +221,93 @@ export function MapManagementTab({
   const [detourAdviceView, setDetourAdviceView] = useState<"FORWARD" | "REVERSE" | "COMBINED">("COMBINED");
   const [forceStraightThrough, setForceStraightThrough] = useState(false);
   const [detourDirectionMode, setDetourDirectionMode] = useState<DetourDirectionModeType>("TWO_WAY");
+  // The highway, flood and detour editors share the same draggable Leaflet vertex handles
+  // and pure GeoJSON editing helpers. Freehand changes do not invoke road snapping.
+  const [freeEditEnabled, setFreeEditEnabled] = useState(false);
+  const [freeEditTarget, setFreeEditTarget] = useState<"FORWARD" | "REVERSE">("FORWARD");
+  const [freeVertexTool, setFreeVertexTool] = useState<"move" | "delete">("move");
+  const [, setFreeHistoryVersion] = useState(0);
+  const freePast = useRef<[number, number][][]>([]);
+  const freeFuture = useRef<[number, number][][]>([]);
+  const handledFreeVertexSeq = useRef(0);
+  const onVertexEditChangeRef = useRef(onVertexEditChange);
+  onVertexEditChangeRef.current = onVertexEditChange;
+  const onVertexEditTargetChangeRef = useRef(onVertexEditTargetChange);
+  onVertexEditTargetChangeRef.current = onVertexEditTargetChange;
+
+  useEffect(() => {
+    onVertexEditChangeRef.current?.(freeEditEnabled);
+    return () => { if (freeEditEnabled) onVertexEditChangeRef.current?.(false); };
+  }, [freeEditEnabled]);
+  useEffect(() => { onVertexEditTargetChangeRef.current?.(freeEditTarget); }, [freeEditTarget]);
+  useEffect(() => {
+    setFreeEditEnabled(false);
+    setFreeEditTarget("FORWARD");
+    freePast.current = [];
+    freeFuture.current = [];
+    setFreeHistoryVersion((v) => v + 1);
+  }, [routeMode, editingRoute?.id]);
+
+  const freeGeometry = freeEditTarget === "REVERSE" ? draftReverseCoordinates : draftCoordinates;
+  const updateFreeGeometry = (next: [number, number][], recordHistory = true) => {
+    const current = freeEditTarget === "REVERSE" ? draftReverseCoordinates : draftCoordinates;
+    if (next.length < 2 || next === current || next.every((point, index) => point[0] === current[index]?.[0] && point[1] === current[index]?.[1])) return;
+    routingRequest.current += 1; // prevent a stale OSRM response from overwriting manual edits
+    if (recordHistory) {
+      freePast.current.push(current.map((p) => [...p] as [number, number]));
+      if (freePast.current.length > 30) freePast.current.shift();
+      freeFuture.current = [];
+    }
+    if (freeEditTarget === "REVERSE") setDraftReverseCoordinates?.(next);
+    else setDraftCoordinates(next);
+    // Keep the form's A/B coordinates aligned if an endpoint handle is dragged.
+    const reversed = freeEditTarget === "REVERSE" || (routeMode === "DETOUR" ? detourDirectionMode === "REVERSE_ONLY" : directionCode === "B_TO_A");
+    const pointA = reversed ? next[next.length - 1] : next[0];
+    const pointB = reversed ? next[0] : next[next.length - 1];
+    if (pointA && pointB) {
+      setStartLon(pointA[0]); setStartLat(pointA[1]);
+      setEndLon(pointB[0]); setEndLat(pointB[1]);
+    }
+    setSnappingStatusText("แก้แนวเส้นอิสระแล้ว — ระบบจะบันทึกตามแนวที่เห็น ไม่คำนวณถนนใหม่อัตโนมัติ");
+    setFreeHistoryVersion((v) => v + 1);
+  };
+
+  const undoFreeGeometry = (redo = false) => {
+    const source = redo ? freeFuture.current : freePast.current;
+    const destination = redo ? freePast.current : freeFuture.current;
+    const previous = source.pop();
+    if (!previous) return;
+    destination.push(freeGeometry.map((p) => [...p] as [number, number]));
+    updateFreeGeometry(previous, false);
+  };
+
+  useEffect(() => {
+    if (!freeEditEnabled || !vertexEvent || vertexEvent.seq === handledFreeVertexSeq.current) return;
+    handledFreeVertexSeq.current = vertexEvent.seq;
+    const coords = freeEditTarget === "REVERSE" ? draftReverseCoordinates : draftCoordinates;
+    if (coords.length < 2 || vertexEvent.index < 0 || vertexEvent.index >= coords.length) {
+      if (vertexEvent.type !== "insert" || vertexEvent.index < 0 || vertexEvent.index > coords.length) return;
+    }
+    if ((vertexEvent.type === "move" || vertexEvent.type === "insert") && vertexEvent.coord) {
+      if (vertexEvent.index === 0 || (vertexEvent.type === "move" && vertexEvent.index === coords.length - 1) || (vertexEvent.type === "insert" && vertexEvent.index >= coords.length)) {
+        onToast("จุด A/B เป็นหมุดอ้างอิง กรุณาปักหมุดใหม่และคำนวณเส้นหากต้องการย้ายจุดต้นหรือปลาย");
+        return;
+      }
+      const valid = vertexEvent.coord.every(Number.isFinite) && Math.abs(vertexEvent.coord[0]) <= 180 && Math.abs(vertexEvent.coord[1]) <= 90;
+      if (!valid) return;
+      const next = vertexEvent.type === "move"
+        ? moveVertex(coords, vertexEvent.index, vertexEvent.coord)
+        : insertVertex(coords, vertexEvent.index, vertexEvent.coord);
+      updateFreeGeometry(next);
+    } else if (vertexEvent.type === "contextmenu" || (vertexEvent.type === "click" && freeVertexTool === "delete")) {
+      if (vertexEvent.index === 0 || vertexEvent.index === coords.length - 1) {
+        onToast("ไม่สามารถลบหมุด A/B ได้ กรุณาย้ายหมุดแทน");
+        return;
+      }
+      updateFreeGeometry(removeVertex(coords, vertexEvent.index));
+    }
+  }, [vertexEvent, freeEditEnabled, freeEditTarget, freeVertexTool, draftCoordinates, draftReverseCoordinates]);
+
   const [detourDistanceMeters, setDetourDistanceMeters] = useState<{ forward: number; reverse: number }>({ forward: 0, reverse: 0 });
   const [closedRoadConflicts, setClosedRoadConflicts] = useState<string[]>([]);
 
@@ -278,8 +373,8 @@ export function MapManagementTab({
   const [isFetchingAddress, setIsFetchingAddress] = useState<boolean>(false);
   const [startedAt, setStartedAt] = useState<string>(() => new Date().toISOString().slice(0, 16));
   const [causeAndNote, setCauseAndNote] = useState<string>("");
-  const [directionCode, setDirectionCode] = useState<FloodDirectionCode>("A_TO_B");
-  const [affectedParts, setAffectedParts] = useState<AffectedRoadPart[]>(["ALL_LANES"]);
+  const [directionCode, setDirectionCode] = useState<FloodDirectionCode>("UNKNOWN");
+  const [affectedParts, setAffectedParts] = useState<AffectedRoadPart[]>(["UNSPECIFIED"]);
   const [detailedPhotos, setDetailedPhotos] = useState<FloodPhotoItem[]>([]);
 
   // Phase 4: Dual Direction quick create
@@ -372,16 +467,21 @@ export function MapManagementTab({
     });
   }, [systemData.highwayLayers, systemData.floodRoutes]);
 
-  // Sync with editingRoute prop
+  // Hydrate an existing record only once per editing session. Refetches of public/full
+  // geometry must not silently overwrite the officer's unsaved manual edits.
+  const hydratedRouteKey = useRef<string | null>(null);
   useEffect(() => {
-    if (!editingRoute) return;
+    if (!editingRoute) { hydratedRouteKey.current = null; return; }
     const { type, id } = editingRoute;
+    const key = `${type}:${id}`;
+    if (id && hydratedRouteKey.current === key) return;
     setRouteMode(type);
     setRouteEditId(id);
 
     if (type === "FLOOD") {
       const flood = systemData.floodRoutes.find((r) => r.id === id);
       if (!flood) return;
+      hydratedRouteKey.current = key;
       setRouteNo(flood.route_no);
       setKmStart(flood.km_start);
       setKmEnd(flood.km_end);
@@ -420,16 +520,17 @@ export function MapManagementTab({
       if (meta.startedAt) setStartedAt(meta.startedAt.slice(0, 16));
       setCauseAndNote(meta.causeAndNote || flood.detour_advice || "");
       setDirectionCode(meta.directionCode || (effectiveSide === "RIGHT" ? "B_TO_A" : effectiveSide === "LEFT" ? "A_TO_B" : "BOTH"));
-      setAffectedParts(meta.affectedParts && meta.affectedParts.length ? meta.affectedParts : ["ALL_LANES"]);
+      setAffectedParts(meta.affectedParts && meta.affectedParts.length ? meta.affectedParts : ["UNSPECIFIED"]);
       setDetailedPhotos(meta.photos || []);
       setFieldImages(meta.photos?.length ? meta.photos.map((p) => p.dataUrl) : (flood.latest_photo_url ? [flood.latest_photo_url] : []));
     } else {
       const detour = systemData.detourRoutes.find((r) => r.id === id);
       if (!detour) return;
+      hydratedRouteKey.current = key;
       setDetourRefId(detour.flood_id_ref || "");
       setDetourName(detour.route_name);
       setDetourDesc(detour.description || "");
-      setDetourDirectionMode((detour.direction_mode as DetourDirectionModeType) || "TWO_WAY");
+      setDetourDirectionMode((detour.direction_mode as DetourDirectionModeType) || ("" as DetourDirectionModeType));
       setSaveAsDraft(!detour.is_active);
       setStartLat(detour.lat_start || 0);
       setStartLon(detour.lon_start || 0);
@@ -486,14 +587,19 @@ export function MapManagementTab({
       setAdminPickMode(null);
       onToast(`กำหนดจุดเริ่มต้น (A): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
       handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat, "START");
-      if (endLat && endLon) setDraftCoordinates([[pickedCoordinate.lon, pickedCoordinate.lat], [Number(endLon), Number(endLat)]]);
+      if (endLat && endLon) { setFreeEditEnabled(false); setDraftCoordinates([]); setDraftReverseCoordinates?.([]); void triggerDualRoadSnapping(pickedCoordinate.lat, pickedCoordinate.lon, endLat, endLon); }
     } else if (pickedCoordinate.mode === "PICK_END") {
       setEndLat(pickedCoordinate.lat);
       setEndLon(pickedCoordinate.lon);
       setAdminPickMode(null);
       onToast(`กำหนดจุดสิ้นสุด (B): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
       handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat, "END");
-      if (startLat && startLon) setDraftCoordinates([[Number(startLon), Number(startLat)], [pickedCoordinate.lon, pickedCoordinate.lat]]);
+      if (startLat && startLon) { setFreeEditEnabled(false); setDraftCoordinates([]); setDraftReverseCoordinates?.([]); void triggerDualRoadSnapping(startLat, startLon, pickedCoordinate.lat, pickedCoordinate.lon); }
+    } else if (pickedCoordinate.mode === "ADD_LINE_VERTEX" && freeEditEnabled) {
+      const point: [number, number] = [pickedCoordinate.lon, pickedCoordinate.lat];
+      const geometry = freeEditTarget === "REVERSE" ? draftReverseCoordinates : draftCoordinates;
+      if (geometry.length >= 2) updateFreeGeometry(insertVertex(geometry, Math.max(1, Math.min(geometry.length - 1, nearestInsertIndex(geometry, point).index)), point));
+      setAdminPickMode(null);
     } else if (pickedCoordinate.mode === "ADD_WAYPOINT") {
       const newWp: [number, number] = [pickedCoordinate.lon, pickedCoordinate.lat];
       setDraftWaypoints((prev) => [...prev, newWp]);
@@ -524,6 +630,7 @@ export function MapManagementTab({
     reverseWaypoints: [number, number][] = draftReverseWaypoints
   ) => {
     const requestId = ++routingRequest.current;
+    if (freeEditEnabled) setFreeEditEnabled(false);
     const numSLat = Number(sLat);
     const numSLon = Number(sLon);
     const numELat = Number(eLat);
@@ -778,6 +885,9 @@ export function MapManagementTab({
 
   // Clear Route
   const handleClearRoute = () => {
+    setFreeEditEnabled(false);
+    freePast.current = [];
+    freeFuture.current = [];
     routingRequest.current += 1;
     setDraftCoordinates([]);
     setDraftWaypoints([]);
@@ -797,7 +907,7 @@ export function MapManagementTab({
     setEndArea(null);
     sectionNameManuallyEdited.current = false;
     setRouteWaterLevel("");
-    setRoadSide("BOTH");
+    setRoadSide("UNKNOWN");
     setAffectedLanes(AFFECTED_LANES_OPTIONS[0]);
     setAffectedShoulder("NONE");
     setReporterName("");
@@ -816,8 +926,8 @@ export function MapManagementTab({
     setVillageOrLandmark("");
     setStartedAt(new Date().toISOString().slice(0, 16));
     setCauseAndNote("");
-    setDirectionCode("A_TO_B");
-    setAffectedParts(["ALL_LANES"]);
+    setDirectionCode("UNKNOWN");
+    setAffectedParts(["UNSPECIFIED"]);
     setIsDualDirectionMode(false);
     setReverseRouteWaterLevel("");
     setReverseRouteStatus("WARNING");
@@ -1089,6 +1199,18 @@ export function MapManagementTab({
 
   // Submit Flood or Detour Route
   const handleSubmitRoute = async () => {
+    // Never silently turn a missing/legacy direction into bidirectional traffic.
+    if (routeMode === "DETOUR" && !["FORWARD_ONLY", "REVERSE_ONLY", "TWO_WAY"].includes(detourDirectionMode)) {
+      onToast("ไม่พบค่าทิศทางเดินรถที่ถูกต้อง กรุณาเลือก A → B, B → A หรือสองทิศทางก่อนบันทึก");
+      return;
+    }
+    if (routeMode === "FLOOD" && !isDualDirectionMode && (roadSide === "UNKNOWN" ||
+        (roadSide === "LEFT" && directionCode !== "A_TO_B") ||
+        (roadSide === "RIGHT" && directionCode !== "B_TO_A") ||
+        (roadSide === "BOTH" && directionCode !== "BOTH"))) {
+      onToast("กรุณาเลือกฝั่งถนนและทิศทางการเดินรถให้ตรงกันก่อนบันทึก (ซ้าย A→B / ขวา B→A / ทั้งสองฝั่ง)");
+      return;
+    }
     if (!sectionName && routeMode === "FLOOD") {
       onToast("กรุณาระบุชื่อตอนควบคุมหรือบริเวณที่เกิดเหตุ");
       return;
@@ -1172,14 +1294,7 @@ export function MapManagementTab({
       const currentEventId = selectedParentEventId || `EV-${chosenRouteNo}-${Date.now()}`;
       const currentEventCode = eventCode.trim() || generateNextEventCode(chosenRouteNo, existingParentEvents);
       const currentEventTitle = eventTitle.trim() || (sectionName ? `ทล.${chosenRouteNo} ตอน${sectionName}` : "เหตุการณ์น้ำท่วมทางหลวง");
-      const effectiveRoadSide: RoadSideType =
-        roadSide && roadSide !== "UNKNOWN"
-          ? roadSide
-          : directionCode === "A_TO_B"
-          ? "LEFT"
-          : directionCode === "B_TO_A"
-          ? "RIGHT"
-          : "BOTH";
+      const effectiveRoadSide: RoadSideType = roadSide;
       const lanesSummary = affectedParts.includes("ALL_LANES")
         ? "ทุกช่องจราจร"
         : affectedParts.map((p) => AFFECTED_ROAD_PART_LABELS[p]).join(", ") || "ไม่ระบุ";
@@ -1202,7 +1317,7 @@ export function MapManagementTab({
         subdivisionName: reporterName.trim() || "เจ้าหน้าที่แขวงทางหลวงปัตตานี",
         villageOrLandmark: villageOrLandmark.trim(),
         directionCode,
-        directionLabel: directionCode === "A_TO_B" ? "ตามหลัก กม. (ขาไป A → B)" : directionCode === "B_TO_A" ? "ย้อนหลัก กม. (ขากลับ B → A)" : "ทั้งสองทิศทาง",
+        directionLabel: directionCode === "A_TO_B" ? "ตามหลัก กม. (ขาไป A → B)" : directionCode === "B_TO_A" ? "ย้อนหลัก กม. (ขากลับ B → A)" : directionCode === "BOTH" ? "ทั้งสองทิศทาง" : "ไม่ระบุทิศทาง",
         roadSide: effectiveRoadSide,
         affectedParts,
         trafficStatusDetail: (routeStatus as string) === "PENDING_VERIFICATION" ? "PENDING_VERIFICATION" : mapTrafficStatusToDetail(routeStatus),
@@ -1212,7 +1327,7 @@ export function MapManagementTab({
         zeroConfirmedAt: waterLevelKnown && numWaterLevel === 0 ? new Date().toISOString() : null,
         causeAndNote: causeAndNote.trim(),
         photos: detailedPhotos,
-        arrow_direction: directionCode === "A_TO_B" ? "FORWARD" : directionCode === "B_TO_A" ? "REVERSE" : "TWO_WAY",
+        arrow_direction: directionCode === "A_TO_B" ? "FORWARD" : directionCode === "B_TO_A" ? "REVERSE" : directionCode === "BOTH" ? "TWO_WAY" : "UNKNOWN",
         show_arrows: true,
         carriageway_type: useCarriagewaySnapping ? "DUAL_CARRIAGEWAY" : "SINGLE_CENTERLINE",
         water_level_known: waterLevelKnown,
@@ -1326,7 +1441,7 @@ export function MapManagementTab({
         });
 
         if (res.success) {
-          onDataRefresh(res.systemData);
+          try { await onDataRefresh(res.systemData); } catch { onToast("บันทึกแล้ว แต่ไม่สามารถโหลดข้อมูลล่าสุด กรุณารีเฟรชหน้าจอ"); }
           showSuccessModal(
             "บันทึกเหตุการณ์ ๒ ทิศทางสำเร็จ",
             `สร้างช่วงน้ำท่วม ทล.${chosenRouteNo} ทั้งขาไป (A→B) และขากลับ (B→A) ในเหตุการณ์เดียวกันเรียบร้อยแล้ว`
@@ -1382,7 +1497,7 @@ export function MapManagementTab({
       });
 
       if (res.success) {
-        onDataRefresh(res.systemData);
+        try { await onDataRefresh(res.systemData); } catch { onToast("บันทึกแล้ว แต่ไม่สามารถโหลดข้อมูลล่าสุด กรุณารีเฟรชหน้าจอ"); }
         showSuccessModal(
           saveAsDraft ? "บันทึกร่างสำเร็จ" : routeEditId ? "แก้ไขข้อมูลสำเร็จ" : routeMode === "DETOUR" ? "บันทึกทางเลี่ยงสำเร็จ" : "บันทึกเหตุการณ์น้ำท่วมสำเร็จ",
           saveAsDraft
@@ -1854,8 +1969,48 @@ export function MapManagementTab({
             </div>
           )}
 
+          {/* Unified My Maps-style geometry editor (also used by highway geometry). */}
+          <div className="rounded-xl border border-sky-800/70 bg-slate-900/50 p-3 space-y-3" role="group" aria-label="โหมดแก้ไขแนวเส้น">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-bold text-white">แก้ไขแนวเส้นบนแผนที่</p>
+              <span className="text-xs text-slate-400">ตามถนน / ดัดเส้นอิสระ</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <ActionButton variant={freeEditEnabled ? "secondary" : "primary"} active={!freeEditEnabled} onClick={() => { setFreeEditEnabled(false); setAdminPickMode(null); }}>
+                <Wand2 className="h-4 w-4" /> ตามแนวถนน
+              </ActionButton>
+              <ActionButton variant={freeEditEnabled ? "primary" : "secondary"} active={freeEditEnabled} onClick={() => {
+                if (draftCoordinates.length < 2) { onToast("กรุณาปัก A และ B แล้วคำนวณแนวถนนก่อนดัดเส้นอิสระ"); return; }
+                routingRequest.current += 1;
+                freePast.current = []; freeFuture.current = [];
+                setFreeEditEnabled(true); setAdminPickMode(null); setFreeVertexTool("move");
+              }}>
+                <MapPinned className="h-4 w-4" /> ดัดเส้นอิสระ
+              </ActionButton>
+            </div>
+            {freeEditEnabled && (
+              <>
+                {routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" && (
+                  <div className="flex flex-wrap gap-2" role="group" aria-label="เลือกทิศทางสำหรับดัดเส้น">
+                    <ActionButton variant="secondary" active={freeEditTarget === "FORWARD"} onClick={() => { setFreeEditTarget("FORWARD"); setAdminPickMode(null); freePast.current=[]; freeFuture.current=[]; }}>ขาไป A → B</ActionButton>
+                    <ActionButton variant="secondary" active={freeEditTarget === "REVERSE"} disabled={draftReverseCoordinates.length < 2} onClick={() => { setFreeEditTarget("REVERSE"); setAdminPickMode(null); freePast.current=[]; freeFuture.current=[]; }}>ขากลับ B → A</ActionButton>
+                  </div>
+                )}
+                <ToolGroup label="แก้ไขจุดดัด (ใช้เครื่องมือเดียวกับแนวทางหลวง)">
+                  <ActionButton variant="secondary" active={freeVertexTool === "move" && adminPickMode !== "ADD_LINE_VERTEX"} onClick={() => { setFreeVertexTool("move"); setAdminPickMode(null); }}>ลากจุดดัด</ActionButton>
+                  <ActionButton variant="pick" active={adminPickMode === "ADD_LINE_VERTEX"} onClick={() => { setFreeVertexTool("move"); setAdminPickMode(adminPickMode === "ADD_LINE_VERTEX" ? null : "ADD_LINE_VERTEX"); }}>+ เพิ่มจุดดัดอิสระ</ActionButton>
+                  <ActionButton variant="danger" active={freeVertexTool === "delete"} onClick={() => { setFreeVertexTool(freeVertexTool === "delete" ? "move" : "delete"); setAdminPickMode(null); }}>ลบจุดดัด</ActionButton>
+                  <ActionButton variant="secondary" disabled={!freePast.current.length} onClick={() => undoFreeGeometry(false)}>ย้อนกลับ</ActionButton>
+                  <ActionButton variant="secondary" disabled={!freeFuture.current.length} onClick={() => undoFreeGeometry(true)}>ทำซ้ำ</ActionButton>
+                </ToolGroup>
+                <p className="text-xs text-sky-200">ลากหมุดเล็กบนเส้นเพื่อย้ายจุด คลิกจุดกึ่งกลางเพื่อแทรก คลิกขวาเพื่อลบ หรือเลือกโหมดลบจุด ข้อมูลจะคงแนวเส้นอิสระตามที่บันทึก</p>
+                {routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" && <p className="text-xs text-amber-200">แก้ขาไปและขากลับแยกกัน หากเส้นขากลับยังไม่มี ให้คำนวณแนวถนนก่อน</p>}
+              </>
+            )}
+          </div>
+
           {/* Waypoint Operations & Midpoint Insertion */}
-          {routeMode === "DETOUR" && (
+          {!freeEditEnabled && routeMode === "DETOUR" && (
             <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-amber-700/60 bg-amber-950/30 p-3 text-xs text-amber-100">
               <input
                 type="checkbox"
@@ -1880,7 +2035,7 @@ export function MapManagementTab({
               <Wand2 className="h-3.5 w-3.5" /> คำนวณเส้นเกาะถนน
             </ActionButton>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {!freeEditEnabled && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <ToolGroup label="ดัดแนวเส้น">
                 <ActionButton variant="secondary" className="text-amber-300" onClick={handleAddMidpointWaypoint}>
                   <Plus className="h-3.5 w-3.5" /> แตะจุดกลางเส้นเพื่อเพิ่มจุด
@@ -1910,9 +2065,9 @@ export function MapManagementTab({
                   ล้างข้อมูลทั้งหมด
                 </ActionButton>
               </ToolGroup>
-            </div>
+            </div>}
           </div>
-          {draftWaypoints.length > 0 && (
+          {!freeEditEnabled && draftWaypoints.length > 0 && (
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3" aria-label="รายการจุดดัดเส้น">
               <p className="mb-2 text-xs font-semibold text-slate-200">จุดดัดเส้น ({draftWaypoints.length} จุด)</p>
               <div className="flex flex-wrap gap-2">
@@ -1932,7 +2087,7 @@ export function MapManagementTab({
               </div>
             </div>
           )}
-          {routeMode === "DETOUR" && draftReverseWaypoints.length > 0 && (
+          {!freeEditEnabled && routeMode === "DETOUR" && draftReverseWaypoints.length > 0 && (
             <div className="rounded-xl border border-sky-900/60 bg-sky-950/30 p-3" aria-label="รายการจุดดัดเส้นขากลับ">
               <p className="mb-2 text-xs font-semibold text-sky-200">จุดดัดเส้นขากลับ B → A ({draftReverseWaypoints.length} จุด)</p>
               <div className="flex flex-wrap gap-2">
@@ -2134,7 +2289,7 @@ export function MapManagementTab({
                     <button
                       type="button"
                       onClick={() => { setDirectionCode("A_TO_B"); setRoadSide("LEFT"); }}
-                      className={`p-2 rounded-xl border text-left transition ${(directionCode === "A_TO_B" || roadSide === "LEFT") && roadSide !== "BOTH" && directionCode !== "BOTH" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
+                      className={`p-2 rounded-xl border text-left transition ${directionCode === "A_TO_B" && roadSide === "LEFT" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
                     >
                       <span className="text-xs font-heading font-bold block">🚗 ฝั่งซ้ายทาง (ขาไป A → B)</span>
                       <span className="text-[10px] text-slate-400">เดินรถทิศทาง กม. เพิ่มขึ้น</span>
@@ -2142,7 +2297,7 @@ export function MapManagementTab({
                     <button
                       type="button"
                       onClick={() => { setDirectionCode("B_TO_A"); setRoadSide("RIGHT"); }}
-                      className={`p-2 rounded-xl border text-left transition ${(directionCode === "B_TO_A" || roadSide === "RIGHT") && roadSide !== "BOTH" && directionCode !== "BOTH" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
+                      className={`p-2 rounded-xl border text-left transition ${directionCode === "B_TO_A" && roadSide === "RIGHT" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
                     >
                       <span className="text-xs font-heading font-bold block">🚙 ฝั่งขวาทาง (ขากลับ B → A)</span>
                       <span className="text-[10px] text-slate-400">เดินรถทิศทาง กม. ลดลง</span>
@@ -2150,7 +2305,7 @@ export function MapManagementTab({
                     <button
                       type="button"
                       onClick={() => { setDirectionCode("BOTH"); setRoadSide("BOTH"); }}
-                      className={`p-2 rounded-xl border text-left transition ${directionCode === "BOTH" || roadSide === "BOTH" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
+                      className={`p-2 rounded-xl border text-left transition ${directionCode === "BOTH" && roadSide === "BOTH" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
                     >
                       <span className="text-xs font-heading font-bold block">↔️ ท่วมทั้งสองฝั่งจราจร</span>
                       <span className="text-[10px] text-slate-400">น้ำท่วมเต็มทั้งสองคันทาง</span>

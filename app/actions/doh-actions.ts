@@ -77,7 +77,7 @@ export async function upsertRouteAction(payload: {
   reporterName?: string;
   directionMeta?: Record<string, any>;
   expectedUpdatedAt?: string;
-}): Promise<{ success: boolean; systemData: SystemDataPayload }> {
+}): Promise<{ success: boolean; savedId?: string; systemData: SystemDataPayload }> {
   return invokeHdms("upsertRouteAction", [payload]);
 }
 

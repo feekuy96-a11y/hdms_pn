@@ -1,0 +1,36 @@
+{
+  "phase": "Phase 6",
+  "status": "STAGING_ONLY_NOT_PRODUCTION_READY",
+  "base": "hdms_pn-main.zip",
+  "cumulative_patch": true,
+  "changed_project_files": 22,
+  "verified": {
+    "type_script_transpile_syntax": "16 files, 0 syntax diagnostics",
+    "pure_type_script_compile": "4 utility source files compiled using global tsc (EXIT 0)",
+    "standalone_pure_assertions": "9 PASS: navigation direction, malicious URL handling, unknown flood metadata, line editor geometry, arrow contrast",
+    "archive_crc": "PASS"
+  },
+  "not_verified": {
+    "npm_ci": "failed offline; missing cached zod-validation-error@4.0.2",
+    "full_typecheck": "not run; install dependencies",
+    "lint": "not run; install dependencies",
+    "next_build": "not run; install dependencies",
+    "playwright_e2e": "not run; install dependencies",
+    "supabase_write_read_roundtrip": "not run; no permission to modify Production DB"
+  },
+  "production_read_only_findings": {
+    "edge_function": "hdms-api version 9 with no road_side/affected_lanes/direction_mode in route upsert",
+    "detours": "8 active/nondeleted records currently TWO_WAY, 0 forward or reverse only",
+    "floods": "4 nondeleted records UNKNOWN or NULL road_side",
+    "db_defaults": {
+      "direction_mode": "TWO_WAY",
+      "road_side": "UNKNOWN"
+    }
+  },
+  "release_blockers": [
+    "B-001 unauthenticated write API uses service role",
+    "B-014 live Edge function outdated",
+    "B-015 full build/e2e/db integration unavailable",
+    "B-016 official emblem not provided"
+  ]
+}

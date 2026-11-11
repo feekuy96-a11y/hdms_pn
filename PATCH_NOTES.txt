@@ -1,0 +1,19 @@
+HDMS_PN — Phase 6 Integrated Patch for STAGING (2026-11-11)
+
+Install target: repository root (the folder containing package.json).
+ZIP entries preserve exact relative paths. This is ONE complete cumulative patch:
+DO NOT apply older Phase 6 patch files before or after this archive.
+
+IMPORTANT: This patch is NOT production-ready or certified complete.
+1. Test all user flows in staging after installing dependencies (npm ci).
+2. Re-run npm run typecheck, npm run lint, NEXT_OUTPUT=export npm run build, Playwright E2E.
+3. Critical: updating code in supabase/functions/hdms-api/index.ts in the Git repository does NOT update the deployed Supabase Edge Function.
+   Deployed Edge Function version 9 still discards road_side, affected_lanes, direction_mode.
+   Do not deploy revised Edge Function without first fixing the unauthenticated service-role writes (B-001) and obtaining owner's approval.
+4. DO NOT alter production database or backfill unknown lane/direction values without official verification.
+5. Garuda government emblem file not provided/approved: highway route-number shield remains a non-official placeholder.
+6. The highway route management table and other Admin UI areas still need visual regression tests.
+
+Read docs/PHASE6_VALIDATION.md for scope, risks, acceptance tests, and deployment blockers.
+Read BASE_FILE_HASHES.json to compare your own base repo before overwriting.
+No GitHub, Production Edge Function or database writes occurred during creation of this ZIP.

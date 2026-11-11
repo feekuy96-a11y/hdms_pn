@@ -438,3 +438,20 @@
   font-size: 0.8125rem;
   font-weight: 500;
 }
+
+/* Phase 6: route-number shield. The official Garuda artwork must be supplied and verified before use. */
+.doh-highway-sign { background: transparent; border: 0; }
+.doh-highway-shield { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 42px; height: 42px; background: #fff; color: #18243a; border: 2px solid #18243a; border-radius: 8px 8px 13px 13px; box-shadow: 0 2px 5px #0005; font-family: system-ui, sans-serif; line-height: 1.1; }
+.doh-highway-shield-title { font-size: 9px; font-weight: 800; }
+.doh-highway-shield strong { font-size: 15px; font-weight: 900; white-space: nowrap; max-width: 38px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Phase 6: tables adapt to the actual admin panel (resizable), not only screen breakpoints. */
+.doh-auto-table { container-type: inline-size; min-width: 0; }
+@container (max-width: 900px) {
+  .doh-auto-table .doh-auto-table-cards { display: block !important; }
+  .doh-auto-table .doh-auto-table-desktop { display: none !important; }
+}
+@container (min-width: 901px) {
+  .doh-auto-table .doh-auto-table-cards { display: none !important; }
+  .doh-auto-table .doh-auto-table-desktop { display: block !important; }
+}

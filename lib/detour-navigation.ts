@@ -85,29 +85,6 @@ export function resolveDetourGoogleMapsNavigation(
 
   const meta = detour.detour_meta || {};
 
-  // ขั้นที่ 1: ตรวจสอบ URL ที่เจ้าหน้าที่ตรวจสอบและอนุมัติไว้โดยตรง
-  const approvedUrl =
-    direction === "REVERSE"
-      ? meta.google_maps_url_reverse || meta.google_maps_url
-      : meta.google_maps_url_forward || meta.google_maps_url;
-
-  if (approvedUrl && typeof approvedUrl === "string" && approvedUrl.trim().length > 10) {
-    const trimmed = approvedUrl.trim();
-    if (
-      trimmed.startsWith("https://www.google.com/maps") ||
-      trimmed.startsWith("https://maps.app.goo.gl") ||
-      trimmed.startsWith("https://maps.google.com") ||
-      trimmed.startsWith("https://goo.gl/maps")
-    ) {
-      return {
-        url: trimmed,
-        isValid: true,
-        source: "APPROVED_URL",
-        disclaimer: "เส้นทางนำทางได้รับการตรวจสอบและยืนยันโดยเจ้าหน้าที่แขวงทางหลวงปัตตานี",
-      };
-    }
-  }
-
   // ขั้นที่ 2: ตรวจสอบสถานะการอนุมัติและความปลอดภัยของทางเลี่ยงในฐานข้อมูล
   if (detour.is_active === false) {
     return {
@@ -118,7 +95,10 @@ export function resolveDetourGoogleMapsNavigation(
     };
   }
 
-  const dirMode = detour.direction_mode || "BOTH";
+  const dirMode = detour.direction_mode;
+  if (!["TWO_WAY", "FORWARD_ONLY", "REVERSE_ONLY"].includes(String(dirMode || ""))) {
+    return { url: null, isValid: false, source: "UNVERIFIED", warning: "ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาติดต่อเจ้าหน้าที่ก่อนใช้นำทาง" };
+  }
   if (direction === "REVERSE" && dirMode === "FORWARD_ONLY") {
     return {
       url: null,
@@ -155,6 +135,37 @@ export function resolveDetourGoogleMapsNavigation(
       }
     }
   }
+
+  // Approved links must pass the same active, direction and closed-road safety checks.
+  // ขั้นที่ 1: ตรวจสอบ URL ที่เจ้าหน้าที่ตรวจสอบและอนุมัติไว้โดยตรง
+  const approvedUrl =
+    direction === "REVERSE"
+      ? meta.google_maps_url_reverse
+      : meta.google_maps_url_forward || meta.google_maps_url;
+
+  if (approvedUrl && typeof approvedUrl === "string" && approvedUrl.trim().length > 10) {
+    const trimmed = approvedUrl.trim();
+    let trusted = false;
+    try {
+      const parsed = new URL(trimmed);
+      trusted = parsed.protocol === "https:" && [
+        "www.google.com", "google.com", "maps.google.com", "maps.app.goo.gl", "goo.gl",
+      ].includes(parsed.hostname.toLowerCase()) && !parsed.username && !parsed.password;
+      if (parsed.hostname.toLowerCase() === "goo.gl") trusted = trusted && parsed.pathname.startsWith("/maps/");
+      if (["www.google.com", "google.com", "maps.google.com"].includes(parsed.hostname.toLowerCase())) {
+        trusted = trusted && (parsed.pathname === "/maps" || parsed.pathname.startsWith("/maps/"));
+      }
+    } catch { trusted = false; }
+    if (trusted) {
+      return {
+        url: trimmed,
+        isValid: true,
+        source: "APPROVED_URL",
+        disclaimer: "เส้นทางนำทางได้รับการตรวจสอบและยืนยันโดยเจ้าหน้าที่แขวงทางหลวงปัตตานี",
+      };
+    }
+  }
+
 
   // ขั้นที่ 3: สกัดพิกัดต้นทาง-ปลายทาง และสร้างจุดผ่านทาง (Waypoints) ตามทิศทาง
   let origin: [number, number];
