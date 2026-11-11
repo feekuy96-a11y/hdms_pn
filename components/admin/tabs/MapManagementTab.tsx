@@ -1486,6 +1486,7 @@ export function MapManagementTab({
         directionMode: routeMode === "DETOUR" ? detourDirectionMode : undefined,
         detourMeta: routeMode === "DETOUR"
           ? {
+            ...((routeEditId ? (systemData.detourRoutes || []).find((d) => d.id === routeEditId)?.detour_meta : undefined) || {}),
             forward_distance_m: detourDistanceMeters.forward || undefined,
             reverse_distance_m: detourDistanceMeters.reverse || undefined,
             show_arrows: true,

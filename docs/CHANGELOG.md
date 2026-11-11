@@ -355,3 +355,28 @@
   - `NEXT_OUTPUT=export next build`: ผ่าน 100% สร้าง Static Pages 6/6 หน้าสมบูรณ์
   - `npx playwright test --workers=2`: ผ่านครบ 46 passed, 14 skipped (admin tests on mobile viewports skipped per design), 0 failed
 - **ลำดับ deploy:** Edge Function (`hdms-api`) → เว็บไซต์ (GitHub Pages) (ไม่มี migration SQL ใหม่)
+
+### [UPDATE-071] 2026-11-11 แก้ไขปัญหาโครงสร้าง 4 จุด (URLs ทางเลี่ยง, พิกัดพื้นที่, ป๊อปอัปแผนที่, บันทึกฝั่งถนน)
+- **ไฟล์:**
+  - `supabase/migrations/20261109000100_directional_flood_and_detour.sql`: รัน migration เพิ่มคอลัมน์ `road_side`, `affected_lanes`, `affected_shoulder`, `direction_meta`, `reporter_name` ใน `doh_flood_routes` และ `doh_timeline_updates`, เพิ่ม `detour_meta`, `direction_mode`, `reverse_coordinates_json`, `reverse_waypoints_json` ใน `doh_detour_routes`
+  - `supabase/functions/hdms-api/index.ts`: Deployed version ล่าสุด รองรับการ upsert และอ่านค่า `detour_meta` และ directional flood fields กลับมาครบถ้วน
+  - `components/admin/tabs/DetourManagementTab.tsx`: แก้ไขการบันทึก `detour_meta` (Google Maps URL ไป-กลับ) ให้คงค่าเดิมและลบเมื่อผู้ใช้ล้างช่องกรอก ไม่เกิดค่า undefined
+  - `components/admin/tabs/MapManagementTab.tsx`: บันทึก `detour_meta` โดยดึงค่าเดิม (`systemData.detourRoutes`) มาผสาน ไม่ลบลิงก์ Google Maps ที่เจ้าหน้าที่เคยอนุมัติไว้
+  - `components/map/LongdoGisMap.tsx`:
+    1. แก้ไขหน้าต่างรายละเอียดและปุ่มบนแผนที่: ผูก `window.__openDetourGoogleMaps`, `window.__openDetourModal`, `window.__getDetourCurrentDir`, `window.__toggleDetourPopupDir` เข้ากับ window พร้อมดึงข้อมูลจาก dynamic ref
+    2. จัดการ Event การคลิก: เพิ่ม `disableClickPropagation` และ `disableScrollPropagation` บน Popup Container ป้องกันการลากแผนที่แทรกแซงการกดปุ่ม
+    3. เชื่อมโยง Popup ทั้งเส้นและไอคอน: เพิ่ม `bindPopup()` และ `openPopup()` บน polyline และ marker ของทั้งน้ำท่วมและทางเลี่ยง ทำให้คลิกที่ใดก็เปิดป๊อปอัปได้ทันที
+    4. เพิ่ม prop `onSelectDetour` เชื่อมโยงการเปิด Detour Modal ระหว่างแผนที่กับหน้าประชาชน
+  - `app/page.tsx`: นำเข้า `defaultDetourDirection` จาก `@/lib/detour-presentation` และส่งต่อ `onSelectDetour` เพื่อเปิด Modal ข้อมูลทางเลี่ยงเมื่อผู้ใช้แตะป๊อปอัปบนแผนที่
+  - `app/admin/page.tsx`: เพิ่ม `onSelectDetour` โฟกัสพิกัดเมื่อแตะเส้นทางเลี่ยง
+  - `lib/gis-utils.ts`:
+    1. ปรับปรุง `cleanThaiAdminPrefix`: ตัดคำนำหน้า `เทศบาลตำบล`, `เทศบาลเมือง`, `อบต.` ฯลฯ ให้กระชับ
+    2. ปรับปรุง `reverseGeocodeTambonAmphoe` และ `getDetailedPattaniAddress`: อ่าน `addr.subdistrict || addr.municipality || addr.town` อย่างถูกต้อง เพิ่ม timeout เป็น 3500ms
+    3. เพิ่ม `PATTANI_AMPHOE_CENTERS` กำหนดพิกัดศูนย์กลางอำเภอจริงทั้ง ๑๒ อำเภอของ จ.ปัตตานี ทำให้ Centroid fallback แม่นยำ 100%
+- **ตรวจแล้ว:**
+  - `npm run lint` (`--max-warnings=0`): ผ่าน 0 errors, 0 warnings
+  - `npm run typecheck` (`tsc --noEmit`): ผ่าน 0 errors
+  - `NEXT_OUTPUT=export next build`: ผ่าน 100% สร้าง Static Pages 6/6 หน้าสมบูรณ์
+  - `npx playwright test --workers=2`: ผ่านครบ 46 passed, 14 skipped, 0 failed
+  - Live Supabase Database / RPC: ทดสอบเขียน-อ่าน `detour_meta` และ `doh_get_system_data_rpc` บนฐานข้อมูลจริงสำเร็จ
+- **ลำดับ deploy:** SQL Migration (`20261109000100_directional_flood_and_detour.sql`) [เสร็จแล้ว] → Edge Function (`hdms-api`) [เสร็จแล้ว] → เว็บไซต์ (GitHub Pages)

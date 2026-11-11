@@ -62,6 +62,7 @@ import {
 import { extractDirectionalAdvice, splitDetourAdviceByDirection } from "@/lib/gis-utils";
 import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
 import {
+  defaultDetourDirection,
   detourDirectionBadge,
   detourDistanceMeters,
   isDetourDirectionAllowed,
@@ -719,6 +720,11 @@ export default function HomePage() {
               if (flood && flood.lat_start && flood.lon_start) {
                 setFocusCoordinates([flood.lon_start, flood.lat_start]);
               }
+            }}
+            onSelectDetour={(detour) => {
+              setViewingDetourModal(detour);
+              setModalDetourDirection(defaultDetourDirection(detour.direction_mode) || "FORWARD");
+              setIsMobileDrawerOpen(false);
             }}
             focusCoordinates={focusCoordinates}
             className="h-full w-full"

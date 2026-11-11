@@ -187,13 +187,22 @@ export function DetourManagementTab({
     try {
       const linkedFlood = floodList.find((f) => f.id === editDetourRefId);
       const linkedEventId = linkedFlood ? parseFloodDirectionMeta(linkedFlood.direction_meta, linkedFlood).eventId : undefined;
-      const updatedDetourMeta = {
+      const updatedDetourMeta: Record<string, any> = {
         ...(editingDetour.detour_meta || {}),
         eventId: linkedEventId,
-        google_maps_url_forward: editDetourGoogleMapsUrlFwd.trim() || undefined,
-        google_maps_url_reverse: editDetourGoogleMapsUrlRev.trim() || undefined,
-        google_maps_url: editDetourGoogleMapsUrlFwd.trim() || undefined,
       };
+      if (editDetourGoogleMapsUrlFwd.trim()) {
+        updatedDetourMeta.google_maps_url_forward = editDetourGoogleMapsUrlFwd.trim();
+        updatedDetourMeta.google_maps_url = editDetourGoogleMapsUrlFwd.trim();
+      } else {
+        delete updatedDetourMeta.google_maps_url_forward;
+        delete updatedDetourMeta.google_maps_url;
+      }
+      if (editDetourGoogleMapsUrlRev.trim()) {
+        updatedDetourMeta.google_maps_url_reverse = editDetourGoogleMapsUrlRev.trim();
+      } else {
+        delete updatedDetourMeta.google_maps_url_reverse;
+      }
 
       const res = await upsertRouteAction({
         id: editingDetour.id,

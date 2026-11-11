@@ -379,6 +379,11 @@ export default function AdminPage() {
                   setFocusCoordinates([flood.lon_start, flood.lat_start]);
                 }
               }}
+              onSelectDetour={(detour) => {
+                if (detour.lat_start && detour.lon_start) {
+                  setFocusCoordinates([detour.lon_start, detour.lat_start]);
+                }
+              }}
               adminPickMode={adminPickMode}
               onCoordinatePicked={(lat, lon, mode) => {
                 setPickedCoordinate({ lat, lon, mode, ts: Date.now() });

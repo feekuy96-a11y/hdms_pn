@@ -5,7 +5,9 @@ import "leaflet/dist/leaflet.css";
 import { SystemDataPayload, FloodRoute, DetourRoute, TimelineUpdate, DohOfficeLocation } from "@/db/default-data";
 import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { splitDetourAdviceByDirection } from "@/lib/gis-utils";
+import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
 import {
+  defaultDetourDirection,
   detourDirectionBadge,
   detourDistanceMeters,
   formatDetourDistanceKm,
@@ -391,6 +393,7 @@ interface LongdoGisMapProps {
   systemData: SystemDataPayload;
   selectedFloodId: string;
   onSelectFlood: (id: string) => void;
+  onSelectDetour?: (detour: DetourRoute) => void;
   adminPickMode?: string | null;
   onCoordinatePicked?: (lat: number, lon: number, mode: string) => void;
   draftCoordinates?: [number, number][];
@@ -422,6 +425,7 @@ export function LongdoGisMap({
   systemData,
   selectedFloodId,
   onSelectFlood,
+  onSelectDetour,
   adminPickMode = null,
   onCoordinatePicked,
   draftCoordinates = EMPTY_COORDS,
@@ -543,18 +547,49 @@ export function LongdoGisMap({
   onVertexClickedRef.current = onVertexClicked;
   const onSelectFloodRef = useRef(onSelectFlood);
   onSelectFloodRef.current = onSelectFlood;
+  const onSelectDetourRef = useRef(onSelectDetour);
+  onSelectDetourRef.current = onSelectDetour;
   const selectedFloodIdRef = useRef(selectedFloodId);
   selectedFloodIdRef.current = selectedFloodId;
+  const systemDataRef = useRef(systemData);
+  systemDataRef.current = systemData;
 
-  // Global popup handlers for direction toggling and opening flood dossier
+  // Global popup handlers for direction toggling, opening modal, and Google Maps navigation
   useEffect(() => {
     const activeDirMap: Record<string, "FORWARD" | "REVERSE"> = {};
+
+    (window as any).__getDetourCurrentDir = (id: string) => {
+      return activeDirMap[id] || "FORWARD";
+    };
 
     (window as any).__openFloodDossier = (id: string) => {
       onSelectFloodRef.current?.(id);
     };
+
+    (window as any).__openDetourModal = (id: string) => {
+      const routes = systemDataRef.current.detourRoutes || [];
+      const detour = routes.find((d) => d.id === id);
+      if (detour) {
+        onSelectDetourRef.current?.(detour);
+      }
+    };
+
+    (window as any).__openDetourGoogleMaps = (safeId: string, dir?: "FORWARD" | "REVERSE") => {
+      const routes = systemDataRef.current.detourRoutes || [];
+      const detour = routes.find((d) => String(d.id || "").replace(/[^a-zA-Z0-9_-]/g, "_") === safeId);
+      if (!detour) return;
+      const targetDir = dir || activeDirMap[safeId] || defaultDetourDirection(detour.direction_mode) || "FORWARD";
+      const nav = resolveDetourGoogleMapsNavigation(detour, targetDir, systemDataRef.current.floodRoutes || []);
+      if (nav.url) {
+        window.open(nav.url, "_blank", "noopener,noreferrer");
+      } else if (nav.warning) {
+        alert(nav.warning);
+      }
+    };
+
     (window as any).__toggleDetourPopupDir = (id: string, dir: "FORWARD" | "REVERSE") => {
-      const route = systemData.detourRoutes.find((d) => String(d.id || "").replace(/[^a-zA-Z0-9_-]/g, "_") === id);
+      const routes = systemDataRef.current.detourRoutes || [];
+      const route = routes.find((d) => String(d.id || "").replace(/[^a-zA-Z0-9_-]/g, "_") === id);
       if (!isDetourDirectionAllowed(route?.direction_mode, dir)) return;
       activeDirMap[id] = dir;
       const fwdBtn = document.getElementById(`detour-btn-fwd-${id}`);
@@ -582,6 +617,9 @@ export function LongdoGisMap({
     return () => {
       delete (window as any).__openFloodDossier;
       delete (window as any).__toggleDetourPopupDir;
+      delete (window as any).__openDetourModal;
+      delete (window as any).__openDetourGoogleMaps;
+      delete (window as any).__getDetourCurrentDir;
     };
   }, []);
 
@@ -672,6 +710,15 @@ export function LongdoGisMap({
           const lat = Number(e.latlng.lat.toFixed(6));
           const lon = Number(e.latlng.lng.toFixed(6));
           onCoordinatePickedRef.current?.(lat, lon, adminPickModeRef.current);
+        });
+
+        // Ensure popup controls and buttons respond smoothly to clicks and touch
+        map.on("popupopen", (e: any) => {
+          const container = e?.popup?.getElement?.();
+          if (container && L?.DomEvent) {
+            L.DomEvent.disableClickPropagation(container);
+            L.DomEvent.disableScrollPropagation(container);
+          }
         });
       } catch (err) {
         console.error("[LongdoGisMap] Failed to initialize Leaflet map:", err);
@@ -1024,6 +1071,10 @@ export function LongdoGisMap({
           renderer,
         }).addTo(group);
         polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir));
+        polyline.on("click", (e: any) => {
+          L.DomEvent.stopPropagation(e);
+          polyline.openPopup(e.latlng);
+        });
 
         const midPoint = latLngs[Math.floor(latLngs.length / 2)];
         const detourIcon = L.divIcon({
@@ -1032,7 +1083,11 @@ export function LongdoGisMap({
           iconSize: [30, 30],
           iconAnchor: [15, 15],
         });
-        L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir)).addTo(group);
+        const detourMarker = L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir)).addTo(group);
+        detourMarker.on("click", (e: any) => {
+          L.DomEvent.stopPropagation(e);
+          detourMarker.openPopup();
+        });
       }
 
       // Draw reverse B->A line if present and distinct (or when REVERSE_ONLY)
@@ -1049,6 +1104,10 @@ export function LongdoGisMap({
             renderer,
           }).addTo(group);
           revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir));
+          revPolyline.on("click", (e: any) => {
+            L.DomEvent.stopPropagation(e);
+            revPolyline.openPopup(e.latlng);
+          });
         }
       }
     });
@@ -1099,9 +1158,11 @@ export function LongdoGisMap({
           renderer,
         }).addTo(group);
         floodLinesRef.current[flood.id] = { line: polyline, baseWeight: fBaseWeight };
+        polyline.bindPopup(() => buildFloodPopupHtml(flood, updatesByFlood[flood.id] || []), { maxWidth: 280 });
         polyline.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           onSelectFloodRef.current(flood.id);
+          polyline.openPopup(e.latlng);
         });
       }
     });
@@ -1170,6 +1231,7 @@ export function LongdoGisMap({
         marker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           onSelectFloodRef.current(primarySeg.id);
+          marker.openPopup();
         });
       });
     } else {
@@ -1368,6 +1430,7 @@ export function LongdoGisMap({
           marker.on("click", (e: any) => {
             L.DomEvent.stopPropagation(e);
             onSelectFloodRef.current(item.flood.id);
+            marker.openPopup();
           });
         });
       });

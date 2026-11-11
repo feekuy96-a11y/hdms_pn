@@ -207,6 +207,21 @@ export function isPointInPolygon(point: [number, number], polygon: [number, numb
   return inside;
 }
 
+const PATTANI_AMPHOE_CENTERS = [
+  { name: "อ.เมืองปัตตานี", pt: [101.250, 6.868] },
+  { name: "อ.หนองจิก", pt: [101.176, 6.852] },
+  { name: "อ.โคกโพธิ์", pt: [101.127, 6.723] },
+  { name: "อ.ยะหริ่ง", pt: [101.370, 6.865] },
+  { name: "อ.ปะนาเระ", pt: [101.493, 6.858] },
+  { name: "อ.มายอ", pt: [101.423, 6.745] },
+  { name: "อ.ยะรัง", pt: [101.293, 6.758] },
+  { name: "อ.สายบุรี", pt: [101.618, 6.702] },
+  { name: "อ.ไม้แก่น", pt: [101.675, 6.612] },
+  { name: "อ.กะพ้อ", pt: [101.558, 6.575] },
+  { name: "อ.ทุ่งยางแดง", pt: [101.468, 6.638] },
+  { name: "อ.แม่ลาน", pt: [101.205, 6.650] },
+];
+
 /**
  * ค้นหาชื่ออำเภอใน จ.ปัตตานี จากพิกัด
  */
@@ -219,17 +234,14 @@ export function findPattaniDistrictName(coord: [number, number]): string {
     }
   }
 
-  // Centroid distance fallback
+  // Centroid distance fallback - เทียบพิกัดกับศูนย์กลางอำเภอจริงทั้ง ๑๒ อำเภอ
   let bestDist = Infinity;
   let bestName = "อ.เมืองปัตตานี";
-  for (const feat of PATTANI_DISTRICTS_GEOJSON.features) {
-    const poly = feat.geometry.coordinates[0] as [number, number][];
-    const cX = poly.reduce((acc, p) => acc + p[0], 0) / poly.length;
-    const cY = poly.reduce((acc, p) => acc + p[1], 0) / poly.length;
-    const d = Math.hypot(coord[0] - cX, coord[1] - cY);
+  for (const item of PATTANI_AMPHOE_CENTERS) {
+    const d = Math.hypot(coord[0] - item.pt[0], coord[1] - item.pt[1]);
     if (d < bestDist) {
       bestDist = d;
-      bestName = feat.properties.name;
+      bestName = item.name;
     }
   }
   return bestName;
@@ -307,10 +319,10 @@ export async function getDetailedPattaniAddress(
     }
   }
 
-  // 2. ลองดึงข้อมูลชื่อถนน/หมู่บ้านเพิ่มเติมจาก Reverse Geocoder ในพื้นหลัง (Timeout 1.2s)
+  // 2. ดึงข้อมูลชื่อถนน/หมู่บ้านเพิ่มเติมจาก Reverse Geocoder ในพื้นหลัง (Timeout 3.5s)
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 1200);
+    const timer = setTimeout(() => controller.abort(), 3500);
     const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=th&zoom=18`;
     const res = await fetch(url, { signal: controller.signal, headers: { "User-Agent": "DOH-Pattani/2.0" } });
     clearTimeout(timer);
@@ -318,15 +330,15 @@ export async function getDetailedPattaniAddress(
       const data = await res.json();
       const addr = data?.address || {};
       const road = addr.road || "";
-      const rawVillage = cleanThaiAdminPrefix(addr.village || addr.hamlet || addr.neighbourhood || addr.suburb || "");
-      const rawTambon = cleanThaiAdminPrefix(addr.subdistrict || addr.town || addr.city_district || localResult.tambon || "");
-      const rawAmphoe = cleanThaiAdminPrefix(addr.district || addr.county || localResult.amphoe || findPattaniDistrictName([lon, lat]));
+      const rawVillage = cleanThaiAdminPrefix(addr.village || addr.hamlet || addr.neighbourhood || "");
+      const rawTambon = cleanThaiAdminPrefix(addr.subdistrict || addr.municipality || addr.town || addr.suburb || addr.city_district || localResult.tambon || "");
+      const rawAmphoe = cleanThaiAdminPrefix(addr.district || addr.county || addr.city_district || addr.city || localResult.amphoe || findPattaniDistrictName([lon, lat]));
 
       const parts: string[] = [];
       if (rawVillage) {
         parts.push(`บ.${rawVillage}`);
       } else if (localResult.tag.includes("บ.")) {
-        const match = localResult.tag.match(/บ\.[^\s]+/);
+        const match = localResult.tag.match(/บ\.[^\s)]+/);
         if (match) parts.push(match[0]);
       }
       if (rawTambon) parts.push(`ต.${rawTambon}`);
@@ -1250,7 +1262,12 @@ export function slicePolylineByKmRange(
  */
 export function cleanThaiAdminPrefix(text: string | null | undefined): string {
   if (!text) return "";
-  return text.replace(/^(ตำบล|แขวง|อำเภอ|เขต|จังหวัด|ต\.|อ\.|จ\.)\s*/, "").trim();
+  return text
+    .replace(
+      /^(เทศบาลตำบล|เทศบาลเมือง|เทศบาลนคร|อบต\.|องค์การบริหารส่วนตำบล|ตำบล|แขวง|อำเภอ|เขต|จังหวัด|หมู่บ้าน|ชุมชน|ต\.|อ\.|จ\.|บ\.|ม\.)\s*/,
+      ""
+    )
+    .trim();
 }
 
 /**
@@ -1264,40 +1281,73 @@ export async function reverseGeocodeTambonAmphoe(
 
   const longdoKey = process.env.NEXT_PUBLIC_LONGDO_MAP_KEY;
 
-  // 1. ลองค้นหาผ่าน Longdo Map Address API (แม่นยำที่สุดสำหรับประเทศไทย)
-  try {
-    const res = await fetch(
-      `https://api.longdo.com/map/services/address?lon=${lon}&lat=${lat}&key=${encodeURIComponent(longdoKey)}`
-    );
-    if (res.ok) {
-      const data = await res.json();
-      const resObj = {
-        subdistrict: cleanThaiAdminPrefix(data.subdistrict),
-        district: cleanThaiAdminPrefix(data.district),
-        province: cleanThaiAdminPrefix(data.province),
-      };
-      if (resObj.subdistrict || resObj.district) return resObj;
+  // 1. ลองค้นหาผ่าน Longdo Map Address API (หากมี API key)
+  if (longdoKey) {
+    try {
+      const res = await fetch(
+        `https://api.longdo.com/map/services/address?lon=${lon}&lat=${lat}&key=${encodeURIComponent(longdoKey)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const resObj = {
+          subdistrict: cleanThaiAdminPrefix(data.subdistrict),
+          district: cleanThaiAdminPrefix(data.district),
+          province: cleanThaiAdminPrefix(data.province),
+        };
+        if (resObj.subdistrict || resObj.district) return resObj;
+      }
+    } catch (err) {
+      // ข้ามไป fallback
     }
-  } catch (err) {
-    // ข้ามไป fallback
   }
 
   // 2. หากไม่สำเร็จ ลองค้นหาผ่าน OpenStreetMap Nominatim API (Fallback)
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3500);
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=th&zoom=14`
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=th&zoom=16`,
+      { signal: controller.signal, headers: { "User-Agent": "DOH-Pattani/2.0" } }
     );
+    clearTimeout(timer);
     if (res.ok) {
       const data = await res.json();
       const addr = data.address || {};
+      const sub = cleanThaiAdminPrefix(
+        addr.subdistrict ||
+          addr.municipality ||
+          addr.town ||
+          addr.suburb ||
+          addr.village ||
+          addr.neighbourhood ||
+          addr.hamlet
+      );
+      const dist = cleanThaiAdminPrefix(
+        addr.district ||
+          addr.county ||
+          addr.city_district ||
+          addr.city ||
+          findPattaniDistrictName([lon, lat])
+      );
+      const prov = cleanThaiAdminPrefix(addr.state || addr.province || "ปัตตานี");
       return {
-        subdistrict: cleanThaiAdminPrefix(addr.suburb || addr.village || addr.neighbourhood || addr.hamlet),
-        district: cleanThaiAdminPrefix(addr.county || addr.city_district || addr.district || addr.town || addr.city),
-        province: cleanThaiAdminPrefix(addr.state || addr.province),
+        subdistrict: sub,
+        district: dist,
+        province: prov,
       };
     }
   } catch (err) {
     // fallback ล้มเหลว
+  }
+
+  // 3. Fallback กรณี Offline หรือ API ขัดข้อง: ใช้การระบุอำเภอตามพิกัดภูมิศาสตร์ในปัตตานี
+  const fallbackDistrict = cleanThaiAdminPrefix(findPattaniDistrictName([lon, lat]));
+  if (fallbackDistrict) {
+    return {
+      subdistrict: "",
+      district: fallbackDistrict,
+      province: "ปัตตานี",
+    };
   }
 
   return null;
