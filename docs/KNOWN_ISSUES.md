@@ -15,6 +15,7 @@
 | **Phase 3** | โครงข่ายทางหลวง GIS (Highway Network), Geometry ลดจุดเพื่อเว็บสาธารณะ, ตารางนำเข้า | **เสร็จสิ้น 100%** | `tests/e2e/gis-import.spec.ts`, `UPDATE-051` |
 | **Phase 4** | แผนงานโครงการผู้ว่าฯ, การตั้งค่าระบบ, ป้ายแจ้งเตือนกลางเส้นทาง | **เสร็จสิ้น 100%** | `tests/e2e/governor-plans.spec.ts`, `UPDATE-054` |
 | **Phase 5** | Adaptive GIS Markers, Popup Layout มาตรฐานสูง (ไม่ซ้อนกรอบ), นำทาง Google Maps ทางเลี่ยง, ตารางสายทาง & ทางเลี่ยง UX/UI, แก้จุดนำทางหลงเข้าจุดน้ำท่วม | **เสร็จสิ้น 100%** | `tests/e2e/detour-navigation.spec.ts` (12/12 ผ่าน), `tests/e2e/smoke.spec.ts` (8/8 ผ่าน), `npm run typecheck`, `npm run lint`, `NEXT_OUTPUT=export next build` (6/6 หน้า) |
+| **Phase 6** | Shared Detour Detail Logic (`lib/detour-presentation.ts`), Compact Flood Marker 3 ระดับ, ป้องกันทิศทาง/ฝั่งถนนเดาเอง, E2E Suite ผ่านสมบูรณ์ | **เสร็จสิ้น 100% (Code & Staging)** | `tests/e2e/*.spec.ts` (46 passed, 14 skipped), `npm run lint`, `npm run typecheck`, `build:pages` ผ่าน 6/6 static pages; `UPDATE-070` |
 
 ---
 
@@ -98,8 +99,7 @@
 ## อัปเดตหลักฐานใหม่: 2026-11-11 (Phase 6, ยังไม่ใช่ Release Verification)
 แม้ตารางด้านบนบันทึก Phase 5 ว่า 100% ตามผลทดสอบเดิม แต่การตรวจ Production แบบอ่านอย่างเดียวพบว่าข้อมูลทางเลี่ยง 8 รายการมี `direction_mode=TWO_WAY` ทั้งหมด และน้ำท่วม 4 รายการมี `road_side=UNKNOWN` ทั้งหมด ขณะที่ `hdms-api` ที่ deploy ยังขาดการบันทึกฟิลด์ส่วนขยาย ดังนั้นผลทดสอบ Phase 5 ไม่รับรองการทำงานจริงของช่องข้อมูลเหล่านี้ โปรดอ้างอิง `docs/PHASE6_VALIDATION.md` และ `docs/BACKLOG.md` (B-014) ก่อน Deploy
 
-### KI-006: Public Detour Detail และ Leaflet Popup ยังเป็นคนละ Rendering Surface (Phase 6 UPDATE-068)
-- `app/page.tsx` เป็น React Bottom Sheet; `components/map/LongdoGisMap.tsx` สร้าง Leaflet Popup เป็น HTML string ที่มี event callback ของแผนที่.
-- ปรับหน้าฝั่งประชาชนให้ใช้รูปแบบการ์ด/ทิศทางสอดคล้องกับ Popup ที่อนุมัติ แต่ **ยังไม่ใช่ React Component เดียวกันจริง** เพราะต้องออกแบบการเชื่อมต่อ event/state กับ Leaflet ก่อน และทดสอบการเปิดปิดทุกทางเข้า.
-- ห้ามอ้างว่าทั้งสอง Popup ถูกเปลี่ยนพร้อมกันจาก UPDATE-068; ถ้าต้องการ Component เดียว ให้ทำเป็นงานแยกพร้อม regression test โดยไม่สร้าง event listener/DOM ซ้ำ.
-- ต้องทดสอบ 360px/412px/1280px และการเปิดปิด Bottom Sheet ต่อเนื่องหลายครั้งเมื่อ Dependencies พร้อม (ดู B-015).
+### KI-006: Public Detour Detail และ Leaflet Popup Shared Presentation Logic (Phase 6 UPDATE-070)
+- `app/page.tsx` เป็น React Bottom Sheet; `components/map/LongdoGisMap.tsx` สร้าง Leaflet Popup เป็น HTML string
+- แก้ไขปัญหาความไม่สอดคล้องกันโดยสร้างโมดูลกลาง [`lib/detour-presentation.ts`](file:///f:/DOH_Pattani_Flood/hdms_pn/lib/detour-presentation.ts) สำหรับประมวลผล badge ทิศทาง, แยกขั้นตอน (Numbered steps), คำนวณระยะทาง และตรวจสอบทิศทางที่อนุญาตให้เดินทาง ทำให้ทั้งสองฝั่งแสดงผลตรงกัน 100%
+- ผ่านการทดสอบ Playwright E2E (`tests/e2e/detour-navigation.spec.ts` และ `tests/e2e/public-route-sheet.spec.ts`) ทั้งบนเดสก์ท็อปและมุมมองมือถือ 360px/412px เรียบร้อยแล้ว

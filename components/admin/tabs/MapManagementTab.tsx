@@ -519,7 +519,7 @@ export function MapManagementTab({
       setVillageOrLandmark(meta.villageOrLandmark || "");
       if (meta.startedAt) setStartedAt(meta.startedAt.slice(0, 16));
       setCauseAndNote(meta.causeAndNote || flood.detour_advice || "");
-      setDirectionCode(meta.directionCode || (effectiveSide === "RIGHT" ? "B_TO_A" : effectiveSide === "LEFT" ? "A_TO_B" : "BOTH"));
+      setDirectionCode(meta.directionCode);
       setAffectedParts(meta.affectedParts && meta.affectedParts.length ? meta.affectedParts : ["UNSPECIFIED"]);
       setDetailedPhotos(meta.photos || []);
       setFieldImages(meta.photos?.length ? meta.photos.map((p) => p.dataUrl) : (flood.latest_photo_url ? [flood.latest_photo_url] : []));

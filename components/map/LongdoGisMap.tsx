@@ -5,8 +5,15 @@ import "leaflet/dist/leaflet.css";
 import { SystemDataPayload, FloodRoute, DetourRoute, TimelineUpdate, DohOfficeLocation } from "@/db/default-data";
 import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { splitDetourAdviceByDirection } from "@/lib/gis-utils";
-import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
-import { getUnifiedTrafficStatus, resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
+import {
+  detourDirectionBadge,
+  detourDistanceMeters,
+  formatDetourDistanceKm,
+  isDetourDirectionAllowed,
+  isRecordedDetourDirection,
+  parseDetourAdvice,
+  type DetourDirection,
+} from "@/lib/detour-presentation";
 import {
   groupFloodRoutesIntoEvents,
   ParentFloodEventGroup,
@@ -44,8 +51,8 @@ const roadSideLabel = (side: unknown) => ({
   LEFT: "ฝั่งซ้ายทาง (ขาไป A → B)",
   RIGHT: "ฝั่งขวาทาง (ขากลับ B → A)",
   BOTH: "ทั้งสองฝั่งจราจร (A ⇄ B)",
-  UNKNOWN: "ไม่ระบุฝั่งถนน (ต้องตรวจสอบ)",
-}[String(side || "UNKNOWN")] || "ไม่ระบุฝั่งถนน (ต้องตรวจสอบ)");
+  UNKNOWN: "ทุกทิศทาง/ตามสภาพจริง",
+}[String(side || "UNKNOWN")] || "ทุกทิศทาง/ตามสภาพจริง");
 
 const shoulderLabel = (shoulder: unknown) => ({
   NONE: "ปกติ",
@@ -55,12 +62,6 @@ const shoulderLabel = (shoulder: unknown) => ({
   AFFECTED: "ท่วมไหล่ทาง",
   UNKNOWN: "ไม่ทราบสถานะไหล่ทาง",
 }[String(shoulder || "NONE")] || "ปกติ");
-
-const detourDirectionLabel = (mode: unknown) => ({
-  TWO_WAY: "ไป-กลับ ๒ ทิศทาง (A ⇄ B)",
-  FORWARD_ONLY: "ทิศทางเดียว: เฉพาะขาไป (A → B)",
-  REVERSE_ONLY: "ทิศทางเดียว: เฉพาะขากลับ (B → A)",
-}[String(mode ?? "")] || "ไม่ระบุทิศทาง (ต้องตรวจสอบ)");
 
 export function isFloodLineVisibleOnCurrentMap(flood: FloodRoute): boolean {
   if (!flood.is_active) return false;
@@ -131,9 +132,9 @@ function parseRouteCoordinates(value: unknown): [number, number][] {
 function lineAnimationClasses(style: { animation?: string; animationSpeed?: string } | undefined, allow: boolean): string {
   const animation = allow && style?.animation === "chaser" ? "doh-line-chaser"
     : allow && style?.animation === "pulse" ? "doh-line-pulse"
-    : allow && style?.animation === "blink" ? "doh-line-blink"
-    : allow && style?.animation === "arrows" ? "doh-line-arrows"
-    : "";
+      : allow && style?.animation === "blink" ? "doh-line-blink"
+        : allow && style?.animation === "arrows" ? "doh-line-arrows"
+          : "";
   const speed = style?.animationSpeed === "slow" ? "doh-anim-slow" : style?.animationSpeed === "fast" ? "doh-anim-fast" : "";
   return `${animation} ${speed}`.trim();
 }
@@ -141,8 +142,8 @@ function lineAnimationClasses(style: { animation?: string; animationSpeed?: stri
 function dashArrayFor(style: { pattern?: string; dashArray?: string } | undefined): string | undefined {
   return style?.pattern === "dash" ? (style.dashArray || "8, 6")
     : style?.pattern === "dot" ? "2, 6"
-    : style?.pattern === "long-dash-dot" ? "14, 6, 3, 6"
-    : undefined;
+      : style?.pattern === "long-dash-dot" ? "14, 6, 3, 6"
+        : undefined;
 }
 
 // Bring path layers of the given groups to the top of the shared canvas, in the order given.
@@ -162,71 +163,89 @@ function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color: string
   const name = routeNameOf(props);
   const lengthKm = props.length_km || "";
   return `
-    <div class="doh-detour-popup text-xs p-3 w-[min(320px,calc(100vw-64px))] max-w-full font-body bg-slate-950 text-white">
-      <!-- Header: สายทาง + ชื่อตอน + ประเภททางหลวง จัดวางต่อเนื่องในแถวเดียวกันเมื่อพื้นที่พอ -->
-      <div class="flex items-center justify-between pb-2 border-b border-slate-800 gap-2 flex-wrap sm:flex-nowrap">
-        <div class="flex items-center gap-1.5 min-w-0">
-          ${code ? `<span class="bg-amber-400 text-slate-950 text-[11px] font-extrabold px-1.5 py-0.5 rounded font-heading whitespace-nowrap">ทล.${escapeHtml(code)}</span>` : ""}
-          <span class="text-white text-sm font-bold font-heading truncate">${escapeHtml(name)}</span>
-        </div>
-        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${featureIsMain ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-sky-500/20 text-sky-300 border border-sky-500/40"}">
-          ${featureIsMain ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"}
+    <div class="text-xs p-2.5 min-w-[270px] font-body bg-slate-950 text-white rounded-xl border-2 shadow-2xl" style="border-color: ${color}">
+      <div class="flex items-center justify-between pb-1.5 border-b border-slate-800 gap-2">
+        <span class="text-white text-base font-bold font-heading tracking-wide">
+          ${code ? `ทล.${escapeHtml(code)} ` : ""}${escapeHtml(name)}
         </span>
       </div>
-
-      <div class="mt-2 text-slate-300 text-[11px]">
-        ${props.km_start !== undefined && props.km_start !== null && String(props.km_start).trim() !== "" ? `<p class="text-amber-300 text-[11px] font-mono">ช่วง กม.${escapeHtml(formatKmPost(props.km_start))}${props.km_end !== undefined && props.km_end !== null && String(props.km_end).trim() !== "" ? ` ถึง กม.${escapeHtml(formatKmPost(props.km_end))}` : ""}</p>` : ""}
+      <div class="mt-2">
+        ${props.km_start !== undefined && props.km_start !== null && String(props.km_start).trim() !== "" ? `<p class="text-amber-300 text-[11px] mt-0.5 font-mono">ระหว่าง กม.${escapeHtml(formatKmPost(props.km_start))}${props.km_end !== undefined && props.km_end !== null && String(props.km_end).trim() !== "" ? ` ถึง กม.${escapeHtml(formatKmPost(props.km_end))}` : ""}</p>` : ""}
       </div>
-
-      <div class="grid grid-cols-2 gap-2 mt-2.5 pt-2 border-t border-slate-800 text-[11px]">
-        <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+      <div class="grid grid-cols-2 gap-1.5 mt-2.5 pt-2 border-t border-slate-800 text-[11px]">
+        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
           <span class="text-slate-400 block text-[10px]">ระยะทาง</span>
           <strong class="text-amber-400 font-mono">${lengthKm ? `${escapeHtml(lengthKm)} กม.` : "ตามโครงข่าย"}</strong>
         </div>
-        <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800">
+        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
           <span class="text-slate-400 block text-[10px]">ช่องจราจร</span>
-          <strong class="text-sky-400 font-mono">${escapeHtml(props.lanes || "๔ ช่องจราจร")}</strong>
+          <strong class="text-sky-400 font-mono text-[10px]">${escapeHtml(props.lanes || "๔ ช่องจราจร")}</strong>
+        </div>
+        <div class="col-span-2 mt-0.5 rounded-lg border border-slate-700 bg-slate-900/90 px-2 py-1.5 text-center text-[10px] font-semibold text-amber-300">
+          ${featureIsMain ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"}
         </div>
       </div>
     </div>
   `;
 }
 
-function buildDetourPopupHtml(detour: DetourRoute, color: string, defaultDir: "FORWARD" | "REVERSE" = "FORWARD"): string {
-  const dirMode = detour.direction_mode;
+// Same presentation rules as the citizen detail sheet (lib/detour-presentation.ts):
+// numbered steps + notes, only recorded distance, never invented advice.
+function buildDetourAdviceHtml(text: string, meters: number | null): string {
+  const { steps, notes } = parseDetourAdvice(text);
+  const distance = meters !== null
+    ? `<div class="mt-1.5 rounded bg-slate-800/80 border border-slate-700 px-2 py-1 text-[10px] text-slate-200">ระยะทางตามข้อมูลที่บันทึก: <strong>${escapeHtml(formatDetourDistanceKm(meters))} กม.</strong></div>`
+    : "";
+  if (!steps.length && !notes.length) {
+    return `<p class="text-slate-300">ยังไม่มีคำแนะนำสำหรับทิศทางนี้ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>${distance}`;
+  }
+  const stepsHtml = steps.length
+    ? `<ol class="space-y-1.5">${steps.map((step, index) => `<li class="flex items-start gap-2"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-slate-950" aria-hidden="true">${index + 1}</span><span class="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">${escapeHtml(step)}</span></li>`).join("")}</ol>`
+    : "";
+  const notesHtml = notes.length
+    ? `<div class="mt-1.5 space-y-0.5 text-slate-300">${notes.map((note) => `<p class="break-words [overflow-wrap:anywhere]">${escapeHtml(note)}</p>`).join("")}</div>`
+    : "";
+  return `${stepsHtml}${notesHtml}${distance}`;
+}
+
+function buildDetourPopupHtml(detour: DetourRoute, color: string, defaultDir: DetourDirection = "FORWARD"): string {
+  const dirMode = detour.direction_mode || "TWO_WAY";
   const { forwardText, reverseText } = splitDetourAdviceByDirection(detour.description || "", dirMode);
   const safeId = String(detour.id || "").replace(/[^a-zA-Z0-9_-]/g, "_");
-  const isRev = dirMode === "REVERSE_ONLY" || (dirMode !== "FORWARD_ONLY" && defaultDir === "REVERSE");
+  const recorded = isRecordedDetourDirection(dirMode);
+  const fwdAllowed = isDetourDirectionAllowed(dirMode, "FORWARD");
+  const revAllowed = isDetourDirectionAllowed(dirMode, "REVERSE");
+  const isRev = revAllowed && (!fwdAllowed || defaultDir === "REVERSE");
 
   return `
     <div class="doh-detour-popup text-xs p-3 w-[min(320px,calc(100vw-64px))] max-w-full font-body bg-slate-950 text-white">
-      <!-- Header: ไอคอน + ชื่อเส้นทางเลี่ยง -->
-      <div class="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
-        <div class="flex items-center gap-2 min-w-0">
+      <!-- Header: ไอคอน + ชื่อเส้นทางเลี่ยง (ชื่อยาวขึ้นบรรทัดใหม่ ไม่ตัดด้วย ...) -->
+      <div class="flex items-start justify-between gap-2 border-b border-slate-800 pb-2">
+        <div class="flex items-start gap-2 min-w-0">
           <span style="color:${color}" class="text-base font-bold shrink-0" aria-hidden="true">↪</span>
-          <h4 class="font-bold text-white text-sm font-heading leading-tight truncate">${escapeHtml(detour.route_name)}</h4>
+          <h4 class="font-bold text-white text-sm font-heading leading-tight break-words [overflow-wrap:anywhere]">${escapeHtml(detour.route_name)}</h4>
         </div>
         <span class="rounded bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold text-amber-300 whitespace-nowrap shrink-0">
-          ${escapeHtml(detourDirectionLabel(dirMode))}
+          ${escapeHtml(detourDirectionBadge(dirMode))}
         </span>
       </div>
 
-      <div class="mt-2 flex items-center justify-between text-[11px] text-slate-300">
+      <div class="mt-2 text-[11px] text-slate-300">
         <span class="rounded bg-slate-900 border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-300">
           ${detour.flood_id_ref ? "เชื่อมโยงจุดน้ำท่วม" : "ทางเลี่ยงอิสระ"}
         </span>
-        ${detour.detour_meta?.forward_distance_km ? `<span class="text-amber-400 font-mono text-[10px]">ระยะทาง ~${detour.detour_meta.forward_distance_km} กม.</span>` : ""}
       </div>
+      ${recorded ? "" : `<p class="mt-2 text-[11px] text-amber-200" role="status">ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>`}
 
-      <!-- ปุ่มสลับทิศทางคำอธิบายทางเลี่ยง (A → B และ B → A) -->
+      <!-- ปุ่มสลับทิศทาง: เปิดเฉพาะทิศทางที่บันทึกและอนุญาตจริง -->
       <div class="mt-2.5 flex rounded-lg bg-slate-900 p-0.5 border border-slate-700/80">
         <button
           type="button"
           id="detour-btn-fwd-${safeId}"
-          ${dirMode === "REVERSE_ONLY" || !["TWO_WAY", "FORWARD_ONLY", "REVERSE_ONLY"].includes(String(dirMode)) ? "disabled aria-disabled=\"true\"" : ""}
+          ${fwdAllowed ? "" : "disabled aria-disabled=\"true\""}
           onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'FORWARD')"
-          class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md transition cursor-pointer text-center ${
-            !isRev ? "bg-amber-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"
+          class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md transition cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed ${
+            !isRev && fwdAllowed ? "bg-amber-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"
           }"
         >
           ขาไป (A → B)
@@ -234,9 +253,9 @@ function buildDetourPopupHtml(detour: DetourRoute, color: string, defaultDir: "F
         <button
           type="button"
           id="detour-btn-rev-${safeId}"
-          ${dirMode === "FORWARD_ONLY" || !["TWO_WAY", "FORWARD_ONLY", "REVERSE_ONLY"].includes(String(dirMode)) ? "disabled aria-disabled=\"true\"" : ""}
+          ${revAllowed ? "" : "disabled aria-disabled=\"true\""}
           onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'REVERSE')"
-          class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md transition cursor-pointer text-center ${
+          class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md transition cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed ${
             isRev ? "bg-amber-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"
           }"
         >
@@ -244,12 +263,12 @@ function buildDetourPopupHtml(detour: DetourRoute, color: string, defaultDir: "F
         </button>
       </div>
 
-      <!-- กล่องคำแนะนำการเดินทาง พร้อมจำกัดความสูงและ Scrollbar เรียบเนียน -->
-      <div id="detour-desc-fwd-${safeId}" class="${!isRev ? "block" : "hidden"} text-slate-200 mt-2 whitespace-pre-wrap text-[11px] max-h-36 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2.5 bg-slate-900/60">
-        ${escapeHtml(forwardText || "ไม่มีคำแนะนำการเดินทางเฉพาะทิศทาง")}
+      <!-- คำแนะนำเป็นขั้นตอน (ตรรกะเดียวกับหน้ารายละเอียดฝั่งประชาชน) -->
+      <div id="detour-desc-fwd-${safeId}" class="${!isRev ? "block" : "hidden"} text-slate-200 mt-2 text-[11px] max-h-36 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2.5 bg-slate-900/60">
+        ${buildDetourAdviceHtml(forwardText, detourDistanceMeters(detour.detour_meta, "FORWARD"))}
       </div>
-      <div id="detour-desc-rev-${safeId}" class="${isRev ? "block" : "hidden"} text-slate-200 mt-2 whitespace-pre-wrap text-[11px] max-h-36 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2.5 bg-slate-900/60">
-        ${escapeHtml(reverseText || "ไม่มีคำแนะนำการเดินทางเฉพาะทิศทาง")}
+      <div id="detour-desc-rev-${safeId}" class="${isRev ? "block" : "hidden"} text-slate-200 mt-2 text-[11px] max-h-36 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2.5 bg-slate-900/60">
+        ${buildDetourAdviceHtml(reverseText, detourDistanceMeters(detour.detour_meta, "REVERSE"))}
       </div>
 
       <!-- Action Buttons: นำทาง Google Maps และ ดูรายละเอียดเต็ม -->
@@ -257,7 +276,7 @@ function buildDetourPopupHtml(detour: DetourRoute, color: string, defaultDir: "F
         <button
           type="button"
           id="detour-nav-btn-${safeId}"
-          ${!["TWO_WAY", "FORWARD_ONLY", "REVERSE_ONLY"].includes(String(dirMode)) ? "disabled aria-disabled=\"true\" title=\"รอเจ้าหน้าที่ตรวจสอบทิศทางเดินรถ\"" : ""}
+          ${recorded ? "" : "disabled aria-disabled=\"true\" title=\"รอเจ้าหน้าที่ตรวจสอบทิศทางเดินรถ\""}
           onclick="window.__openDetourGoogleMaps && window.__openDetourGoogleMaps('${safeId}', window.__getDetourCurrentDir ? window.__getDetourCurrentDir('${safeId}') : '${defaultDir}')"
           class="doh-detour-nav-btn flex-1 min-h-[40px] py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow"
         >
@@ -295,23 +314,20 @@ function buildFloodPopupHtml(flood: FloodRoute, updates: TimelineUpdate[]): stri
     : "";
   const lanesDisplay = flood.affected_lanes ? ` · ช่องจราจร: ${escapeHtml(flood.affected_lanes)}` : "";
   const shoulderDisplay = flood.affected_shoulder && flood.affected_shoulder !== "NONE" ? ` · ไหล่ทาง: ${escapeHtml(shoulderLabel(flood.affected_shoulder))}` : "";
-
-  // ใช้สถานะมาตรฐานเดียวกันทั้งระบบ 5 สถานะ + รอตรวจสอบ
-  const unified = getUnifiedTrafficStatus(flood.traffic_status, flood.water_level_cm, flood.direction_meta?.trafficStatusDetail);
+  const statusLabel = trafficStatusLabel(flood.traffic_status);
+  const statusBg = flood.traffic_status === "CLOSED" ? "bg-red-500 text-white" : flood.traffic_status === "PASSABLE" ? "bg-emerald-500 text-white" : "bg-amber-400 text-slate-950";
 
   return `
-    <div class="text-xs p-3 min-w-[280px] sm:min-w-[320px] max-w-[360px] max-h-[80vh] overflow-y-auto font-body text-slate-100 bg-slate-950">
-      <!-- Header: ทล.XX + ป้ายสถานะ 5 สี -->
-      <div class="flex items-center justify-between gap-1.5 pb-2 border-b border-slate-800 flex-wrap sm:flex-nowrap">
-        <span class="bg-[#f59e0b] text-slate-950 text-[11px] font-extrabold px-2 py-0.5 rounded font-heading whitespace-nowrap">
+    <div class="text-xs p-1 min-w-[250px] max-w-[280px] font-body text-slate-100">
+      <div class="flex items-center justify-between gap-1.5 pb-1 border-b border-slate-800">
+        <span class="bg-[#f59e0b] text-slate-950 text-[11px] font-extrabold px-2 py-0.5 rounded font-heading">
           ทล.${escapeHtml(flood.route_no)}
         </span>
-        <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${unified.popupBadgeClass} whitespace-nowrap flex items-center gap-1">
-          <span>${unified.icon}</span><span>${escapeHtml(unified.label)}</span>
+        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${statusBg}">
+          ${escapeHtml(statusLabel)}
         </span>
       </div>
-
-      <h4 class="font-bold text-white text-sm font-heading mt-2 leading-snug">${escapeHtml(flood.section_name)}</h4>
+      <h4 class="font-bold text-white text-sm font-heading mt-1.5 leading-snug">${escapeHtml(flood.section_name)}</h4>
       <div class="text-slate-300 text-[11px] mt-0.5">
         ระหว่าง กม.${escapeHtml(formatKmPost(flood.km_start))} ถึง กม.${escapeHtml(formatKmPost(flood.km_end))}
       </div>
@@ -352,19 +368,19 @@ function buildFloodPopupHtml(flood: FloodRoute, updates: TimelineUpdate[]): stri
 function buildOfficePopupHtml(office: DohOfficeLocation): string {
   const isHq = office.type === "HEADQUARTERS";
   return `
-    <div class="text-xs p-3 min-w-[240px] max-w-[280px] font-body text-slate-100 bg-slate-950">
-      <div class="flex items-center gap-1.5 mb-1.5">
-        <span class="bg-amber-400 text-slate-950 text-[10px] font-bold px-1.5 py-0.5 rounded font-heading">
+    <div class="text-xs p-1 min-w-[220px] font-body text-slate-100">
+      <div class="flex items-center gap-1.5 mb-1">
+        <span class="bg-amber-400 text-slate-950 text-[10px] font-bold px-1.5 py-0.2 rounded font-heading">
           ${isHq ? "สำนักงานใหญ่" : "หมวดทางหลวง"}
         </span>
       </div>
       <h4 class="font-bold text-white text-sm font-heading">${escapeHtml(office.name)}</h4>
-      <p class="text-slate-300 text-[11px] mt-1 leading-relaxed">${escapeHtml(office.address)}</p>
-      <div class="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-between">
+      <p class="text-slate-300 text-[11px] mt-1">${escapeHtml(office.address)}</p>
+      <div class="mt-2 pt-1.5 border-t border-slate-700 flex items-center justify-between">
         <a href="tel:${String(office.phone ?? "").replace(/[^0-9]/g, "")}" class="text-amber-300 hover:underline font-bold text-xs flex items-center gap-1">
           📞 ${escapeHtml(office.phone)}
         </a>
-        <a href="https://www.google.com/maps/dir/?api=1&destination=${office.lat},${office.lon}" target="_blank" rel="noopener noreferrer" class="bg-amber-500 text-slate-950 px-2.5 py-1 rounded-md text-[11px] font-bold hover:bg-amber-400 shadow">
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${office.lat},${office.lon}" target="_blank" rel="noopener noreferrer" class="bg-amber-500 text-slate-950 px-2 py-0.5 rounded text-[10px] font-bold hover:bg-amber-400">
           นำทาง
         </a>
       </div>
@@ -458,7 +474,7 @@ export function LongdoGisMap({
   const [showDetourLayer, setShowDetourLayer] = useState(true);
   const [showMainHwy, setShowMainHwy] = useState(true);
   const [showSecHwy, setShowSecHwy] = useState(true);
-  const [showHighwayShields, setShowHighwayShields] = useState(true);
+  const [showHighwayShields, setShowHighwayShields] = useState(false);
   const [showOffices, setShowOffices] = useState(true);
   const [showRoadLabels, setShowRoadLabels] = useState(true);
   const [legendRouteList, setLegendRouteList] = useState<"MAIN_HIGHWAY" | "SECOND_HIGHWAY" | null>(null);
@@ -530,42 +546,16 @@ export function LongdoGisMap({
   const selectedFloodIdRef = useRef(selectedFloodId);
   selectedFloodIdRef.current = selectedFloodId;
 
-  // Global popup handlers for direction toggling, navigation, and opening modals
+  // Global popup handlers for direction toggling and opening flood dossier
   useEffect(() => {
     const activeDirMap: Record<string, "FORWARD" | "REVERSE"> = {};
 
     (window as any).__openFloodDossier = (id: string) => {
       onSelectFloodRef.current?.(id);
     };
-
-    (window as any).__getDetourCurrentDir = (id: string): "FORWARD" | "REVERSE" => {
-      const route = systemData.detourRoutes.find((d) => String(d.id || "").replace(/[^a-zA-Z0-9_-]/g, "_") === id);
-      return activeDirMap[id] || (route?.direction_mode === "REVERSE_ONLY" ? "REVERSE" : "FORWARD");
-    };
-
-    (window as any).__openDetourModal = (id: string) => {
-      window.dispatchEvent(new CustomEvent("doh:open-detour-modal", { detail: id }));
-    };
-
-    (window as any).__openDetourGoogleMaps = (safeId: string, dir: "FORWARD" | "REVERSE") => {
-      const detour = systemData.detourRoutes.find(
-        (d) => String(d.id || "").replace(/[^a-zA-Z0-9_-]/g, "_") === safeId || d.id === safeId
-      );
-      if (!detour) {
-        alert("ไม่พบข้อมูลเส้นทางเลี่ยง");
-        return;
-      }
-      const nav = resolveDetourGoogleMapsNavigation(detour, dir, systemData.floodRoutes);
-      if (nav.isValid && nav.url) {
-        window.open(nav.url, "_blank", "noopener,noreferrer");
-      } else {
-        alert(nav.warning || "เส้นทางเลี่ยงในทิศทางนี้ยังไม่ได้รับการยืนยันการนำทางที่ปลอดภัย");
-      }
-    };
-
     (window as any).__toggleDetourPopupDir = (id: string, dir: "FORWARD" | "REVERSE") => {
       const route = systemData.detourRoutes.find((d) => String(d.id || "").replace(/[^a-zA-Z0-9_-]/g, "_") === id);
-      if ((route?.direction_mode === "FORWARD_ONLY" && dir === "REVERSE") || (route?.direction_mode === "REVERSE_ONLY" && dir === "FORWARD")) return;
+      if (!isDetourDirectionAllowed(route?.direction_mode, dir)) return;
       activeDirMap[id] = dir;
       const fwdBtn = document.getElementById(`detour-btn-fwd-${id}`);
       const revBtn = document.getElementById(`detour-btn-rev-${id}`);
@@ -574,14 +564,14 @@ export function LongdoGisMap({
       if (!fwdBtn || !revBtn || !fwdDesc || !revDesc) return;
 
       if (dir === "FORWARD") {
-        fwdBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 shadow transition cursor-pointer text-center";
+        fwdBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 transition cursor-pointer text-center";
         revBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md text-slate-400 hover:text-white transition cursor-pointer text-center";
         fwdDesc.classList.remove("hidden");
         fwdDesc.classList.add("block");
         revDesc.classList.remove("block");
         revDesc.classList.add("hidden");
       } else {
-        revBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 shadow transition cursor-pointer text-center";
+        revBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 transition cursor-pointer text-center";
         fwdBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md text-slate-400 hover:text-white transition cursor-pointer text-center";
         revDesc.classList.remove("hidden");
         revDesc.classList.add("block");
@@ -589,15 +579,11 @@ export function LongdoGisMap({
         fwdDesc.classList.add("hidden");
       }
     };
-
     return () => {
       delete (window as any).__openFloodDossier;
       delete (window as any).__toggleDetourPopupDir;
-      delete (window as any).__openDetourModal;
-      delete (window as any).__openDetourGoogleMaps;
-      delete (window as any).__getDetourCurrentDir;
     };
-  }, [systemData.detourRoutes, systemData.floodRoutes]);
+  }, []);
 
   // 1. Initialize Leaflet Map Instance
   useEffect(() => {
@@ -700,7 +686,7 @@ export function LongdoGisMap({
       if (leafletMapRef.current) {
         try {
           leafletMapRef.current.remove();
-        } catch (e) {}
+        } catch (e) { }
         leafletMapRef.current = null;
       }
       leafletRef.current = null;
@@ -958,13 +944,13 @@ export function LongdoGisMap({
         if (!item.isMain && z < 11 && !forceShowAllHighways && !criticalHighwayRouteNos.has(item.code.replace(/^ทล\.?/i, "").trim())) continue;
         if (!viewport.contains(item.latlng)) continue;
         const point = map.latLngToContainerPoint(item.latlng);
-        const cellX = Math.floor(point.x / 54);
-        const cellY = Math.floor(point.y / 46);
+        const cellX = Math.floor(point.x / 48);
+        const cellY = Math.floor(point.y / 28);
         let collides = false;
         for (let dx = -1; dx <= 1 && !collides; dx++) {
           for (let dy = -1; dy <= 1 && !collides; dy++) {
             const bucket = occupied[`${cellX + dx}:${cellY + dy}`];
-            if (bucket && bucket.some((other) => Math.abs(other.x - point.x) < 54 && Math.abs(other.y - point.y) < 46)) collides = true;
+            if (bucket && bucket.some((other) => Math.abs(other.x - point.x) < 48 && Math.abs(other.y - point.y) < 28)) collides = true;
           }
         }
         if (collides) continue;
@@ -973,10 +959,10 @@ export function LongdoGisMap({
         occupied[key].push({ x: point.x, y: point.y });
 
         const signIcon = L.divIcon({
-          html: `<div class="doh-highway-shield" aria-label="ทางหลวงหมายเลข ${escapeHtml(item.code)}"><span class="doh-highway-shield-title">ทล.</span><strong>${escapeHtml(item.code)}</strong></div>`,
+          html: `<div style="width:28px;height:18px;background:#fff;border:1px solid #64748b;border-radius:3px;color:#334155;text-align:center;line-height:16px;font-size:10px;font-weight:600">${escapeHtml(item.code)}</div>`,
           className: "doh-highway-sign",
-          iconSize: [42, 42],
-          iconAnchor: [21, 21],
+          iconSize: [28, 18],
+          iconAnchor: [14, 9],
         });
         const sign = L.marker(item.latlng, { icon: signIcon, interactive: true }).addTo(group);
         sign.bindTooltip(`ทล.${escapeHtml(item.code)} · ${escapeHtml(item.name)}`, { direction: "top", offset: [0, -18] });
@@ -1013,9 +999,7 @@ export function LongdoGisMap({
 
     (systemData.detourRoutes || []).forEach((detour) => {
       if (!detour.is_active) return;
-      // Legacy routes without an audited direction remain visible, but never gain inferred two-way arrows/navigation.
-      const dirMode = ["TWO_WAY", "FORWARD_ONLY", "REVERSE_ONLY"].includes(String(detour.direction_mode || ""))
-        ? detour.direction_mode : "UNKNOWN";
+      const dirMode = detour.direction_mode || "TWO_WAY";
       const fwdCoords = parseRouteCoordinates(detour.coordinates_json);
       const revCoords = parseRouteCoordinates(detour.reverse_coordinates_json);
 
@@ -1034,8 +1018,8 @@ export function LongdoGisMap({
         const polyline = L.polyline(latLngs as any, {
           color: dColor,
           weight: detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight,
-          dashArray: dirMode === "UNKNOWN" ? "3, 7" : dDash,
-          opacity: dirMode === "UNKNOWN" ? 0.5 : (detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity),
+          dashArray: dDash,
+          opacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
           className,
           renderer,
         }).addTo(group);
@@ -1052,7 +1036,7 @@ export function LongdoGisMap({
       }
 
       // Draw reverse B->A line if present and distinct (or when REVERSE_ONLY)
-      if (dirMode === "TWO_WAY" || dirMode === "REVERSE_ONLY") {
+      if (dirMode !== "FORWARD_ONLY") {
         const effectiveRev = revCoords.length >= 2 ? revCoords : (dirMode === "REVERSE_ONLY" ? fwdCoords : []);
         if (effectiveRev.length >= 2) {
           const revLatLngs = effectiveRev.map(toLeafletLatLng);
@@ -1123,7 +1107,7 @@ export function LongdoGisMap({
     });
 
     if (floodDisplayMode === "EVENTS") {
-      // Merged parent event capsule markers with zoom-adaptive layout
+      // Merged parent event capsule markers
       const parentEvents = groupFloodRoutesIntoEvents(visibleFloods);
       parentEvents.forEach((ev) => {
         let sumLat = 0;
@@ -1141,70 +1125,48 @@ export function LongdoGisMap({
         const centerLat = count > 0 ? sumLat / count : APP_CONFIG.DEFAULT_CENTER.lat;
         const centerLon = count > 0 ? sumLon / count : APP_CONFIG.DEFAULT_CENTER.lon;
 
-        const unified = getUnifiedTrafficStatus(
-          ev.mostSevereStatus === "CLOSED" ? "CLOSED" : ev.mostSevereStatus === "NO_SMALL_VEHICLES" ? "WARNING" : ev.mostSevereStatus,
-          ev.maxWaterLevelCm,
-          ev.mostSevereStatus === "NO_SMALL_VEHICLES" ? "NO_SMALL_VEHICLES" : undefined
-        );
-
         let zIndex = 200;
-        if (ev.mostSevereStatus === "CLOSED") zIndex = 1000;
-        else if (ev.mostSevereStatus === "NO_SMALL_VEHICLES") zIndex = 800;
-        else if (ev.mostSevereStatus === "CAUTION") zIndex = 600;
-        else if (ev.mostSevereStatus === "PENDING_VERIFICATION") zIndex = 400;
+        let capsuleClass = "doh-capsule-tag doh-capsule-amber";
+        let glyphIcon = "⚠️";
 
-        // 3-Tier Zoom Adaptive Markers
-        let pinHtml = "";
-        let pinSize: [number, number] = [140, 28];
-        let pinAnchor: [number, number] = [70, 14];
-
-        if (currentZoom <= 10) {
-          // ซูมไกล: แสดงเฉพาะไอคอนสถานะในทรงกลมกะทัดรัด
-          pinSize = [28, 28];
-          pinAnchor = [14, 14];
-          pinHtml = `
-            <div class="doh-capsule-tag ${unified.capsuleClass} doh-capsule-zoom-far" title="ทล.${escapeHtml(ev.routeNo)} [${ev.segments.length} ช่วง] - ${escapeHtml(unified.label)}">
-              <span class="text-xs font-bold leading-none" aria-hidden="true">${unified.icon}</span>
-            </div>
-          `;
-        } else if (currentZoom >= 11 && currentZoom <= 13) {
-          // ซูมกลาง: แสดงไอคอนสถานะ + หมายเลขทางหลวง
-          pinSize = [110, 28];
-          pinAnchor = [55, 14];
-          pinHtml = `
-            <div class="doh-capsule-tag ${unified.capsuleClass} doh-capsule-zoom-mid">
-              <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${unified.icon}</span>
-              <span>ทล.${escapeHtml(ev.routeNo)}</span>
-              <span class="opacity-90 font-mono text-[10px]">(${ev.segments.length})</span>
-            </div>
-          `;
-        } else {
-          // ซูมใกล้: แสดงไอคอนสถานะ + หมายเลขทางหลวง + ระดับน้ำ + สถานะ
-          pinSize = [210, 30];
-          pinAnchor = [105, 15];
-          pinHtml = `
-            <div class="doh-capsule-tag ${unified.capsuleClass} doh-capsule-zoom-near">
-              <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${unified.icon}</span>
-              <span>ทล.${escapeHtml(ev.routeNo)} [${ev.segments.length} ช่วง]</span>
-              <span class="opacity-90 font-mono text-[11px]">(${escapeHtml(ev.maxWaterLevelCm)} ซม.)</span>
-              <span class="bg-black/25 px-1.5 py-0.5 rounded text-[10px] font-bold">${escapeHtml(unified.label)}</span>
-            </div>
-          `;
+        if (ev.mostSevereStatus === "CLOSED") {
+          capsuleClass = "doh-capsule-tag doh-capsule-red";
+          glyphIcon = "⛔";
+          zIndex = 1000;
+        } else if (ev.mostSevereStatus === "NO_SMALL_VEHICLES") {
+          capsuleClass = "doh-capsule-tag doh-capsule-orange";
+          glyphIcon = "🚗";
+          zIndex = 800;
+        } else if (ev.mostSevereStatus === "CAUTION") {
+          capsuleClass = "doh-capsule-tag doh-capsule-amber";
+          glyphIcon = "⚠️";
+          zIndex = 600;
+        } else if (ev.mostSevereStatus === "PASSABLE") {
+          capsuleClass = "doh-capsule-tag doh-capsule-green";
+          glyphIcon = "✅";
+          zIndex = 200;
+        } else if (ev.mostSevereStatus === "PENDING_VERIFICATION") {
+          capsuleClass = "doh-capsule-tag doh-capsule-slate";
+          glyphIcon = "⏳";
+          zIndex = 400;
         }
 
         const pinIcon = L.divIcon({
-          html: pinHtml,
+          html: `
+            <div class="${capsuleClass}">
+              <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${glyphIcon}</span>
+              <span>ทล.${escapeHtml(ev.routeNo)} [${ev.segments.length} ช่วง]</span>
+              <span class="opacity-90">(${escapeHtml(ev.maxWaterLevelCm)} ซม.)</span>
+            </div>
+          `,
           className: "doh-map-capsule-pin",
-          iconSize: pinSize,
-          iconAnchor: pinAnchor,
+          iconSize: [140, 28],
+          iconAnchor: [70, 14],
         });
 
         const primarySeg = ev.segments[0];
         const marker = L.marker([centerLat, centerLon], { icon: pinIcon, zIndexOffset: zIndex }).addTo(group);
-        marker.bindPopup(() => buildFloodPopupHtml(primarySeg, updatesByFlood[primarySeg.id] || []), {
-          maxWidth: 360,
-          minWidth: 280,
-        });
+        marker.bindPopup(() => buildFloodPopupHtml(primarySeg, updatesByFlood[primarySeg.id] || []), { maxWidth: 280 });
         marker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           onSelectFloodRef.current(primarySeg.id);
@@ -1232,28 +1194,63 @@ export function LongdoGisMap({
         const lon = midCoord ? midCoord[0] : (flood.lon_start || APP_CONFIG.DEFAULT_CENTER.lon);
 
         const meta = flood.direction_meta;
+        const trafficDetail = meta?.trafficStatusDetail;
         const waterKnown = meta?.water_level_known !== false;
         const levelText = waterKnown ? `${flood.water_level_cm} ซม.` : "รอวัดระดับน้ำ";
 
-        const unified = getUnifiedTrafficStatus(flood.traffic_status, flood.water_level_cm, meta?.trafficStatusDetail);
-
         let zIndex = 200;
-        if (unified.key === "CLOSED") zIndex = 1000;
-        else if (unified.key === "WARNING") zIndex = 800;
-        else if (unified.key === "ONE_LANE") zIndex = 700;
-        else if (unified.key === "LIGHT_VEHICLES_ONLY") zIndex = 600;
-        else if (unified.key === "PENDING_VERIFICATION") zIndex = 400;
+        let capsuleClass = "doh-capsule-tag doh-capsule-amber";
+        let glyphIcon = "⚠️";
+        let statusLabel = "เฝ้าระวัง / ระมัดระวัง";
 
-        const dirCode = meta?.directionCode || (flood.road_side === "LEFT" ? "A_TO_B" : flood.road_side === "RIGHT" ? "B_TO_A" : "BOTH");
+        if (trafficDetail === "PENDING_VERIFICATION" || (flood.traffic_status as string) === "PENDING_VERIFICATION") {
+          capsuleClass = "doh-capsule-tag doh-capsule-slate";
+          glyphIcon = "⏳";
+          statusLabel = "รอตรวจสอบสถานะ";
+          zIndex = 400;
+        } else if (trafficDetail === "NO_SMALL_VEHICLES") {
+          capsuleClass = "doh-capsule-tag doh-capsule-orange";
+          glyphIcon = "🚗";
+          statusLabel = "รถเล็กไม่สามารถผ่านได้";
+          zIndex = 800;
+        } else if (flood.traffic_status === "CLOSED" || trafficDetail === "CLOSED") {
+          capsuleClass = "doh-capsule-tag doh-capsule-red";
+          glyphIcon = "⛔";
+          statusLabel = "ผ่านไม่ได้";
+          zIndex = 1000;
+        } else if (flood.traffic_status === "LIGHT_VEHICLES_ONLY") {
+          capsuleClass = "doh-capsule-tag doh-capsule-sky";
+          glyphIcon = "🚗";
+          statusLabel = "รถเล็กผ่านได้";
+          zIndex = 600;
+        } else if (flood.traffic_status === "ONE_LANE") {
+          capsuleClass = "doh-capsule-tag doh-capsule-amber";
+          glyphIcon = "↔️";
+          statusLabel = "รถเล็กผ่านได้ ๑ ช่องทาง";
+          zIndex = 600;
+        } else if (flood.traffic_status === "WARNING" || trafficDetail === "CAUTION") {
+          capsuleClass = "doh-capsule-tag doh-capsule-amber";
+          glyphIcon = "⚠️";
+          statusLabel = "รถเล็กไม่สามารถผ่านได้";
+          zIndex = 800;
+        } else if (flood.traffic_status === "PASSABLE" || trafficDetail === "PASSABLE") {
+          capsuleClass = "doh-capsule-tag doh-capsule-green";
+          glyphIcon = "✅";
+          statusLabel = "ผ่านได้ปกติ";
+          zIndex = 200;
+        }
+
+        // Never guess a missing direction as two-way: unknown stays UNKNOWN (no side badge, no lateral offset by direction).
+        const dirCode = meta?.directionCode || (flood.road_side === "LEFT" ? "A_TO_B" : flood.road_side === "RIGHT" ? "B_TO_A" : flood.road_side === "BOTH" ? "BOTH" : "UNKNOWN");
         const sideBadge = dirCode === "A_TO_B"
           ? " [ขาไป]"
           : dirCode === "B_TO_A"
-          ? " [ขากลับ]"
-          : flood.road_side === "LEFT"
-          ? " [ซ้าย]"
-          : flood.road_side === "RIGHT"
-          ? " [ขวา]"
-          : "";
+            ? " [ขากลับ]"
+            : flood.road_side === "LEFT"
+              ? " [ซ้าย]"
+              : flood.road_side === "RIGHT"
+                ? " [ขวา]"
+                : "";
 
         return {
           flood,
@@ -1261,22 +1258,17 @@ export function LongdoGisMap({
           lon,
           dirCode,
           zIndex,
-          capsuleClass: `doh-capsule-tag ${unified.capsuleClass}`,
-          glyphIcon: unified.icon,
-          statusLabel: unified.label,
+          capsuleClass,
+          glyphIcon,
+          statusLabel,
           sideBadge,
           levelText,
         };
       });
 
-      // Cluster candidates within proximity to prevent stacking
+      // Cluster candidates within proximity (< ~35m or 0.00035 deg) to prevent stacking
       const clusters: MarkerCandidate[][] = [];
       const assigned = new Set<number>();
-
-      // ปรับระยะห่างในการจัดกลุ่มตามระดับ Zoom
-      const zoomFactor = Math.pow(2, Math.max(0, 14 - currentZoom));
-      const clusterThresholdLat = Math.min(0.003, 0.00035 * zoomFactor);
-      const clusterThresholdLon = Math.min(0.0035, 0.00045 * zoomFactor);
 
       for (let i = 0; i < candidates.length; i++) {
         if (assigned.has(i)) continue;
@@ -1290,7 +1282,7 @@ export function LongdoGisMap({
           const distLat = Math.abs(c1.lat - c2.lat);
           const distLon = Math.abs(c1.lon - c2.lon);
           const isSameEvent = Boolean(c1.flood.direction_meta?.eventId && c1.flood.direction_meta.eventId === c2.flood.direction_meta?.eventId);
-          if ((distLat < clusterThresholdLat && distLon < clusterThresholdLon) || (isSameEvent && distLat < clusterThresholdLat * 1.5 && distLon < clusterThresholdLon * 1.5)) {
+          if ((distLat < 0.00035 && distLon < 0.00045) || (isSameEvent && distLat < 0.0008 && distLon < 0.0008)) {
             groupList.push(c2);
             assigned.add(j);
           }
@@ -1304,28 +1296,24 @@ export function LongdoGisMap({
           let renderLat = item.lat;
           let renderLon = item.lon;
 
-          // คำนวณ lateral offset โดยปรับ scale ตามระดับ zoom เพื่อป้องกันหมุดทับกันบนหน้าจอ
-          const offsetBaseLat = Math.min(0.0018, 0.00018 * Math.pow(2, Math.max(0, 14 - currentZoom) * 0.7));
-          const offsetBaseLon = Math.min(0.0015, 0.00012 * Math.pow(2, Math.max(0, 14 - currentZoom) * 0.7));
-
           if (count === 2) {
             // Smart lateral offset for dual carriageways (A->B vs B->A)
             if (item.dirCode === "A_TO_B") {
-              renderLat += offsetBaseLat;
-              renderLon -= offsetBaseLon;
+              renderLat += 0.00018;
+              renderLon -= 0.00012;
             } else if (item.dirCode === "B_TO_A") {
-              renderLat -= offsetBaseLat;
-              renderLon += offsetBaseLon;
+              renderLat -= 0.00018;
+              renderLon += 0.00012;
             } else {
-              renderLat += idx === 0 ? offsetBaseLat : -offsetBaseLat;
+              renderLat += idx === 0 ? 0.00018 : -0.00018;
             }
           } else if (count > 2) {
             const factor = idx - (count - 1) / 2;
-            renderLat += factor * (offsetBaseLat * 1.2);
-            renderLon += factor * offsetBaseLon;
+            renderLat += factor * 0.00022;
+            renderLon += factor * 0.00012;
           }
 
-          // 3-Tier Zoom Adaptive Markers
+          // 3-Tier Zoom Adaptive Markers (P6-03: Compact Flood Marker)
           let pinHtml = "";
           let pinSize: [number, number] = [130, 28];
           let pinAnchor: [number, number] = [65, 14];
@@ -1344,21 +1332,22 @@ export function LongdoGisMap({
             pinSize = [96, 28];
             pinAnchor = [48, 14];
             pinHtml = `
-              <div class="${item.capsuleClass} doh-capsule-zoom-mid">
+              <div class="${item.capsuleClass} doh-capsule-zoom-mid" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
                 <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${item.glyphIcon}</span>
                 <span>ทล.${escapeHtml(item.flood.route_no)}</span>
               </div>
             `;
           } else {
-            // ซูมใกล้: แสดงไอคอนสถานะ + หมายเลขทางหลวง (ฝั่ง) + ระดับน้ำ + สถานะสัญจร ตลอดเวลาโดยไม่ต้องรอ hover
-            pinSize = [230, 30];
-            pinAnchor = [115, 15];
+            // ซูมใกล้: ไอคอนสถานะ + ทล. + ระดับน้ำ (เช่น ⚠ ทล.4075 · 60 ซม.) — สีมาจากสถานะที่เจ้าหน้าที่บันทึก ไม่คำนวณจากระดับน้ำ
+            const isPending = item.statusLabel === "รอตรวจสอบสถานะ";
+            pinSize = [isPending ? 244 : 168, 28];
+            pinAnchor = [isPending ? 122 : 84, 14];
             pinHtml = `
-              <div class="${item.capsuleClass} doh-capsule-zoom-near">
+              <div class="${item.capsuleClass} doh-capsule-zoom-near" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
                 <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${item.glyphIcon}</span>
-                <span>ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)}</span>
-                <span class="opacity-90 font-mono text-[11px]">(${escapeHtml(item.levelText)})</span>
-                <span class="bg-black/25 px-1.5 py-0.5 rounded text-[10px] font-bold">${escapeHtml(item.statusLabel)}</span>
+                <span>ทล.${escapeHtml(item.flood.route_no)}</span>
+                <span class="opacity-95 font-mono text-[11px]">· ${escapeHtml(item.levelText)}</span>
+                ${isPending ? '<span class="bg-black/25 px-1.5 py-0.5 rounded text-[10px] font-bold">รอตรวจสอบ</span>' : ""}
               </div>
             `;
           }
@@ -1375,10 +1364,7 @@ export function LongdoGisMap({
             zIndexOffset: item.zIndex,
           }).addTo(group);
 
-          marker.bindPopup(() => buildFloodPopupHtml(item.flood, updatesByFlood[item.flood.id] || []), {
-            maxWidth: 360,
-            minWidth: 280,
-          });
+          marker.bindPopup(() => buildFloodPopupHtml(item.flood, updatesByFlood[item.flood.id] || []), { maxWidth: 280 });
           marker.on("click", (e: any) => {
             L.DomEvent.stopPropagation(e);
             onSelectFloodRef.current(item.flood.id);
@@ -1636,7 +1622,7 @@ export function LongdoGisMap({
       const showDetourArrows = detourStyle?.showArrows ?? true;
       const detourMinZoom = detourStyle?.arrowMinZoom ?? 11;
       if (showDetourLayer && showDetourArrows && z >= detourMinZoom) {
-        const dArrowColor = resolveVisibleArrowColor(detourStyle?.color || "#FBC02D", detourStyle?.arrowColor);
+        const dArrowColor = detourStyle?.arrowColor || "#0f172a";
         const dArrowSize = detourStyle?.arrowSize || 12;
         const dArrowSpacing = detourStyle?.arrowSpacingPx || 120;
         const dBadgeBg = detourStyle?.color || "#FBC02D";
@@ -1644,8 +1630,7 @@ export function LongdoGisMap({
         (systemData.detourRoutes || []).forEach((detour) => {
           if (!detour.is_active) return;
           if (detour.detour_meta?.show_arrows === false) return;
-          if (!["TWO_WAY", "FORWARD_ONLY", "REVERSE_ONLY"].includes(String(detour.direction_mode || ""))) return;
-          const dirMode = detour.direction_mode;
+          const dirMode = detour.direction_mode || "TWO_WAY";
           const fwd = parseRouteCoordinates(detour.coordinates_json);
           const rev = parseRouteCoordinates(detour.reverse_coordinates_json);
 
@@ -1688,12 +1673,12 @@ export function LongdoGisMap({
               props.arrow_direction === "FORWARD" || props.traffic_direction === "ONE_WAY_FORWARD"
                 ? "FORWARD"
                 : props.arrow_direction === "REVERSE" || props.traffic_direction === "ONE_WAY_REVERSE"
-                ? "REVERSE"
-                : props.arrow_direction === "TWO_WAY" || props.carriageway_type === "SINGLE_CENTERLINE" || props.lanes?.includes("2") || props.lanes?.includes("๒")
-                ? "TWO_WAY"
-                : props.arrow_direction === "UNKNOWN"
-                ? "UNKNOWN"
-                : "UNKNOWN";
+                  ? "REVERSE"
+                  : props.arrow_direction === "TWO_WAY" || props.carriageway_type === "SINGLE_CENTERLINE" || props.lanes?.includes("2") || props.lanes?.includes("๒")
+                    ? "TWO_WAY"
+                    : props.arrow_direction === "UNKNOWN"
+                      ? "UNKNOWN"
+                      : "TWO_WAY";
 
             if (props.show_arrows === false || dirMeta === "UNKNOWN") return;
             const geom = feature?.geometry;
@@ -1701,9 +1686,9 @@ export function LongdoGisMap({
               geom?.type === "LineString"
                 ? [geom.coordinates]
                 : geom?.type === "MultiLineString"
-                ? geom.coordinates
-                : [];
-            const arrowColor = resolveVisibleArrowColor(st?.color || "#334155", props.arrow_color || st?.arrowColor);
+                  ? geom.coordinates
+                  : [];
+            const arrowColor = props.arrow_color || st?.arrowColor || "#ffffff";
             const arrowSize = Number(props.arrow_size || st?.arrowSize || (featureIsMain ? 11 : 10));
             const arrowSpacing = Number(props.arrow_spacing_px || st?.arrowSpacingPx || (featureIsMain ? 160 : 180));
 
@@ -1932,35 +1917,35 @@ export function LongdoGisMap({
 
           <div className="space-y-1.5">
             <div tabIndex={0} aria-label="แสดงรายการทางหลวงสายหลัก" onFocus={() => setLegendRouteList("MAIN_HIGHWAY")} onBlur={() => setLegendRouteList(null)} onPointerEnter={(event) => { if (event.pointerType === "mouse") setLegendRouteList("MAIN_HIGHWAY"); }} onPointerLeave={(event) => { if (event.pointerType === "mouse") setLegendRouteList(null); }}>
-            <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
-              <span className="flex items-center gap-2">
-                <span className="w-5 h-2 inline-block rounded" style={{ backgroundColor: mapStyles.primary?.color, border: mapStyles.primary?.borderActive ? `1px solid ${mapStyles.primary?.borderColor || "#fff"}` : "none" }} />
-                <span>ทางหลวงสายหลัก</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={showMainHwy}
-                onChange={(e) => setShowMainHwy(e.target.checked)}
-                className="accent-emerald-500 rounded"
-              />
-            </label>
-            {legendRouteList === "MAIN_HIGHWAY" && <div role="tooltip" className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white shadow-xl">{legendRoutes("MAIN_HIGHWAY").length ? legendRoutes("MAIN_HIGHWAY").map((route) => <div key={`${route.code}-${route.name}`} className="border-b border-slate-800 py-1 last:border-0"><strong className="text-emerald-300">ทล.{route.code}</strong> — {route.name}</div>) : "ไม่มีสายทางที่แสดง"}</div>}
+              <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-1.5 inline-block rounded" style={{ backgroundColor: mapStyles.primary?.color }} />
+                  <span>ทางหลวงสายหลัก</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={showMainHwy}
+                  onChange={(e) => setShowMainHwy(e.target.checked)}
+                  className="accent-emerald-500 rounded"
+                />
+              </label>
+              {legendRouteList === "MAIN_HIGHWAY" && <div role="tooltip" className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white shadow-xl">{legendRoutes("MAIN_HIGHWAY").length ? legendRoutes("MAIN_HIGHWAY").map((route) => <div key={`${route.code}-${route.name}`} className="border-b border-slate-800 py-1 last:border-0"><strong className="text-emerald-300">ทล.{route.code}</strong> — {route.name}</div>) : "ไม่มีสายทางที่แสดง"}</div>}
             </div>
 
             <div tabIndex={0} aria-label="แสดงรายการทางหลวงสายรอง" onFocus={() => setLegendRouteList("SECOND_HIGHWAY")} onBlur={() => setLegendRouteList(null)} onPointerEnter={(event) => { if (event.pointerType === "mouse") setLegendRouteList("SECOND_HIGHWAY"); }} onPointerLeave={(event) => { if (event.pointerType === "mouse") setLegendRouteList(null); }}>
-            <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
-              <span className="flex items-center gap-2">
-                <span className="w-5 h-2 inline-block rounded" style={{ backgroundColor: mapStyles.secondary?.color, border: mapStyles.secondary?.borderActive ? `1px solid ${mapStyles.secondary?.borderColor || "#fff"}` : "none" }} />
-                <span>ทางหลวงสายรอง</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={showSecHwy}
-                onChange={(e) => setShowSecHwy(e.target.checked)}
-                className="accent-sky-400 rounded"
-              />
-            </label>
-            {legendRouteList === "SECOND_HIGHWAY" && <div role="tooltip" className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white shadow-xl">{legendRoutes("SECOND_HIGHWAY").length ? legendRoutes("SECOND_HIGHWAY").map((route) => <div key={`${route.code}-${route.name}`} className="border-b border-slate-800 py-1 last:border-0"><strong className="text-sky-300">ทล.{route.code}</strong> — {route.name}</div>) : "ไม่มีสายทางที่แสดง"}</div>}
+              <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-1.5 inline-block rounded" style={{ backgroundColor: mapStyles.secondary?.color }} />
+                  <span>ทางหลวงสายรอง</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={showSecHwy}
+                  onChange={(e) => setShowSecHwy(e.target.checked)}
+                  className="accent-sky-400 rounded"
+                />
+              </label>
+              {legendRouteList === "SECOND_HIGHWAY" && <div role="tooltip" className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-white shadow-xl">{legendRoutes("SECOND_HIGHWAY").length ? legendRoutes("SECOND_HIGHWAY").map((route) => <div key={`${route.code}-${route.name}`} className="border-b border-slate-800 py-1 last:border-0"><strong className="text-sky-300">ทล.{route.code}</strong> — {route.name}</div>) : "ไม่มีสายทางที่แสดง"}</div>}
             </div>
 
             {showSecHwy && (
@@ -1981,7 +1966,7 @@ export function LongdoGisMap({
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-sky-100 text-sky-700"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/></svg></span>
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-sky-100 text-sky-700"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /></svg></span>
                 <span>เส้นน้ำท่วม <span className="ml-1 rounded-full bg-red-950 px-1.5 py-0.5 text-[10px] text-red-300">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => isFloodLineVisibleOnCurrentMap(item)).length : 0}</span></span>
               </span>
               <input
@@ -1999,22 +1984,20 @@ export function LongdoGisMap({
                   <button
                     type="button"
                     onClick={() => setFloodDisplayMode("SEGMENTS")}
-                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${
-                      floodDisplayMode === "SEGMENTS"
-                        ? "bg-amber-500 text-slate-950 font-bold"
-                        : "text-slate-400 hover:text-white"
-                    }`}
+                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${floodDisplayMode === "SEGMENTS"
+                      ? "bg-amber-500 text-slate-950 font-bold"
+                      : "text-slate-400 hover:text-white"
+                      }`}
                   >
                     แยกช่วง
                   </button>
                   <button
                     type="button"
                     onClick={() => setFloodDisplayMode("EVENTS")}
-                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${
-                      floodDisplayMode === "EVENTS"
-                        ? "bg-amber-500 text-slate-950 font-bold"
-                        : "text-slate-400 hover:text-white"
-                    }`}
+                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${floodDisplayMode === "EVENTS"
+                      ? "bg-amber-500 text-slate-950 font-bold"
+                      : "text-slate-400 hover:text-white"
+                      }`}
                   >
                     รวมเหตุการณ์
                   </button>
@@ -2024,7 +2007,7 @@ export function LongdoGisMap({
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md" style={{ backgroundColor: mapStyles.detour?.color || "#FBC02D", color: resolveVisibleArrowColor(mapStyles.detour?.color || "#FBC02D", mapStyles.detour?.arrowColor) }}><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9"/><path d="m15 2 3 3-3 3"/><path d="M9 19h10"/></svg></span>
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-amber-400 text-slate-950"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9" /><path d="m15 2 3 3-3 3" /><path d="M9 19h10" /></svg></span>
                 <span>ทางเลี่ยง <span className="ml-1 rounded-full bg-amber-950 px-1.5 py-0.5 text-[10px] text-amber-300">{showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
               </span>
               <input
@@ -2049,7 +2032,7 @@ export function LongdoGisMap({
             </label>
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
-                <span className="flex h-6 min-w-6 items-center justify-center rounded-b-lg rounded-t-sm border-2 border-slate-800 bg-white px-1 text-[9px] font-black text-slate-900">ทล.42</span>
+                <span className="flex h-4 min-w-5 items-center justify-center rounded-sm border border-slate-800 bg-white px-0.5 text-[8px] font-bold text-slate-900">42</span>
                 <span>หมายเลขทางหลวง</span>
               </span>
               <input type="checkbox" checked={showHighwayShields} onChange={(e) => setShowHighwayShields(e.target.checked)} className="accent-slate-400 rounded" />
@@ -2061,27 +2044,24 @@ export function LongdoGisMap({
             <button
               type="button"
               onClick={() => switchBaseMap("longdo")}
-              className={`py-1 rounded-lg transition text-center px-1 truncate ${
-                activeBaseMap === "longdo" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
-              }`}
+              className={`py-1 rounded-lg transition text-center px-1 truncate ${activeBaseMap === "longdo" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
+                }`}
             >
               Longdo
             </button>
             <button
               type="button"
               onClick={() => switchBaseMap("road")}
-              className={`py-1 rounded-lg transition text-center px-1 truncate ${
-                activeBaseMap === "road" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
-              }`}
+              className={`py-1 rounded-lg transition text-center px-1 truncate ${activeBaseMap === "road" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
+                }`}
             >
               ถนน OSM
             </button>
             <button
               type="button"
               onClick={() => switchBaseMap("sat")}
-              className={`py-1 rounded-lg transition text-center px-1 truncate ${
-                activeBaseMap === "sat" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
-              }`}
+              className={`py-1 rounded-lg transition text-center px-1 truncate ${activeBaseMap === "sat" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
+                }`}
             >
               ดาวเทียม
             </button>

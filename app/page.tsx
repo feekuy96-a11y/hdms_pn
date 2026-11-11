@@ -61,6 +61,13 @@ import {
 } from "lucide-react";
 import { extractDirectionalAdvice, splitDetourAdviceByDirection } from "@/lib/gis-utils";
 import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
+import {
+  detourDirectionBadge,
+  detourDistanceMeters,
+  isDetourDirectionAllowed,
+  isRecordedDetourDirection,
+  parseDetourAdvice,
+} from "@/lib/detour-presentation";
 import { parseFloodDirectionMeta, resolveEffectiveRoadSide, AFFECTED_ROAD_PART_LABELS } from "@/lib/flood-event-schema";
 import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
@@ -132,29 +139,8 @@ function SituationSummary({ counts }: { counts: Record<StatusColor, number> }) {
   );
 }
 
-// Presentation helpers shared by the route list and the citizen detour details.
-// Unknown legacy direction must never be represented as a confirmed two-way detour.
-function detourDirectionBadge(mode: DetourRoute["direction_mode"]) {
-  if (mode === "FORWARD_ONLY") return "A → B";
-  if (mode === "REVERSE_ONLY") return "B → A";
-  if (mode === "TWO_WAY") return "A ⇄ B";
-  return "รอตรวจสอบทิศทาง";
-}
-
-function parseDetourAdvice(rawAdvice: string): { steps: string[]; notes: string[] } {
-  const advice = rawAdvice.trim();
-  if (!advice) return { steps: [], notes: [] };
-  const normalized = advice
-    .replace(/\s+(?=\d+[.)]\s)/g, "\n")
-    .replace(/\s+(?=[-•]\s)/g, "\n");
-  const steps: string[] = [];
-  const notes: string[] = [];
-  for (const entry of normalized.split(/\n+/).map((line) => line.trim()).filter(Boolean)) {
-    if (/^[-•–]\s*/.test(entry)) notes.push(entry.replace(/^[-•–]\s*/, ""));
-    else steps.push(entry.replace(/^\d+[.)]\s*/, ""));
-  }
-  return { steps, notes };
-}
+// Direction badge / advice parsing / distance live in lib/detour-presentation.ts and are shared
+// with the map popup. Unknown legacy direction must never be shown as a confirmed two-way detour.
 
 function highwayIdsInDetour(route: DetourRoute, floods: FloodRoute[]): string[] {
   const ids = new Set<string>();
@@ -1467,13 +1453,13 @@ export default function HomePage() {
                     <h4 className="text-sm font-heading font-bold text-slate-100">เลือกทิศทางการเดินทาง</h4>
                     <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-slate-700 bg-slate-950 p-1 text-xs font-heading font-bold">
                       {([
-                        { direction: "FORWARD", label: "ขาไป A → B", blocked: viewingDetourModal.direction_mode === "REVERSE_ONLY" },
-                        { direction: "REVERSE", label: "ขากลับ B → A", blocked: viewingDetourModal.direction_mode === "FORWARD_ONLY" },
+                        { direction: "FORWARD", label: "ขาไป A → B" },
+                        { direction: "REVERSE", label: "ขากลับ B → A" },
                       ] as const).map((item) => (
                         <button
                           key={item.direction}
                           type="button"
-                          disabled={item.blocked || !["FORWARD_ONLY", "REVERSE_ONLY", "TWO_WAY"].includes(String(viewingDetourModal.direction_mode || ""))}
+                          disabled={!isDetourDirectionAllowed(viewingDetourModal.direction_mode, item.direction)}
                           aria-pressed={modalDetourDirection === item.direction}
                           onClick={() => setModalDetourDirection(item.direction)}
                           className={`min-h-11 rounded-lg px-2 py-2 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 disabled:cursor-not-allowed disabled:opacity-40 ${
@@ -1484,7 +1470,7 @@ export default function HomePage() {
                         </button>
                       ))}
                     </div>
-                    {!["FORWARD_ONLY", "REVERSE_ONLY", "TWO_WAY"].includes(String(viewingDetourModal.direction_mode || "")) && (
+                    {!isRecordedDetourDirection(viewingDetourModal.direction_mode) && (
                       <p className="text-xs text-amber-200" role="status">ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>
                     )}
                   </section>
@@ -1521,10 +1507,8 @@ export default function HomePage() {
                       );
                     })()}
                     {(() => {
-                      const meters = modalDetourDirection === "FORWARD"
-                        ? viewingDetourModal.detour_meta?.forward_distance_m ?? (viewingDetourModal.detour_meta?.forward_distance_km != null ? viewingDetourModal.detour_meta.forward_distance_km * 1000 : undefined)
-                        : viewingDetourModal.detour_meta?.reverse_distance_m ?? (viewingDetourModal.detour_meta?.reverse_distance_km != null ? viewingDetourModal.detour_meta.reverse_distance_km * 1000 : undefined);
-                      return typeof meters === "number" && Number.isFinite(meters) && meters > 0 ? (
+                      const meters = detourDistanceMeters(viewingDetourModal.detour_meta, modalDetourDirection);
+                      return meters !== null ? (
                         <p className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-xs text-slate-200">ระยะทางตามข้อมูลที่บันทึก: <strong>{(meters / 1000).toLocaleString("th-TH", { maximumFractionDigits: 1 })} กม.</strong></p>
                       ) : null;
                     })()}

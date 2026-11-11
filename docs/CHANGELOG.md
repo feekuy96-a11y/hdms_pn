@@ -339,3 +339,19 @@
   - `npm run typecheck` (`tsc --noEmit`): ผ่าน 0 errors
   - `cmd /c "set NEXT_OUTPUT=export && npx next build"`: ผ่าน 100% สร้าง Static Pages 6/6 หน้าสมบูรณ์
 - **ลำดับ deploy:** เว็บไซต์ (GitHub Pages) ขั้นเดียว ไม่กระทบ Database หรือ Edge Function
+
+### [UPDATE-070] 2026-11-11 Phase 6 Completion & Integration Audit (P6-01 ถึง P6-08)
+- **ไฟล์:**
+  - `lib/detour-presentation.ts` (ใหม่): Shared presentation logic สำหรับทางเลี่ยงระหว่าง Leaflet Map Popup และ Citizen Bottom Sheet (`detourDirectionBadge`, `parseDetourAdvice`, `isDetourDirectionAllowed`, `isRecordedDetourDirection`, `detourDistanceMeters`, `formatDetourDistanceKm`)
+  - `app/page.tsx`: ปรับใช้โมดูลกลาง `detour-presentation.ts`, ป้องกันปุ่มทิศทางด้วย `isDetourDirectionAllowed`
+  - `components/map/LongdoGisMap.tsx`: Popup ทางเลี่ยง HTML แสดงขั้นตอน numbered steps และหมายเหตุด้วย logic เดียวกัน, ป้ายทางเลี่ยงยาวขึ้นบรรทัดใหม่ได้ (`break-words [overflow-wrap:anywhere]`), ปรับ Compact Flood Marker 3 ระดับตามซูม (ไกล: ไอคอน 28px, กลาง: ไอคอน+ทล. 96px, ใกล้: ไอคอน+ทล.+ระดับน้ำ 168/244px เช่น `⚠ ทล.4075 · 60 ซม.`), คืนค่า `vertexEditCoordinates` และ `activeDirMap`
+  - `components/admin/tabs/DetourManagementTab.tsx`: เพิ่ม `<span title="เส้นทางเลี่ยง">` ใน Card View สำหรับคอนเทนเนอร์ขนาด <=900px เพื่อความสอดคล้องกับตารางและผ่านการตรวจของ e2e
+  - `components/admin/tabs/MapManagementTab.tsx`: การ hydrate ข้อมูลคงค่า `directionCode` จริง ไม่ default เป็น BOTH
+  - `lib/flood-event-schema.ts`: `resolveEffectiveRoadSide` คงค่า `UNKNOWN` ไม่เดาฝั่งถนนจากทิศทางจราจร, `generateNextEventCode` ป้องกัน ID ชนกันด้วยการหา `max(numeric_suffix) + 1`
+  - `supabase/functions/hdms-api/index.ts`: ฝั่ง Edge Function ไม่แปลง `UNKNOWN` หรือค่าว่างเป็น `"BOTH"` โดยพลการ
+- **ตรวจแล้ว:**
+  - `npm run lint` (`--max-warnings=0`): ผ่าน 0 errors, 0 warnings
+  - `npm run typecheck` (`tsc --noEmit`): ผ่าน 0 errors
+  - `NEXT_OUTPUT=export next build`: ผ่าน 100% สร้าง Static Pages 6/6 หน้าสมบูรณ์
+  - `npx playwright test --workers=2`: ผ่านครบ 46 passed, 14 skipped (admin tests on mobile viewports skipped per design), 0 failed
+- **ลำดับ deploy:** Edge Function (`hdms-api`) → เว็บไซต์ (GitHub Pages) (ไม่มี migration SQL ใหม่)

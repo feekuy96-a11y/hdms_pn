@@ -341,33 +341,36 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
 }
 
 /**
- * ดึงสถานะฝั่งถนนจริง (Effective Road Side) โดยค้นหาทั้งในฟิลด์หลัก road_side และ direction_meta
+ * ดึงฝั่งถนนที่ "บันทึกไว้จริง" จาก road_side หรือ direction_meta.roadSide เท่านั้น
+ * ห้ามเดาจาก directionCode หรือ affectedParts (ไหล่ทางไม่ใช่ฝั่งถนน) — ข้อมูลเก่าที่เป็น UNKNOWN ต้องคงเป็น UNKNOWN
+ * เพื่อให้หน้าจอแสดง "ต้องตรวจสอบ" และผู้ใช้เลือกใหม่เอง (P6-04)
  */
 export function resolveEffectiveRoadSide(flood: any): "LEFT" | "RIGHT" | "BOTH" | "UNKNOWN" {
   if (!flood) return "UNKNOWN";
-  if (flood.road_side && flood.road_side !== "UNKNOWN") return flood.road_side;
+  const valid = (value: unknown): value is "LEFT" | "RIGHT" | "BOTH" =>
+    value === "LEFT" || value === "RIGHT" || value === "BOTH";
+  if (valid(flood.road_side)) return flood.road_side;
   const meta = flood.direction_meta;
-  if (meta && typeof meta === "object") {
-    if (meta.roadSide && meta.roadSide !== "UNKNOWN") return meta.roadSide;
-    if (meta.directionCode === "A_TO_B") return "LEFT";
-    if (meta.directionCode === "B_TO_A") return "RIGHT";
-    if (meta.directionCode === "BOTH") return "BOTH";
-    if (Array.isArray(meta.affectedParts)) {
-      if (meta.affectedParts.some((p: string) => String(p).includes("LEFT"))) return "LEFT";
-      if (meta.affectedParts.some((p: string) => String(p).includes("RIGHT"))) return "RIGHT";
-    }
-  }
+  if (meta && typeof meta === "object" && valid(meta.roadSide)) return meta.roadSide;
   return "UNKNOWN";
 }
 
 /**
  * สร้างรหัสเหตุการณ์อัตโนมัติ (เช่น FL-42-01, FL-42-02)
+ * ใช้เลขสูงสุดที่มีอยู่จริงของสายทางนั้น + 1 (ไม่นับจำนวน จึงไม่ซ้ำแม้เคยลบรายการกลางคัน
+ * และ FL-42 ไม่ชนกับ FL-420)
  */
 export function generateNextEventCode(routeNo: string, events: ParentFloodEventGroup[]): string {
   const clean = String(routeNo || "").replace(/^ทล\.?/i, "").trim() || "42";
-  const matching = (events || []).filter((e) => e.routeNo === clean || e.eventCode.includes(`FL-${clean}`));
-  const nextNum = matching.length + 1;
-  return `FL-${clean}-${String(nextNum).padStart(2, "0")}`;
+  const prefix = `FL-${clean}-`;
+  let max = 0;
+  for (const event of events || []) {
+    const code = String(event.eventCode || "");
+    if (!code.startsWith(prefix)) continue;
+    const suffix = Number(code.slice(prefix.length));
+    if (Number.isInteger(suffix) && suffix > max) max = suffix;
+  }
+  return `${prefix}${String(max + 1).padStart(2, "0")}`;
 }
 
 /**

@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
         if (p.roadSide || p.affectedLanes || p.affectedShoulder || p.directionMeta) {
           const extFlood: Record<string, unknown> = { updated_at: now };
           const extTimeline: Record<string, unknown> = {};
-          if (p.roadSide) { extFlood.road_side = roadSide(p.roadSide); extTimeline.road_side = roadSide(p.roadSide); }
+          if (p.roadSide && roadSide(p.roadSide) !== "UNKNOWN") { extFlood.road_side = roadSide(p.roadSide); extTimeline.road_side = roadSide(p.roadSide); }
           if (typeof p.affectedLanes === "string") { extFlood.affected_lanes = p.affectedLanes; extTimeline.affected_lanes = p.affectedLanes; }
           if (p.affectedShoulder) { extFlood.affected_shoulder = shoulder(p.affectedShoulder); extTimeline.affected_shoulder = shoulder(p.affectedShoulder); }
           if (p.directionMeta && typeof p.directionMeta === "object") { extFlood.direction_meta = p.directionMeta; extTimeline.direction_meta = p.directionMeta; }
@@ -142,13 +142,9 @@ Deno.serve(async (req) => {
         const extRow: Record<string, unknown> = {};
         if (p.recordType === "FLOOD") {
           Object.assign(baseRow, { route_no: text(p.routeNo ?? existing.route_no, "Route"), section_name: text(p.sectionName ?? existing.section_name, "Section"), km_start: text(p.kmStart ?? existing.km_start, "Start KM"), km_end: text(p.kmEnd ?? existing.km_end, "End KM"), water_level_cm: number(p.waterLevelCm ?? existing.water_level_cm ?? 0, 0, 10000), traffic_status: traffic(p.trafficStatus ?? existing.traffic_status ?? "WARNING"), latest_photo_url: p.photoUrl ?? p.latestPhotoUrl ?? existing.latest_photo_url ?? "", district: p.district ?? existing.district ?? "", subdistrict: p.subdistrict ?? existing.subdistrict ?? "", detour_advice: p.detourAdvice ?? existing.detour_advice ?? "" });
-          const resolvedSide = roadSide(
-            p.roadSide ??
-            p.directionMeta?.roadSide ??
-            (p.directionMeta?.directionCode === "A_TO_B" ? "LEFT" : p.directionMeta?.directionCode === "B_TO_A" ? "RIGHT" : p.directionMeta?.directionCode === "BOTH" ? "BOTH" : undefined) ??
-            existing.road_side ??
-            "BOTH"
-          );
+          // Only an explicit value is stored. A missing value stays UNKNOWN so the UI asks for review;
+          // it is never guessed from direction/lanes and never defaulted to BOTH.
+          const resolvedSide = roadSide(p.roadSide ?? p.directionMeta?.roadSide ?? existing.road_side ?? "UNKNOWN");
           const metaObj = (p.directionMeta && typeof p.directionMeta === "object") ? { ...p.directionMeta, roadSide: resolvedSide } : (existing.direction_meta ?? {});
           Object.assign(extRow, { road_side: resolvedSide, affected_lanes: String(p.affectedLanes ?? existing.affected_lanes ?? ""), affected_shoulder: shoulder(p.affectedShoulder ?? existing.affected_shoulder ?? "NONE"), reporter_name: String(p.reporterName ?? existing.reporter_name ?? ""), direction_meta: metaObj });
         } else {

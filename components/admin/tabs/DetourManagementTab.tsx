@@ -478,6 +478,9 @@ export function DetourManagementTab({
                         }
                         className="h-4 w-4 accent-amber-500 rounded"
                       />
+                      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-slate-950" title="เส้นทางเลี่ยง">
+                        <Route className="h-4 w-4" />
+                      </span>
                       <span className="font-heading font-black text-sm text-white">{item.route_name}</span>
                     </div>
                     <button
