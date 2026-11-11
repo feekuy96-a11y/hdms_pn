@@ -197,12 +197,12 @@ test("incident and detour records use consistent symbols and detail controls", a
   await openMenu(page, "รายการเหตุการณ์");
   await expect(page.getByRole("heading", { name: "ทะเบียนเหตุการณ์น้ำท่วม" })).toBeVisible();
   const floodSymbol = page.locator('[title="จุดน้ำท่วม"]').first();
-  if (await floodSymbol.count()) await expect(floodSymbol).toBeVisible();
-  else await expect(page.getByText("ไม่พบรายการเหตุการณ์", { exact: false })).toBeVisible();
+  const emptyIncident = page.getByText("ไม่พบรายการเหตุการณ์", { exact: false });
+  await expect(floodSymbol.or(emptyIncident)).toBeVisible();
 
   await openMenu(page, "รายการทางเลี่ยง");
   const detourSymbol = page.locator('[title="เส้นทางเลี่ยง"]').first();
-  if (await detourSymbol.count()) await expect(detourSymbol).toBeVisible();
-  else await expect(page.getByText("ไม่พบรายการเส้นทางเลี่ยง", { exact: false })).toBeVisible();
+  const emptyDetour = page.getByText("ไม่พบรายการเส้นทางเลี่ยง", { exact: false });
+  await expect(detourSymbol.or(emptyDetour)).toBeVisible();
   await expect(page.getByRole("button", { name: /วาดทางเลี่ยงใหม่/ })).toBeVisible();
 });
