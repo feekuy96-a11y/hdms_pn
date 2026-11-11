@@ -860,7 +860,7 @@ export default function HomePage() {
                     {(sidebarTab === "ALL" || sidebarTab === "DETOUR") && detourList}
                     {((sidebarTab === "FLOOD" && filteredFloods.length === 0) || (sidebarTab === "DETOUR" && filteredDetours.length === 0) || (sidebarTab === "ALL" && filteredDetours.length + filteredFloods.length === 0)) && (
                       <div className="rounded-xl border border-slate-700 p-4 text-sm text-slate-300">
-                        <p>{sidebarTab === "DETOUR" ? "ไม่พบเส้นทางเลี่ยงที่ตรงกับคำค้นหา" : systemData.floodRoutes.length === 0 && sidebarTab !== "DETOUR" ? "ยังไม่มีรายงานจุดน้ำท่วม" : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p>
+                        <p>{sidebarTab === "DETOUR" ? "ไม่พบเส้นทางเลี่ยงที่ตรงกับคำค้นหา" : systemData.floodRoutes.length === 0 ? "ยังไม่มีรายงานจุดน้ำท่วม" : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p>
                         <button type="button" className="mt-2 min-h-11 font-bold text-amber-300" onClick={() => { setSearchQuery(""); setSelectedRouteFilter("ALL"); }}>ล้างตัวกรอง</button>
                       </div>
                     )}
