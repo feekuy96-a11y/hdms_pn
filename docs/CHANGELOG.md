@@ -324,3 +324,18 @@
 - **ตรวจแล้ว:** Syntax/JSX ผ่าน TypeScript transpile diagnostics; ตรวจ ZIP CRC; เพิ่ม Playwright test สำหรับการกรอง/เปิด/ปิด/ย้อนกลับ/ทิศทางเดียว.
 - **ยังไม่ได้ตรวจ:** lint, typecheck, build:pages, Playwright E2E, การแสดงบน Chrome มือถือจริง (npm ci ล้มเหลวจาก EAI_AGAIN ระหว่างดึง dependency), การเขียนข้อมูลกับ Supabase (ไม่อยู่ในขอบเขต UI นี้).
 - **สถานะ:** Patch สำหรับ Staging เท่านั้น; B-001, B-014, B-015 ยังคงเปิดอยู่.
+
+### [UPDATE-069] 2026-11-11 แก้ไข TypeScript Type Error ใน app/page.tsx และ Playwright E2E Test Selectors เพื่อให้ CI เขียว
+- **ไฟล์:** `app/page.tsx`, `tests/e2e/admin-menus.spec.ts`, `tests/e2e/public-route-sheet.spec.ts`, `docs/CHANGELOG.md`
+- **ปัญหาที่พบ:**
+  1. `app/page.tsx` มี TypeScript error TS2367 เนื่องจากเปรียบเทียบ `sidebarTab !== "DETOUR"` ในกิ่งที่ `sidebarTab` ไม่มีทางเป็น `"DETOUR"` ส่งผลให้ `npm run typecheck` ล้มเหลวและบล็อก GitHub Actions Deploy/CI ทั้งหมด (แก้ไปใน commit 79403c5 แล้ว)
+  2. `tests/e2e/admin-menus.spec.ts`: ในการตรวจ landmark ของ "โครงข่ายสายทาง" Playwright `.first()` ไปเลือก `<span>โครงข่ายสายทาง</span>` ใน `div.lg:hidden` (แถบเมนูมือถือที่ซ่อนบน desktop) ทำให้ assertion `.toBeVisible()` ล้มเหลว
+  3. `tests/e2e/public-route-sheet.spec.ts`: การเรียก `list.getByLabel("สายทาง")` เกิด Playwright strict mode violation เนื่องจากชน 2 องค์ประกอบ (ปุ่ม `aria-label="ปิดรายการสายทาง"` และ `<select id="citizen-highway-filter">`)
+- **การแก้ไข:**
+  1. ใน `tests/e2e/admin-menus.spec.ts`: จำกัดขอบเขตการตรวจ landmark ให้อยู่ภายใน `.doh-form` (พื้นที่แสดงเนื้อหาของแท็บจริง)
+  2. ใน `tests/e2e/public-route-sheet.spec.ts`: ระบุ `{ exact: true }` ให้กับ `getByLabel("สายทาง", { exact: true })` เพื่อเลือก `<select>` อย่างแม่นยำ ไม่ชนกับปุ่มปิด
+- **ตรวจแล้ว:**
+  - `npm run lint` (`--max-warnings=0`): ผ่าน 0 errors, 0 warnings
+  - `npm run typecheck` (`tsc --noEmit`): ผ่าน 0 errors
+  - `cmd /c "set NEXT_OUTPUT=export && npx next build"`: ผ่าน 100% สร้าง Static Pages 6/6 หน้าสมบูรณ์
+- **ลำดับ deploy:** เว็บไซต์ (GitHub Pages) ขั้นเดียว ไม่กระทบ Database หรือ Edge Function

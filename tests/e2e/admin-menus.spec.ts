@@ -21,7 +21,7 @@ test("admin menus open real workspaces without UI errors", async ({ page }) => {
 
   for (const [menu, landmark] of menus) {
     await openMenu(page, menu);
-    await expect(page.getByText(landmark, { exact: false }).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".doh-form").getByText(landmark, { exact: false }).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("body")).not.toContainText("Application error");
     await expect(page.locator("body")).not.toContainText("Unhandled Runtime Error");
   }

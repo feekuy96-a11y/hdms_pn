@@ -37,7 +37,7 @@ test("citizen route sheet filters floods and detours and returns from details wi
   const list = page.getByRole("dialog", { name: "รายการสายทางและจุดเฝ้าระวัง" });
   await expect(list).toBeVisible();
   await expect(list.getByRole("heading", { name: "สถานการณ์ทางหลวง" })).toBeVisible();
-  await list.getByLabel("สายทาง").selectOption("42");
+  await list.getByLabel("สายทาง", { exact: true }).selectOption("42");
   await list.getByRole("button", { name: /ทางเลี่ยง \(1\)/ }).click();
   const detour = list.getByRole("button", { name: /ชื่อเส้นทางยาวที่ต้องขึ้นบรรทัดใหม่/ });
   await expect(detour).toBeVisible();
@@ -52,7 +52,7 @@ test("citizen route sheet filters floods and detours and returns from details wi
   await detail.getByRole("button", { name: "ปิดหน้าต่างคำแนะนำทางเลี่ยง" }).click();
   await expect(detail).toHaveCount(0);
   await expect(list).toBeVisible();
-  await expect(list.getByLabel("สายทาง")).toHaveValue("42");
+  await expect(list.getByLabel("สายทาง", { exact: true })).toHaveValue("42");
   await list.getByRole("button", { name: "ปิดรายการสายทาง" }).click();
   await expect(list).toHaveCount(0);
 });
