@@ -54,6 +54,10 @@ import {
   CheckCircle2,
   ArrowRightLeft,
   Droplets,
+  MapPinned,
+  Route,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { extractDirectionalAdvice, splitDetourAdviceByDirection } from "@/lib/gis-utils";
 import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
@@ -128,66 +132,70 @@ function SituationSummary({ counts }: { counts: Record<StatusColor, number> }) {
   );
 }
 
+// Presentation helpers shared by the route list and the citizen detour details.
+// Unknown legacy direction must never be represented as a confirmed two-way detour.
+function detourDirectionBadge(mode: DetourRoute["direction_mode"]) {
+  if (mode === "FORWARD_ONLY") return "A → B";
+  if (mode === "REVERSE_ONLY") return "B → A";
+  if (mode === "TWO_WAY") return "A ⇄ B";
+  return "รอตรวจสอบทิศทาง";
+}
+
+function parseDetourAdvice(rawAdvice: string): { steps: string[]; notes: string[] } {
+  const advice = rawAdvice.trim();
+  if (!advice) return { steps: [], notes: [] };
+  const normalized = advice
+    .replace(/\s+(?=\d+[.)]\s)/g, "\n")
+    .replace(/\s+(?=[-•]\s)/g, "\n");
+  const steps: string[] = [];
+  const notes: string[] = [];
+  for (const entry of normalized.split(/\n+/).map((line) => line.trim()).filter(Boolean)) {
+    if (/^[-•–]\s*/.test(entry)) notes.push(entry.replace(/^[-•–]\s*/, ""));
+    else steps.push(entry.replace(/^\d+[.)]\s*/, ""));
+  }
+  return { steps, notes };
+}
+
+function highwayIdsInDetour(route: DetourRoute, floods: FloodRoute[]): string[] {
+  const ids = new Set<string>();
+  const matchingFlood = floods.find((flood) => flood.id === route.flood_id_ref);
+  if (matchingFlood?.route_no) ids.add(matchingFlood.route_no.replace(/^(?:ทล|ปน)\.?\s*/i, "").trim());
+  const names = `${route.route_name || ""} ${route.description || ""}`;
+  for (const match of names.matchAll(/(?:ทล|ปน)\.?\s*(\d{1,5})/gi)) ids.add(match[1]);
+  return [...ids];
+}
+
 // One card for the desktop sidebar and the mobile sheet (they used to be two diverging copies).
 function FloodCard({ flood, selected, onSelect }: { flood: FloodRoute; selected: boolean; onSelect: (flood: FloodRoute) => void }) {
   const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
-  const status = getTrafficPresentation(
-    flood.traffic_status as TrafficStatus,
-    flood.water_level_cm,
-    meta.trafficStatusDetail
-  );
-  const dirBadge = meta.directionCode === "A_TO_B"
-    ? "A → B (ตาม กม.)"
-    : meta.directionCode === "B_TO_A"
-    ? "B → A (ย้อน กม.)"
-    : meta.directionCode === "BOTH"
-    ? "A ⇄ B (๒ ฝั่ง)"
-    : "ไม่ระบุทิศทาง";
-  const photoCount = Array.isArray(meta.photos) && meta.photos.length > 0 ? meta.photos.length : (flood.latest_photo_url ? 1 : 0);
-
+  const status = getTrafficPresentation(flood.traffic_status as TrafficStatus, flood.water_level_cm, meta.trafficStatusDetail);
+  const direction = meta.directionCode === "A_TO_B" ? "A → B" : meta.directionCode === "B_TO_A" ? "B → A" : meta.directionCode === "BOTH" ? "A ⇄ B" : "ไม่ระบุทิศทาง";
   return (
     <button
       type="button"
       aria-pressed={selected}
       onClick={() => onSelect(flood)}
-      className={`relative block w-full overflow-hidden rounded-2xl border py-3 pl-4 pr-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400 ${
-        selected ? "border-amber-400/70 bg-slate-900 ring-1 ring-amber-400/60" : "border-slate-800 bg-[#0f1b33] hover:border-slate-600"
-      }`}
+      className={`relative block min-h-12 w-full overflow-hidden rounded-2xl border bg-[#101d33] px-3.5 py-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${selected ? "border-amber-400 ring-1 ring-amber-400/50" : "border-slate-700/90 hover:border-amber-400/70"}`}
     >
-      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: STATUS_BAR[status.color] }} />
-      <span className="flex items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-1.5 flex-wrap">
-          <span className="shrink-0 rounded-md bg-amber-400 px-2 py-0.5 font-heading text-xs font-black text-slate-950">ทล.{flood.route_no}</span>
-          <span className="truncate text-xs text-slate-300">กม.{flood.km_start} - {flood.km_end}</span>
-          {dirBadge && (
-            <span className="shrink-0 rounded bg-sky-950/80 border border-sky-800/80 px-1.5 py-0.2 text-[10px] font-bold text-sky-200">
-              {dirBadge}
-            </span>
-          )}
+      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: STATUS_BAR[status.color] }} />
+      <span className="flex flex-wrap items-start justify-between gap-2">
+        <span className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="rounded-md bg-amber-400 px-2 py-1 font-heading text-xs font-black text-slate-950">ทล.{flood.route_no}</span>
+          <span className="text-xs text-slate-300">กม.{flood.km_start} – {flood.km_end}</span>
         </span>
-        <span className={`shrink-0 rounded-full border px-2.5 py-1 font-heading text-xs font-bold ${STATUS_CHIP[status.color]}`}>
+        <span className={`rounded-lg border px-2 py-1 text-xs font-semibold ${STATUS_CHIP[status.color]}`}>
           {status.icon} {status.label}
         </span>
       </span>
-      <span className="mt-2 line-clamp-2 block font-heading text-sm font-bold leading-snug text-white">{flood.section_name}</span>
-      <span className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-300">
+      <span className="mt-2 block break-words font-heading text-sm font-bold leading-snug text-white">{flood.section_name}</span>
+      <span className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs text-slate-300">
         <span className="inline-flex items-center gap-1.5">
-          <Droplets aria-hidden="true" className="h-4 w-4 text-sky-300" />
-          ระดับน้ำ <strong className="font-mono text-sm text-white">{flood.water_level_cm}</strong> ซม.
-          {photoCount > 1 && (
-            <span className="ml-1 text-[10px] text-amber-300 font-mono font-bold">📷 {photoCount} รูป</span>
-          )}
+          <Droplets aria-hidden="true" className="h-4 w-4 text-sky-300" /> ระดับน้ำ
+          <strong className="text-sm text-white">{flood.water_level_cm} ซม.</strong>
+          <span className="rounded bg-sky-950/70 px-1.5 py-1 text-[11px] text-sky-200">{direction}</span>
         </span>
-        <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-amber-300">
-          รายละเอียด <ChevronRight aria-hidden="true" className="h-4 w-4" />
-        </span>
+        <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-amber-300">รายละเอียด <ChevronRight aria-hidden="true" className="h-4 w-4" /></span>
       </span>
-      {flood.detour_advice && (
-        <span className="mt-2 flex items-start gap-1.5 rounded-lg bg-slate-950/50 px-2 py-1.5 text-xs text-amber-100">
-          <Compass aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
-          <span className="line-clamp-2">ทางเลี่ยง: {flood.detour_advice}</span>
-        </span>
-      )}
     </button>
   );
 }
@@ -210,6 +218,8 @@ export default function HomePage() {
   const [viewingDetourModal, setViewingDetourModal] = useState<DetourRoute | null>(null);
   const [modalDetourDirection, setModalDetourDirection] = useState<"FORWARD" | "REVERSE">("FORWARD");
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
+  const [mobileDrawerStage, setMobileDrawerStage] = useState<"peek" | "list" | "full">("list");
+  const [returnToDetourList, setReturnToDetourList] = useState(false);
   const [isSummaryCardVisible, setIsSummaryCardVisible] = useState<boolean>(true);
 
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
@@ -252,6 +262,9 @@ export default function HomePage() {
       const detourId = e.detail;
       const found = systemData.detourRoutes.find((d) => d.id === detourId);
       if (found) {
+        setReturnToDetourList(false);
+        setIsMobileDrawerOpen(false);
+        setModalDetourDirection(found.direction_mode === "REVERSE_ONLY" ? "REVERSE" : "FORWARD");
         setViewingDetourModal(found);
       }
     };
@@ -310,43 +323,35 @@ export default function HomePage() {
     }
   }, [selectedFlood]);
 
-  // Dynamic route chips: ONLY active flood routes, sorted naturally by highway number
+  // One highway filter for floods and detours. Keep standalone detours visible with "ทั้งหมด".
   const routeChips = React.useMemo(() => {
-    const routeMap = new Map<string, string>();
-    (systemData.floodRoutes || []).forEach((r) => {
-      if (r.is_active && r.route_no) {
-        const cleanNo = r.route_no.replace(/^ทล\.?/i, "").trim();
-        const key = cleanNo || r.route_no;
-        if (!routeMap.has(key)) {
-          routeMap.set(key, `ทล.${key}`);
-        }
+    const labels = new Map<string, string>();
+    for (const flood of systemData.floodRoutes || []) {
+      if (!flood.is_active || !flood.route_no) continue;
+      const number = flood.route_no.replace(/^(?:ทล|ปน)\.?\s*/i, "").trim();
+      if (number) labels.set(number, /^(?:ปน)\.?/i.test(flood.route_no) ? `ปน.${number}` : `ทล.${number}`);
+    }
+    for (const detour of systemData.detourRoutes || []) {
+      if (!detour.is_active) continue;
+      for (const match of `${detour.route_name || ""} ${detour.description || ""}`.matchAll(/(ทล|ปน)\.?\s*(\d{1,5})/gi)) {
+        if (!labels.has(match[2])) labels.set(match[2], `${match[1]}.${match[2]}`);
       }
-    });
-
-    const dynamicList = Array.from(routeMap.entries())
-      .map(([id, label]) => ({ id, label }))
-      .sort((a, b) => {
-        const numA = parseInt(a.id, 10);
-        const numB = parseInt(b.id, 10);
-        if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
-          return numA - numB;
-        }
-        return a.id.localeCompare(b.id, "th", { numeric: true });
-      });
-
-    return [{ id: "ALL", label: "ทั้งหมด" }, ...dynamicList];
-  }, [systemData.floodRoutes]);
+    }
+    const sorted = [...labels.keys()].sort((a, b) => a.localeCompare(b, "th", { numeric: true }));
+    return [{ id: "ALL", label: "ทุกสายทาง" }, ...sorted.map((id) => ({ id, label: labels.get(id) || id }))];
+  }, [systemData.floodRoutes, systemData.detourRoutes]);
 
   // Filtered flood routes for citizens/users
   const filteredFloods = (systemData.floodRoutes || []).filter((r) => {
     if (!r.is_active) return false;
+    const normalizedQuery = searchQuery.trim().replace(/^(?:ทล|ปน)\.?\s*/i, "").toLocaleLowerCase();
     const matchSearch =
-      r.route_no.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      r.route_no.toLowerCase().includes(normalizedQuery) ||
       r.section_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (r.subdistrict && r.subdistrict.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (r.district && r.district.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const cleanNo = r.route_no.replace(/^ทล\.?/i, "").trim();
+    const cleanNo = r.route_no.replace(/^(?:ทล|ปน)\.?\s*/i, "").trim();
     const matchChip = selectedRouteFilter === "ALL" || cleanNo === selectedRouteFilter || r.route_no === selectedRouteFilter;
 
     return matchSearch && matchChip;
@@ -403,7 +408,14 @@ export default function HomePage() {
     }
   };
   const activeDetours = (systemData.detourRoutes || []).filter((route) => route.is_active);
-  const filteredDetours = activeDetours.filter((route) => `${route.route_name} ${route.description || ""}`.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase()));
+  const filteredDetours = activeDetours.filter((route) => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    const normalizedQuery = query.replace(/^(?:ทล|ปน)\.?\s*/i, "");
+    const matchesText = `${route.route_name} ${route.description || ""}`.toLocaleLowerCase().includes(query) ||
+      highwayIdsInDetour(route, systemData.floodRoutes || []).some((id) => id.includes(normalizedQuery));
+    const matchesHighway = selectedRouteFilter === "ALL" || highwayIdsInDetour(route, systemData.floodRoutes || []).includes(selectedRouteFilter);
+    return matchesText && matchesHighway;
+  });
   const selectedFloodDetours = selectedFlood
     ? activeDetours.filter(
         (route) =>
@@ -413,63 +425,56 @@ export default function HomePage() {
             route.detour_meta.eventId === selectedFloodMeta.eventId)
       )
     : [];
-  const detourList = filteredDetours.length > 0 && (
-    <section className="space-y-2.5 rounded-2xl border border-amber-500/40 bg-slate-900/90 p-3 shadow-lg" aria-label="รายการทางเลี่ยง">
-      <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
-        <h3 className="font-heading font-bold text-amber-300 text-xs sm:text-sm flex items-center gap-1.5">
-          <span>🔄 ทางเลี่ยง ({filteredDetours.length} เส้นทาง)</span>
-        </h3>
-        <span className="text-[10px] text-slate-400">แตะเพื่อดูคำแนะนำการเดินทาง</span>
-      </div>
-      <div className="space-y-2">
-        {filteredDetours.map((route) => {
-          const linkedFlood = route.flood_id_ref
-            ? systemData.floodRoutes.find((f) => f.id === route.flood_id_ref)
-            : null;
-          const dirLabel = route.direction_mode === "FORWARD_ONLY"
-            ? "ทางเดียว (A → B)"
-            : route.direction_mode === "REVERSE_ONLY"
-            ? "ทางเดียว (B → A)"
-            : "ไป-กลับ ๒ ทิศทาง (A ⇄ B)";
+  const closeDetourDetails = () => {
+    setViewingDetourModal(null);
+    if (returnToDetourList) {
+      setIsMobileDrawerOpen(true);
+      setSidebarTab("DETOUR");
+    }
+    setReturnToDetourList(false);
+  };
 
-          return (
-            <button
-              key={route.id}
-              type="button"
-              className="block min-h-11 w-full rounded-xl border border-slate-700/80 bg-slate-950/85 p-3 text-left text-sm text-white hover:bg-slate-800 hover:border-amber-400/70 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer shadow-sm group"
-              onClick={() => {
-                setViewingDetourModal(route);
-                const linkedMeta = linkedFlood ? parseFloodDirectionMeta(linkedFlood.direction_meta, linkedFlood) : null;
-                if (linkedMeta?.directionCode === "B_TO_A" || route.direction_mode === "REVERSE_ONLY") {
-                  setModalDetourDirection("REVERSE");
-                } else {
-                  setModalDetourDirection("FORWARD");
-                }
-                if (Number.isFinite(route.lon_start) && Number.isFinite(route.lat_start)) {
-                  setFocusCoordinates([route.lon_start, route.lat_start]);
-                }
-              }}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <strong className="text-white font-heading text-sm group-hover:text-amber-300 transition-colors">
-                  {route.route_name}
-                </strong>
-                <span className="rounded bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold text-amber-300 shrink-0">
-                  {dirLabel}
-                </span>
-              </div>
-              <div className="mt-2 pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                <span className="text-slate-400 text-[11px] truncate mr-2">
-                  {linkedFlood ? `ผูกจุดน้ำท่วม ทล.${linkedFlood.route_no}` : "ทางเลี่ยงอิสระ"}
-                </span>
-                <span className="text-amber-400 font-heading font-bold text-xs flex items-center gap-1 shrink-0 group-hover:underline">
-                  ดูคำแนะนำ →
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+  const detourList = filteredDetours.length > 0 && (
+    <section className="space-y-2" aria-label="รายการทางเลี่ยง">
+      {sidebarTab === "ALL" && (
+        <h3 className="px-1 text-xs font-heading font-bold text-amber-300">ทางเลี่ยง ({filteredDetours.length} เส้นทาง)</h3>
+      )}
+      {filteredDetours.map((route) => {
+        const linkedFlood = route.flood_id_ref
+          ? systemData.floodRoutes.find((f) => f.id === route.flood_id_ref)
+          : null;
+        return (
+          <button
+            key={route.id}
+            type="button"
+            className="group block min-h-12 w-full rounded-2xl border border-slate-700/90 bg-[#101d33] px-3.5 py-3 text-left text-white transition hover:border-amber-400/70 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+            onClick={() => {
+              setReturnToDetourList(isMobileDrawerOpen);
+              setIsMobileDrawerOpen(false);
+              setViewingDetourModal(route);
+              const linkedMeta = linkedFlood ? parseFloodDirectionMeta(linkedFlood.direction_meta, linkedFlood) : null;
+              setModalDetourDirection(linkedMeta?.directionCode === "B_TO_A" || route.direction_mode === "REVERSE_ONLY" ? "REVERSE" : "FORWARD");
+            }}
+          >
+            <span className="flex min-w-0 items-start justify-between gap-2">
+              <strong className="min-w-0 flex-1 font-heading text-sm leading-snug font-bold break-words [overflow-wrap:anywhere] group-hover:text-amber-200">
+                {route.route_name}
+              </strong>
+              <span className="shrink-0 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-200">
+                {detourDirectionBadge(route.direction_mode)}
+              </span>
+            </span>
+            <span className="mt-2 flex items-center justify-between gap-2 text-xs">
+              <span className="min-w-0 text-slate-300 break-words">
+                {linkedFlood ? `เลี่ยงจุดน้ำท่วม ทล.${linkedFlood.route_no}` : "ทางเลี่ยงอิสระ"}
+              </span>
+              <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-amber-300">
+                ดูเส้นทาง <ChevronRight aria-hidden="true" className="h-4 w-4" />
+              </span>
+            </span>
+          </button>
+        );
+      })}
     </section>
   );
 
@@ -756,121 +761,112 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* 2. Slide-up Drawer on mobile */}
-          {isMobileDrawerOpen && (
-            <div className="lg:hidden fixed inset-0 z-[650] flex flex-col justify-end bg-black/60 backdrop-blur-sm animate-fade-in">
-              <div className="flex-1" onClick={() => setIsMobileDrawerOpen(false)} />
-              <div role="dialog" aria-modal="true" aria-label="รายการสายทางและจุดเฝ้าระวัง" className="bg-[#0c1527] border-t-2 border-amber-500 rounded-t-3xl max-h-[88dvh] flex flex-col shadow-2xl overflow-hidden">
-                <div className="p-3 bg-[#091122] border-b border-slate-800 space-y-2.5 shrink-0">
-                  <div className="w-12 h-1.5 bg-slate-600 rounded-full mx-auto mb-1" />
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse motion-reduce:animate-none" />
-                      <h2 className="font-heading font-bold text-sm text-white">
-                        จุดเฝ้าระวังและน้ำท่วมทางหลวง ({filteredFloods.length} จุด)
-                      </h2>
+          {/* Mobile citizen list: one sheet, three heights; never stack it behind detour details. */}
+          {isMobileDrawerOpen && !viewingDetourModal && (
+            <div className="lg:hidden fixed inset-0 z-[650] flex flex-col justify-end bg-slate-950/65" onClick={() => setIsMobileDrawerOpen(false)}>
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="รายการสายทางและจุดเฝ้าระวัง"
+                onClick={(event) => event.stopPropagation()}
+                className={`flex w-full flex-col overflow-hidden rounded-t-3xl border-t border-amber-500/60 bg-[#0c1527] text-slate-100 shadow-2xl transition-[height] duration-200 motion-reduce:transition-none ${
+                  mobileDrawerStage === "full" ? "h-[95dvh]" : mobileDrawerStage === "peek" ? "h-[235px]" : "h-[78dvh]"
+                }`}
+              >
+                <div className="shrink-0 border-b border-slate-800 bg-[#0c1527] px-3 pb-3 pt-2.5">
+                  <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-slate-600" aria-hidden="true" />
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 py-0.5">
+                      <h2 className="font-heading text-lg font-bold leading-snug text-white break-words [overflow-wrap:anywhere]">สถานการณ์ทางหลวง</h2>
+                      <p className="mt-0.5 text-xs text-slate-300">ข้อมูลน้ำท่วมและเส้นทางเลี่ยง</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsMobileDrawerOpen(false)}
-                      aria-label="ปิดรายการสายทาง"
-                      className="grid h-11 w-11 place-items-center rounded-lg bg-slate-800 text-slate-300 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setMobileDrawerStage((stage) => stage === "peek" ? "list" : stage === "list" ? "full" : "peek")}
+                        aria-label={mobileDrawerStage === "peek" ? "แสดงรายการ" : mobileDrawerStage === "list" ? "ขยายรายการเต็มจอ" : "ย่อรายการ"}
+                        className="grid h-11 w-11 place-items-center rounded-xl text-slate-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                      >
+                        {mobileDrawerStage === "full" ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsMobileDrawerOpen(false)}
+                        aria-label="ปิดรายการสายทาง"
+                        className="grid h-11 w-11 place-items-center rounded-xl bg-slate-800 text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
                   </div>
-
-                  <SituationSummary counts={situationCounts} />
-
-                  {/* View Switcher Sub-tabs: All / Floods / Detours */}
-                  <div className="grid grid-cols-3 gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs font-heading font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setSidebarTab("ALL")}
-                      className={`py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer ${
-                        sidebarTab === "ALL"
-                          ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                          : "text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <span>ทั้งหมด ({filteredFloods.length + filteredDetours.length})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSidebarTab("FLOOD")}
-                      className={`py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer ${
-                        sidebarTab === "FLOOD"
-                          ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                          : "text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <span>🌊 น้ำท่วม ({filteredFloods.length})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSidebarTab("DETOUR")}
-                      className={`py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer ${
-                        sidebarTab === "DETOUR"
-                          ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                          : "text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <span>🔄 ทางเลี่ยง ({filteredDetours.length})</span>
-                    </button>
+                  <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl border border-slate-700/80 bg-slate-900/90 p-1 text-xs font-heading font-bold" role="group" aria-label="ประเภทข้อมูล">
+                    {([
+                      { id: "ALL", label: "ทั้งหมด", count: filteredFloods.length + filteredDetours.length },
+                      { id: "FLOOD", label: "น้ำท่วม", count: filteredFloods.length },
+                      { id: "DETOUR", label: "ทางเลี่ยง", count: filteredDetours.length },
+                    ] as const).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        aria-pressed={sidebarTab === item.id}
+                        onClick={() => { setSidebarTab(item.id); setMobileDrawerStage((stage) => stage === "peek" ? "list" : stage); }}
+                        className={`min-h-11 rounded-lg px-1 py-1.5 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white ${sidebarTab === item.id ? "bg-amber-500 text-slate-950" : "text-slate-300 hover:bg-slate-800"}`}
+                      >
+                        {item.label} <span className="tabular-nums">({item.count})</span>
+                      </button>
+                    ))}
                   </div>
-
-                  <div className="relative">
-                    <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="ค้นหาสายทาง (ทล.43, ทล.42, ทล.418)..."
-                      aria-label="ค้นหาหมายเลขทางหลวงหรือพื้นที่"
-                      inputMode="search"
-                      className="min-h-11 w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-sm text-white placeholder-slate-400"
-                    />
-                  </div>
-
-                  {sidebarTab !== "DETOUR" && routeChips.length > 1 && (
-                    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px]">
-                      {routeChips.map((chip) => {
-                        const isActive = selectedRouteFilter === chip.id;
-                        return (
-                          <button
-                            key={chip.id}
-                            type="button"
-                            onClick={() => setSelectedRouteFilter(chip.id)}
-                            className={`min-h-11 px-3 py-1 rounded-lg font-heading font-bold whitespace-nowrap transition ${
-                              isActive
-                                ? "bg-amber-500 text-slate-950 shadow-md"
-                                : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
-                            }`}
-                          >
-                            {chip.label}
-                          </button>
-                        );
-                      })}
+                  {mobileDrawerStage !== "peek" && (
+                    <div className="mt-3 space-y-2">
+                      <div className="relative">
+                        <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="search"
+                          value={searchQuery}
+                          onChange={(event) => setSearchQuery(event.target.value)}
+                          placeholder="ค้นหาสายทางหรือชื่อพื้นที่..."
+                          aria-label="ค้นหาหมายเลขทางหลวงหรือพื้นที่"
+                          className="min-h-11 w-full rounded-xl border border-slate-700 bg-slate-900 pl-10 pr-3 text-sm text-white placeholder-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label htmlFor="citizen-highway-filter" className="shrink-0 text-xs font-semibold text-slate-300">สายทาง</label>
+                        <select
+                          id="citizen-highway-filter"
+                          value={selectedRouteFilter}
+                          onChange={(event) => setSelectedRouteFilter(event.target.value)}
+                          className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                        >
+                          {routeChips.map((chip) => <option key={chip.id} value={chip.id}>{chip.label}</option>)}
+                        </select>
+                        {(searchQuery || selectedRouteFilter !== "ALL") && (filteredFloods.length + filteredDetours.length > 0) && (
+                          <button type="button" onClick={() => { setSearchQuery(""); setSelectedRouteFilter("ALL"); }} className="min-h-11 shrink-0 rounded-lg px-2 text-xs font-bold text-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">ล้างตัวกรอง</button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
-
-                <div className="flex-1 overflow-y-auto overscroll-contain p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2.5">
-                  {(sidebarTab === "ALL" || sidebarTab === "DETOUR") && detourList}
-                  {(sidebarTab === "ALL" || sidebarTab === "FLOOD") && (
-                    <>
-                      {filteredFloods.length === 0 && <div className="rounded-xl border border-slate-700 p-4 text-slate-300 text-sm"><p>{systemData.floodRoutes.length === 0 ? "ยังไม่มีรายงานจุดน้ำท่วม" : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p><button type="button" className="mt-3 min-h-11 text-amber-300" onClick={() => { setSearchQuery(""); setSelectedRouteFilter("ALL"); }}>ล้างตัวกรอง</button></div>}
-                      {filteredFloods.map((flood) => (
-                        <FloodCard key={flood.id} flood={flood} selected={flood.id === selectedFloodId} onSelect={handleSelectFlood} />
-                      ))}
-                    </>
-                  )}
-                  {sidebarTab === "DETOUR" && filteredDetours.length === 0 && (
-                    <div className="rounded-xl border border-slate-700 p-4 text-slate-300 text-sm text-center">
-                      <p>ไม่พบเส้นทางเลี่ยงที่ตรงกับคำค้นหา</p>
-                    </div>
-                  )}
-                </div>
+                {mobileDrawerStage !== "peek" && (
+                  <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+                    <p className="text-xs text-slate-300" role="status">
+                      พบ {sidebarTab === "ALL" ? filteredFloods.length + filteredDetours.length : sidebarTab === "FLOOD" ? filteredFloods.length : filteredDetours.length} รายการ
+                    </p>
+                    {(sidebarTab === "ALL" || sidebarTab === "FLOOD") && (
+                      <section aria-label="รายการน้ำท่วม" className="space-y-2">
+                        {sidebarTab === "ALL" && filteredFloods.length > 0 && <h3 className="px-1 text-xs font-heading font-bold text-amber-300">น้ำท่วม ({filteredFloods.length} จุด)</h3>}
+                        {filteredFloods.map((flood) => <FloodCard key={flood.id} flood={flood} selected={flood.id === selectedFloodId} onSelect={handleSelectFlood} />)}
+                      </section>
+                    )}
+                    {(sidebarTab === "ALL" || sidebarTab === "DETOUR") && detourList}
+                    {((sidebarTab === "FLOOD" && filteredFloods.length === 0) || (sidebarTab === "DETOUR" && filteredDetours.length === 0) || (sidebarTab === "ALL" && filteredDetours.length + filteredFloods.length === 0)) && (
+                      <div className="rounded-xl border border-slate-700 p-4 text-sm text-slate-300">
+                        <p>{sidebarTab === "DETOUR" ? "ไม่พบเส้นทางเลี่ยงที่ตรงกับคำค้นหา" : systemData.floodRoutes.length === 0 && sidebarTab !== "DETOUR" ? "ยังไม่มีรายงานจุดน้ำท่วม" : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p>
+                        <button type="button" className="mt-2 min-h-11 font-bold text-amber-300" onClick={() => { setSearchQuery(""); setSelectedRouteFilter("ALL"); }}>ล้างตัวกรอง</button>
+                      </div>
+                    )}
+                    {isError && <button type="button" onClick={() => void refetch()} className="min-h-11 w-full rounded-lg border border-amber-500/50 p-2 text-sm text-amber-300">โหลดข้อมูลล่าสุดไม่สำเร็จ · ลองใหม่</button>}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1393,14 +1389,14 @@ export default function HomePage() {
             <div
               className="fixed inset-0 z-[700] flex items-end justify-center bg-slate-950/75 backdrop-blur-xs animate-fade-in sm:items-center sm:p-4"
               onClick={(e) => {
-                if (e.target === e.currentTarget) setViewingDetourModal(null);
+                if (e.target === e.currentTarget) closeDetourDetails();
               }}
             >
               <div
                 role="dialog"
                 aria-modal="true"
                 aria-label={`คำแนะนำเส้นทางเลี่ยง ${viewingDetourModal.route_name}`}
-                className="relative max-h-[92dvh] w-full overflow-y-auto overscroll-contain rounded-t-3xl border border-slate-700/80 bg-[#0c162c] text-slate-100 shadow-2xl sm:max-h-[88vh] sm:max-w-[560px] sm:rounded-3xl"
+                className="relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-amber-500/40 bg-[#0c162c] text-slate-100 shadow-2xl sm:max-h-[88vh] sm:max-w-[560px] sm:rounded-3xl"
               >
                 {/* Header */}
                 <div className="sticky top-0 z-20 border-b border-slate-800 bg-[#0c1a30] px-4 pb-3 pt-2 shadow-md">
@@ -1408,19 +1404,15 @@ export default function HomePage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="rounded bg-amber-500/20 border border-amber-500/40 px-2.5 py-0.5 text-xs font-bold text-amber-300 font-heading">
-                          {viewingDetourModal.direction_mode === "FORWARD_ONLY"
-                            ? "ทางเดียว (A → B)"
-                            : viewingDetourModal.direction_mode === "REVERSE_ONLY"
-                            ? "ทางเดียว (B → A)"
-                            : "ไป-กลับ ๒ ทิศทาง (A ⇄ B)"}
+                        <span className="rounded-md border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-200">
+                          {detourDirectionBadge(viewingDetourModal.direction_mode)}
                         </span>
                         {(() => {
                           const linked = viewingDetourModal.flood_id_ref
                             ? systemData.floodRoutes.find((f) => f.id === viewingDetourModal.flood_id_ref)
                             : null;
                           return linked ? (
-                            <span className="rounded bg-sky-950/80 border border-sky-700/70 px-2 py-0.5 text-[11px] text-sky-200">
+                            <span className="min-w-0 break-words rounded-md border border-sky-700/70 bg-sky-950/80 px-2 py-1 text-xs text-sky-200 [overflow-wrap:anywhere]">
                               เลี่ยงจุดน้ำท่วม ทล.{linked.route_no} ({linked.section_name})
                             </span>
                           ) : (
@@ -1430,14 +1422,14 @@ export default function HomePage() {
                           );
                         })()}
                       </div>
-                      <h3 className="font-heading text-base font-bold leading-snug text-white">
+                      <h3 className="break-words font-heading text-lg font-bold leading-snug text-white [overflow-wrap:anywhere]">
                         {viewingDetourModal.route_name}
                       </h3>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setViewingDetourModal(null)}
-                      className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+                      onClick={closeDetourDetails}
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                       aria-label="ปิดหน้าต่างคำแนะนำทางเลี่ยง"
                     >
                       <X className="w-5 h-5" />
@@ -1446,7 +1438,7 @@ export default function HomePage() {
                 </div>
 
                 {/* Body Content */}
-                <div className="p-4 space-y-3.5">
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4">
                   {/* Photo from linked flood event (Option 1 as approved by user) */}
                   {(() => {
                     const linked = viewingDetourModal.flood_id_ref
@@ -1454,8 +1446,9 @@ export default function HomePage() {
                       : null;
                     if (!linked?.latest_photo_url) return null;
                     return (
-                      <div className="space-y-1">
-                        <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-950 shadow-md">
+                      <details className="rounded-xl border border-slate-700 bg-slate-900/70">
+                        <summary className="min-h-11 cursor-pointer px-3 py-3 text-xs font-semibold text-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">ดูภาพประกอบเหตุการณ์น้ำท่วม</summary>
+                        <div className="relative overflow-hidden rounded-b-xl bg-slate-950">
                           <img
                             src={linked.latest_photo_url}
                             alt="ภาพจุดน้ำท่วมที่ผูกกับทางเลี่ยง"
@@ -1465,63 +1458,77 @@ export default function HomePage() {
                             <span className="font-bold text-amber-300">ภาพจุดเกิดเหตุน้ำท่วม:</span> ทล.{linked.route_no} {linked.section_name} (กม.{linked.km_start} - {linked.km_end})
                           </div>
                         </div>
-                      </div>
+                      </details>
                     );
                   })()}
 
-                  {/* Direction Switcher Toggle */}
-                  <div className="space-y-1.5">
-                    <div className="text-xs font-heading font-bold text-slate-300 flex items-center justify-between">
-                      <span>เลือกทิศทางการเดินทาง:</span>
-                      <span className="text-amber-400 font-mono text-[11px]">
-                        {modalDetourDirection === "FORWARD" ? "ขาไป (A → B)" : "ขากลับ (B → A)"}
-                      </span>
+                  {/* Direction selectors follow saved permissions; never infer two-way traffic. */}
+                  <section aria-label="เลือกทิศทางการเดินทาง" className="space-y-2">
+                    <h4 className="text-sm font-heading font-bold text-slate-100">เลือกทิศทางการเดินทาง</h4>
+                    <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-slate-700 bg-slate-950 p-1 text-xs font-heading font-bold">
+                      {([
+                        { direction: "FORWARD", label: "ขาไป A → B", blocked: viewingDetourModal.direction_mode === "REVERSE_ONLY" },
+                        { direction: "REVERSE", label: "ขากลับ B → A", blocked: viewingDetourModal.direction_mode === "FORWARD_ONLY" },
+                      ] as const).map((item) => (
+                        <button
+                          key={item.direction}
+                          type="button"
+                          disabled={item.blocked || !["FORWARD_ONLY", "REVERSE_ONLY", "TWO_WAY"].includes(String(viewingDetourModal.direction_mode || ""))}
+                          aria-pressed={modalDetourDirection === item.direction}
+                          onClick={() => setModalDetourDirection(item.direction)}
+                          className={`min-h-11 rounded-lg px-2 py-2 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 disabled:cursor-not-allowed disabled:opacity-40 ${
+                            modalDetourDirection === item.direction ? "bg-amber-500 font-black text-slate-950" : "text-slate-200 hover:bg-slate-800"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
                     </div>
-                    <div className="grid grid-cols-2 gap-1.5 bg-slate-950/90 p-1 rounded-xl border border-slate-700 text-xs font-heading font-bold">
-                      <button
-                        type="button"
-                        onClick={() => setModalDetourDirection("FORWARD")}
-                        className={`py-2 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                          modalDetourDirection === "FORWARD"
-                            ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                            : "text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        <span>🚗 ขาไป (A → B)</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setModalDetourDirection("REVERSE")}
-                        className={`py-2 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                          modalDetourDirection === "REVERSE"
-                            ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                            : "text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        <span>🚙 ขากลับ (B → A)</span>
-                      </button>
-                    </div>
-                  </div>
+                    {!["FORWARD_ONLY", "REVERSE_ONLY", "TWO_WAY"].includes(String(viewingDetourModal.direction_mode || "")) && (
+                      <p className="text-xs text-amber-200" role="status">ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>
+                    )}
+                  </section>
 
-                  {/* Formatted Detour Advice Content */}
-                  <div className="space-y-1.5">
-                    <h4 className="text-xs font-heading font-bold text-amber-300 flex items-center gap-1.5">
-                      <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      คำแนะนำเส้นทางทีละขั้นตอน:
+                  {/* Readable steps: preserve actual staff-provided text; never invent instructions. */}
+                  <section aria-label="คำแนะนำการเดินทาง" className="space-y-2">
+                    <h4 className="flex items-center gap-2 text-sm font-heading font-bold text-amber-300">
+                      <Route aria-hidden="true" className="h-4 w-4" /> คำแนะนำเส้นทาง
                     </h4>
                     {(() => {
-                      const parsed = splitDetourAdviceByDirection(
-                        viewingDetourModal.description || "",
-                        viewingDetourModal.direction_mode
-                      );
+                      const parsed = splitDetourAdviceByDirection(viewingDetourModal.description || "", viewingDetourModal.direction_mode);
                       const adviceText = modalDetourDirection === "FORWARD" ? parsed.forwardText : parsed.reverseText;
-                      return (
-                        <div className="rounded-xl border border-amber-500/20 bg-slate-950/80 p-3.5 text-xs text-amber-100/95 leading-relaxed whitespace-pre-line max-h-60 overflow-y-auto font-sans">
-                          {adviceText}
+                      const { steps, notes } = parseDetourAdvice(adviceText);
+                      return steps.length || notes.length ? (
+                        <div className="space-y-2">
+                          {steps.length > 0 && (
+                            <ol className="space-y-2">
+                              {steps.map((step, index) => (
+                                <li key={index} className="flex items-start gap-3 rounded-xl border border-slate-700/90 bg-slate-900/75 p-3">
+                                  <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-400 text-sm font-black text-slate-950">{index + 1}</span>
+                                  <p className="min-w-0 flex-1 break-words text-sm leading-relaxed text-slate-100 [overflow-wrap:anywhere]">{step}</p>
+                                </li>
+                              ))}
+                            </ol>
+                          )}
+                          {notes.length > 0 && (
+                            <div className="space-y-1 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs leading-relaxed text-slate-200">
+                              {notes.map((note, index) => <p key={index} className="break-words [overflow-wrap:anywhere]">{note}</p>)}
+                            </div>
+                          )}
                         </div>
+                      ) : (
+                        <p className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-300">ยังไม่มีคำแนะนำสำหรับทิศทางนี้ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>
                       );
                     })()}
-                  </div>
+                    {(() => {
+                      const meters = modalDetourDirection === "FORWARD"
+                        ? viewingDetourModal.detour_meta?.forward_distance_m ?? (viewingDetourModal.detour_meta?.forward_distance_km != null ? viewingDetourModal.detour_meta.forward_distance_km * 1000 : undefined)
+                        : viewingDetourModal.detour_meta?.reverse_distance_m ?? (viewingDetourModal.detour_meta?.reverse_distance_km != null ? viewingDetourModal.detour_meta.reverse_distance_km * 1000 : undefined);
+                      return typeof meters === "number" && Number.isFinite(meters) && meters > 0 ? (
+                        <p className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-xs text-slate-200">ระยะทางตามข้อมูลที่บันทึก: <strong>{(meters / 1000).toLocaleString("th-TH", { maximumFractionDigits: 1 })} กม.</strong></p>
+                      ) : null;
+                    })()}
+                  </section>
 
                   {/* Navigation and Actions */}
                   {(() => {
@@ -1531,19 +1538,20 @@ export default function HomePage() {
                       systemData.floodRoutes
                     );
                     return (
-                      <div className="pt-2 border-t border-slate-800 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
+                      <div className="sticky bottom-0 -mx-4 -mb-4 space-y-2 border-t border-slate-700 bg-[#0c162c] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_18px_rgba(12,22,44,0.8)]">
+                        <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-2">
                           {nav.isValid && nav.url ? (
                             <a
                               href={nav.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex-1 min-h-11 bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-black text-xs px-4 py-2.5 rounded-xl shadow-md transition flex items-center justify-center gap-2"
+                              className="flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl bg-emerald-600 px-2 py-2 text-center text-xs font-heading font-black text-white transition hover:bg-emerald-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                             >
-                              <Navigation className="w-4 h-4" /> นำทาง Google Maps ({modalDetourDirection === "FORWARD" ? "ขาไป A → B" : "ขากลับ B → A"})
+                              <span className="flex items-center gap-1"><Navigation aria-hidden="true" className="h-4 w-4" />นำทาง Google Maps</span>
+                              <span className="text-[11px] font-semibold">{modalDetourDirection === "FORWARD" ? "ขาไป A → B" : "ขากลับ B → A"}</span>
                             </a>
                           ) : (
-                            <div className="flex-1 min-h-11 bg-slate-900 border border-amber-500/30 text-amber-300 font-heading text-xs px-3 py-2 rounded-xl flex items-center justify-center text-center">
+                            <div className="min-h-12 min-w-0 rounded-xl border border-amber-500/30 bg-slate-900 px-2 py-2 text-center text-xs text-amber-200">
                               ⚠️ {nav.warning || "เส้นทางเลี่ยงในทิศทางนี้ยังไม่พร้อมสำหรับการนำทาง"}
                             </div>
                           )}
@@ -1554,17 +1562,19 @@ export default function HomePage() {
                                 setFocusCoordinates([viewingDetourModal.lon_start, viewingDetourModal.lat_start]);
                               }
                               setViewingDetourModal(null);
+                              setReturnToDetourList(false);
                               setIsMobileDrawerOpen(false);
                             }}
-                            className="min-h-11 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 font-heading font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                            className="flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-2 py-2 text-center text-xs font-heading font-bold text-slate-100 transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                           >
-                            📍 ดูตำแหน่งบนแผนที่
+                            <MapPinned aria-hidden="true" className="h-4 w-4 shrink-0" /> ดูบนแผนที่
                           </button>
                         </div>
                         {nav.disclaimer && (
-                          <p className="text-[10px] text-slate-400 text-center leading-tight">
-                            {nav.disclaimer}
-                          </p>
+                          <details className="text-xs text-slate-300">
+                            <summary className="cursor-pointer text-center text-slate-300 underline underline-offset-2">ข้อควรทราบก่อนนำทาง</summary>
+                            <p className="mt-1 text-center leading-relaxed">{nav.disclaimer}</p>
+                          </details>
                         )}
                       </div>
                     );

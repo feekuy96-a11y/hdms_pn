@@ -314,3 +314,13 @@
 - **ยืนยันจาก Production แบบ READ-ONLY:** Edge `hdms-api` เวอร์ชัน 9 ยังไม่เขียนช่องจราจร/ฝั่งถนน/ทิศทาง, ซึ่งเป็นสาเหตุหลักของการแสดง Default; ไม่มีการเปลี่ยนข้อมูลจริง
 - **ทดสอบ:** Syntax ผ่าน, pure TS compile ผ่าน, 9 standalone assertions ผ่าน; **ยังไม่ผ่าน full typecheck/build/E2E** เพราะ dependencies ขาด และไม่ได้ทดสอบ DB writes
 - **สถานะ:** Staging Patch / ห้ามใช้ Production จนกว่าจะปิด B-001, B-014, B-015; ดู `docs/PHASE6_VALIDATION.md`
+
+### [UPDATE-068] 2026-11-11 Phase 6 — Public Route List / Detour Details UI (ต่อเนื่องจาก UPDATE-067)
+- **ฐาน:** `hdms_pn-main.zip` + `HDMS_PN_Phase6_Integrated_Staging_Patch_20261111.zip` (ใช้เป็นฐานแก้โค้ด ไม่ย้อนทับ patch ก่อนหน้า)
+- **ไฟล์:** `app/page.tsx`, `tests/e2e/public-route-sheet.spec.ts` (ใหม่), `docs/UI_CONTRACT.md`, `docs/CHANGELOG.md`, `docs/KNOWN_ISSUES.md`, `docs/BACKLOG.md`.
+- **ปรับฝั่งประชาชน:** Bottom Sheet รายการบนมือถือมี 3 ระดับ (ย่อ/รายการ/เต็มจอ), หัวข้อและแท็บแบบกระชับ, ค้นหาและกรองหมายเลขสายทางร่วมกันทั้งน้ำท่วมและทางเลี่ยง, การ์ดแสดงข้อมูลจำเป็นก่อน, ป้ายทิศทางย่อ A→B / B→A / A⇄B (ไม่เดาค่าที่ไม่ทราบ).
+- **รายละเอียดทางเลี่ยง:** ชื่อยาวตัดขึ้นบรรทัดได้, เลือกเฉพาะทิศทางที่อนุญาต, แยกขั้นตอนและหมายเหตุจากข้อความที่เจ้าหน้าที่บันทึกโดยไม่ประดิษฐ์คำแนะนำใหม่, แสดงระยะทางเฉพาะเมื่อมีค่าบันทึกไว้, ลดข้อความ/กล่องซ้อน, ย้ายภาพประกอบเข้ากล่องเปิดดู, ปุ่ม Google Maps และดูบนแผนที่อ่านง่ายบนมือถือ; เมื่อเข้าจากรายการจะซ่อน Sheet รายการและคืนรายการเดิมหลังปิดรายละเอียด.
+- **ขอบเขต:** ไม่เปลี่ยน Edge Function, Database, แผนที่ Popup ที่ Leaflet สร้างเป็น HTML หรือข้อมูลจริง; ไม่ได้สร้าง React Component ชุดเดียวใช้กับ Leaflet Popup เพราะต้องแก้สถาปัตยกรรมและทดสอบแยกภายหลัง.
+- **ตรวจแล้ว:** Syntax/JSX ผ่าน TypeScript transpile diagnostics; ตรวจ ZIP CRC; เพิ่ม Playwright test สำหรับการกรอง/เปิด/ปิด/ย้อนกลับ/ทิศทางเดียว.
+- **ยังไม่ได้ตรวจ:** lint, typecheck, build:pages, Playwright E2E, การแสดงบน Chrome มือถือจริง (npm ci ล้มเหลวจาก EAI_AGAIN ระหว่างดึง dependency), การเขียนข้อมูลกับ Supabase (ไม่อยู่ในขอบเขต UI นี้).
+- **สถานะ:** Patch สำหรับ Staging เท่านั้น; B-001, B-014, B-015 ยังคงเปิดอยู่.

@@ -1,24 +1,117 @@
 {
-  "app/actions/doh-actions.ts": "87c2660268de4b1b68b04cd8e6455f4c6134cd86262c3d40b3c344838ce4b5d8",
-  "app/admin/page.tsx": "ad15052d6758cff6b221853de38a92c73c781cb119cf5d7658ad67707ab317e2",
-  "app/globals.css": "8ed5f8f518c72d389671aaf504ede77a12f666e0982224bfbb9685c96aa48484",
-  "app/page.tsx": "7b91df7c09d59cd88dfc5d6a7815db4128174d1a79103abda3f95f3e80a63807",
-  "components/admin/AdminConsole.tsx": "020677f8d0d14701f2425c46ea189d46583f844abd052f21ab95eb9e0b8f949b",
-  "components/admin/tabs/DetourManagementTab.tsx": "f7014e1edaa8289ab141e0c3cf8e479f0107b16b7d1f06890898b9a7dde20bbd",
-  "components/admin/tabs/GisDataImportTab.tsx": "b748aa2da62df26694ca223187cd678b839a67c91e80cd2c8e8a34109237ada6",
-  "components/admin/tabs/IncidentRegistryTab.tsx": "803515a45b3f0379ff771e876d731bb3b5e5016263e5fbfc6aa064f278881742",
-  "components/admin/tabs/MapManagementTab.tsx": "aef47b8f5b462573f9122a97f3203ac00d95025578aef86faf4b5573f5e61e67",
-  "components/map/LongdoGisMap.tsx": "5f153cab8484ed0fe331970956561b0f3051795558690e036c9e00e4c07e4dd7",
-  "docs/BACKLOG.md": "db651cdf117ba8fb4578662e3885f1d1a625a9a59a6ae8d4c118a5baee42cdfd",
-  "docs/CHANGELOG.md": "3a5f9db0aef5c1f64b86b9f9a44ee1c7fd4307ceba06de4ee1a60d4e727960ff",
-  "docs/KNOWN_ISSUES.md": "c70e95b92355aabf8ab18a305480c020069e7360bd01cc62635dfe63c3415f7f",
-  "docs/PHASE6_VALIDATION.md": null,
-  "docs/UI_CONTRACT.md": "4ceea4bf8e5d951ed41789662387b97fc79af75be1723548d416916ae19d26d3",
-  "lib/detour-navigation.ts": "1267622a6df131d343e4b623f5ed0fa218569d4d21fb9262a1950993f92ed9fb",
-  "lib/flood-event-schema.ts": "4ff238f8cf3607b8a88addc409f558120dd819f053bc045b057c92d6fe146e5f",
-  "lib/map-style-utils.ts": null,
-  "supabase/functions/hdms-api/index.ts": "d44e4d0aa8a3f39fb9ac941d73efb5af76e48cae7c400fc0f47328729adf279f",
-  "tests/e2e/admin-menus.spec.ts": "65361bae7fb0e2729fd37b3212827ea469d0bd682d761cfe54c47b3969045037",
-  "tests/e2e/detour-navigation.spec.ts": "43c5d43071c63a570474ea373e5ed54d773a0f972d82ff82605b624881472317",
-  "tests/e2e/phase6-data-integrity.spec.ts": null
+  "app/actions/doh-actions.ts": {
+    "base_sha256": "87c2660268de4b1b68b04cd8e6455f4c6134cd86262c3d40b3c344838ce4b5d8",
+    "patch_sha256": "403bce205bb28e5752df2efccec56b6ccff262f5a340d013bccda51099cf05e6",
+    "from_previous_integrated_patch": true
+  },
+  "app/admin/page.tsx": {
+    "base_sha256": "ad15052d6758cff6b221853de38a92c73c781cb119cf5d7658ad67707ab317e2",
+    "patch_sha256": "d5cb45922994344499af2c7bd1e1b8883afa4377c6ae358b494217ec0caec4a3",
+    "from_previous_integrated_patch": true
+  },
+  "app/globals.css": {
+    "base_sha256": "8ed5f8f518c72d389671aaf504ede77a12f666e0982224bfbb9685c96aa48484",
+    "patch_sha256": "8734643975829878a99b2f01a74c5552a680644e6e2c5bf38b19e934ab95c508",
+    "from_previous_integrated_patch": true
+  },
+  "app/page.tsx": {
+    "base_sha256": "7b91df7c09d59cd88dfc5d6a7815db4128174d1a79103abda3f95f3e80a63807",
+    "patch_sha256": "50ffad684e8802ec4a916b1f03c9ea88223fd78211a70779be81764aadaf413c",
+    "from_previous_integrated_patch": true
+  },
+  "components/admin/AdminConsole.tsx": {
+    "base_sha256": "020677f8d0d14701f2425c46ea189d46583f844abd052f21ab95eb9e0b8f949b",
+    "patch_sha256": "28d3184370715e4d6cacc57a5e330a68150c7874b4ad3f3fb0716bfd1d2a0f80",
+    "from_previous_integrated_patch": true
+  },
+  "components/admin/tabs/DetourManagementTab.tsx": {
+    "base_sha256": "f7014e1edaa8289ab141e0c3cf8e479f0107b16b7d1f06890898b9a7dde20bbd",
+    "patch_sha256": "1e0b8e7ac27312f722f7c5d4653178570182107d644bda926db30f0955014541",
+    "from_previous_integrated_patch": true
+  },
+  "components/admin/tabs/GisDataImportTab.tsx": {
+    "base_sha256": "b748aa2da62df26694ca223187cd678b839a67c91e80cd2c8e8a34109237ada6",
+    "patch_sha256": "0d6d4d52146791bc5a7a0ddb413ed5c97197c27429feff6fe15b1aa81415e0a5",
+    "from_previous_integrated_patch": true
+  },
+  "components/admin/tabs/IncidentRegistryTab.tsx": {
+    "base_sha256": "803515a45b3f0379ff771e876d731bb3b5e5016263e5fbfc6aa064f278881742",
+    "patch_sha256": "ca2381f1c82d7c8c73f6d23c7238c0a7ac113b069b92a7c1b773b9b944744eab",
+    "from_previous_integrated_patch": true
+  },
+  "components/admin/tabs/MapManagementTab.tsx": {
+    "base_sha256": "aef47b8f5b462573f9122a97f3203ac00d95025578aef86faf4b5573f5e61e67",
+    "patch_sha256": "297ac1018830baf4b3bb047b35a217cae2b3261cd34605b92cdb5bb07f8beaa3",
+    "from_previous_integrated_patch": true
+  },
+  "components/map/LongdoGisMap.tsx": {
+    "base_sha256": "5f153cab8484ed0fe331970956561b0f3051795558690e036c9e00e4c07e4dd7",
+    "patch_sha256": "eb77129867eb083d99d2377ef3770093476e2e8140049c5e31ef5a6fab0a546f",
+    "from_previous_integrated_patch": true
+  },
+  "docs/BACKLOG.md": {
+    "base_sha256": "db651cdf117ba8fb4578662e3885f1d1a625a9a59a6ae8d4c118a5baee42cdfd",
+    "patch_sha256": "ff4c991adf61c132d3631902421077f7189ee75c1913bd473223bd618c4fc195",
+    "from_previous_integrated_patch": true
+  },
+  "docs/CHANGELOG.md": {
+    "base_sha256": "3a5f9db0aef5c1f64b86b9f9a44ee1c7fd4307ceba06de4ee1a60d4e727960ff",
+    "patch_sha256": "6a8e58de7cf527f8aae50c022415552c1913eb52e2a357397eea46e65bf1e5dd",
+    "from_previous_integrated_patch": true
+  },
+  "docs/KNOWN_ISSUES.md": {
+    "base_sha256": "c70e95b92355aabf8ab18a305480c020069e7360bd01cc62635dfe63c3415f7f",
+    "patch_sha256": "626482a849f7d811a5ea1020fa3a312329ce3e5a4b7a52173d963c120d9e914c",
+    "from_previous_integrated_patch": true
+  },
+  "docs/PHASE6_VALIDATION.md": {
+    "base_sha256": null,
+    "patch_sha256": "ac6efd38dfcfa76bcfea38ccef6bd04a356ad8fe25c29dadcd2fa6e363eb3246",
+    "from_previous_integrated_patch": true
+  },
+  "docs/UI_CONTRACT.md": {
+    "base_sha256": "4ceea4bf8e5d951ed41789662387b97fc79af75be1723548d416916ae19d26d3",
+    "patch_sha256": "160d3247db8b15ab1439e955ac89686d19920b0da7d54338384e9f2e272f8146",
+    "from_previous_integrated_patch": true
+  },
+  "lib/detour-navigation.ts": {
+    "base_sha256": "1267622a6df131d343e4b623f5ed0fa218569d4d21fb9262a1950993f92ed9fb",
+    "patch_sha256": "d7a85772530740d69380e3ae719fe8f6e9dc4859fabe4457380e9df3776e0f90",
+    "from_previous_integrated_patch": true
+  },
+  "lib/flood-event-schema.ts": {
+    "base_sha256": "4ff238f8cf3607b8a88addc409f558120dd819f053bc045b057c92d6fe146e5f",
+    "patch_sha256": "62341a0ffea3cc59420edc8b89c36d087bd651a30b3fd22fb0cee9a21a2c090d",
+    "from_previous_integrated_patch": true
+  },
+  "lib/map-style-utils.ts": {
+    "base_sha256": null,
+    "patch_sha256": "396927b5727cb5da0de89995f237101025eace26d218dca662c560d8e61ede7b",
+    "from_previous_integrated_patch": true
+  },
+  "supabase/functions/hdms-api/index.ts": {
+    "base_sha256": "d44e4d0aa8a3f39fb9ac941d73efb5af76e48cae7c400fc0f47328729adf279f",
+    "patch_sha256": "998546ceb2781fa60bf3f39b56d3357e9c3557463d86a277675167e818969247",
+    "from_previous_integrated_patch": true
+  },
+  "tests/e2e/admin-menus.spec.ts": {
+    "base_sha256": "65361bae7fb0e2729fd37b3212827ea469d0bd682d761cfe54c47b3969045037",
+    "patch_sha256": "d9573703b38468a26afd73720e4d190629879087cf9d7d291eaa829f04938870",
+    "from_previous_integrated_patch": true
+  },
+  "tests/e2e/detour-navigation.spec.ts": {
+    "base_sha256": "43c5d43071c63a570474ea373e5ed54d773a0f972d82ff82605b624881472317",
+    "patch_sha256": "3c77b33745a9820b3eb292af3cc08b7fdc0513ee7cee2125c24cb8d3d32f67dc",
+    "from_previous_integrated_patch": true
+  },
+  "tests/e2e/phase6-data-integrity.spec.ts": {
+    "base_sha256": null,
+    "patch_sha256": "fc43ad06f653580a42642561ad5fd5667f83aaca3679a14bedf950c5ff5c4ad5",
+    "from_previous_integrated_patch": true
+  },
+  "tests/e2e/public-route-sheet.spec.ts": {
+    "base_sha256": null,
+    "patch_sha256": "946f151af217c350f6d33a8f7fca2a0c38667b0848c83cbd86495ad1574f0bcf",
+    "from_previous_integrated_patch": false
+  }
 }

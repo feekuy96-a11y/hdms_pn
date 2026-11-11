@@ -84,3 +84,7 @@
 
 ## B-012 [ต่ำ] `reactStrictMode: false`
 - เปิดเฉพาะ dev เพื่อจับ effect ที่ cleanup ไม่ครบ (ระวัง double-invoke กับโค้ดที่อ่าน event/โหลด Leaflet)
+
+## บันทึกเพิ่ม B-015 / Phase 6 Public UI (2026-11-11)
+- มี Playwright test ใหม่ `tests/e2e/public-route-sheet.spec.ts` สำหรับหน้ารายการมือถือและหน้ารายละเอียดทางเลี่ยง โดยยังไม่ได้รันจริงเพราะ `npm ci` ดึงแพ็กเกจไม่สำเร็จ (`EAI_AGAIN`); ต้องรัน E2E สองโหมด + ตรวจการล้นจอ 360/412/1280px ก่อน production.
+- ยังไม่รวม React Detour Detail Component เข้ากับ Leaflet HTML Popup แบบเรียกใช้ Component เดียวกันจริง (ดู KI-006); ป้องกันการรีแฟคเตอร์เสี่ยงใน PATCH นี้.

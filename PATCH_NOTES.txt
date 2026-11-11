@@ -1,19 +1,31 @@
-HDMS_PN — Phase 6 Integrated Patch for STAGING (2026-11-11)
+HDMS_PN Phase 6 — Integrated UI Update 2026-11-11 (UPDATE-068)
 
-Install target: repository root (the folder containing package.json).
-ZIP entries preserve exact relative paths. This is ONE complete cumulative patch:
-DO NOT apply older Phase 6 patch files before or after this archive.
+BASE AND SCOPE
+- Source repository snapshot: hdms_pn-main.zip (uploaded by project owner).
+- Previous changes: HDMS_PN_Phase6_Integrated_Staging_Patch_20261111.zip.
+- This archive contains the FINAL FILE CONTENT of all modified files relative to that original snapshot, preserving their repository paths. There is NO need to stack earlier Phase 6 patch ZIPs on top of this ZIP.
+- NO user or production files were changed directly.
 
-IMPORTANT: This patch is NOT production-ready or certified complete.
-1. Test all user flows in staging after installing dependencies (npm ci).
-2. Re-run npm run typecheck, npm run lint, NEXT_OUTPUT=export npm run build, Playwright E2E.
-3. Critical: updating code in supabase/functions/hdms-api/index.ts in the Git repository does NOT update the deployed Supabase Edge Function.
-   Deployed Edge Function version 9 still discards road_side, affected_lanes, direction_mode.
-   Do not deploy revised Edge Function without first fixing the unauthenticated service-role writes (B-001) and obtaining owner's approval.
-4. DO NOT alter production database or backfill unknown lane/direction values without official verification.
-5. Garuda government emblem file not provided/approved: highway route-number shield remains a non-official placeholder.
-6. The highway route management table and other Admin UI areas still need visual regression tests.
+NEW UPDATE-068 (citizen frontend)
+- app/page.tsx: mobile three-stage Bottom Sheet, compact tabs, unified highway filter and search across flood+detour, compact cards, do not keep the list sheet open behind detour detail, restore list/filter after closing.
+- app/page.tsx: detour detail with line-wrapped long route names, step-by-step presentation of existing staff advice, notes preserved, direction availability guards, compact Google Maps and map buttons; optional incident photo; no fabricated time/distance.
+- tests/e2e/public-route-sheet.spec.ts: mobile regression scenario for filter, non-stacking, allowed direction, return to list; authored but NOT EXECUTED.
+- docs/*: updated project rules/status and known limitations.
 
-Read docs/PHASE6_VALIDATION.md for scope, risks, acceptance tests, and deployment blockers.
-Read BASE_FILE_HASHES.json to compare your own base repo before overwriting.
-No GitHub, Production Edge Function or database writes occurred during creation of this ZIP.
+VALIDATION AND RELEASE SAFETY
+- TypeScript syntax/JSX diagnostics PASS on app/page.tsx and new e2e test.
+- Six isolated helper assertions PASS.
+- ZIP CRC and member SHA256 validation PASS.
+- npm ci failed because registry requests returned EAI_AGAIN. Full typecheck, lint, build:pages, Playwright, actual visual screenshots and Supabase integration remain NOT VERIFIED.
+- Original Phase 6 integrated patch includes Edge Function changes that MUST NOT be deployed until the production authorization issue B-001 is solved and reviewed. Do not deploy to production from this package without full release testing.
+- No SQL, Edge Function, GitHub, or production deploy actions have been performed in this session.
+
+SUGGESTED SAFE DEPLOY SEQUENCE (staging only)
+1. Owner makes backup (only if they choose to).
+2. Compare BASE_FILE_HASHES.json with original files to ensure no conflicting newer edits.
+3. Extract this ZIP at the ROOT of the same repository containing package.json. It has no hdms_pn-main/ wrapper.
+4. Run npm ci; npm run lint; npm run typecheck; npm run build:pages; npx playwright test tests/e2e/public-route-sheet.spec.ts; then full regression suite.
+5. Review mobile 360px/412px and desktop 1280px, navigation/direction integrity and live database version before any production release.
+6. To undo, restore these paths from the original repository or revert the commit. Do not overwrite newer production changes blindly.
+
+See VALIDATION_STATUS.json, BASE_FILE_HASHES.json, docs/CHANGELOG.md UPDATE-068 and docs/KNOWN_ISSUES.md KI-006.

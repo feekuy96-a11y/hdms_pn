@@ -1,36 +1,27 @@
 {
-  "phase": "Phase 6",
-  "status": "STAGING_ONLY_NOT_PRODUCTION_READY",
-  "base": "hdms_pn-main.zip",
-  "cumulative_patch": true,
-  "changed_project_files": 22,
-  "verified": {
-    "type_script_transpile_syntax": "16 files, 0 syntax diagnostics",
-    "pure_type_script_compile": "4 utility source files compiled using global tsc (EXIT 0)",
-    "standalone_pure_assertions": "9 PASS: navigation direction, malicious URL handling, unknown flood metadata, line editor geometry, arrow contrast",
-    "archive_crc": "PASS"
+  "title": "HDMS_PN Phase 6 Integrated Staging Patch plus Public UI UPDATE-068",
+  "date": "2026-11-11",
+  "base_archive": "hdms_pn-main.zip",
+  "previous_patch": "HDMS_PN_Phase6_Integrated_Staging_Patch_20261111.zip",
+  "files_changed": 23,
+  "validation": {
+    "app_page_tsx_syntax": "PASS — TypeScript transpileModule, syntax/JSX diagnostics",
+    "public_route_sheet_test_syntax": "PASS — TypeScript transpileModule, syntax/JSX diagnostics",
+    "presentation_helper_unit_checks": "PASS — 6 isolated assertions",
+    "zip_integrity": "PASS — ZipFile.testzip and path/hash verification",
+    "npm_install": "BLOCKED — npm ci EAI_AGAIN (registry unreachable)",
+    "full_typecheck": "NOT_RUN — dependencies missing",
+    "lint": "NOT_RUN — dependencies missing",
+    "static_export_build": "NOT_RUN — dependencies missing",
+    "playwright_e2e": "NOT_RUN — dependencies/browser not available",
+    "live_supabase_writes": "NOT_RUN — production read/write not authorized",
+    "mobile_and_desktop_browser_visual": "NOT_RUN — frontend cannot be built in this environment"
   },
-  "not_verified": {
-    "npm_ci": "failed offline; missing cached zod-validation-error@4.0.2",
-    "full_typecheck": "not run; install dependencies",
-    "lint": "not run; install dependencies",
-    "next_build": "not run; install dependencies",
-    "playwright_e2e": "not run; install dependencies",
-    "supabase_write_read_roundtrip": "not run; no permission to modify Production DB"
-  },
-  "production_read_only_findings": {
-    "edge_function": "hdms-api version 9 with no road_side/affected_lanes/direction_mode in route upsert",
-    "detours": "8 active/nondeleted records currently TWO_WAY, 0 forward or reverse only",
-    "floods": "4 nondeleted records UNKNOWN or NULL road_side",
-    "db_defaults": {
-      "direction_mode": "TWO_WAY",
-      "road_side": "UNKNOWN"
-    }
-  },
-  "release_blockers": [
-    "B-001 unauthenticated write API uses service role",
-    "B-014 live Edge function outdated",
-    "B-015 full build/e2e/db integration unavailable",
-    "B-016 official emblem not provided"
+  "caveats": [
+    "Previous Phase 6 changes remain unverified as a complete production release.",
+    "Leaflet map popup is still separately rendered from React citizen detail (KI-006).",
+    "Production API authentication and data-persistence blockers B-001/B-014 remain open.",
+    "Use only with staging/testing until CI/E2E pass.",
+    "Do not overlay on a repo that diverged from hdms_pn-main.zip without comparing base hashes."
   ]
 }
