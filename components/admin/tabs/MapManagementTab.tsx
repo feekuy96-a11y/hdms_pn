@@ -219,6 +219,9 @@ export function MapManagementTab({
   const [detourName, setDetourName] = useState("");
   const [detourDesc, setDetourDesc] = useState("");
   const [detourAdviceView, setDetourAdviceView] = useState<"FORWARD" | "REVERSE" | "COMBINED">("COMBINED");
+  const [detourGoogleMapsUrlFwd, setDetourGoogleMapsUrlFwd] = useState("");
+  const [detourGoogleMapsUrlRev, setDetourGoogleMapsUrlRev] = useState("");
+  const [detourRoadCondition, setDetourRoadCondition] = useState("");
   const [forceStraightThrough, setForceStraightThrough] = useState(false);
   const [detourDirectionMode, setDetourDirectionMode] = useState<DetourDirectionModeType>("TWO_WAY");
   // The highway, flood and detour editors share the same draggable Leaflet vertex handles
@@ -531,6 +534,9 @@ export function MapManagementTab({
       setDetourName(detour.route_name);
       setDetourDesc(detour.description || "");
       setDetourDirectionMode((detour.direction_mode as DetourDirectionModeType) || ("" as DetourDirectionModeType));
+      setDetourGoogleMapsUrlFwd(detour.detour_meta?.google_maps_url_forward || detour.detour_meta?.google_maps_url || "");
+      setDetourGoogleMapsUrlRev(detour.detour_meta?.google_maps_url_reverse || "");
+      setDetourRoadCondition(detour.detour_meta?.road_condition || "");
       setSaveAsDraft(!detour.is_active);
       setStartLat(detour.lat_start || 0);
       setStartLon(detour.lon_start || 0);
@@ -916,6 +922,9 @@ export function MapManagementTab({
     setDetourName("");
     setDetourDesc("");
     setDetourDirectionMode("TWO_WAY");
+    setDetourGoogleMapsUrlFwd("");
+    setDetourGoogleMapsUrlRev("");
+    setDetourRoadCondition("");
     setDetourDistanceMeters({ forward: 0, reverse: 0 });
     setFieldImages([]);
     setDetailedPhotos([]);
@@ -1493,6 +1502,9 @@ export function MapManagementTab({
             verified_no_closed_overlap: closedRoadConflicts.length === 0,
             carriageway_type: separation?.isSymmetricSingleLine ? "SINGLE_CENTERLINE" : "ASYMMETRIC_DETOUR",
             eventId: linkedEventId,
+            ...(detourGoogleMapsUrlFwd.trim() ? { google_maps_url_forward: detourGoogleMapsUrlFwd.trim(), google_maps_url: detourGoogleMapsUrlFwd.trim() } : {}),
+            ...(detourGoogleMapsUrlRev.trim() ? { google_maps_url_reverse: detourGoogleMapsUrlRev.trim() } : {}),
+            ...(detourRoadCondition.trim() ? { road_condition: detourRoadCondition.trim() } : {}),
           }
           : undefined,
       });
@@ -2249,6 +2261,52 @@ export function MapManagementTab({
               >
                 <ArrowRightLeft className="w-3 h-3" /> สลับมุมมองทิศทาง
               </button>
+            </div>
+
+            {/* Approved Google Maps Navigation URLs & Road Condition */}
+            <div className="pt-2 border-t border-slate-800/80 space-y-3">
+              <div>
+                <label className="text-xs text-slate-300 block mb-1">สภาพผิวทาง (Road Surface Condition)</label>
+                <input
+                  type="text"
+                  value={detourRoadCondition}
+                  onChange={(e) => setDetourRoadCondition(e.target.value)}
+                  placeholder="เช่น ผิวทางลาดยาง สัญจรได้ตามปกติ หรือ ทางลูกรัง/หินคลุก"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-heading font-bold text-emerald-400 flex items-center gap-1.5">
+                    <Navigation className="w-3.5 h-3.5" />
+                    <span>Google Maps URL ที่เจ้าหน้าที่อนุมัติแล้ว (Optional)</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400">หากระบุ จะใช้นำทางแทนการคำนวณอัตโนมัติ</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[11px] text-slate-300 block mb-1">ลิงก์ขาไป (A → B):</span>
+                    <input
+                      type="url"
+                      value={detourGoogleMapsUrlFwd}
+                      onChange={(e) => setDetourGoogleMapsUrlFwd(e.target.value)}
+                      placeholder="https://maps.app.goo.gl/... หรือ Google Maps URL"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-slate-300 block mb-1">ลิงก์ขากลับ (B → A):</span>
+                    <input
+                      type="url"
+                      value={detourGoogleMapsUrlRev}
+                      onChange={(e) => setDetourGoogleMapsUrlRev(e.target.value)}
+                      placeholder="https://maps.app.goo.gl/... หรือ Google Maps URL"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </FormSection>
         )}

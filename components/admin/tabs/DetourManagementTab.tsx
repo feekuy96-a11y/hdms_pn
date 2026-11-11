@@ -73,6 +73,7 @@ export function DetourManagementTab({
   const [editDetourAdviceView, setEditDetourAdviceView] = useState<"FORWARD" | "REVERSE" | "COMBINED">("COMBINED");
   const [editDetourGoogleMapsUrlFwd, setEditDetourGoogleMapsUrlFwd] = useState("");
   const [editDetourGoogleMapsUrlRev, setEditDetourGoogleMapsUrlRev] = useState("");
+  const [editDetourRoadCondition, setEditDetourRoadCondition] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedDetourIds, setSelectedDetourIds] = useState<Set<string>>(() => new Set());
@@ -138,6 +139,7 @@ export function DetourManagementTab({
     setEditDetourAdviceView("COMBINED");
     setEditDetourGoogleMapsUrlFwd(d.detour_meta?.google_maps_url_forward || d.detour_meta?.google_maps_url || "");
     setEditDetourGoogleMapsUrlRev(d.detour_meta?.google_maps_url_reverse || "");
+    setEditDetourRoadCondition(d.detour_meta?.road_condition || "");
   };
 
   // Auto Generate Advice inside Modal
@@ -202,6 +204,11 @@ export function DetourManagementTab({
         updatedDetourMeta.google_maps_url_reverse = editDetourGoogleMapsUrlRev.trim();
       } else {
         delete updatedDetourMeta.google_maps_url_reverse;
+      }
+      if (editDetourRoadCondition.trim()) {
+        updatedDetourMeta.road_condition = editDetourRoadCondition.trim();
+      } else {
+        delete updatedDetourMeta.road_condition;
       }
 
       const res = await upsertRouteAction({
@@ -1046,6 +1053,18 @@ export function DetourManagementTab({
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Road Condition */}
+              <div>
+                <label className="text-slate-300 block mb-1">สภาพผิวทาง (Road Surface Condition)</label>
+                <input
+                  type="text"
+                  value={editDetourRoadCondition}
+                  onChange={(e) => setEditDetourRoadCondition(e.target.value)}
+                  placeholder="เช่น ผิวทางลาดยาง สัญจรได้ตามปกติ หรือ ทางลูกรัง/หินคลุก"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                />
               </div>
 
               {/* Row 3: Active Status Switch */}

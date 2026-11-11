@@ -34,6 +34,14 @@ export function detourDirectionBadge(mode: unknown): string {
   return "รอตรวจสอบทิศทาง";
 }
 
+/** Detailed badge matching Citizen Detour Modal visual contract */
+export function detourDirectionDetailedBadge(mode: unknown): string {
+  if (mode === "TWO_WAY") return "ไป-กลับ 2 ทิศทาง (A ⇄ B)";
+  if (mode === "FORWARD_ONLY") return "เดินรถทางเดียว (A ➔ B)";
+  if (mode === "REVERSE_ONLY") return "เดินรถทางเดียว (B ➔ A)";
+  return "รอตรวจสอบทิศทาง";
+}
+
 /**
  * Split staff-written advice into numbered steps and side notes.
  * Never invents text: an empty input yields empty arrays.
@@ -69,3 +77,188 @@ export function formatDetourDistanceKm(meters: number): string {
   return (meters / 1000).toLocaleString("th-TH", { maximumFractionDigits: 1 });
 }
 
+export interface DetourTimelineStep {
+  stepNumber: number;
+  iconType: "start" | "turn_right" | "turn_left" | "straight" | "end";
+  title: string;
+  detail: string;
+  badge: string;
+}
+
+export interface DetourTimelinePresentation {
+  steps: DetourTimelineStep[];
+  totalDistanceKm: number;
+  totalDistanceFormatted: string;
+  estimatedMinutes: number;
+  roadCondition: string;
+}
+
+/**
+ * แปลงคำแนะนำเส้นทางเป็นไทม์ไลน์ตามภาพ Citizen Detour Modal 100%
+ */
+export function getDetourTimelinePresentation(
+  rawAdvice: string,
+  recordedDistanceMeters: number | null = null,
+  fallbackDistanceKm: number = 0,
+  startLocationHint: string = "",
+  endLocationHint: string = "",
+  explicitRoadCondition?: string
+): DetourTimelinePresentation {
+  const { steps: rawSteps, notes } = parseDetourAdvice(rawAdvice);
+
+  // 1. คำนวณระยะทางรวม (กม.)
+  let totalDistanceKm = 0;
+  if (recordedDistanceMeters && recordedDistanceMeters > 0) {
+    totalDistanceKm = recordedDistanceMeters / 1000;
+  } else {
+    // ลองหาจากข้อความโน้ต
+    const distMatch = rawAdvice.match(/รวมระยะทาง(?:เลี่ยง)?:\s*(?:ประมาณ\s*)?([0-9.]+)\s*กม/);
+    if (distMatch && !isNaN(parseFloat(distMatch[1]))) {
+      totalDistanceKm = parseFloat(distMatch[1]);
+    } else if (fallbackDistanceKm > 0) {
+      totalDistanceKm = fallbackDistanceKm;
+    }
+  }
+
+  // 2. คำนวณเวลาเดินทางโดยประมาณ (นาที)
+  let estimatedMinutes = 0;
+  const durMatch = rawAdvice.match(/ใช้เวลาเดินทางประมาณ\s*([0-9]+)\s*นาที/);
+  if (durMatch && !isNaN(parseInt(durMatch[1], 10))) {
+    estimatedMinutes = parseInt(durMatch[1], 10);
+  } else if (totalDistanceKm > 0) {
+    estimatedMinutes = Math.max(1, Math.round((totalDistanceKm / 40) * 60));
+  } else {
+    estimatedMinutes = 2;
+  }
+
+  // 3. วิเคราะห์สภาพเส้นทาง
+  let roadCondition = "ผิวทางลาดยาง สัญจรได้ตามปกติ";
+  if (explicitRoadCondition && explicitRoadCondition.trim()) {
+    roadCondition = explicitRoadCondition.trim();
+  } else {
+    const condMatch = rawAdvice.match(/สภาพเส้นทาง:\s*([^\n]+)/);
+    if (condMatch && condMatch[1].trim()) {
+      const c = condMatch[1].trim();
+      if (c.includes("ลาดยาง")) {
+        roadCondition = "ผิวทางลาดยาง สัญจรได้ตามปกติ";
+      } else {
+        roadCondition = c;
+      }
+    }
+  }
+
+  // 4. สร้างโครงสร้าง Steps
+  const steps: DetourTimelineStep[] = [];
+
+  if (rawSteps.length === 0) {
+    // กรณีไม่มีบันทึกขั้นตอน สร้างขั้นตอนมาตรฐาน 2 จุด
+    steps.push({
+      stepNumber: 1,
+      iconType: "start",
+      title: "จุดเริ่มต้น",
+      detail: startLocationHint ? `บริเวณ ${startLocationHint}` : "จุดเริ่มต้นเส้นทางเลี่ยง",
+      badge: "กม. 0+000",
+    });
+    steps.push({
+      stepNumber: 2,
+      iconType: "turn_right",
+      title: "ถึงจุดบรรจบทางหลวงสายหลัก",
+      detail: endLocationHint ? `${endLocationHint} สัญจรต่อได้ตามปกติ` : "สัญจรต่อได้ตามปกติ",
+      badge: totalDistanceKm > 0 ? `${totalDistanceKm.toFixed(1)} กม.` : "ปลายทาง",
+    });
+  } else if (rawSteps.length === 1) {
+    const single = rawSteps[0];
+    steps.push({
+      stepNumber: 1,
+      iconType: "start",
+      title: "จุดเริ่มต้น",
+      detail: single.replace(/^จุดเริ่มต้น:\s*/, "") || (startLocationHint ? `บริเวณ ${startLocationHint}` : "จุดเริ่มต้นเส้นทางเลี่ยง"),
+      badge: "กม. 0+000",
+    });
+    steps.push({
+      stepNumber: 2,
+      iconType: "turn_right",
+      title: "ถึงจุดบรรจบทางหลวงสายหลัก",
+      detail: endLocationHint ? `${endLocationHint} สัญจรต่อได้ตามปกติ` : "สัญจรต่อได้ตามปกติ",
+      badge: totalDistanceKm > 0 ? `${totalDistanceKm.toFixed(1)} กม.` : "ปลายทาง",
+    });
+  } else {
+    // มีตั้งแต่ 2 ขั้นตอนขึ้นไป
+    rawSteps.forEach((rawStep, index) => {
+      const isFirst = index === 0;
+      const isLast = index === rawSteps.length - 1;
+
+      if (isFirst) {
+        let detail = rawStep;
+        if (/^จุดเริ่มต้น:\s*/.test(detail)) {
+          detail = detail.replace(/^จุดเริ่มต้น:\s*/, "");
+        }
+        steps.push({
+          stepNumber: 1,
+          iconType: "start",
+          title: "จุดเริ่มต้น",
+          detail: detail || (startLocationHint ? `บริเวณ ${startLocationHint}` : "จุดเริ่มต้น"),
+          badge: "กม. 0+000",
+        });
+      } else if (isLast) {
+        let detail = rawStep;
+        if (detail.includes("ถึงจุดบรรจบทางหลวงสายหลัก")) {
+          detail = detail.replace(/^(ถึงจุดบรรจบทางหลวงสายหลัก|ถึงจุดบรรจบ)\s*/, "");
+        }
+        steps.push({
+          stepNumber: index + 1,
+          iconType: "turn_right",
+          title: "ถึงจุดบรรจบทางหลวงสายหลัก",
+          detail: detail.trim() || (endLocationHint ? `${endLocationHint} สัญจรต่อได้ตามปกติ` : "สัญจรต่อได้ตามปกติ"),
+          badge: totalDistanceKm > 0 ? `${totalDistanceKm.toFixed(1)} กม.` : "ปลายทาง",
+        });
+      } else {
+        // ขั้นตอนตรงกลาง (เลี้ยว/ตรงไป/ผ่านแยก)
+        let iconType: DetourTimelineStep["iconType"] = "straight";
+        if (rawStep.includes("เลี้ยวขวา")) iconType = "turn_right";
+        else if (rawStep.includes("เลี้ยวซ้าย")) iconType = "turn_left";
+
+        // แยก badge ระยะทาง เช่น (ระยะทาง 500 ม.)
+        let badge = "";
+        let cleanText = rawStep;
+        const stepDistMatch = rawStep.match(/\((?:ระยะทาง\s*)?([0-9.]+\s*(?:ม\.|กม\.))\)/);
+        if (stepDistMatch) {
+          badge = stepDistMatch[1];
+          cleanText = rawStep.replace(stepDistMatch[0], "").trim();
+        }
+
+        // แยก title กับ detail
+        let title = cleanText;
+        let detail = "";
+        const colonIdx = cleanText.indexOf(":");
+        if (colonIdx !== -1) {
+          title = cleanText.substring(0, colonIdx).trim();
+          detail = cleanText.substring(colonIdx + 1).trim();
+        } else {
+          // หากไม่มี colon ให้ใช้คำกริยาแรก
+          const matchVerb = cleanText.match(/^(ตรงไป|เลี้ยวขวา|เลี้ยวซ้าย|เบี่ยงเข้าสู่|กลับรถ)[^\s]*/);
+          if (matchVerb) {
+            title = matchVerb[0];
+            detail = cleanText.substring(matchVerb[0].length).trim();
+          }
+        }
+
+        steps.push({
+          stepNumber: index + 1,
+          iconType,
+          title: title || `ขั้นตอนที่ ${index + 1}`,
+          detail: detail || cleanText,
+          badge: badge || `${index + 1}`,
+        });
+      }
+    });
+  }
+
+  return {
+    steps,
+    totalDistanceKm,
+    totalDistanceFormatted: totalDistanceKm.toFixed(1),
+    estimatedMinutes,
+    roadCondition,
+  };
+}
