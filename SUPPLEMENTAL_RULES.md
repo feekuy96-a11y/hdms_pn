@@ -866,3 +866,13 @@
 - **รายละเอียดการทำงาน:** เพิ่มปุ่ม “ตำแหน่งของฉัน” ในแผงควบคุมแผนที่, ปัก marker เฉพาะ session ปัจจุบันและ zoom ไปยังตำแหน่งนั้น; ใช้ `enableHighAccuracy: false` และ cache 60 วินาทีเพื่อลดการใช้แบตเตอรี่/ทรัพยากร; ไม่ส่งหรือเก็บพิกัดผู้ใช้ใน Supabase
 - **การทดสอบและผลลัพธ์:** production `npm run build` ผ่าน; Playwright mobile mock permission/geolocation และยืนยันข้อความสำเร็จผ่าน 1/1
 - **สถานะ:** พร้อม review ในเครื่อง; ยังไม่ Push หรือ Deploy GitHub Pages
+
+---
+
+### [UPDATE-072] 2026-11-12: ทำให้เอฟเฟกต์เส้น Canvas แสดงผลจริงโดยไม่กินทรัพยากรเกินจำเป็น
+- **วัตถุประสงค์:** แก้การตั้งค่า animation ใน style studio แล้วไม่เห็นผลบนแผนที่ Leaflet Canvas
+- **ไฟล์ที่เกี่ยวข้อง:** `components/map/LongdoGisMap.tsx`
+- **รายละเอียดการทำงาน:** เก็บ reference ของเส้นน้ำท่วม/ทางเลี่ยงที่วาดอยู่ แล้วขยับ dash offset หรือ pulse opacity/weight โดยตรงทุก 140ms แทน CSS class ที่ Canvas ไม่รองรับ; ทำงานเฉพาะเมื่อจำนวน feature/route อยู่ต่ำกว่าเพดานเดิม, แท็บมองเห็น และผู้ใช้ไม่ได้ตั้ง `prefers-reduced-motion`
+- **การทดสอบและผลลัพธ์:** `npm run lint`, `npm run typecheck`, production `npm run build` ผ่าน; Playwright mobile public flow ผ่าน 1/1
+- **ข้อจำกัด:** การยืนยันการเคลื่อนไหวเชิงภาพยังต้องตรวจบนอุปกรณ์จริงหลังนำ web build ขึ้น แต่ path update ใช้ Canvas API เดียวกับเส้นที่แสดงอยู่และไม่สร้าง layer ใหม่ต่อเฟรม
+- **สถานะ:** พร้อม review ในเครื่อง; ยังไม่ Push หรือ Deploy GitHub Pages
