@@ -626,6 +626,7 @@ export function LongdoGisMap({
   // 1. Initialize Leaflet Map Instance
   useEffect(() => {
     let isMounted = true;
+    const initialResizeTimers: ReturnType<typeof setTimeout>[] = [];
 
     async function initMap() {
       if (typeof window === "undefined" || !mapContainerRef.current) return;
@@ -699,9 +700,9 @@ export function LongdoGisMap({
 
         // Invalidate size multiple times to ensure full canvas coverage across viewports
         [100, 300, 600, 1000].forEach((delay) => {
-          setTimeout(() => {
+          initialResizeTimers.push(setTimeout(() => {
             if (map) map.invalidateSize();
-          }, delay);
+          }, delay));
         });
 
         // Handle map clicks for coordinate picking
@@ -729,6 +730,7 @@ export function LongdoGisMap({
 
     return () => {
       isMounted = false;
+      initialResizeTimers.forEach(clearTimeout);
       setMapReady(false);
       if (leafletMapRef.current) {
         try {

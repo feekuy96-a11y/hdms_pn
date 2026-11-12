@@ -798,3 +798,17 @@
 - **การทดสอบและผลลัพธ์:** `npm run lint`, `npm run typecheck`, production build และ Pages build ผ่าน; Playwright 46 ผ่าน 14 ข้าม (desktop-only/ไม่มี geometry fixture) ทั้ง server และ static export
 - **ข้อจำกัด:** Migration และ Edge Function ยังไม่ได้ deploy หรือทดสอบกับ Supabase production เพราะรอบนี้ไม่เปลี่ยน Production
 - **สถานะ:** พร้อม review และ deploy เป็นชุดเดียวกัน
+
+---
+
+### [UPDATE-066] 2026-11-12: ลดภาระการแก้ไขแนวเส้นและทำ Dialog ทางเลี่ยงให้ใช้คีย์บอร์ดได้ครบ
+- **วัตถุประสงค์:** ป้องกันการสูญเสียเส้นพรีวิวเมื่อนำทางล้มเหลว ลดงานแผนที่ที่ค้างหลังเปลี่ยนหน้า และทำหน้าต่างคำแนะนำทางเลี่ยงใช้งานได้ด้วยคีย์บอร์ด
+- **ไฟล์ที่เกี่ยวข้อง:** `app/admin/page.tsx`, `app/page.tsx`, `components/map/LongdoGisMap.tsx`, `tests/e2e/public-route-sheet.spec.ts`
+- **รายละเอียดการทำงาน:**
+  1. เมื่อคำนวณแนวเส้นใหม่ไม่สำเร็จใน Admin ระบบคงพิกัด/เส้นพรีวิวเดิมไว้ และแจ้งสถานะที่ชัดเจน แทนการล้างแนวเส้นที่เจ้าหน้าที่แก้ไว้
+  2. ล้าง timer `invalidateSize` ระหว่างเริ่มแผนที่เมื่อ component ถูกถอดออก ป้องกัน callback เก่าทำงานต่อหลังเปลี่ยนหน้า
+  3. Dialog ทางเลี่ยงย้าย focus ไปยังปุ่มปิดเมื่อเปิด รองรับ `Escape` และวน focus ด้วย `Tab` ภายใน dialog; เมื่อปิดคืน focus ไปยังตัวควบคุมเดิม
+  4. E2E รอข้อมูลจาก API mock ก่อนเปิด mobile sheet เพื่อป้องกัน test race condition
+- **การทดสอบและผลลัพธ์:** `npm run lint`, `npm run typecheck`, production `npm run build` ผ่าน; Playwright mobile route sheet ผ่าน 1/1
+- **ข้อจำกัด:** ยังไม่ทดสอบกับข้อมูล/เครื่องผู้ใช้จริงหรือ Supabase production และรอบนี้ไม่มีการ Push หรือ Deploy
+- **สถานะ:** พร้อม review ในเครื่อง

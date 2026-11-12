@@ -33,6 +33,9 @@ test("citizen route sheet filters floods and detours and returns from details wi
   });
 
   await page.goto(`${base}/`);
+  // Wait for the intercepted live payload instead of opening an empty sheet
+  // while TanStack Query is still resolving its initial request.
+  await expect(page.getByText("จุดเฝ้าระวังน้ำท่วม 1 จุด")).toBeVisible();
   await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
   const list = page.getByRole("dialog", { name: "รายการสายทางและจุดเฝ้าระวัง" });
   await expect(list).toBeVisible();
@@ -45,11 +48,12 @@ test("citizen route sheet filters floods and detours and returns from details wi
   const detail = page.getByRole("dialog", { name: /คำแนะนำเส้นทางเลี่ยง/ });
   await expect(detail).toBeVisible();
   await expect(list).toHaveCount(0);
+  await expect(detail.getByRole("button", { name: "ปิดหน้าต่างคำแนะนำทางเลี่ยง" })).toBeFocused();
   await expect(detail.getByRole("heading", { name: /ชื่อเส้นทางยาวที่ต้องขึ้นบรรทัดใหม่/ })).toBeVisible();
   await expect(detail.getByRole("button", { name: /ขาไป.*A.*B/ })).toBeEnabled();
   await expect(detail.getByRole("button", { name: /ขากลับ.*B.*A/ })).toBeDisabled();
   await expect(detail.getByText("เริ่มจากทางแยก ทล.42")).toBeVisible();
-  await detail.getByRole("button", { name: "ปิดหน้าต่างคำแนะนำทางเลี่ยง" }).click();
+  await page.keyboard.press("Escape");
   await expect(detail).toHaveCount(0);
   await expect(list).toBeVisible();
   await expect(list.getByLabel("สายทาง", { exact: true })).toHaveValue("42");

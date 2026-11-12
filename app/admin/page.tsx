@@ -141,8 +141,9 @@ export default function AdminPage() {
         showToast(`ปรับดัดแนวเส้นทางที่จุด #${idx + 1} สำเร็จ`);
       } catch {
         if (requestId !== waypointRequestRef.current) return;
-        setDraftCoordinates([]);
-        showToast("คำนวณเส้นทางใหม่ไม่สำเร็จ กรุณาลองอีกครั้ง");
+        // Keep the last valid preview on screen. Clearing it here made an operator
+        // lose visual context after a transient routing failure while dragging.
+        showToast("คำนวณเส้นทางใหม่ไม่สำเร็จ ระบบคงแนวเส้นเดิมไว้ กรุณาลองอีกครั้ง");
       }
     }
   };

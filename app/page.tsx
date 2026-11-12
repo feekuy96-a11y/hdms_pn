@@ -208,6 +208,9 @@ export default function HomePage() {
     : null;
   const previousFocus = useRef<HTMLElement | null>(null);
   const closeDetailsRef = useRef<HTMLButtonElement | null>(null);
+  const detourDialogRef = useRef<HTMLDivElement | null>(null);
+  const detourCloseRef = useRef<HTMLButtonElement | null>(null);
+  const detourPreviousFocus = useRef<HTMLElement | null>(null);
   const [selectedFloodId, setSelectedFloodId] = useState<string>("");
   const [showDossier, setShowDossier] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
@@ -434,6 +437,63 @@ export default function HomePage() {
     }
     setReturnToDetourList(false);
   };
+
+  // A detour opens above the mobile route sheet, so retain keyboard focus in the
+  // active dialog and return it to the originating control when it closes.
+  useEffect(() => {
+    if (!viewingDetourModal) return;
+
+    detourPreviousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = detourDialogRef.current;
+    const focusableSelector = [
+      "button:not([disabled])",
+      "a[href]",
+      "input:not([disabled])",
+      "select:not([disabled])",
+      "textarea:not([disabled])",
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(",");
+    const getFocusableElements = () =>
+      Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) ?? []).filter(
+        (element) => !element.hasAttribute("disabled") && element.getAttribute("aria-hidden") !== "true"
+      );
+
+    const focusableElements = getFocusableElements();
+    // Let the newly rendered bottom sheet finish its layout before moving focus.
+    const focusFrame = window.requestAnimationFrame(() => (detourCloseRef.current ?? focusableElements[0])?.focus());
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDetourDetails();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const elements = getFocusableElements();
+      if (elements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.cancelAnimationFrame(focusFrame);
+      if (detourPreviousFocus.current?.isConnected) detourPreviousFocus.current.focus();
+      detourPreviousFocus.current = null;
+    };
+  }, [viewingDetourModal]);
 
   const detourList = filteredDetours.length > 0 && (
     <section className="space-y-2" aria-label="รายการทางเลี่ยง">
@@ -1400,6 +1460,7 @@ export default function HomePage() {
               }}
             >
               <div
+                ref={detourDialogRef}
                 role="dialog"
                 aria-modal="true"
                 aria-label={`คำแนะนำเส้นทางเลี่ยง ${viewingDetourModal.route_name}`}
@@ -1420,6 +1481,7 @@ export default function HomePage() {
                         {detourDirectionDetailedBadge(viewingDetourModal.direction_mode)}
                       </span>
                       <button
+                        ref={detourCloseRef}
                         type="button"
                         onClick={closeDetourDetails}
                         className="grid h-8 w-8 place-items-center rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
