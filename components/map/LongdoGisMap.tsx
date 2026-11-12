@@ -23,7 +23,7 @@ import {
   resolveEffectiveRoadSide,
   DetailedTrafficStatus,
 } from "@/lib/flood-event-schema";
-import { Layers, Navigation, Building2, Map, ChevronUp, ChevronDown } from "lucide-react";
+import { Layers, Navigation, Building2, Map, ChevronUp, ChevronDown, LocateFixed } from "lucide-react";
 
 const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -468,6 +468,7 @@ export function LongdoGisMap({
   const vertexGroupRef = useRef<any>(null);
   const officeGroupRef = useRef<any>(null);
   const floodLinesRef = useRef<Record<string, FloodLineEntry>>({});
+  const userLocationMarkerRef = useRef<any>(null);
   const baseLayersRef = useRef<Record<string, any>>({});
   const currentBaseKeyRef = useRef<string>("longdo");
 
@@ -486,6 +487,8 @@ export function LongdoGisMap({
   const [showRoadLabels, setShowRoadLabels] = useState(true);
   const [legendRouteList, setLegendRouteList] = useState<"MAIN_HIGHWAY" | "SECOND_HIGHWAY" | null>(null);
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<string | null>(null);
 
   const mapStyles = systemData.mapStyles || DEFAULT_MAP_STYLES;
   const legendRoutes = (type: "MAIN_HIGHWAY" | "SECOND_HIGHWAY") => {
@@ -753,6 +756,7 @@ export function LongdoGisMap({
       officeGroupRef.current = null;
       shieldGroupRef.current = null;
       floodLinesRef.current = {};
+      userLocationMarkerRef.current = null;
     };
   }, []);
 
@@ -823,6 +827,53 @@ export function LongdoGisMap({
   const resetCamera = () => {
     if (!leafletMapRef.current) return;
     leafletMapRef.current.setView([APP_CONFIG.DEFAULT_CENTER.lat, APP_CONFIG.DEFAULT_CENTER.lon], APP_CONFIG.DEFAULT_ZOOM);
+  };
+
+  // This stays entirely in the browser: the current position is never sent to
+  // Supabase or stored with a flood report. Low accuracy/short cache avoids an
+  // unnecessary GPS wake-up while still centering the map for most travelers.
+  const locateUser = () => {
+    if (!navigator.geolocation) {
+      setLocationStatus("อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง");
+      return;
+    }
+    if (!leafletMapRef.current || !leafletRef.current) {
+      setLocationStatus("แผนที่ยังไม่พร้อม กรุณาลองอีกครั้ง");
+      return;
+    }
+    setIsLocating(true);
+    setLocationStatus("กำลังค้นหาตำแหน่งของคุณ…");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const map = leafletMapRef.current;
+        const L = leafletRef.current;
+        if (!map || !L) return;
+        const latLng: [number, number] = [position.coords.latitude, position.coords.longitude];
+        if (userLocationMarkerRef.current) userLocationMarkerRef.current.setLatLng(latLng);
+        else {
+          userLocationMarkerRef.current = L.circleMarker(latLng, {
+            radius: 8,
+            color: "#ffffff",
+            weight: 2,
+            fillColor: "#2563eb",
+            fillOpacity: 0.95,
+            interactive: false,
+            pane: "markerPane",
+          }).addTo(map).bindTooltip("ตำแหน่งของคุณ", { direction: "top", offset: [0, -8] });
+        }
+        map.flyTo(latLng, Math.max(map.getZoom(), 14), { duration: 0.7 });
+        setLocationStatus("แสดงตำแหน่งของคุณแล้ว");
+        setIsLocating(false);
+      },
+      (error) => {
+        const message = error.code === error.PERMISSION_DENIED
+          ? "ไม่ได้รับอนุญาตให้ใช้ตำแหน่ง กรุณาเปิดสิทธิ์ในเบราว์เซอร์"
+          : "ไม่พบตำแหน่งของคุณ กรุณาลองอีกครั้ง";
+        setLocationStatus(message);
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 }
+    );
   };
 
   // 4. Overlay layers
@@ -1976,6 +2027,16 @@ export function LongdoGisMap({
               </button>
               <button
                 type="button"
+                onClick={locateUser}
+                disabled={isLocating}
+                aria-label="ตำแหน่งของฉัน"
+                className="inline-flex min-h-8 items-center gap-1 rounded-md px-1.5 text-[10px] font-semibold text-sky-300 hover:bg-slate-800 hover:text-sky-200 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+              >
+                <LocateFixed className="h-3.5 w-3.5" aria-hidden="true" />
+                {isLocating ? "กำลังหา…" : "ตำแหน่งของฉัน"}
+              </button>
+              <button
+                type="button"
                 onClick={() => setIsLayerControlCollapsed(true)}
                 className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
                 title="ย่อแถบควบคุมเลเยอร์"
@@ -1985,6 +2046,12 @@ export function LongdoGisMap({
               </button>
             </div>
           </div>
+
+          {locationStatus && (
+            <p role="status" aria-live="polite" className="mt-2 rounded-md bg-slate-900/80 px-2 py-1.5 text-[11px] leading-snug text-slate-300">
+              {locationStatus}
+            </p>
+          )}
 
           <div className="space-y-1.5">
             <div tabIndex={0} aria-label="แสดงรายการทางหลวงสายหลัก" onFocus={() => setLegendRouteList("MAIN_HIGHWAY")} onBlur={() => setLegendRouteList(null)} onPointerEnter={(event) => { if (event.pointerType === "mouse") setLegendRouteList("MAIN_HIGHWAY"); }} onPointerLeave={(event) => { if (event.pointerType === "mouse") setLegendRouteList(null); }}>

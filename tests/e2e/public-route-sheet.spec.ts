@@ -46,6 +46,10 @@ test("citizen route sheet filters floods and detours and returns from details wi
   // while TanStack Query is still resolving its initial request.
   await expect(page.getByText("จุดเฝ้าระวังน้ำท่วม 2 จุด")).toBeVisible();
   await expect(page.locator('link[data-system-favicon="true"]')).toHaveAttribute("href", /agency-logo\.png/);
+  await page.context().grantPermissions(["geolocation"]);
+  await page.context().setGeolocation({ latitude: 6.700001, longitude: 101.200001 });
+  await page.getByRole("button", { name: "ตำแหน่งของฉัน" }).click();
+  await expect(page.getByText("แสดงตำแหน่งของคุณแล้ว")).toBeVisible();
   await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
   const list = page.getByRole("dialog", { name: "รายการสายทางและจุดเฝ้าระวัง" });
   await expect(list).toBeVisible();
