@@ -3,6 +3,20 @@
 รูปแบบสั้น: วันที่ · หัวข้อ · ไฟล์ · ทำอะไรและทำไม · ตรวจอะไรแล้ว/ยังไม่ได้ตรวจ · ความเสี่ยงที่ยอมรับ (ถ้ามี) · ลิงก์ BACKLOG
 ประวัติเก่า (UPDATE-001…047) อยู่ใน `SUPPLEMENTAL_RULES.md` — ใช้ grep ค้น ไม่อ่านทั้งไฟล์ เลขรายการต่อจาก 047
 
+### [UPDATE-073] 2026-11-12 แก้ให้ Stroke/Casing ของเส้นแสดงผลบนแผนที่ Canvas จริง
+- **ไฟล์:** `components/map/LongdoGisMap.tsx`
+- **ปัญหา:** `LineStylingTab` บันทึก `borderActive`, `borderColor` และ `borderWidth` ได้ แต่ตัววาด Leaflet Canvas ใช้เฉพาะเส้น foreground จึงไม่มีเส้นขอบปรากฏจริงบนแผนที่
+- **การแก้ไข:** วาด casing แบบ non-interactive ใต้เส้นหลักเฉพาะกรณีเปิด Stroke/Casing สำหรับเส้นน้ำท่วม ทางเลี่ยง และโครงข่ายสายทางหลัก/รอง; คลิก ป๊อปอัป การเลือก และแอนิเมชันยังทำบนเส้นหลักชั้นเดียว และเมื่อเลือกเหตุการณ์น้ำท่วม casing จะขยายตามเส้นหลัก
+- **ผลด้านทรัพยากร:** ไม่สร้าง SVG/DOM ต่อเส้น และไม่เพิ่มชั้น casing หากปิดตัวเลือก; Canvas renderer เดิมและ layer group เดิมยังถูกใช้ต่อเนื่อง
+- **ตรวจแล้ว:** `npm run lint`, `npm run typecheck`, `npm run build:pages` ผ่าน; Playwright mobile route-sheet ผ่านเมื่อ build ด้วย public Supabase config เช่นเดียวกับ CI
+- **ลำดับ deploy:** เว็บไซต์ GitHub Pages เท่านั้น (ไม่มี SQL หรือ Edge Function) · ย้อนกลับด้วย `git revert` commit นี้
+
+### [UPDATE-074] 2026-11-12 ทำให้ E2E ในเครื่องใช้ public configuration เดียวกับ CI
+- **ไฟล์:** `package.json`, `scripts/test-e2e-with-public-config.mjs` (ใหม่), `docs/BACKLOG.md`
+- **การแก้ไข:** เพิ่ม `npm run test:e2e:local` ซึ่งอ่านเฉพาะ public URL/key จาก `.github/hdms-public.json`, build ก่อน แล้วจึงรัน Playwright; ป้องกันหน้า public ค้าง Loading เพราะ `NEXT_PUBLIC_*` ถูกฝังตั้งแต่ขั้น build
+- **ตรวจแล้ว:** `npm run test:e2e:local -- tests/e2e/public-route-sheet.spec.ts --project=mobile-chromium --workers=1` ผ่าน 1/1
+- **ลำดับ deploy:** ไม่ต้อง deploy (เครื่องมือทดสอบเฉพาะ local/CI) · ย้อนกลับด้วย `git revert` commit นี้
+
 ### [UPDATE-048] 2026-11-06 โครงสร้างแผนที่ลด CPU/RAM
 - **ไฟล์:** `components/map/LongdoGisMap.tsx`, `app/admin/page.tsx`, `components/admin/AdminConsole.tsx`
 - **ทำอะไร:** สร้าง canvas renderer ตัวเดียว (เดิมสร้างใหม่ทุกครั้งที่วาด → `<canvas>` สะสมจนเครื่องค้าง); แยก layer group ต่อชนิดข้อมูล; ค่าเริ่มต้น prop แบบ array เป็นค่าคงที่; callback ผ่าน ref; popup/tooltip lazy; ป้ายทางหลวง debounce ตามกรอบจอ; กันผลคำนวณเส้นเก่าเขียนทับ

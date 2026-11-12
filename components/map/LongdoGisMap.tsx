@@ -106,12 +106,40 @@ interface ShieldCandidate {
 interface FloodLineEntry {
   line: any;
   baseWeight: number;
+  casing?: any;
+  baseBorderWidth?: number;
 }
 
 interface AnimatedLineEntry {
   line: any;
   baseWeight: number;
   baseOpacity: number;
+}
+
+/**
+ * Canvas paths cannot render a separate stroke on one polyline.  Draw a
+ * non-interactive casing first, then the interactive foreground path.  This
+ * keeps hit-testing and popups on one layer while only adding work when the
+ * administrator has explicitly enabled a casing.
+ */
+function addLineCasing(
+  L: any,
+  group: any,
+  latLngs: [number, number][],
+  style: { borderActive?: boolean; borderColor?: string; borderWidth?: number; opacity?: number },
+  foregroundWeight: number,
+  renderer: any,
+) {
+  if (!style.borderActive) return null;
+  const borderWidth = Number(style.borderWidth);
+  if (!Number.isFinite(borderWidth) || borderWidth <= 0) return null;
+  return L.polyline(latLngs as any, {
+    color: style.borderColor || "#ffffff",
+    weight: foregroundWeight + borderWidth * 2,
+    opacity: style.opacity ?? 1,
+    interactive: false,
+    renderer,
+  }).addTo(group);
 }
 
 const routeCodeOf = (props: any) => props?.route_no || props?.route_code || props?.ROAD_NO || props?.route || props?.code || "";
@@ -954,35 +982,64 @@ export function LongdoGisMap({
       const opacity = style?.opacity ?? 0.85;
       const className = lineAnimationClasses(style, allowLineAnimationRef.current);
 
+    const shouldShowFeature = (feature: any) => {
+      if (feature?.properties?.is_visible === false) return false;
+      const type = feature?.properties?.highway_type;
+      const featureIsMain = type === "MAIN_HIGHWAY" ? true : type === "SECOND_HIGHWAY" ? false : isMain;
+      if (featureIsMain) return showMainHwy;
+      if (!showSecHwy) return false;
+      if (showSecondaryAtCurrentZoom) return true;
+      const code = String(routeCodeOf(feature?.properties)).replace(/^ทล\.?/i, "").trim();
+      return Boolean(code && criticalHighwayRouteNos.has(code));
+    };
+
+    const highwayForegroundStyle = (feature: any) => {
+      const props = feature?.properties || {};
+      const featureIsMain = props.highway_type === "MAIN_HIGHWAY" ? true : props.highway_type === "SECOND_HIGHWAY" ? false : isMain;
+      const featureStyle = featureIsMain ? mapStyles.primary : mapStyles.secondary;
+      let featureWeight = featureStyle?.weight || weight;
+      if (props.lanes) {
+        const lanesStr = String(props.lanes);
+        if (lanesStr.includes("๘") || lanesStr.includes("8")) featureWeight = 8.5;
+        else if (lanesStr.includes("๖") || lanesStr.includes("6")) featureWeight = 7.5;
+        else if (lanesStr.includes("๔") || lanesStr.includes("4")) featureWeight = 5.5;
+        else if (lanesStr.includes("๒") || lanesStr.includes("2")) featureWeight = 3.5;
+      }
+      if (isLowZoom) featureWeight = Math.max(2, featureWeight * 0.8);
+      return { featureStyle, featureWeight };
+    };
+
       try {
-        const geoLayer = L.geoJSON(layer.geojson_data, {
+      // Casing is a separate non-interactive Canvas path.  It must be drawn
+      // before the foreground GeoJSON so clicks and labels stay on the road.
+      const hasHighwayCasing = [mapStyles.primary, mapStyles.secondary].some(
+        (item) => item?.borderActive && Number(item.borderWidth) > 0,
+      );
+      if (hasHighwayCasing) {
+        L.geoJSON(layer.geojson_data, {
           renderer,
+          interactive: false,
           filter: (feature: any) => {
-            if (feature?.properties?.is_visible === false) return false;
-            const type = feature?.properties?.highway_type;
-            const featureIsMain = type === "MAIN_HIGHWAY" ? true : type === "SECOND_HIGHWAY" ? false : isMain;
-            if (featureIsMain) return showMainHwy;
-            if (!showSecHwy) return false;
-            if (showSecondaryAtCurrentZoom) return true;
-            // When zoomed out (< 11), keep secondary highways that have an active critical flood incident
-            const code = String(routeCodeOf(feature?.properties)).replace(/^ทล\.?/i, "").trim();
-            return Boolean(code && criticalHighwayRouteNos.has(code));
+            const { featureStyle } = highwayForegroundStyle(feature);
+            return shouldShowFeature(feature) && Boolean(featureStyle?.borderActive && Number(featureStyle.borderWidth) > 0);
           },
           style: (feature: any) => {
-            const props = feature?.properties || {};
-            const featureIsMain = props.highway_type === "MAIN_HIGHWAY" ? true : props.highway_type === "SECOND_HIGHWAY" ? false : isMain;
-            const featureStyle = featureIsMain ? mapStyles.primary : mapStyles.secondary;
-            let featureWeight = featureStyle?.weight || weight;
-            if (props.lanes) {
-              const lanesStr = String(props.lanes);
-              if (lanesStr.includes("๘") || lanesStr.includes("8")) featureWeight = 8.5;
-              else if (lanesStr.includes("๖") || lanesStr.includes("6")) featureWeight = 7.5;
-              else if (lanesStr.includes("๔") || lanesStr.includes("4")) featureWeight = 5.5;
-              else if (lanesStr.includes("๒") || lanesStr.includes("2")) featureWeight = 3.5;
-            }
-            if (isLowZoom) {
-              featureWeight = Math.max(2, featureWeight * 0.8);
-            }
+            const { featureStyle, featureWeight } = highwayForegroundStyle(feature);
+            const borderWidth = Math.max(0, Number(featureStyle?.borderWidth) || 0);
+            return {
+              color: featureStyle?.borderColor || "#ffffff",
+              weight: featureWeight + borderWidth * 2,
+              opacity: featureStyle?.opacity ?? opacity,
+              interactive: false,
+            };
+          },
+        }).addTo(group);
+      }
+        const geoLayer = L.geoJSON(layer.geojson_data, {
+          renderer,
+          filter: shouldShowFeature,
+          style: (feature: any) => {
+            const { featureStyle, featureWeight } = highwayForegroundStyle(feature);
             return {
               color: featureStyle?.color || color,
               weight: featureWeight,
@@ -1127,9 +1184,11 @@ export function LongdoGisMap({
       // Draw forward A->B line if mode is TWO_WAY or FORWARD_ONLY
       if (dirMode !== "REVERSE_ONLY" && fwdCoords.length >= 2) {
         const latLngs = fwdCoords.map(toLeafletLatLng);
+        const forwardWeight = detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight;
+        addLineCasing(L, group, latLngs, detourStyle || {}, forwardWeight, renderer);
         const polyline = L.polyline(latLngs as any, {
           color: dColor,
-          weight: detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight,
+          weight: forwardWeight,
           dashArray: dDash,
           opacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
           className,
@@ -1166,9 +1225,11 @@ export function LongdoGisMap({
         if (effectiveRev.length >= 2) {
           const revLatLngs = effectiveRev.map(toLeafletLatLng);
           const revColor = dirMode === "REVERSE_ONLY" ? dColor : (detour.detour_meta?.arrow_color_reverse || "#38bdf8");
+          const reverseWeight = Math.max(3.5, (detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight) - 0.5);
+          addLineCasing(L, group, revLatLngs, detourStyle || {}, reverseWeight, renderer);
           const revPolyline = L.polyline(revLatLngs as any, {
             color: revColor,
-            weight: Math.max(3.5, (detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight) - 0.5),
+            weight: reverseWeight,
             dashArray: dDash || "6, 6",
             opacity: detourStyle?.opacity ?? 0.9,
             renderer,
@@ -1228,15 +1289,23 @@ export function LongdoGisMap({
     visibleFloods.forEach((flood) => {
       const coords = parseRouteCoordinates(flood.coordinates_json);
       if (coords.length >= 2) {
+        const selectedWeight = fBaseWeight + (flood.id === selectedFloodIdRef.current ? 1.5 : 0);
+        const latLngs = coords.map(toLeafletLatLng);
+        const casing = addLineCasing(L, group, latLngs, floodStyle || {}, selectedWeight, renderer);
         const polyline = L.polyline(coords.map(toLeafletLatLng) as any, {
           color: fColor,
-          weight: fBaseWeight + (flood.id === selectedFloodIdRef.current ? 1.5 : 0),
+          weight: selectedWeight,
           opacity: fOpacity,
           dashArray: fDash,
           className,
           renderer,
         }).addTo(group);
-        floodLinesRef.current[flood.id] = { line: polyline, baseWeight: fBaseWeight };
+        floodLinesRef.current[flood.id] = {
+          line: polyline,
+          baseWeight: fBaseWeight,
+          casing,
+          baseBorderWidth: Number(floodStyle?.borderWidth) || 0,
+        };
         polyline.bindPopup(() => buildFloodPopupHtml(flood, updatesByFlood[flood.id] || []), { maxWidth: 280 });
         polyline.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
@@ -1571,7 +1640,9 @@ export function LongdoGisMap({
   // 4e. Selected flood: restyle one polyline in place instead of redrawing the map.
   useEffect(() => {
     Object.entries(floodLinesRef.current).forEach(([id, entry]) => {
-      entry.line.setStyle({ weight: entry.baseWeight + (id === selectedFloodId ? 1.5 : 0) });
+      const selectedDelta = id === selectedFloodId ? 1.5 : 0;
+      entry.line.setStyle({ weight: entry.baseWeight + selectedDelta });
+      entry.casing?.setStyle({ weight: entry.baseWeight + selectedDelta + (entry.baseBorderWidth || 0) * 2 });
     });
   }, [selectedFloodId, mapReady, systemData.floodRoutes, showFloodLayer, mapStyles]);
 

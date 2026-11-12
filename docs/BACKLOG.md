@@ -21,8 +21,15 @@
 | B-014 | **วิกฤต** | Edge Function Production v9 ไม่ส่งค่าฝั่งถนน/ช่องจราจร/ทิศทางไปยัง DB (ตรวจอ่านอย่างเดียว 2026-11-11) | เปิด: แก้ source แล้ว ต้อง Security Review + deploy และทดสอบ staging |
 | B-015 | สูง | Phase 6 ยังไม่ผ่าน Build/E2E/CRUD integration บน staging เพราะ dependencies ในสภาพแวดล้อมทดสอบไม่ครบ | ปิด (2026-11-11, ดู UPDATE-070: Playwright E2E 46 passed, lint 0 warnings, typecheck 0 errors, build:pages 6/6 ผ่านสมบูรณ์) |
 | B-016 | กลาง | ตราครุฑทางการสำหรับป้ายทางหลวงยังไม่มี Asset ที่ผ่านอนุมัติ | เปิด |
+| B-017 | ต่ำ | รัน Playwright ในเครื่องโดยไม่ build พร้อม public config ทำให้หน้า public ค้าง Loading และ test ที่ mock Edge Function ล้ม | ปิด (2026-11-12, UPDATE-074) |
 
 ---
+
+## B-017 [ต่ำ] คำสั่ง E2E ในเครื่องไม่เตรียม public build configuration — ปิดแล้ว
+- **หลักฐาน:** `tests/e2e/public-route-sheet.spec.ts` ล้มที่ข้อความ `จุดเฝ้าระวังน้ำท่วม 2 จุด` เมื่อรันจาก clone ที่ไม่มี `.env.local`; `next build` ฝังค่า `NEXT_PUBLIC_*` ตอน build แล้ว `npm run start` ไม่รับค่าใหม่ภายหลัง. เมื่อ build โดยใช้ค่าจาก `.github/hdms-public.json` แล้วทดสอบซ้ำ ผลผ่าน 1/1.
+- **ผลกระทบ:** นักพัฒนาใหม่อาจเข้าใจผิดว่า UI หรือการ mock พัง ทั้งที่เป็นขั้นตอนเตรียม test; CI ไม่กระทบเพราะ workflow เขียนค่า public config ลง `GITHUB_ENV` ก่อน build.
+- **ทางเลือก:** A) เพิ่ม script E2E กลางที่อ่าน `.github/hdms-public.json` แล้ว build/test ด้วย environment เดียวกับ CI; B) บังคับให้สร้าง `.env.local` จาก `.env.example`; C) คงคู่มือคำสั่งมือ.
+- **การแก้ไข:** ใช้ทางเลือก A ผ่าน `npm run test:e2e:local`; script อ่าน public configuration, `npm run build`, แล้วส่งต่อ argument ให้ Playwright โดยไม่สร้างหรือบันทึก `.env.local`.
 
 ## B-001 [วิกฤต] Edge Function เขียนข้อมูลโดยไม่ตรวจสิทธิ์
 - **หลักฐาน:** `supabase/functions/hdms-api/index.ts` — ทุก action ที่ไม่ใช่ read ใช้ `SUPABASE_SERVICE_ROLE_KEY` และไม่มีโค้ดตรวจ token/บทบาท (ค้น `getUser`/`app_metadata` ไม่พบ) · `supabase/config.toml`: `verify_jwt = false` พร้อมคอมเมนต์ว่าตั้งใจให้ `/admin` ไม่ต้อง login · `PRODUCTION.md` เขียนตรงข้าม (อ้างว่าตรวจ JWT และบทบาท) **(ต้องยืนยันกับฟังก์ชันที่ deploy จริง)**
