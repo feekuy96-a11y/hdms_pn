@@ -812,3 +812,13 @@
 - **การทดสอบและผลลัพธ์:** `npm run lint`, `npm run typecheck`, production `npm run build` ผ่าน; Playwright mobile route sheet ผ่าน 1/1
 - **ข้อจำกัด:** ยังไม่ทดสอบกับข้อมูล/เครื่องผู้ใช้จริงหรือ Supabase production และรอบนี้ไม่มีการ Push หรือ Deploy
 - **สถานะ:** พร้อม review ในเครื่อง
+
+---
+
+### [UPDATE-067] 2026-11-12: ทำให้ favicon เปลี่ยนตามโลโก้ระบบอย่างสม่ำเสมอ
+- **วัตถุประสงค์:** แก้กรณีอัปโหลดโลโก้แล้ว icon บนแท็บเบราว์เซอร์ยังคงเป็น icon เดิม
+- **ไฟล์ที่เกี่ยวข้อง:** `lib/use-system-favicon.ts`, `tests/e2e/public-route-sheet.spec.ts`
+- **รายละเอียดการทำงาน:** อัปเดต `href` ของทุก `link[rel~="icon"]` และ `shortcut icon` ที่มีอยู่จาก Next.js แล้วกำกับด้วย `data-system-favicon` เพื่อไม่ให้เบราว์เซอร์เลือก favicon เก่าที่คงอยู่ใน document head
+- **การทดสอบและผลลัพธ์:** `npm run lint`, `npm run typecheck`, production `npm run build` ผ่าน; Playwright mobile ตรวจ `link[data-system-favicon]` จากค่าโลโก้ API mock ผ่าน 1/1
+- **ข้อจำกัด:** การตรวจนี้ยืนยัน DOM หลังรับค่าจาก API; cache ของเบราว์เซอร์/เครือข่ายจริงยังต้องตรวจหลังเผยแพร่
+- **สถานะ:** พร้อม review ในเครื่อง
