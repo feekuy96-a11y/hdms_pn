@@ -419,6 +419,8 @@ interface LongdoGisMapProps {
   className?: string;
   publicMode?: boolean;
   isSidebarCollapsed?: boolean;
+  /** Optional citizen-side status filter: only these flood records are drawn. */
+  visibleFloodIds?: string[];
 }
 
 export function LongdoGisMap({
@@ -450,6 +452,7 @@ export function LongdoGisMap({
   className = "h-full w-full",
   publicMode = false,
   isSidebarCollapsed = false,
+  visibleFloodIds,
 }: LongdoGisMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
@@ -1145,7 +1148,10 @@ export function LongdoGisMap({
     Object.values(updatesByFlood).forEach((list) => list.sort((a, b) => new Date(a.reported_at).getTime() - new Date(b.reported_at).getTime()));
 
     // 4d. Flood routes + capsule markers (with De-overlapping, Priority z-Index & Merged/Segment modes)
-    const visibleFloods = (systemData.floodRoutes || []).filter((flood) => isFloodLineVisibleOnCurrentMap(flood));
+    const visibleFloodIdSet = visibleFloodIds ? new Set(visibleFloodIds) : null;
+    const visibleFloods = (systemData.floodRoutes || []).filter(
+      (flood) => isFloodLineVisibleOnCurrentMap(flood) && (!visibleFloodIdSet || visibleFloodIdSet.has(flood.id))
+    );
 
     // First draw polylines for all visible flood routes using configured unified line style
     visibleFloods.forEach((flood) => {
@@ -1443,7 +1449,7 @@ export function LongdoGisMap({
       group.clearLayers();
       floodLinesRef.current = {};
     };
-  }, [mapReady, systemData.floodRoutes, systemData.timelineUpdates, showFloodLayer, floodDisplayMode, mapStyles, currentZoom]);
+  }, [mapReady, systemData.floodRoutes, systemData.timelineUpdates, showFloodLayer, floodDisplayMode, mapStyles, currentZoom, visibleFloodIds]);
 
   // 4e. Selected flood: restyle one polyline in place instead of redrawing the map.
   useEffect(() => {

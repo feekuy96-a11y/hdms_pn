@@ -139,15 +139,39 @@ const SUMMARY_ITEMS: ReadonlyArray<{ color: StatusColor; label: string; dot: str
   { color: "slate", label: "รอตรวจสอบ", dot: "bg-slate-400" },
 ];
 
-function SituationSummary({ counts }: { counts: Record<StatusColor, number> }) {
+function SituationSummary({
+  counts,
+  activeFilter = "ALL",
+  onFilter,
+}: {
+  counts: Record<StatusColor, number>;
+  activeFilter?: StatusColor | "ALL";
+  onFilter?: (color: StatusColor) => void;
+}) {
   const visible = SUMMARY_ITEMS.filter((item) => counts[item.color] > 0);
   if (visible.length === 0) return <p className="text-xs text-slate-300">ยังไม่มีจุดเฝ้าระวังที่รายงานในขณะนี้</p>;
   return (
     <ul aria-label="สรุปสถานการณ์ทุกจุด" className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-200">
       {visible.map((item) => (
-        <li key={item.color} className="inline-flex items-center gap-1.5">
-          <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${item.dot}`} />
-          <strong className="font-mono text-sm text-white">{counts[item.color]}</strong> {item.label}
+        <li key={item.color}>
+          {onFilter ? (
+            <button
+              type="button"
+              aria-pressed={activeFilter === item.color}
+              onClick={() => onFilter(item.color)}
+              className={`inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
+                activeFilter === item.color ? "bg-slate-700/90 ring-1 ring-amber-400/70" : "hover:bg-slate-800/80"
+              }`}
+            >
+              <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${item.dot}`} />
+              <strong className="font-mono text-sm text-white">{counts[item.color]}</strong> {item.label}
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${item.dot}`} />
+              <strong className="font-mono text-sm text-white">{counts[item.color]}</strong> {item.label}
+            </span>
+          )}
         </li>
       ))}
     </ul>
@@ -216,6 +240,7 @@ export default function HomePage() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRouteFilter, setSelectedRouteFilter] = useState("ALL");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<StatusColor | "ALL">("ALL");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [citizenDetourDirection, setCitizenDetourDirection] = useState<"FORWARD" | "REVERSE">("FORWARD");
   const [sidebarTab, setSidebarTab] = useState<"ALL" | "FLOOD" | "DETOUR">("ALL");
@@ -358,7 +383,9 @@ export default function HomePage() {
     const cleanNo = r.route_no.replace(/^(?:ทล|ปน)\.?\s*/i, "").trim();
     const matchChip = selectedRouteFilter === "ALL" || cleanNo === selectedRouteFilter || r.route_no === selectedRouteFilter;
 
-    return matchSearch && matchChip;
+    const presentation = getTrafficPresentation(r.traffic_status as TrafficStatus, r.water_level_cm, r.direction_meta?.trafficStatusDetail);
+    const matchStatus = selectedStatusFilter === "ALL" || presentation.color === selectedStatusFilter;
+    return matchSearch && matchChip && matchStatus;
   }).sort(
     (a, b) =>
       STATUS_ORDER[getTrafficPresentation(a.traffic_status as TrafficStatus, a.water_level_cm, a.direction_meta?.trafficStatusDetail).color] -
@@ -372,6 +399,15 @@ export default function HomePage() {
     return counts;
   }, [systemData.floodRoutes]);
   const activeFloodCount = situationCounts.red + situationCounts.orange + situationCounts.amber + situationCounts.sky + situationCounts.emerald + situationCounts.slate;
+  const visibleFloodIds = React.useMemo(
+    () => (selectedStatusFilter === "ALL" ? undefined : filteredFloods.map((flood) => flood.id)),
+    [filteredFloods, selectedStatusFilter]
+  );
+  const handleStatusFilter = (color: StatusColor) => {
+    setSelectedStatusFilter((current) => (current === color ? "ALL" : color));
+    setSidebarTab("FLOOD");
+    setIsMobileDrawerOpen(true);
+  };
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
   const [onDemandPhotos, setOnDemandPhotos] = useState<Record<string, any[]>>({});
   const dossierStatus = getTrafficPresentation(
@@ -621,7 +657,16 @@ export default function HomePage() {
               </button>
             </div>
 
-            <SituationSummary counts={situationCounts} />
+            <SituationSummary counts={situationCounts} activeFilter={selectedStatusFilter} onFilter={handleStatusFilter} />
+            {selectedStatusFilter !== "ALL" && (
+              <button
+                type="button"
+                onClick={() => setSelectedStatusFilter("ALL")}
+                className="self-start text-xs font-semibold text-amber-300 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+              >
+                แสดงทุกสถานะ
+              </button>
+            )}
 
             {/* View Switcher Sub-tabs: All / Floods / Detours */}
             <div className="grid grid-cols-3 gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs font-heading font-bold">
@@ -725,12 +770,13 @@ export default function HomePage() {
                     ? "ยังไม่มีรายงานในระบบ ข้อมูลนี้ไม่ยืนยันว่าทุกเส้นทางปลอดภัย โปรดตรวจสอบกับสายด่วน 1586 ก่อนเดินทาง"
                     : "กรุณาลองเปลี่ยนคำค้นหา หรือกดปุ่มด้านล่างเพื่อล้างตัวกรอง"}
                 </p>
-                {(searchQuery || selectedRouteFilter !== "ALL") && (
+                {(searchQuery || selectedRouteFilter !== "ALL" || selectedStatusFilter !== "ALL") && (
                   <button
                     type="button"
                     onClick={() => {
                       setSearchQuery("");
                       setSelectedRouteFilter("ALL");
+                      setSelectedStatusFilter("ALL");
                     }}
                     className="mt-3 min-h-11 rounded-lg border border-amber-400 px-4 font-bold text-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                   >
@@ -796,6 +842,7 @@ export default function HomePage() {
               setIsMobileDrawerOpen(false);
             }}
             focusCoordinates={focusCoordinates}
+            visibleFloodIds={visibleFloodIds}
             className="h-full w-full"
           />
 
@@ -808,7 +855,7 @@ export default function HomePage() {
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1 space-y-1.5">
                   <p className="font-heading text-sm font-bold text-white">จุดเฝ้าระวังน้ำท่วม {activeFloodCount} จุด</p>
-                  <SituationSummary counts={situationCounts} />
+                  <SituationSummary counts={situationCounts} activeFilter={selectedStatusFilter} onFilter={handleStatusFilter} />
                 </div>
                 <button
                   type="button"
