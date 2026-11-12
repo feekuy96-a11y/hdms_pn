@@ -17,6 +17,12 @@ test("citizen route sheet filters floods and detours and returns from details wi
           lat_end: 6.88, lon_end: 101.27, coordinates_json: [[101.25, 6.87], [101.27, 6.88]],
           water_level_cm: 30, traffic_status: "WARNING", direction_meta: {},
           latest_photo_url: "", is_active: true, updated_at: updatedAt,
+        }, {
+          id: "F-43", route_no: "43", section_name: "สายทางที่ผ่านได้ปกติสำหรับทดสอบตัวกรอง",
+          km_start: "2+000", km_end: "2+200", lat_start: 6.89, lon_start: 101.28,
+          lat_end: 6.90, lon_end: 101.30, coordinates_json: [[101.28, 6.89], [101.30, 6.90]],
+          water_level_cm: 0, traffic_status: "PASSABLE", direction_meta: {},
+          latest_photo_url: "", is_active: true, updated_at: updatedAt,
         }],
         detourRoutes: [{
           id: "D-42", flood_id_ref: "F-42",
@@ -38,7 +44,7 @@ test("citizen route sheet filters floods and detours and returns from details wi
   await page.goto(`${base}/`);
   // Wait for the intercepted live payload instead of opening an empty sheet
   // while TanStack Query is still resolving its initial request.
-  await expect(page.getByText("จุดเฝ้าระวังน้ำท่วม 1 จุด")).toBeVisible();
+  await expect(page.getByText("จุดเฝ้าระวังน้ำท่วม 2 จุด")).toBeVisible();
   await expect(page.locator('link[data-system-favicon="true"]')).toHaveAttribute("href", /agency-logo\.png/);
   await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
   const list = page.getByRole("dialog", { name: "รายการสายทางและจุดเฝ้าระวัง" });
@@ -63,4 +69,14 @@ test("citizen route sheet filters floods and detours and returns from details wi
   await expect(list.getByLabel("สายทาง", { exact: true })).toHaveValue("42");
   await list.getByRole("button", { name: "ปิดรายการสายทาง" }).click();
   await expect(list).toHaveCount(0);
+
+  // A status card is a real map/list filter, not decoration. Selecting the
+  // warning bucket must hide a normally-passable record from the citizen sheet.
+  await page.getByRole("button", { name: /เฝ้าระวัง \/ ระมัดระวัง/ }).click();
+  await expect(list).toBeVisible();
+  await expect(list.getByText("ทดสอบจุดน้ำท่วม ทล.42")).toBeVisible();
+  await expect(list.getByText("สายทางที่ผ่านได้ปกติสำหรับทดสอบตัวกรอง")).toHaveCount(0);
+  await list.getByRole("button", { name: "แสดงทุกสถานะ" }).click();
+  await list.getByLabel("สายทาง", { exact: true }).selectOption("ALL");
+  await expect(list.getByText("สายทางที่ผ่านได้ปกติสำหรับทดสอบตัวกรอง")).toBeVisible();
 });

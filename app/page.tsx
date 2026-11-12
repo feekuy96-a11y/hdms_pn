@@ -906,6 +906,18 @@ export default function HomePage() {
                       </button>
                     </div>
                   </div>
+                  {selectedStatusFilter !== "ALL" && (
+                    <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-amber-400/40 bg-amber-950/35 px-2.5 py-1.5 text-xs">
+                      <span className="text-amber-100">กำลังกรองตามสถานะที่เลือก</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStatusFilter("ALL")}
+                        className="min-h-8 rounded-md px-2 font-semibold text-amber-300 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                      >
+                        แสดงทุกสถานะ
+                      </button>
+                    </div>
+                  )}
                   <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl border border-slate-700/80 bg-slate-900/90 p-1 text-xs font-heading font-bold" role="group" aria-label="ประเภทข้อมูล">
                     {([
                       { id: "ALL", label: "ทั้งหมด", count: filteredFloods.length + filteredDetours.length },
