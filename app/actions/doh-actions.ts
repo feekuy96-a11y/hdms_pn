@@ -34,6 +34,8 @@ export async function getPublicSystemDataAction(): Promise<SystemDataPayload> {
 }
 
 export async function saveTimelineUpdateAction(payload: {
+  /** Stable client-generated key used by offline retries to prevent duplicate reports. */
+  clientRequestId?: string;
   floodId: string;
   waterLevelCm: number;
   trafficStatus: "CLOSED" | "WARNING" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE";

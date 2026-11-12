@@ -115,17 +115,22 @@ Deno.serve(async (req) => {
       case "saveTimelineUpdateAction": {
         const timelineId = `TL-${crypto.randomUUID()}`;
         const floodId = text(p.floodId, "Flood ID");
-        await check(db.rpc("doh_update_timeline_rpc", { payload: { timelineId, floodId, waterLevelCm: number(p.waterLevelCm, 0, 10000), trafficStatus: traffic(p.trafficStatus), latitude: number(p.latitude, -90, 90), longitude: number(p.longitude, -180, 180), photoUrl: p.photoUrl || "", reporterName: text(p.reporterName, "Reporter"), remark: p.remark || "" } }));
-        if (p.roadSide || p.affectedLanes || p.affectedShoulder || p.directionMeta) {
-          const extFlood: Record<string, unknown> = { updated_at: now };
-          const extTimeline: Record<string, unknown> = {};
-          if (p.roadSide && roadSide(p.roadSide) !== "UNKNOWN") { extFlood.road_side = roadSide(p.roadSide); extTimeline.road_side = roadSide(p.roadSide); }
-          if (typeof p.affectedLanes === "string") { extFlood.affected_lanes = p.affectedLanes; extTimeline.affected_lanes = p.affectedLanes; }
-          if (p.affectedShoulder) { extFlood.affected_shoulder = shoulder(p.affectedShoulder); extTimeline.affected_shoulder = shoulder(p.affectedShoulder); }
-          if (p.directionMeta && typeof p.directionMeta === "object") { extFlood.direction_meta = p.directionMeta; extTimeline.direction_meta = p.directionMeta; }
-          await check(db.from("doh_flood_routes").update(extFlood).eq("id", floodId));
-          await check(db.from("doh_timeline_updates").update(extTimeline).eq("id", timelineId));
-        }
+        await check(db.rpc("doh_update_timeline_rpc", { payload: {
+          timelineId,
+          clientRequestId: typeof p.clientRequestId === "string" ? p.clientRequestId.slice(0, 160) : undefined,
+          floodId,
+          waterLevelCm: number(p.waterLevelCm, 0, 10000),
+          trafficStatus: traffic(p.trafficStatus),
+          latitude: number(p.latitude, -90, 90),
+          longitude: number(p.longitude, -180, 180),
+          photoUrl: p.photoUrl || "",
+          reporterName: text(p.reporterName, "Reporter"),
+          remark: p.remark || "",
+          roadSide: p.roadSide ? roadSide(p.roadSide) : undefined,
+          affectedLanes: typeof p.affectedLanes === "string" ? p.affectedLanes : undefined,
+          affectedShoulder: p.affectedShoulder ? shoulder(p.affectedShoulder) : undefined,
+          directionMeta: p.directionMeta && typeof p.directionMeta === "object" ? p.directionMeta : undefined,
+        } }));
         break;
       }
       case "upsertRouteAction": {

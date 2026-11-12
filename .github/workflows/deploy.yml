@@ -29,7 +29,14 @@ jobs:
           else
             echo "BASE_PATH=/$REPO" >> "$GITHUB_ENV"
           fi
-      - run: npm run lint && npm run typecheck && npm run build:pages
+      - run: npm run lint && npm run typecheck && npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - run: npm run build:pages
+      - run: npm run test:e2e
+        env:
+          PLAYWRIGHT_STATIC: "1"
+          BASE_PATH: /hdms_pn
       - uses: actions/upload-pages-artifact@v3
         with:
           path: out

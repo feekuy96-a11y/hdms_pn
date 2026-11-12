@@ -46,8 +46,8 @@ test("citizen route sheet filters floods and detours and returns from details wi
   await expect(detail).toBeVisible();
   await expect(list).toHaveCount(0);
   await expect(detail.getByRole("heading", { name: /ชื่อเส้นทางยาวที่ต้องขึ้นบรรทัดใหม่/ })).toBeVisible();
-  await expect(detail.getByRole("button", { name: "ขาไป A → B" })).toBeEnabled();
-  await expect(detail.getByRole("button", { name: "ขากลับ B → A" })).toBeDisabled();
+  await expect(detail.getByRole("button", { name: /ขาไป.*A.*B/ })).toBeEnabled();
+  await expect(detail.getByRole("button", { name: /ขากลับ.*B.*A/ })).toBeDisabled();
   await expect(detail.getByText("เริ่มจากทางแยก ทล.42")).toBeVisible();
   await detail.getByRole("button", { name: "ปิดหน้าต่างคำแนะนำทางเลี่ยง" }).click();
   await expect(detail).toHaveCount(0);

@@ -101,8 +101,12 @@ function getTrafficPresentation(status: string, waterLevelCm: number, detailStat
       return { label: "รถเล็กผ่านได้ ๑ ช่องทาง", detail: "เปิดการจราจรหนึ่งช่องทาง", icon: "↔️", color: "amber" as const };
     case "WARNING":
       return { label: "รถเล็กผ่านไม่ได้", detail: `ระดับน้ำ ${waterLevelCm} ซม.`, icon: "⚠️", color: "amber" as const };
-    default:
+    case "PASSABLE":
       return { label: "ผ่านได้ปกติ", detail: "การจราจรผ่านได้ตามปกติ", icon: "✅", color: "emerald" as const };
+    default:
+      // External imports and older records can contain an unsupported value.
+      // It must never be presented as safe traffic until an officer verifies it.
+      return { label: "รอตรวจสอบสถานะ", detail: "ไม่พบสถานะการจราจรที่ยืนยันได้", icon: "⏳", color: "slate" as const };
   }
 }
 

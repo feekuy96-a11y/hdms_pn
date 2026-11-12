@@ -787,3 +787,14 @@
   - `npm run typecheck`: 0 errors
   - `NEXT_OUTPUT=export next build`: 6/6 static pages สำเร็จ 100%
 - **สถานะ:** พร้อมใช้งานจริง (ACTIVE)
+
+---
+
+### [UPDATE-065] 2026-11-12: ความถูกต้องของสถานะและการซิงค์ Timeline แบบไม่ซ้ำ
+- **ผู้ดำเนินการ/ผู้สั่งการ:** เจ้าหน้าที่แขวงทางหลวงปัตตานี / AI Assistant
+- **วัตถุประสงค์:** ป้องกันการแสดงสถานะไม่รู้จักเป็น “ผ่านได้ปกติ”, ป้องกัน Timeline ซ้ำเมื่อ Offline retry และบังคับให้ Deploy ตรวจ E2E ก่อนเผยแพร่
+- **ไฟล์ที่เกี่ยวข้อง:** `app/page.tsx`, `lib/detour-navigation.ts`, `app/actions/doh-actions.ts`, `components/offline/OfflineSyncStatus.tsx`, `supabase/functions/hdms-api/index.ts`, `supabase/migrations/20261112145427_timeline_idempotency_and_atomic_metadata.sql`, `.github/workflows/deploy.yml`, `tests/e2e/*.spec.ts`
+- **รายละเอียดการทำงาน:** สถานะที่ไม่รองรับแสดง “รอตรวจสอบสถานะ”; Offline queue ส่ง `clientRequestId` คงที่; migration เพิ่ม unique key และ RPC เดียวสำหรับ Timeline/Flood metadata เพื่อ atomic rollback; workflow Deploy รัน browser E2E ทั้ง server และ static artifact ก่อน upload Pages
+- **การทดสอบและผลลัพธ์:** `npm run lint`, `npm run typecheck`, production build และ Pages build ผ่าน; Playwright 46 ผ่าน 14 ข้าม (desktop-only/ไม่มี geometry fixture) ทั้ง server และ static export
+- **ข้อจำกัด:** Migration และ Edge Function ยังไม่ได้ deploy หรือทดสอบกับ Supabase production เพราะรอบนี้ไม่เปลี่ยน Production
+- **สถานะ:** พร้อม review และ deploy เป็นชุดเดียวกัน

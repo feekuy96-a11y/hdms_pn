@@ -354,7 +354,6 @@ export function getUnifiedTrafficStatus(
         popupBadgeClass: "bg-orange-950 text-orange-300 border-orange-500/60",
       };
     case "PASSABLE":
-    default:
       return {
         key: "PASSABLE",
         label: "ผ่านได้ปกติ",
@@ -365,6 +364,18 @@ export function getUnifiedTrafficStatus(
         capsuleClass: "doh-capsule-emerald",
         badgeClass: "bg-emerald-950/80 text-emerald-300 border border-emerald-500/50",
         popupBadgeClass: "bg-emerald-950 text-emerald-300 border-emerald-500/60",
+      };
+    default:
+      return {
+        key: "PENDING_VERIFICATION",
+        label: "รอตรวจสอบสถานะ",
+        detail: "ไม่พบสถานะการจราจรที่ยืนยันได้",
+        icon: "⏳",
+        color: "slate",
+        hex: "#64748b",
+        capsuleClass: "doh-capsule-slate",
+        badgeClass: "bg-slate-900/80 text-slate-300 border border-slate-600/50",
+        popupBadgeClass: "bg-slate-900 text-slate-300 border-slate-700",
       };
   }
 }

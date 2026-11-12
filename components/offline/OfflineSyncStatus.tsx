@@ -54,6 +54,9 @@ export function OfflineSyncStatus({ onSyncComplete }: { onSyncComplete?: () => v
       const unsynced = await getUnsyncedReports();
       for (const item of unsynced) {
         await saveTimelineUpdateAction({
+          // Keep this key stable across timeout/retry cycles. The database uses it
+          // as the idempotency key for the one field report.
+          clientRequestId: item.id,
           floodId: item.floodId,
           waterLevelCm: item.waterLevelCm,
           trafficStatus: item.trafficStatus as any,

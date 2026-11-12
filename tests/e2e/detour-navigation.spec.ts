@@ -174,5 +174,9 @@ test.describe("Phase 5.1: Unified Traffic Status Presentation (5 Statuses + Pend
     expect(sPending.color).toBe("slate");
     expect(sPending.icon).toBe("⏳");
     expect(sPending.label).toBe("รอตรวจสอบสถานะ");
+
+    const sUnknown = getUnifiedTrafficStatus("UNRECOGNIZED_STATUS", 0);
+    expect(sUnknown.key).toBe("PENDING_VERIFICATION");
+    expect(sUnknown.label).toBe("รอตรวจสอบสถานะ");
   });
 });
