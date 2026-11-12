@@ -835,3 +835,16 @@
 - **การทดสอบและผลลัพธ์:** `npm run lint` และ `npm run typecheck` ผ่าน
 - **ข้อจำกัด:** ยังต้องรัน browser E2E ครอบคลุมการแตะทุกสถานะและตรวจแผนที่จริงในรอบรวมก่อนเผยแพร่
 - **สถานะ:** พร้อม review ในเครื่อง
+
+---
+
+### [UPDATE-069] 2026-11-12: ยืนยัน Timeline idempotency และ Draft lifecycle บน Supabase Production
+- **วัตถุประสงค์:** นำ schema/API ที่โค้ดใช้งานจริงขึ้น Supabase และยืนยันว่า retry ของรายงานภาคสนามไม่สร้าง Timeline ซ้ำ
+- **Production migrations ที่ใช้:** `limit_timeline_history_in_system_data`, `highway_display_geometry`, `directional_flood_and_detour`, `optimize_display_payload_photos`, `timeline_idempotency_and_atomic_metadata`
+- **Production API:** อัปเดต Edge Function `hdms-api` เป็น version 10 โดยคง `verify_jwt: false` ตามข้อกำหนด `/admin` ไม่ล็อกอิน
+- **หลักฐานการทดสอบจริง:**
+  1. เรียก `getPublicSystemDataAction` ผ่าน Edge Function สำเร็จ และได้ flood/detour/settings จากฐานข้อมูลจริง
+  2. สร้าง flood route ทดสอบแบบ Draft, เรียก `saveTimelineUpdateAction` ซ้ำ 2 ครั้งด้วย `clientRequestId` เดียวกัน, ผลตรวจได้ Timeline 1 แถว, metadata ทิศทาง/ช่องจราจรถูกบันทึกครบ และ `is_active=false` คงอยู่
+  3. ลบ route/timeline ทดสอบและตรวจว่าไม่เหลือข้อมูลทดสอบแล้ว
+- **ข้อจำกัด:** ยังไม่ได้ Push หรือ Deploy GitHub Pages; การยอมรับ anonymous admin write และคำเตือน RLS/PostGIS ยังคงตามข้อกำหนดการไม่ล็อกอินเดิม ต้องแยกตัดสินใจหากต้องการ hardening
+- **สถานะ:** Supabase schema และ Edge API ตรงกับโค้ดปัจจุบันและผ่านการทดสอบ production แบบควบคุม
