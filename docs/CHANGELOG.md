@@ -16,6 +16,11 @@
 - **ตรวจแล้ว:** typecheck และ diff check ผ่าน; lint กำลังรันในสภาพแวดล้อมนี้
 - **ยังไม่เสร็จ:** modal ทางเลี่ยงและ GIS ยังอยู่ใน B-018
 
+### [UPDATE-077] 2026-11-13 ทำให้ modal ทางเลี่ยงใช้งานด้วยคีย์บอร์ดได้
+- **ไฟล์:** `components/admin/tabs/DetourManagementTab.tsx`
+- **การแก้ไข:** modal รายละเอียดและแก้ไขทางเลี่ยงใช้ focus/Escape/Tab trap/คืน focus จาก hook กลางแล้ว
+- **ตรวจแล้ว:** `npm run typecheck`, `git diff --check` ผ่าน · **ยังไม่ได้ตรวจ:** E2E keyboard และ modal GIS
+
 ### [UPDATE-073] 2026-11-12 แก้ให้ Stroke/Casing ของเส้นแสดงผลบนแผนที่ Canvas จริง
 - **ไฟล์:** `components/map/LongdoGisMap.tsx`
 - **ปัญหา:** `LineStylingTab` บันทึก `borderActive`, `borderColor` และ `borderWidth` ได้ แต่ตัววาด Leaflet Canvas ใช้เฉพาะเส้น foreground จึงไม่มีเส้นขอบปรากฏจริงบนแผนที่

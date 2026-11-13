@@ -36,6 +36,7 @@ import {
 import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
 import { parseFloodDirectionMeta } from "@/lib/flood-event-schema";
 import { exportLineFeatures, GisExportFormat, parseLineCoordinates } from "@/lib/gis-export";
+import { useModalAccessibility } from "@/components/ui/use-modal-accessibility";
 
 interface DetourManagementTabProps {
   systemData: SystemDataPayload;
@@ -79,6 +80,8 @@ export function DetourManagementTab({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedDetourIds, setSelectedDetourIds] = useState<Set<string>>(() => new Set());
   const [exportScope, setExportScope] = useState<"FILTERED" | "ALL" | "SELECTED">("FILTERED");
+  const viewingDialog = useModalAccessibility(Boolean(viewingDetour), () => setViewingDetour(null));
+  const editingDialog = useModalAccessibility(Boolean(editingDetour), () => setEditingDetour(null));
 
   const detourList = systemData.detourRoutes || [];
   const floodList = systemData.floodRoutes || [];
@@ -755,7 +758,7 @@ export function DetourManagementTab({
 
       {viewingDetour && (
         <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/75 backdrop-blur-sm p-2 sm:items-center sm:p-4" onClick={() => setViewingDetour(null)}>
-          <section role="dialog" aria-modal="true" aria-label="รายละเอียดเส้นทางเลี่ยง" className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5 text-slate-100 shadow-2xl space-y-4" onClick={(event) => event.stopPropagation()}>
+          <div ref={viewingDialog.dialogRef} role="dialog" aria-modal="true" aria-label="รายละเอียดเส้นทางเลี่ยง" tabIndex={-1} onKeyDown={viewingDialog.onKeyDown} className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5 text-slate-100 shadow-2xl space-y-4" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
               <div>
                 <h2 className="text-lg font-heading font-black text-white flex items-center gap-2">
@@ -890,14 +893,14 @@ export function DetourManagementTab({
                 ลบทางเลี่ยง
               </button>
             </div>
-          </section>
+          </div>
         </div>
       )}
 
       {/* 4. Modal: Quick Detour Editor */}
       {editingDetour && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#0c162c] border border-amber-500/60 rounded-3xl p-5 max-w-xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+          <div ref={editingDialog.dialogRef} role="dialog" aria-modal="true" aria-label="แก้ไขข้อมูลเส้นทางเลี่ยง" tabIndex={-1} onKeyDown={editingDialog.onKeyDown} className="bg-[#0c162c] border border-amber-500/60 rounded-3xl p-5 max-w-xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
@@ -909,6 +912,7 @@ export function DetourManagementTab({
               <button
                 type="button"
                 onClick={() => setEditingDetour(null)}
+                aria-label="ปิดหน้าต่างแก้ไขเส้นทางเลี่ยง"
                 className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
