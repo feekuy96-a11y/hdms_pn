@@ -94,6 +94,16 @@
 - **การตรวจ:** ตรวจ payload การบันทึก geometry 3 จุด, การอ่านข้อมูลกลับหลังบันทึก, การตอบ 422 แล้วคง editor ไว้, และ payload คันทางคู่ที่มีเส้นขาไป/ขากลับ; ทุก API ถูกจำลองในเบราว์เซอร์
 - **ตรวจแล้ว:** Playwright static desktop ผ่าน 3/3; mobile ข้าม 3 กรณีตามขอบเขตเครื่องมือแก้แนว; build:pages ผ่าน; ไม่เปลี่ยนข้อมูล Production
 
+### [UPDATE-090] 2026-11-13 แยกโมดูลแท็บ Admin ขนาดใหญ่และลดภาระการคำนวณ/เรนเดอร์ (B-005)
+- **ไฟล์:** `components/admin/AdminConsole.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `components/admin/tabs/GisHighwayModals.tsx` (ใหม่), `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/DetourAdviceSection.tsx` (ใหม่), `docs/BACKLOG.md`, `docs/CHANGELOG.md`
+- **การแก้ไข:**
+  1. แยก `HighwaySpecsEditModal`, `HighwayRouteDetailModal` และ `HighwayGeometryEditorPanel` ออกเป็น `components/admin/tabs/GisHighwayModals.tsx` (ลดขนาด `GisDataImportTab.tsx` จาก 2,445 เหลือ 2,005 บรรทัด)
+  2. แยกส่วนคำแนะนำเส้นทางเลี่ยงสำหรับประชาชนออกเป็น `components/admin/tabs/DetourAdviceSection.tsx` ที่ห่อด้วย `React.memo` และใช้ `React.useDeferredValue` สำหรับพรีวิว `<AdviceText />` (ลดขนาด `MapManagementTab.tsx` จาก 2,832 เหลือ 2,626 บรรทัด)
+  3. ใช้ `next/dynamic` (`ssr: false`) โหลด 6 แท็บรองใน `AdminConsole.tsx` แบบแยก chunk และเพิ่ม CSS containment (`[contain:layout_style_paint]`) บนพื้นที่ฟอร์ม `.doh-form` และกล่อง modal
+  4. Memoize `allHighwayFeatures` และ `matchingHighwayFeatures` ด้วย `useMemo` + `useDeferredValue(routeSearch)`, จำกัด dependency ของ `joinCandidates` เฉพาะพิกัดปลายเส้น 2 จุด (ไม่คำนวณซ้ำเมื่อลากจุดกลางเส้น) และเพิ่ม `content-visibility: auto; contain-intrinsic-size: auto 600px` บนส่วนตารางรายการทางหลวง
+- **ตรวจแล้ว:** `npm run lint` (0 warnings), `npm run typecheck` (0 errors), `NEXT_OUTPUT=export npx next build` (6/6 หน้า), และ Playwright E2E บน static build ผ่าน **59 passed, 0 failed** (27 skipped ตามเงื่อนไข viewport)
+- **ลำดับ deploy:** เว็บไซต์ GitHub Pages เท่านั้น (ไม่มีการเปลี่ยน SQL หรือ Edge Function) · ย้อนกลับด้วย `git revert` commit นี้
+
 ### [UPDATE-073] 2026-11-12 แก้ให้ Stroke/Casing ของเส้นแสดงผลบนแผนที่ Canvas จริง
 - **ไฟล์:** `components/map/LongdoGisMap.tsx`
 - **ปัญหา:** `LineStylingTab` บันทึก `borderActive`, `borderColor` และ `borderWidth` ได้ แต่ตัววาด Leaflet Canvas ใช้เฉพาะเส้น foreground จึงไม่มีเส้นขอบปรากฏจริงบนแผนที่

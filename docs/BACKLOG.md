@@ -9,7 +9,7 @@
 | B-002 | สูง | `.mcp.json` ให้ AI เข้าถึง Supabase production พร้อมสิทธิ์ฐานข้อมูล ขัด ADR-001 | เปิด (ต้องตัดสินใจ) |
 | B-003 | สูง | Deploy ไม่รอ CI/e2e และเจ้าของ push ตรงเข้า main | เปิด (ต้องตัดสินใจ) |
 | B-004 | กลาง | หน้าแอดมินยังโหลด GeoJSON ทางหลวงเต็มความละเอียดทุกครั้ง | ปิด (2026-11-10, ดู UPDATE-063) |
-| B-005 | กลาง | ไฟล์ใหญ่เกิน: `GisDataImportTab.tsx` (~1.9k บรรทัด), `MapManagementTab.tsx` (~1.1k) | เปิด |
+| B-005 | กลาง | ไฟล์ใหญ่เกิน: `GisDataImportTab.tsx` (~2.4k บรรทัด), `MapManagementTab.tsx` (~2.8k) | ปิดบางส่วน (2026-11-13, ดู UPDATE-090: แยกโมดูล + Code Splitting + Memoization) |
 | B-006 | กลาง | `SUPPLEMENTAL_RULES.md` ~120 KB ถูกบังคับให้อ่านทุกเซสชัน | ปิดบางส่วน (ยกเลิกบังคับใน AGENTS.md; ยังไม่ได้ย้ายไฟล์) |
 | B-007 | ต่ำ | โค้ดค้างที่ไม่อยู่ใน path จริง (better-auth, supabase-server, routing-service, Docker Postgres) | ปิด (ลบไฟล์ค้างแล้วใน UPDATE-065) |
 | B-008 | กลาง | พึ่ง OSRM สาธารณะ (`router.project-osrm.org`) ไม่มี SLA | เปิด |
@@ -73,12 +73,15 @@
 - **สถานะ:** ปิดแล้ว (2026-11-10, ดู `UPDATE-063`) — หน้า `/admin` โหลดเริ่มต้นด้วย `getPublicSystemDataAction` (Geometry แบบลดจุด) และดึง `getSystemDataAction` ความละเอียดเต็มอัตโนมัติเฉพาะเมื่อเปิดแท็บ GIS หรือแก้ไขจุด Vertex
 - **หลักฐาน:** `app/admin/page.tsx`, `components/admin/AdminConsole.tsx`
 
-## B-005 [กลาง] ไฟล์ใหญ่เกินไป — ตัดสินใจ: ยังไม่แยกตอนนี้
-- **หลักฐาน:** `GisDataImportTab.tsx` ~1.9k บรรทัด (รวมโหมดตามถนน/อิสระ, ตัดและเชื่อมเส้น, modal คุณสมบัติ), `MapManagementTab.tsx` ~2.7k บรรทัด
-- **ทำไมไม่แยกเลยตามที่ขอ:** ทั้งสองไฟล์มี state ที่พันกันมาก (ประวัติ undo/redo, เหตุการณ์จากแผนที่, ผล OSRM) และ e2e ยังไม่ครอบคลุมฟีเจอร์ใหม่ (B-011) การแยกโดยไม่มีตาข่ายทดสอบทำให้พังเงียบ ๆ ได้ ซึ่งขัดกับ R8 ของเรา
-- **ทางเลือก:** A) เพิ่ม e2e ก่อน แล้วแยกทีละส่วนใน PR เล็ก ๆ (แนะนำ) · B) แยกเฉพาะฟังก์ชันล้วน (ไม่มี state) ไปไว้ใน `lib/` · C) เขียนใหม่ทั้งไฟล์ — ไม่แนะนำ
-- **แผนที่ควรทำเมื่อพร้อม:** (1) เขียน e2e ให้ตัวแก้ไขเส้น (เพิ่ม/ลบ/ลากจุด, ตัด, เชื่อม, undo) และตัวสร้างคำแนะนำ (2) แยก `GeometryEditorPanel` พร้อม hook ประวัติ (`useEditHistory`) ออกจาก `GisDataImportTab` (3) แยกส่วน "คำแนะนำสำหรับประชาชน" ออกจาก `MapManagementTab` (4) ทุกขั้นต้องผ่าน e2e เดิมก่อนไปขั้นต่อไป
-- **ตัวกระตุ้น:** เริ่มเมื่อ B-011 เสร็จ
+## B-005 [กลาง] ไฟล์ใหญ่เกินไป — ปิดบางส่วน (2026-11-13, ดู `UPDATE-090`)
+- **หลักฐานก่อนปรับปรุง:** `GisDataImportTab.tsx` 2,445 บรรทัด (คำนวณ `allHighwayFeatures` และ `matchingHighwayFeatures` ซ้ำทุก render, คำนวณ `joinCandidates` ทุกครั้งที่ลากจุดกลางเส้น, และรวม JSX ของ 3 modal/panel ไว้ในไฟล์เดียว), `MapManagementTab.tsx` 2,832 บรรทัด (แปลงพรีวิว `<AdviceText />` สดทุก keystroke), และ `AdminConsole.tsx` นำเข้าทั้ง 7 แท็บแบบ static bundle เดียว
+- **การแก้ไขที่ทำแล้ว (`UPDATE-090`):**
+  1. แยก `components/admin/tabs/GisHighwayModals.tsx` (`HighwaySpecsEditModal`, `HighwayRouteDetailModal`, `HighwayGeometryEditorPanel`) ลดขนาด `GisDataImportTab.tsx` จาก **2,445 → 2,005 บรรทัด (-440 บรรทัด / -18.0%)**
+  2. แยก `components/admin/tabs/DetourAdviceSection.tsx` (`React.memo` + `useDeferredValue`) ลดขนาด `MapManagementTab.tsx` จาก **2,832 → 2,626 บรรทัด (-206 บรรทัด / -7.3%)**
+  3. ใช้ `next/dynamic` (`ssr: false`) แยก chunk ของ 6 แท็บรองใน `AdminConsole.tsx` พร้อมใส่ `[contain:layout_style_paint]` บนพื้นที่ `.doh-form`
+  4. Memoize `allHighwayFeatures` + `matchingHighwayFeatures` + `useDeferredValue(routeSearch)`, จำกัด dependency ของ `joinCandidates` เฉพาะพิกัดปลายเส้น 2 จุด และใส่ `content-visibility: auto; contain-intrinsic-size: auto 600px` บนส่วนตารางทางหลวงด้านล่าง
+- **ผลตรวจ:** `npm run lint` (0 warnings), `npm run typecheck` (0 errors), `next build` (static export 6/6 หน้า), และ Playwright E2E **59 passed, 0 failed** (27 skipped ตามเงื่อนไข viewport)
+- **สิ่งที่เหลือสำหรับอนาคต (เมื่อต้องการแยกเพิ่ม):** แยกส่วนตารางทางหลวง (`GisHighwaySpecsTable`) และฟอร์มย่อยของโหมดจุดน้ำท่วมใน `MapManagementTab.tsx` ใน PR ถัดไปโดยยึดชุดทดสอบ E2E เดียวกัน
 
 ## B-006 [กลาง] `SUPPLEMENTAL_RULES.md`
 - แก้แล้ว: AGENTS.md ให้ค้นด้วย grep ไม่อ่านทั้งไฟล์ และประวัติใหม่ลง `docs/CHANGELOG.md`

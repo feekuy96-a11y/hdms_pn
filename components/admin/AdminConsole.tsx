@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { SystemDataPayload } from "@/db/default-data";
 import { DEFAULT_MAP_STYLES } from "@/lib/constants";
 import {
@@ -19,15 +20,34 @@ import {
 import { AnimatedStatusModal } from "@/components/ui/AnimatedStatusModal";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 
-// Modular Subcomponents
-import { SystemSettingsTab } from "@/components/admin/tabs/SystemSettingsTab";
-import { MapManagementTab } from "@/components/admin/tabs/MapManagementTab";
+// Modular Subcomponents (Code-Split Heavy Tabs)
 import { IncidentRegistryTab } from "@/components/admin/tabs/IncidentRegistryTab";
-import { DetourManagementTab } from "@/components/admin/tabs/DetourManagementTab";
-import { GisDataImportTab } from "@/components/admin/tabs/GisDataImportTab";
 import type { VertexEditEvent } from "@/lib/line-edit";
-import { LineStylingTab } from "@/components/admin/tabs/LineStylingTab";
-import { GovernorProjectsTab } from "@/components/admin/tabs/GovernorProjectsTab";
+
+const SystemSettingsTab = dynamic(
+  () => import("@/components/admin/tabs/SystemSettingsTab").then((m) => m.SystemSettingsTab),
+  { ssr: false }
+);
+const MapManagementTab = dynamic(
+  () => import("@/components/admin/tabs/MapManagementTab").then((m) => m.MapManagementTab),
+  { ssr: false }
+);
+const DetourManagementTab = dynamic(
+  () => import("@/components/admin/tabs/DetourManagementTab").then((m) => m.DetourManagementTab),
+  { ssr: false }
+);
+const GisDataImportTab = dynamic(
+  () => import("@/components/admin/tabs/GisDataImportTab").then((m) => m.GisDataImportTab),
+  { ssr: false }
+);
+const LineStylingTab = dynamic(
+  () => import("@/components/admin/tabs/LineStylingTab").then((m) => m.LineStylingTab),
+  { ssr: false }
+);
+const GovernorProjectsTab = dynamic(
+  () => import("@/components/admin/tabs/GovernorProjectsTab").then((m) => m.GovernorProjectsTab),
+  { ssr: false }
+);
 
 interface AdminConsoleProps {
   systemData: SystemDataPayload;
@@ -433,7 +453,7 @@ export function AdminConsole({
         </div>
 
         {/* Scrollable Tab Workspace */}
-        <div className="doh-form flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 lg:p-6">
+        <div className="doh-form flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 lg:p-6 [contain:layout_style_paint]">
           {/* TAB 1: System Settings */}
           {activeTab === "system" && (
             <SystemSettingsTab
