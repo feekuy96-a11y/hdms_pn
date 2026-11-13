@@ -3,6 +3,13 @@
 รูปแบบสั้น: วันที่ · หัวข้อ · ไฟล์ · ทำอะไรและทำไม · ตรวจอะไรแล้ว/ยังไม่ได้ตรวจ · ความเสี่ยงที่ยอมรับ (ถ้ามี) · ลิงก์ BACKLOG
 ประวัติเก่า (UPDATE-001…047) อยู่ใน `SUPPLEMENTAL_RULES.md` — ใช้ grep ค้น ไม่อ่านทั้งไฟล์ เลขรายการต่อจาก 047
 
+### [UPDATE-075] 2026-11-13 เริ่มรวมพฤติกรรม Keyboard ของ modal แอดมิน
+- **ไฟล์:** `components/ui/use-modal-accessibility.ts` (ใหม่), `components/ui/AnimatedStatusModal.tsx`, `components/admin/OfficialReportDispatchModal.tsx`
+- **การแก้ไข:** สร้าง hook กลางสำหรับตั้ง focus เมื่อเปิด, trap Tab/Shift+Tab, Escape เพื่อปิด และคืน focus กลับปุ่มเดิม; นำไปใช้กับ modal กลางสำหรับยืนยัน/สำเร็จ/ผิดพลาดและแบบรายงานราชการแล้ว
+- **ตรวจแล้ว:** `npm run lint`, `npm run typecheck`, `npm run build:pages` ผ่าน
+- **ยังไม่เสร็จ:** modal รายละเอียดเหตุการณ์, ทางเลี่ยง และ GIS ยังต้องย้ายมาใช้ hook เดียวกัน (B-018)
+- **ลำดับ deploy:** เว็บไซต์ GitHub Pages เท่านั้น · ย้อนกลับด้วย `git revert` commit นี้
+
 ### [UPDATE-073] 2026-11-12 แก้ให้ Stroke/Casing ของเส้นแสดงผลบนแผนที่ Canvas จริง
 - **ไฟล์:** `components/map/LongdoGisMap.tsx`
 - **ปัญหา:** `LineStylingTab` บันทึก `borderActive`, `borderColor` และ `borderWidth` ได้ แต่ตัววาด Leaflet Canvas ใช้เฉพาะเส้น foreground จึงไม่มีเส้นขอบปรากฏจริงบนแผนที่

@@ -2,6 +2,7 @@
 
 import React, { useEffect } from "react";
 import { CheckCircle2, AlertTriangle, Trash2, X, Info } from "lucide-react";
+import { useModalAccessibility } from "@/components/ui/use-modal-accessibility";
 
 export interface AnimatedStatusModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export function AnimatedStatusModal({
   onClose,
   autoCloseMs,
 }: AnimatedStatusModalProps) {
+  const { dialogRef, onKeyDown } = useModalAccessibility(isOpen, onClose);
   useEffect(() => {
     if (!isOpen || !autoCloseMs || type === "confirm") return;
     const timer = setTimeout(() => {
@@ -39,6 +41,12 @@ export function AnimatedStatusModal({
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in font-body">
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="status-modal-title"
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
         className="relative w-full max-w-md bg-slate-900 border-2 rounded-2xl p-6 shadow-2xl transform transition-all animate-scale-up"
         style={{
           borderColor:
@@ -57,6 +65,7 @@ export function AnimatedStatusModal({
         <button
           type="button"
           onClick={onClose}
+          aria-label="ปิดหน้าต่าง"
           className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg transition"
         >
           <X className="w-5 h-5" />
@@ -84,7 +93,7 @@ export function AnimatedStatusModal({
 
         {/* Title and Message */}
         <div className="text-center space-y-2">
-          <h3 className="font-heading font-black text-lg sm:text-xl text-white">
+          <h3 id="status-modal-title" className="font-heading font-black text-lg sm:text-xl text-white">
             {title}
           </h3>
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
