@@ -556,6 +556,13 @@ export function DetourManagementTab({
                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
+                        onClick={() => setViewingDetour(item)}
+                        className="min-h-10 px-2.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 font-heading font-bold text-xs hover:bg-slate-700"
+                      >
+                        รายละเอียด
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleOpenEditModal(item)}
                         className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg font-heading font-bold text-xs border border-slate-700"
                       >

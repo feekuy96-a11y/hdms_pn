@@ -742,6 +742,9 @@ export function IncidentRegistryTab({
 
                           {/* Action Buttons Per Segment: จัดกลุ่มปุ่มหลัก-รอง ป้องกันการซ้อนตกบรรทัด */}
                           <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
+                            <button type="button" onClick={() => setViewingIncident(r)} className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-100 hover:bg-slate-700">
+                              รายละเอียด
+                            </button>
                             <div className="inline-flex items-center gap-1 bg-slate-900/80 p-0.5 rounded-xl border border-slate-700/60">
                               <button
                                 type="button"

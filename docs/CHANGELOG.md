@@ -21,6 +21,38 @@
 - **การแก้ไข:** modal รายละเอียดและแก้ไขทางเลี่ยงใช้ focus/Escape/Tab trap/คืน focus จาก hook กลางแล้ว
 - **ตรวจแล้ว:** `npm run typecheck`, `git diff --check` ผ่าน · **ยังไม่ได้ตรวจ:** E2E keyboard และ modal GIS
 
+### [UPDATE-078] 2026-11-13 ตรวจ modal GIS ด้วยข้อมูลทดสอบแยกจาก Production
+- **ไฟล์:** `components/admin/tabs/GisDataImportTab.tsx`, `tests/e2e/gis-dialog-keyboard.spec.ts`
+- **การแก้ไข:** หน้าต่างตั้งค่าคุณสมบัติและรายละเอียดสายทางใช้ hook กลางสำหรับ focus, Tab, Escape และคืน focus; เพิ่มชื่อให้ปุ่มปิดที่เป็นไอคอน
+- **ตรวจแล้ว:** lint, typecheck, build:pages และ Playwright Desktop ผ่าน 1/1 โดย mock สายทางเฉพาะในเบราว์เซอร์ทดสอบ
+- **ยังไม่ได้ตรวจ:** คีย์บอร์ดบนอุปกรณ์จริงและ modal แอดมินอื่น ๆ
+
+### [UPDATE-079] 2026-11-13 ทดสอบคีย์บอร์ด modal เหตุการณ์และทางเลี่ยง
+- **ไฟล์:** `tests/e2e/admin-dialog-keyboard.spec.ts`
+- **การตรวจ:** ใช้ข้อมูลจำลองเฉพาะใน Playwright เปิด modal อัปเดตระดับน้ำและแก้ไขทางเลี่ยงจากปุ่มจริง ตรวจ Tab trap, Escape และคืน focus
+- **ผล:** `npx playwright test tests/e2e/admin-dialog-keyboard.spec.ts --project=desktop-chromium --workers=1` ผ่าน 1/1; ไม่มีข้อมูล Production ถูกเปลี่ยน
+- **ยังไม่ได้ตรวจ:** modal แบบอื่นและการใช้โปรแกรมอ่านหน้าจอบนอุปกรณ์จริง
+
+### [UPDATE-080] 2026-11-13 ทดสอบ modal กลางของ Admin
+- **ไฟล์:** `tests/e2e/admin-shared-dialog-keyboard.spec.ts`
+- **การตรวจ:** ใช้ข้อมูลจำลองเฉพาะ Playwright ทดสอบรายงานราชการและกล่องยืนยันลบจากปุ่มจริง; ตรวจ Tab, Escape และคืน focus โดยไม่ยืนยันการลบ
+- **ผล:** Playwright desktop ผ่าน 1/1; ไม่เปลี่ยนข้อมูล Production
+
+### [UPDATE-081] 2026-11-13 ทดสอบ modal แบ่งช่วงและรวมช่วง
+- **ไฟล์:** `tests/e2e/admin-dialog-keyboard.spec.ts`
+- **การตรวจ:** mock เหตุการณ์สองช่วง กม. ในเบราว์เซอร์ทดสอบ แล้วเปิดจากปุ่มจริง ตรวจ Tab วนใน modal, Escape ปิด และคืน focus; ไม่กดยืนยันเปลี่ยนข้อมูล
+- **ผล:** Playwright desktop ผ่าน 2/2 ในไฟล์ทดสอบนี้
+
+### [UPDATE-082] 2026-11-13 เปิดรายละเอียดเหตุการณ์ใน Admin และตรวจหน้าต่างรายละเอียดสองอุปกรณ์
+- **ไฟล์:** `components/admin/tabs/IncidentRegistryTab.tsx`, `tests/e2e/admin-dialog-keyboard.spec.ts`
+- **ปัญหาและการแก้ไข:** modal รายละเอียดเหตุการณ์มีอยู่แต่ไม่มีทางเปิด เพิ่มปุ่มรายละเอียดประจำช่วงเหตุการณ์
+- **ผล:** Playwright รายละเอียดเหตุการณ์/ทางเลี่ยงผ่าน desktop 1/1 และ mobile 1/1; ตรวจ Escape, Tab trap, การคืน focus; ไม่เปลี่ยนข้อมูล Production
+
+### [UPDATE-083] 2026-11-13 เปิดรายละเอียดทางเลี่ยงบนมือถือด้วยคีย์บอร์ด
+- **ไฟล์:** `components/admin/tabs/DetourManagementTab.tsx`, `tests/e2e/admin-dialog-keyboard.spec.ts`
+- **ปัญหาและการแก้ไข:** การ์ดทางเลี่ยงบนมือถือเปิดรายละเอียดได้ด้วยการแตะทั้งการ์ด แต่ไม่มีปุ่มที่โฟกัสด้วยคีย์บอร์ดได้ จึงเพิ่มปุ่ม “รายละเอียด” ในการ์ดและทดสอบ Enter, Escape และการคืน focus
+- **ตรวจแล้ว:** lint, typecheck, build:pages ผ่าน; Playwright บน build ล่าสุดผ่าน 6 กรณี (desktop 5, mobile 1) และข้ามตามเงื่อนไข viewport 4 กรณี; ไม่เปลี่ยนข้อมูล Production
+
 ### [UPDATE-073] 2026-11-12 แก้ให้ Stroke/Casing ของเส้นแสดงผลบนแผนที่ Canvas จริง
 - **ไฟล์:** `components/map/LongdoGisMap.tsx`
 - **ปัญหา:** `LineStylingTab` บันทึก `borderActive`, `borderColor` และ `borderWidth` ได้ แต่ตัววาด Leaflet Canvas ใช้เฉพาะเส้น foreground จึงไม่มีเส้นขอบปรากฏจริงบนแผนที่

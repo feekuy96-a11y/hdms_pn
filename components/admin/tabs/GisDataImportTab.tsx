@@ -5,6 +5,7 @@ import type { LonLat, VertexEditEvent } from "@/lib/line-edit";
 import { exportLineFeatures, GisExportFormat } from "@/lib/gis-export";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useModalAccessibility } from "@/components/ui/use-modal-accessibility";
 import { SystemDataPayload } from "@/db/default-data";
 type LineStylesMap = Record<string, import("@/db/default-data").MapLineStyleItem>;
 import {
@@ -421,6 +422,8 @@ export function GisDataImportTab({
     remarks: string;
     isVisible: boolean;
   } | null>(null);
+  const specsDialog = useModalAccessibility(Boolean(editingRouteSpecs), () => setEditingRouteSpecs(null));
+  const routeDialog = useModalAccessibility(Boolean(selectedRoute), () => setSelectedRoute(null));
 
   // Toggle Eye visibility for a single feature inside a highway layer
   const handleToggleFeatureVisibility = async (layerId: string, featureIdx: number) => {
@@ -1933,7 +1936,7 @@ export function GisDataImportTab({
       {/* Modal: Highway Specifications Editor (Issue #13) */}
       {editingRouteSpecs && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#0c162c] border border-amber-500/60 rounded-3xl p-5 max-w-xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+          <div ref={specsDialog.dialogRef} role="dialog" aria-modal="true" aria-label="ตั้งค่าคุณสมบัติทางวิศวกรรม" tabIndex={-1} onKeyDown={specsDialog.onKeyDown} className="bg-[#0c162c] border border-amber-500/60 rounded-3xl p-5 max-w-xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
                 <h4 className="font-heading font-black text-base text-white flex items-center gap-2">
@@ -1947,6 +1950,7 @@ export function GisDataImportTab({
               <button
                 type="button"
                 onClick={() => setEditingRouteSpecs(null)}
+                aria-label="ปิดหน้าต่างแก้ไขคุณสมบัติ"
                 className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
@@ -2146,7 +2150,7 @@ export function GisDataImportTab({
         if (!item) return null;
         return (
           <div className="fixed inset-0 z-[1001] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-label="รายละเอียดสายทาง">
-            <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-950 p-6 text-white shadow-2xl space-y-4">
+            <div ref={routeDialog.dialogRef} tabIndex={-1} onKeyDown={routeDialog.onKeyDown} className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-950 p-6 text-white shadow-2xl space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <div className="flex items-center gap-2.5">
                   <span className="rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 px-2.5 py-1 text-sm font-black font-heading">
