@@ -80,6 +80,12 @@
 - **การตรวจ:** ใช้ข้อมูลเส้นจำลองและตอบ OSRM จำลองเฉพาะในการทดสอบ เลือกจุดดัดบนแผนที่, คำนวณแนวใหม่, ลบจุดดัด และยกเลิกโดยไม่บันทึก
 - **ตรวจแล้ว:** Playwright static desktop ผ่าน 1/1; mobile ข้ามตามขอบเขตเครื่องมือแก้แนว; ไม่มีการเรียก OSRM หรือเปลี่ยนข้อมูล Production จริง
 
+### [UPDATE-089] 2026-11-13 ตรวจบันทึกแนวสายทางและคันทางคู่
+- **ไฟล์:** `components/admin/tabs/GisDataImportTab.tsx`, `tests/e2e/gis-geometry-save.spec.ts`, `tests/e2e/gis-dual-carriageway-save.spec.ts`
+- **การแก้ไข:** เพิ่ม accessible name ให้ตัวเลือกโครงสร้างถนนและทิศทางลูกศร เพื่อให้คีย์บอร์ดและโปรแกรมอ่านหน้าจอระบุ control ได้
+- **การตรวจ:** ตรวจ payload การบันทึก geometry 3 จุด, การอ่านข้อมูลกลับหลังบันทึก, การตอบ 422 แล้วคง editor ไว้, และ payload คันทางคู่ที่มีเส้นขาไป/ขากลับ; ทุก API ถูกจำลองในเบราว์เซอร์
+- **ตรวจแล้ว:** Playwright static desktop ผ่าน 3/3; mobile ข้าม 3 กรณีตามขอบเขตเครื่องมือแก้แนว; build:pages ผ่าน; ไม่เปลี่ยนข้อมูล Production
+
 ### [UPDATE-073] 2026-11-12 แก้ให้ Stroke/Casing ของเส้นแสดงผลบนแผนที่ Canvas จริง
 - **ไฟล์:** `components/map/LongdoGisMap.tsx`
 - **ปัญหา:** `LineStylingTab` บันทึก `borderActive`, `borderColor` และ `borderWidth` ได้ แต่ตัววาด Leaflet Canvas ใช้เฉพาะเส้น foreground จึงไม่มีเส้นขอบปรากฏจริงบนแผนที่

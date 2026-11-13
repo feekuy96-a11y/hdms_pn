@@ -2285,6 +2285,7 @@ export function GisDataImportTab({
                 <div>
                   <label className="text-slate-300 block mb-1">โครงสร้างทางหลวงตามจริง</label>
                   <select
+                    aria-label="โครงสร้างทางหลวงตามจริง"
                     value={carriagewayStructure}
                     onChange={(e) => {
                       const val = e.target.value as "SINGLE_CENTERLINE" | "DUAL_CARRIAGEWAY" | "ONE_WAY";
@@ -2309,6 +2310,7 @@ export function GisDataImportTab({
                 <div>
                   <label className="text-slate-300 block mb-1">ทิศทางลูกศรจราจรบนเส้น</label>
                   <select
+                    aria-label="ทิศทางลูกศรจราจรบนเส้น"
                     value={arrowDirectionSetting}
                     disabled={carriagewayStructure === "DUAL_CARRIAGEWAY"}
                     onChange={(e) => setArrowDirectionSetting(e.target.value as "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN")}
