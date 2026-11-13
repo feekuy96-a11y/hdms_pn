@@ -3,6 +3,14 @@
 รูปแบบสั้น: วันที่ · หัวข้อ · ไฟล์ · ทำอะไรและทำไม · ตรวจอะไรแล้ว/ยังไม่ได้ตรวจ · ความเสี่ยงที่ยอมรับ (ถ้ามี) · ลิงก์ BACKLOG
 ประวัติเก่า (UPDATE-001…047) อยู่ใน `SUPPLEMENTAL_RULES.md` — ใช้ grep ค้น ไม่อ่านทั้งไฟล์ เลขรายการต่อจาก 047
 
+### [UPDATE-090] 2026-11-13 ป้องกัน Draft หลุดใน Public API
+- **ไฟล์:** `supabase/migrations/20261113091500_public_payload_excludes_inactive_records.sql` (ใหม่), `supabase/functions/hdms-api/index.ts`, `docs/ARCHITECTURE.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`
+- **การแก้ไข:** เพิ่ม RPC wrapper `doh_get_public_system_data_display_rpc()` ซึ่งคง geometry แบบเบา แต่ตัด flood Draft, timeline ของ Draft และ detour ที่ผูกกับ Draft ก่อนส่งให้ประชาชน; Edge Function เรียก wrapper นี้เฉพาะ `getPublicSystemDataAction` และไม่ fallback ไป payload เต็มเมื่อ Public RPC ใช้ไม่ได้ เพื่อไม่ให้เกิดการรั่วข้อมูลซ้ำ.
+- **Production:** ใช้ migration แล้วกับ Supabase project `ebyobrtvisylwawxiurx`; deploy `hdms-api` เวอร์ชัน 11 แล้ว. ไม่มีตารางหรือข้อมูลจริงถูกเปลี่ยน.
+- **ตรวจแล้ว:** lint, typecheck, build:pages และ Playwright ทั้งชุดผ่าน (`86` ผ่าน); QA lifecycle บน Production ยืนยัน Admin เห็น Draft, Public API/UI ไม่เห็น Draft กับ detour ที่ผูก, เปิดใช้งานแล้ว Public เห็น, soft delete แล้ว Public ไม่เห็น. ลบข้อมูล QA ออกจาก DB และตรวจคงเหลือ `0` แล้ว.
+- **ย้อนกลับ:** deploy Edge Function เวอร์ชัน 10 แล้ว `DROP FUNCTION IF EXISTS public.doh_get_public_system_data_display_rpc()`; หลัง rollback Public จะกลับไปส่ง Draft ตามพฤติกรรมเดิม จึงไม่แนะนำยกเว้นกรณีฉุกเฉิน.
+- **Backlog:** ปิด B-019
+
 ### [UPDATE-075] 2026-11-13 เริ่มรวมพฤติกรรม Keyboard ของ modal แอดมิน
 - **ไฟล์:** `components/ui/use-modal-accessibility.ts` (ใหม่), `components/ui/AnimatedStatusModal.tsx`, `components/admin/OfficialReportDispatchModal.tsx`
 - **การแก้ไข:** สร้าง hook กลางสำหรับตั้ง focus เมื่อเปิด, trap Tab/Shift+Tab, Escape เพื่อปิด และคืน focus กลับปุ่มเดิม; นำไปใช้กับ modal กลางสำหรับยืนยัน/สำเร็จ/ผิดพลาดและแบบรายงานราชการแล้ว

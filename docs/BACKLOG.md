@@ -23,8 +23,16 @@
 | B-016 | กลาง | ตราครุฑทางการสำหรับป้ายทางหลวงยังไม่มี Asset ที่ผ่านอนุมัติ | เปิด |
 | B-017 | ต่ำ | รัน Playwright ในเครื่องโดยไม่ build พร้อม public config ทำให้หน้า public ค้าง Loading และ test ที่ mock Edge Function ล้ม | ปิด (2026-11-12, UPDATE-074) |
 | B-018 | กลาง | Modal รายละเอียด/แก้ไขใน Admin ยังไม่ใช้ focus trap และ Escape กลางครบทุกตัว | กำลังทำ (UPDATE-075) |
+| B-019 | สูง | Public API ส่ง Draft/inactive payload แม้หน้าเว็บจะกรองไม่แสดง | ปิด (2026-11-13, UPDATE-090) |
 
 ---
+
+## B-019 [สูง] Public API ต้องไม่ส่ง Draft/inactive payload
+- **หลักฐาน:** ทดสอบ Production วันที่ 2026-11-13 ด้วยรายการ QA Draft พบว่า `getPublicSystemDataAction` ส่งรายการ `is_active=false` กลับมา แม้ `app/page.tsx` และ `LongdoGisMap.tsx` จะกรองก่อนวาด จึงไม่เห็นใน UI.
+- **ผลกระทบ:** ผู้เรียก API โดยตรงเข้าถึงรายละเอียดเหตุการณ์ที่เจ้าหน้าที่ตั้งใจเก็บเป็น Draft ได้ และดาวน์โหลด payload ใหญ่เกินจำเป็น.
+- **แนวทางแก้:** เพิ่ม `doh_get_public_system_data_display_rpc()` เป็น wrapper ของ display RPC เพื่อคง Admin payload เดิม พร้อมตัด flood/detour/timeline ที่ inactive หรือเชื่อมกับ Draft; Edge Function เรียก wrapper นี้เฉพาะ `getPublicSystemDataAction` และตอบ 503 แทนการ fallback ไป payload เต็ม.
+- **การตรวจและปิดงาน:** deploy SQL ก่อน Edge Function v11 แล้วทดสอบ Production วันที่ 2026-11-13 ด้วย flood/detour QA: Admin อ่าน Draft ได้; Public API และ UI ไม่พบ Draft/detour ที่ผูก; เมื่อเปิดใช้งาน Public พบทั้งคู่; หลัง soft delete Public ไม่พบทั้งคู่. ลบ QA ออกจาก DB แล้ว ตรวจคงเหลือ `0`.
+- **สถานะ:** ปิด (2026-11-13, UPDATE-090).
 
 ## B-017 [ต่ำ] คำสั่ง E2E ในเครื่องไม่เตรียม public build configuration — ปิดแล้ว
 - **หลักฐาน:** `tests/e2e/public-route-sheet.spec.ts` ล้มที่ข้อความ `จุดเฝ้าระวังน้ำท่วม 2 จุด` เมื่อรันจาก clone ที่ไม่มี `.env.local`; `next build` ฝังค่า `NEXT_PUBLIC_*` ตอน build แล้ว `npm run start` ไม่รับค่าใหม่ภายหลัง. เมื่อ build โดยใช้ค่าจาก `.github/hdms-public.json` แล้วทดสอบซ้ำ ผลผ่าน 1/1.

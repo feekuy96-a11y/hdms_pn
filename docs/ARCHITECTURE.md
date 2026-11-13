@@ -5,7 +5,7 @@
 
 ## 1. ภาพรวมการทำงาน
 ```
-ประชาชน (มือถือ) ──┐                                   ┌─ RPC doh_get_system_data_display_rpc  (เส้นทางหลวงลดจุด)
+ประชาชน (มือถือ) ──┐                                   ┌─ RPC doh_get_public_system_data_display_rpc (เส้นทางหลวงลดจุด + ตัด Draft)
                    ├─ GitHub Pages (static) ──POST──▶ Edge Function hdms-api ─┤  RPC doh_get_system_data_rpc          (เต็มความละเอียด)
 เจ้าหน้าที่ (PC) ──┘   app/page.tsx, app/admin/page.tsx   (supabase/functions)  ├─ RPC doh_import_routes_rpc / doh_update_timeline_rpc / doh_snap_line_rpc
                                                                                └─ ตารางโดยตรง (service role) สำหรับการเขียนอื่น ๆ
@@ -26,7 +26,7 @@
 | Offline | `lib/offline-db.ts` (IndexedDB) | คิวรายงานภาคสนาม ใช้การเชื่อมต่อเดียวร่วมกัน; ซิงก์ผ่าน `OfflineSyncStatus` |
 
 ### กฎขนาดข้อมูล (payload)
-- หน้าประชาชนต้องใช้ข้อมูลแบบเบา: เส้นทางหลวงจากคอลัมน์ `doh_highway_layers.geojson_display` (ลดจุด ~2 ม., ทศนิยม 5 หลัก, คำนวณด้วย trigger ตอนบันทึก) ผ่าน `doh_get_system_data_display_rpc` (migration `20261107000200`)
+- หน้าประชาชนต้องใช้ข้อมูลแบบเบา: เส้นทางหลวงจากคอลัมน์ `doh_highway_layers.geojson_display` (ลดจุด ~2 ม., ทศนิยม 5 หลัก, คำนวณด้วย trigger ตอนบันทึก) ผ่าน `doh_get_public_system_data_display_rpc` (migration `20261113091500`) ซึ่งตัด Draft, timeline ของ Draft และทางเลี่ยงที่ผูกกับ Draft ออกจาก payload ที่ส่งออกนอก Admin
 - หน้าแอดมินต้องใช้ `geojson_data` เต็ม เพราะตัวแก้ไขเส้นบันทึกกลับ **ห้ามให้แอดมินแก้บนเส้นที่ลดจุดแล้ว** (เส้นเสียถาวร)
 - `timelineUpdates` จำกัด 60 รายการต่อจุดน้ำท่วม (migration `20261107000100`) ห้ามเพิ่ม query ที่ไม่มี limit/ขอบเขต
 - งานที่เปลี่ยนขนาด payload ต้องรายงานตัวเลขก่อน-หลัง (F12 → Network → `hdms-api`)
@@ -34,7 +34,7 @@
 
 ## 3. ฐานข้อมูล (Supabase / PostGIS)
 - ตาราง: `doh_flood_routes`, `doh_detour_routes`, `doh_timeline_updates`, `doh_mitigation_projects`, `doh_highway_layers`, `doh_offices`, `doh_map_styles`, `doh_system_settings` (+ `deleted_at` soft delete บน flood/detour)
-- RPC: `doh_get_system_data_rpc`, `doh_get_system_data_display_rpc`, `doh_import_routes_rpc` (รับ LineString ≥ 2 จุด WGS84), `doh_update_timeline_rpc`, `doh_snap_line_rpc`
+- RPC: `doh_get_system_data_rpc` (Admin เต็ม), `doh_get_system_data_display_rpc` (display ภายใน), `doh_get_public_system_data_display_rpc` (ประชาชนเฉพาะ active), `doh_import_routes_rpc` (รับ LineString ≥ 2 จุด WGS84), `doh_update_timeline_rpc`, `doh_snap_line_rpc`
 - trigger `trg_doh_highway_layer_geom` สร้างคอลัมน์ `geom`; `trg_doh_highway_layer_display` สร้าง `geojson_display`
 - **ไฟล์ SQL ในรีโปไม่ใช่สถานะจริงของ DB** — มีการแพตช์ฟังก์ชันภายหลังด้วย `pg_get_functiondef` + `replace` (เช่น soft delete) ก่อนแก้ฟังก์ชันใดต้องอ่านนิยามจริงจาก DB ก่อน (R4)
 - สถานะจราจรที่ DB รับ: `PASSABLE`, `LIGHT_VEHICLES_ONLY`, `ONE_LANE`, `CLOSED`, `WARNING` (constraint `chk_doh_flood_traffic_status`, `chk_doh_timeline_traffic_status`)

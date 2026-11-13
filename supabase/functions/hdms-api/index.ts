@@ -68,23 +68,25 @@ Deno.serve(async (req) => {
       }
       return data;
     };
-    const system = async (display = false) => {
+    const system = async (display = false, publicOnly = false) => {
       let data: any = null;
       if (display) {
-        // Light highway geometry for the public map. Falls back to the full payload if the
-        // db/supabase/migrations/20261107000200 migration has not been applied yet.
-        const { data: displayData, error } = await db.rpc("doh_get_system_data_display_rpc");
-        if (error) console.warn("Display payload unavailable, using full payload", error.code);
-        else data = displayData;
+        // The citizen endpoint must use the public wrapper: falling back to the full
+        // system payload would expose Draft records. Deploy its SQL migration first.
+        const rpc = publicOnly ? "doh_get_public_system_data_display_rpc" : "doh_get_system_data_display_rpc";
+        data = await check(db.rpc(rpc));
       }
-      if (!data || !Array.isArray(data.floodRoutes)) data = await check(db.rpc("doh_get_system_data_rpc"));
+      if (!data || !Array.isArray(data.floodRoutes)) {
+        if (publicOnly) fail("Public payload unavailable", 503);
+        data = await check(db.rpc("doh_get_system_data_rpc"));
+      }
       if (!data || !Array.isArray(data.floodRoutes)) fail("Invalid system data", 502);
       data.systemSettings = data.systemSettings?.main || data.systemSettings;
       return data;
     };
     if (action === "getSystemDataAction") return reply(await system());
     if (action === "getPublicSystemDataAction") {
-      return reply(await system(true), 200, {
+      return reply(await system(true, true), 200, {
         "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
       });
     }
