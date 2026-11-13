@@ -53,6 +53,11 @@
 - **ปัญหาและการแก้ไข:** การ์ดทางเลี่ยงบนมือถือเปิดรายละเอียดได้ด้วยการแตะทั้งการ์ด แต่ไม่มีปุ่มที่โฟกัสด้วยคีย์บอร์ดได้ จึงเพิ่มปุ่ม “รายละเอียด” ในการ์ดและทดสอบ Enter, Escape และการคืน focus
 - **ตรวจแล้ว:** lint, typecheck, build:pages ผ่าน; Playwright บน build ล่าสุดผ่าน 6 กรณี (desktop 5, mobile 1) และข้ามตามเงื่อนไข viewport 4 กรณี; ไม่เปลี่ยนข้อมูล Production
 
+### [UPDATE-084] 2026-11-13 ตรวจตัวแก้ไขแนวสายทางด้วยข้อมูลจำลอง
+- **ไฟล์:** `tests/e2e/gis-geometry-editor.spec.ts`
+- **การตรวจ:** เปิดตัวแก้ไขแนวถนนของสายทางจำลอง, สลับโหมดวาดอิสระ, เพิ่มจุดกึ่งกลาง, Undo/Redo และลบจุด โดยไม่บันทึกข้อมูล; ยืนยันจำนวน Canvas ใน Leaflet overlay ไม่เพิ่มระหว่างแก้ไข
+- **ตรวจแล้ว:** Playwright static desktop ผ่าน 1/1; mobile ข้ามตามข้อจำกัดพื้นที่ทำงานของตัวแก้ไข; ไม่เปลี่ยนข้อมูล Production
+
 ### [UPDATE-073] 2026-11-12 แก้ให้ Stroke/Casing ของเส้นแสดงผลบนแผนที่ Canvas จริง
 - **ไฟล์:** `components/map/LongdoGisMap.tsx`
 - **ปัญหา:** `LineStylingTab` บันทึก `borderActive`, `borderColor` และ `borderWidth` ได้ แต่ตัววาด Leaflet Canvas ใช้เฉพาะเส้น foreground จึงไม่มีเส้นขอบปรากฏจริงบนแผนที่
