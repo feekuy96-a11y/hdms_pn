@@ -42,6 +42,7 @@ import {
   parseKmPostMeters,
   formatKmPostString,
 } from "@/lib/flood-event-schema";
+import { useModalAccessibility } from "@/components/ui/use-modal-accessibility";
 
 interface IncidentRegistryTabProps {
   systemData: SystemDataPayload;
@@ -92,6 +93,13 @@ export function IncidentRegistryTab({
   // Phase 4: Merge Segments states
   const [mergeModalIncident, setMergeModalIncident] = useState<FloodRoute | null>(null);
   const [targetMergeIncidentId, setTargetMergeIncidentId] = useState<string>("");
+  const viewingDialog = useModalAccessibility(Boolean(viewingIncident), () => setViewingIncident(null));
+  const updateDialog = useModalAccessibility(Boolean(updateModalIncident), () => setUpdateModalIncident(null));
+  const splitDialog = useModalAccessibility(Boolean(splitModalIncident), () => setSplitModalIncident(null));
+  const mergeDialog = useModalAccessibility(Boolean(mergeModalIncident), () => {
+    setMergeModalIncident(null);
+    setTargetMergeIncidentId("");
+  });
 
   const activeCount = (systemData.floodRoutes || []).filter((r) => r.is_active).length;
   const resolvedCount = (systemData.floodRoutes || []).filter((r) => !r.is_active).length;
@@ -815,7 +823,7 @@ export function IncidentRegistryTab({
 
       {viewingIncident && (
         <div className="fixed inset-0 z-[9990] flex items-center justify-center bg-slate-950/80 p-3 backdrop-blur-sm" onClick={() => setViewingIncident(null)}>
-          <section role="dialog" aria-modal="true" aria-label="รายละเอียดเหตุการณ์" className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
+          <div ref={viewingDialog.dialogRef} role="dialog" aria-modal="true" aria-label="รายละเอียดเหตุการณ์" tabIndex={-1} onKeyDown={viewingDialog.onKeyDown} className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 border-b border-slate-700 pb-3">
               <div><p className="text-xs font-semibold text-amber-300">ทล.{viewingIncident.route_no}</p><h3 className="text-lg font-semibold text-white">{viewingIncident.section_name}</h3></div>
               <button type="button" onClick={() => setViewingIncident(null)} className="rounded-lg p-2 text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer" aria-label="ปิดรายละเอียด">×</button>
@@ -883,14 +891,14 @@ export function IncidentRegistryTab({
               <button type="button" onClick={() => { setViewingIncident(null); onEditFlood(viewingIncident.id); }} className="rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-heading font-bold text-slate-950 transition cursor-pointer">แก้ไขข้อมูลบนแผนที่</button>
               <button type="button" onClick={() => { setViewingIncident(null); handleDeleteRoute(viewingIncident.id); }} className="rounded-xl border border-rose-500/60 bg-rose-950/40 hover:bg-rose-900 px-4 py-2 text-xs font-heading font-bold text-rose-300 transition cursor-pointer">ลบ</button>
             </div>
-          </section>
+          </div>
         </div>
       )}
 
       {/* Quick Water Level Update Modal */}
       {updateModalIncident && (
         <div className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border-2 border-amber-400/80 rounded-2xl p-5 max-w-md w-full space-y-4 shadow-2xl animate-scale-up">
+          <div ref={updateDialog.dialogRef} role="dialog" aria-modal="true" aria-label="อัปเดตระดับน้ำ" tabIndex={-1} onKeyDown={updateDialog.onKeyDown} className="bg-slate-900 border-2 border-amber-400/80 rounded-2xl p-5 max-w-md w-full space-y-4 shadow-2xl animate-scale-up">
             <h3 className="font-heading font-bold text-sm text-white">
               อัปเดตระดับน้ำ: ทล.{updateModalIncident.route_no} {updateModalIncident.section_name}
             </h3>
@@ -964,7 +972,7 @@ export function IncidentRegistryTab({
       {/* Split Segment Modal (Phase 2) */}
       {splitModalIncident && (
         <div className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border-2 border-sky-400/80 rounded-2xl p-5 max-w-md w-full space-y-4 shadow-2xl animate-scale-up">
+          <div ref={splitDialog.dialogRef} role="dialog" aria-modal="true" aria-label="แบ่งช่วงกิโลเมตรน้ำท่วม" tabIndex={-1} onKeyDown={splitDialog.onKeyDown} className="bg-slate-900 border-2 border-sky-400/80 rounded-2xl p-5 max-w-md w-full space-y-4 shadow-2xl animate-scale-up">
             <div className="border-b border-slate-800 pb-2">
               <h3 className="font-heading font-bold text-sm text-white flex items-center gap-1.5">
                 <Split className="w-4 h-4 text-sky-400" /> แบ่งช่วงกิโลเมตรน้ำท่วม (Split Segment)
@@ -1041,7 +1049,7 @@ export function IncidentRegistryTab({
       {/* Merge Segments Modal (Phase 4) */}
       {mergeModalIncident && (
         <div className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border-2 border-indigo-500/80 rounded-2xl p-5 max-w-md w-full space-y-4 shadow-2xl animate-scale-up">
+          <div ref={mergeDialog.dialogRef} role="dialog" aria-modal="true" aria-label="รวมช่วงกิโลเมตรน้ำท่วม" tabIndex={-1} onKeyDown={mergeDialog.onKeyDown} className="bg-slate-900 border-2 border-indigo-500/80 rounded-2xl p-5 max-w-md w-full space-y-4 shadow-2xl animate-scale-up">
             <div className="border-b border-slate-800 pb-2">
               <h3 className="font-heading font-bold text-sm text-white flex items-center gap-1.5">
                 <Merge className="w-4 h-4 text-indigo-400" /> รวมช่วงกิโลเมตรน้ำท่วม (Merge Segments)

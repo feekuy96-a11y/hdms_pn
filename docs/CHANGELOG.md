@@ -10,6 +10,12 @@
 - **ยังไม่เสร็จ:** modal รายละเอียดเหตุการณ์, ทางเลี่ยง และ GIS ยังต้องย้ายมาใช้ hook เดียวกัน (B-018)
 - **ลำดับ deploy:** เว็บไซต์ GitHub Pages เท่านั้น · ย้อนกลับด้วย `git revert` commit นี้
 
+### [UPDATE-076] 2026-11-13 ทำให้ modal เหตุการณ์น้ำท่วมใช้งานด้วยคีย์บอร์ดได้
+- **ไฟล์:** `components/admin/tabs/IncidentRegistryTab.tsx`
+- **การแก้ไข:** ใช้ hook accessibility กลางกับ modal รายละเอียดเหตุการณ์, อัปเดตระดับน้ำ, แบ่งช่วง และรวมช่วง; แต่ละหน้าต่างรองรับ focus ตอนเปิด, Tab/Shift+Tab trap, Escape และคืน focus กลับสู่ปุ่มต้นทาง
+- **ตรวจแล้ว:** typecheck และ diff check ผ่าน; lint กำลังรันในสภาพแวดล้อมนี้
+- **ยังไม่เสร็จ:** modal ทางเลี่ยงและ GIS ยังอยู่ใน B-018
+
 ### [UPDATE-073] 2026-11-12 แก้ให้ Stroke/Casing ของเส้นแสดงผลบนแผนที่ Canvas จริง
 - **ไฟล์:** `components/map/LongdoGisMap.tsx`
 - **ปัญหา:** `LineStylingTab` บันทึก `borderActive`, `borderColor` และ `borderWidth` ได้ แต่ตัววาด Leaflet Canvas ใช้เฉพาะเส้น foreground จึงไม่มีเส้นขอบปรากฏจริงบนแผนที่
