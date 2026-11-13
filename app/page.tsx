@@ -1489,6 +1489,7 @@ export default function HomePage() {
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
+                        aria-label="ขาไป A → B"
                         disabled={!isDetourDirectionAllowed(viewingDetourModal.direction_mode, "FORWARD")}
                         aria-pressed={modalDetourDirection === "FORWARD"}
                         onClick={() => setModalDetourDirection("FORWARD")}
@@ -1498,11 +1499,12 @@ export default function HomePage() {
                             : "bg-[#13203c] border border-slate-700/60 hover:bg-[#1a2b50] text-slate-200"
                         }`}
                       >
-                        <span>🚗</span>
+                        <span aria-hidden="true">🚗</span>
                         <span>ขาไป (A ➔ B)</span>
                       </button>
                       <button
                         type="button"
+                        aria-label="ขากลับ B → A"
                         disabled={!isDetourDirectionAllowed(viewingDetourModal.direction_mode, "REVERSE")}
                         aria-pressed={modalDetourDirection === "REVERSE"}
                         onClick={() => setModalDetourDirection("REVERSE")}
@@ -1512,7 +1514,7 @@ export default function HomePage() {
                             : "bg-[#13203c] border border-slate-700/60 hover:bg-[#1a2b50] text-slate-200"
                         }`}
                       >
-                        <span>🚙</span>
+                        <span aria-hidden="true">🚙</span>
                         <span>ขากลับ (B ➔ A)</span>
                       </button>
                     </div>

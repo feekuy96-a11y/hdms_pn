@@ -380,3 +380,19 @@
   - `npx playwright test --workers=2`: ผ่านครบ 46 passed, 14 skipped, 0 failed
   - Live Supabase Database / RPC: ทดสอบเขียน-อ่าน `detour_meta` และ `doh_get_system_data_rpc` บนฐานข้อมูลจริงสำเร็จ
 - **ลำดับ deploy:** SQL Migration (`20261109000100_directional_flood_and_detour.sql`) [เสร็จแล้ว] → Edge Function (`hdms-api`) [เสร็จแล้ว] → เว็บไซต์ (GitHub Pages)
+
+---
+
+### [UPDATE-072] แก้ไข CI แดงจากปุ่มสลับทิศทางเส้นทางเลี่ยง และลบไฟล์วางผิดที่ `lib/MapManagementTab.tsx`
+- **สาเหตุ:**
+  1. `app/page.tsx` (จาก commit `3ee39e5`) เปลี่ยนข้อความปุ่มเลือกทิศทางใน `viewingDetourModal` เป็น `🚗 ขาไป (A ➔ B)` / `🚙 ขากลับ (B ➔ A)` ทำให้ `tests/e2e/public-route-sheet.spec.ts:49-50` หา `getByRole("button", { name: "ขาไป A → B" })` และ `"ขากลับ B → A"` ไม่เจอ (R7)
+  2. Commit `8d444b0` อัปโหลดไฟล์ `MapManagementTab.tsx` ผิดโฟลเดอร์ไปที่ `lib/MapManagementTab.tsx` (ซึ่งเป็นเวอร์ชันเก่ากว่า `components/admin/tabs/MapManagementTab.tsx` และมี unused import)
+- **การแก้ไข:**
+  1. `app/page.tsx`: เพิ่ม `aria-label="ขาไป A → B"` และ `aria-label="ขากลับ B → A"` บนปุ่มเลือกทิศทาง พร้อม `aria-hidden="true"` บนอีโมจิตกแต่ง เพื่อรักษา e2e contract (R7) โดยคงหน้าตา UI ไว้ครบถ้วน
+  2. ลบไฟล์ `lib/MapManagementTab.tsx` ที่วางผิดโฟลเดอร์ (`components/admin/tabs/MapManagementTab.tsx` มีฟีเจอร์ล่าสุดครบอยู่แล้ว)
+- **ตรวจแล้ว:**
+  - `npm run lint` (`--max-warnings=0`): ผ่าน (0 errors, 0 warnings)
+  - `npm run typecheck` (`tsc --noEmit`): ผ่าน (0 errors)
+  - `$env:NEXT_OUTPUT="export"; npx next build`: ผ่าน (Static Pages 6/6)
+  - `npx playwright test --workers=2`: ผ่าน (46 passed, 14 skipped, 0 failed)
+- **ลำดับ deploy:** เว็บไซต์ (GitHub Pages) เท่านั้น (ไม่ต้องแก้ SQL หรือ Edge Function)
