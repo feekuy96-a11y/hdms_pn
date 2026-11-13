@@ -396,3 +396,19 @@
   - `$env:NEXT_OUTPUT="export"; npx next build`: ผ่าน (Static Pages 6/6)
   - `npx playwright test --workers=2`: ผ่าน (46 passed, 14 skipped, 0 failed)
 - **ลำดับ deploy:** เว็บไซต์ (GitHub Pages) เท่านั้น (ไม่ต้องแก้ SQL หรือ Edge Function)
+
+---
+
+### [UPDATE-073] ผสานฟีเจอร์แสดงผลข้อความแนะนำทางเลี่ยง (`AdviceText`), ชุดตัวอย่างมาตรฐาน, ตัวแยกทิศทาง, และ `lib/osrm-client.ts` โดยไม่กระทบฟีเจอร์ปัจจุบัน
+- **การแก้ไข:**
+  1. เพิ่ม `components/AdviceText.tsx` และ `lib/advice-format.ts` (`parseAdviceText`, `buildGoogleMapsDirectionsUrl`) แสดงหัวข้อทิศทางตัวหนา ขั้นตอนเลขพร้อมป้าย `จุดเริ่มต้น:/จุดสิ้นสุด:` ตัวหนา และสรุป 3 บรรทัดย่อหน้าเข้าทั้งในหน้าประชาชน (`app/page.tsx`) และหน้าแอดมิน (`MapManagementTab.tsx`, `DetourManagementTab.tsx`)
+  2. เพิ่ม `lib/detour-advice-presets.ts` (ชุดตัวอย่างมาตรฐาน 2 สาย: ปน.2003 และ ปน.3057) พร้อมช่องเลือกตัวอย่าง, ลิงก์เทียบกับ Google Maps (ขาไป/ขากลับ), และกล่อง `"ตัวอย่างที่ประชาชนจะเห็น"` ใน `components/admin/tabs/MapManagementTab.tsx`
+  3. ปรับ `extractDirectionalAdvice`, `splitDetourAdviceByDirection`, และ `buildSingleDirectionAdvice` ใน `lib/gis-utils.ts` ให้คงส่วนหัว ต./อ. เมื่อแก้ทีละทิศทาง, รองรับกรณีพิมพ์หัวข้อขากลับผิดเป็น `"ทิศทางขาไป: จุด B → จุด A"`, บอกทางออกวงเวียน `"ทางออกที่ N"`, ใช้ `"ถนนโยธาธิการ ปน.2003"`, และขึ้นต้นขั้นสุดท้ายด้วย `"จุดสิ้นสุด:"` โดยคงระบบ `area-lookup` และพารามิเตอร์ทิศทางเดิมไว้ครบถ้วน
+  4. เพิ่ม `lib/osrm-client.ts` (แคช 30 นาที, in-flight deduplication, retry 1 ครั้ง, เว้นช่วง 1 วินาที, circuit breaker 60 วินาทีสำหรับ local OSRM) และกู้คืน `server/routing-service.mjs`
+  5. ปรับ `lib/hdms-api.ts` (`HdmsHttpError`), `app/actions/doh-actions.ts`, และ `components/providers/QueryProvider.tsx` เพื่อจำกัดการยิงซ้ำเมื่อระบบขัดข้อง
+- **ตรวจแล้ว:**
+  - `npm run lint` (`--max-warnings=0`): ผ่าน (0 errors, 0 warnings)
+  - `npm run typecheck` (`tsc --noEmit`): ผ่าน (0 errors)
+  - `$env:NEXT_OUTPUT="export"; npx next build`: ผ่าน (Static Pages 6/6)
+  - `$env:PLAYWRIGHT_STATIC="1"; npx playwright test --workers=2`: ผ่านครบ (46 passed, 14 skipped, 0 failed)
+- **ลำดับ deploy:** เว็บไซต์ (GitHub Pages) เท่านั้น (ไม่ต้องแก้ SQL หรือ Edge Function)

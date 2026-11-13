@@ -55,6 +55,7 @@ export function parseDetourAdvice(rawAdvice: string): { steps: string[]; notes: 
   const steps: string[] = [];
   const notes: string[] = [];
   for (const entry of normalized.split(/\n+/).map((line) => line.trim()).filter(Boolean)) {
+    if (/^={2,}\s*.+?\s*={2,}$/.test(entry)) continue;
     if (/^[-•–]\s*/.test(entry)) notes.push(entry.replace(/^[-•–]\s*/, ""));
     else steps.push(entry.replace(/^\d+[.)]\s*/, ""));
   }

@@ -1,6 +1,7 @@
 import { UTM_47N_PARAMS } from "./constants";
 import { parseKmPostMeters } from "./highway-schema";
 import { cleanThaiAdminPrefix, findPattaniDistrictName, isPointInPolygon, resolveArea } from "./area-lookup";
+import { fetchOsrmWithFailover, getOsrmFailureHint } from "./osrm-client";
 export { cleanThaiAdminPrefix, findPattaniDistrictName, isPointInPolygon } from "./area-lookup";
 
 /**
@@ -116,56 +117,9 @@ export function calculatePolylineLengthKm(coords: [number, number][]): number {
   return Number(total.toFixed(2));
 }
 
-/**
- * ดึงข้อมูลการคำนวณเส้นทาง OSRM แบบ Multi-Tier Failover
- * Tier 1: Local OSRM Microservice (เช่น Docker บน localhost:5000 หรือ LAN Server ของหน่วยงาน)
- * Tier 2: Public OSRM API (Fallback อัตโนมัติเมื่อ Local ปิดอยู่หรือตอบสนองช้าเกิน 1.2 วินาที)
- */
-export async function fetchOsrmWithFailover(
-  coordString: string,
-  params: string = "overview=full&geometries=geojson"
-): Promise<{ data: any; source: "local" | "public" } | null> {
-  const localBase = process.env.NEXT_PUBLIC_OSRM_LOCAL_URL;
-  const publicBase = process.env.NEXT_PUBLIC_OSRM_ROUTING_URL || "https://router.project-osrm.org/route/v1/driving";
-
-  // Tier 1: Local Microservice
-  if (localBase) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1200);
-      const url = `${localBase}/${coordString}?${params}`;
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (response.ok) {
-        const data = await response.json();
-        if (data?.routes?.[0]) {
-          return { data, source: "local" };
-        }
-      }
-    } catch {
-      // Local ไม่ตอบสนอง ลื่นไหลไป Tier 2
-    }
-  }
-
-  // Tier 2: Public OSRM API Fallback
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6500);
-    const url = `${publicBase}/${coordString}?${params}`;
-    const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (response.ok) {
-      const data = await response.json();
-      if (data?.routes?.[0]) {
-        return { data, source: "public" };
-      }
-    }
-  } catch (err) {
-    console.warn("[fetchOsrmWithFailover] All OSRM sources unavailable:", err);
-  }
-
-  return null;
-}
+// fetchOsrmWithFailover now lives in ./osrm-client (cache, de-duplication, retry, spacing, circuit breaker).
+// It is re-exported here so existing imports from "@/lib/gis-utils" keep working.
+export { fetchOsrmWithFailover };
 
 /**
  * ตรวจสอบสถานะการเชื่อมต่อของ OSRM Routing Engines (Local & Public)
@@ -276,25 +230,31 @@ function formatDirectionHeader(
 
 /**
  * แยกคำแนะนำแบบ ๒ ทิศทาง (ขาไป A -> B และ ขากลับ B -> A)
+ * ใช้ส่วนหัว "=== ทิศทาง... ===" อันแรกเป็นขาไป และอันที่สองเป็นขากลับ (ไม่สนว่าสะกดคำว่าขาไป/ขากลับถูกหรือไม่)
+ * และคืนส่วนหัวเดิมมาด้วย เพื่อไม่ให้รายละเอียดตำบล/อำเภอในหัวข้อหายไปเมื่อแก้ข้อความ
  */
 export function extractDirectionalAdvice(text: string): {
   forward: string;
   reverse: string;
   hasBoth: boolean;
+  forwardHeader: string;
+  reverseHeader: string;
 } {
-  if (!text) return { forward: "", reverse: "", hasBoth: false };
+  if (!text) return { forward: "", reverse: "", hasBoth: false, forwardHeader: "", reverseHeader: "" };
 
-  const forwardMarker = /===\s*ทิศทางขาไป[^=]*===/i;
-  const reverseMarker = /===\s*ทิศทางขากลับ[^=]*===/i;
-
-  if (forwardMarker.test(text) && reverseMarker.test(text)) {
-    const parts = text.split(reverseMarker);
-    const forwardPart = parts[0].replace(forwardMarker, "").trim();
-    const reversePart = (parts[1] || "").trim();
+  const headers = Array.from(text.matchAll(/===\s*ทิศทาง[^=\n]*===/g));
+  if (headers.length >= 2) {
+    const [first, second] = headers;
+    const third = headers[2];
+    const firstEnd = (first.index ?? 0) + first[0].length;
+    const secondStart = second.index ?? 0;
+    const secondEnd = secondStart + second[0].length;
     return {
-      forward: forwardPart,
-      reverse: reversePart,
+      forward: text.slice(firstEnd, secondStart).trim(),
+      reverse: text.slice(secondEnd, third ? third.index : undefined).trim(),
       hasBoth: true,
+      forwardHeader: first[0],
+      reverseHeader: second[0],
     };
   }
 
@@ -302,6 +262,8 @@ export function extractDirectionalAdvice(text: string): {
     forward: text.trim(),
     reverse: text.trim(),
     hasBoth: false,
+    forwardHeader: "",
+    reverseHeader: "",
   };
 }
 
@@ -319,6 +281,7 @@ async function buildSingleDirectionAdvice(
   const startAddr = await getDetailedPattaniAddress(startPt[0], startPt[1]);
   const endAddr = await getDetailedPattaniAddress(endPt[0], endPt[1]);
   const startHwyStr = relatedHighwayNo ? `ทล.${relatedHighwayNo}` : "จุดตัดทางหลวง";
+  const endHwyStr = relatedHighwayNo ? `ทล.${relatedHighwayNo} ` : "";
 
   let osrmSteps: any[] = [];
   let totalDistanceM = 0;
@@ -362,8 +325,11 @@ async function buildSingleDirectionAdvice(
       } else if (isLast || mType === "arrive") {
         action = "ถึงจุดบรรจบทางหลวงสายหลัก:";
       } else if (mType === "roundabout" || mType === "rotary") {
-        // วงเวียน: ตรวจจับทิศทางการเลี้ยวเพื่อความเป็นธรรมชาติ (เช่น เลี้ยวซ้ายผ่านวงเวียน)
-        if (mMod.includes("left")) {
+        // วงเวียน: ถ้ามีเลขทางออกจาก OSRM ให้บอกเป็น "ทางออกที่ N" เหมือนตัวอย่างข้อความมาตรฐาน
+        const exitNumber = Number(s.maneuver.exit);
+        if (Number.isInteger(exitNumber) && exitNumber > 0) {
+          action = `เมื่อถึงวงเวียน ให้ใช้ทางออกที่ ${exitNumber} มุ่งหน้าสู่`;
+        } else if (mMod.includes("left")) {
           action = "เลี้ยวซ้ายผ่านวงเวียนมุ่งหน้าสู่";
         } else if (mMod.includes("right")) {
           action = "เลี้ยวขวาผ่านวงเวียนมุ่งหน้าสู่";
@@ -398,7 +364,10 @@ async function buildSingleDirectionAdvice(
 
       let fullRoad = "";
       if (roadName && refStr) {
-        fullRoad = `${roadName} (${refStr})`;
+        // ปน./ยล. เขียนต่อท้ายชื่อถนน (ถนนโยธาธิการ ปน.2003) ส่วนทางหลวงใช้วงเล็บ (ถนน... (ทล.4356))
+        fullRoad = /^ทางหลวงชนบท\s/.test(refStr)
+          ? `${roadName} ${refStr.replace(/^ทางหลวงชนบท\s+/, "")}`
+          : `${roadName} (${refStr})`;
       } else if (refStr) {
         fullRoad = refStr;
       } else if (roadName) {
@@ -473,12 +442,13 @@ async function buildSingleDirectionAdvice(
       if (roadName === "เส้นทางเชื่อมต่อท้องถิ่น" && stepAddr.road) {
         roadName = stepAddr.road;
       }
-      lines.push(`${stepCounter++}. ${step.action} ${roadName} ${stepAddr.tag} (ระยะทาง ${distStr})`);
+      lines.push(`${stepCounter++}. ${step.action} ${roadName} (ระยะทาง ${distStr})`);
     }
 
     // Step สุดท้าย: ถึงจุดหมาย
-    lines.push(`${stepCounter++}. ถึงจุดบรรจบทางหลวงสายหลัก ${endAddr.tag} สัญจรต่อได้ตามปกติ`);
-    lines.push(`- รวมระยะทางเลี่ยง: ${totalKm} กม. (ใช้เวลาเดินทางประมาณ ${estMinutes} นาที)`);
+    lines.push(`${stepCounter++}. จุดสิ้นสุด: ถึงจุดบรรจบทางหลวงสายหลัก ${endHwyStr}${endAddr.tag} สัญจรต่อได้ตามปกติ`);
+    lines.push(`- รวมระยะทางเลี่ยง: ${totalKm} กม.`);
+    lines.push(`- ระยะเวลาเดินทาง: ประมาณ ${estMinutes} นาที`);
     lines.push(`- สภาพเส้นทาง: ผิวทางลาดยาง รถยนต์ทุกชนิดสามารถสัญจรได้ตามปกติ`);
 
     return lines.join("\n");
@@ -491,8 +461,9 @@ async function buildSingleDirectionAdvice(
     dirHeader,
     `1. จุดเริ่มต้น: บริเวณ ${startHwyStr} ${startAddr.tag}`,
     `2. เบี่ยงเข้าสู่ โครงข่ายเส้นทางเลี่ยง มุ่งหน้า ${endAddr.tag}`,
-    `3. ถึงจุดบรรจบทางหลวงสายหลัก ${endAddr.tag} สัญจรต่อได้ตามปกติ`,
-    `- รวมระยะทางเลี่ยง: ประมาณ ${lengthKm} กม. (ใช้เวลาเดินทางประมาณ ${Math.ceil(lengthKm * 1.5)} นาที)`,
+    `3. จุดสิ้นสุด: ถึงจุดบรรจบทางหลวงสายหลัก ${endHwyStr}${endAddr.tag} สัญจรต่อได้ตามปกติ`,
+    `- รวมระยะทางเลี่ยง: ประมาณ ${lengthKm} กม.`,
+    `- ระยะเวลาเดินทาง: ประมาณ ${Math.ceil(lengthKm * 1.5)} นาที`,
     `- สภาพเส้นทาง: ผิวทางลาดยาง รถยนต์ทุกชนิดสามารถสัญจรได้ตามปกติ`,
   ];
   return lines.join("\n");
@@ -581,6 +552,15 @@ export function splitDetourAdviceByDirection(
     return {
       forwardText: "เส้นทางเลี่ยงนี้เปิดใช้งานเฉพาะทิศทางขากลับ (B → A) เท่านั้น กรุณาใช้เส้นทางอื่นสำหรับขาไป",
       reverseText: desc,
+    };
+  }
+
+  // รองรับรูปแบบที่มีส่วนหัว === ทิศทาง... === ๒ ส่วน (แม้พิมพ์หัวข้อขากลับผิดเป็น "ทิศทางขาไป: จุด B → จุด A")
+  const extracted = extractDirectionalAdvice(desc);
+  if (extracted.hasBoth) {
+    return {
+      forwardText: extracted.forward || desc,
+      reverseText: extracted.reverse || desc,
     };
   }
 
@@ -711,6 +691,11 @@ export async function calculateRoadSnappedRoute(
   } catch (err) {
     console.warn("OSRM routing unavailable:", err);
   }
+  const hint = getOsrmFailureHint();
+  const alternative = "หรือสลับเป็นโหมด \"วาด/แก้ไขอิสระ\" เพื่อลากจุดเอง";
+  if (hint === "rate_limited") throw new Error(`ระบบหาเส้นทาง (OSRM) ถูกจำกัดการเรียกชั่วคราว รอประมาณ 1 นาทีแล้วลองใหม่ ${alternative}`);
+  if (hint === "no_route") throw new Error(`ไม่พบเส้นทางตามถนนระหว่างจุดที่เลือก ลองขยับจุดให้ใกล้ถนนมากขึ้น ${alternative}`);
+  if (hint === "unreachable") throw new Error(`เชื่อมต่อระบบหาเส้นทาง (OSRM) ไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่ ${alternative}`);
   throw new Error("ไม่สามารถคำนวณเส้นทางตามถนนได้ กรุณาลองใหม่");
 }
 

@@ -221,6 +221,16 @@ const DEFAULT_ACTION_TIMEOUT_MS = 20_000;
 // afterwards, so it asks the server not to send the whole system payload back a second time.
 const READ_ONLY_ACTIONS = new Set(["getSystemDataAction", "getPublicSystemDataAction", "getDeletedRoutesAction", "snapRouteAction"]);
 
+/** An HTTP error answered by the Edge Function (so callers can tell it apart from a network failure). */
+export class HdmsHttpError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "HdmsHttpError";
+    this.status = status;
+  }
+}
+
 export async function invokeHdms<T = any>(action: string, args: unknown[]): Promise<T> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -253,7 +263,7 @@ export async function invokeHdms<T = any>(action: string, args: unknown[]): Prom
   }
   if (!response.ok) {
     const result = await response.json().catch(() => ({}));
-    throw new Error(result.error || `ไม่สามารถดำเนินการได้ (${response.status})`);
+    throw new HdmsHttpError(result.error || `ไม่สามารถดำเนินการได้ (${response.status})`, response.status);
   }
   return (await response.json()) as T;
 }

@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { AdviceText } from "@/components/AdviceText";
 import { ActionButton, FormSection, StickyActionBar, ToolGroup } from "@/components/admin/ui";
 import { SystemDataPayload } from "@/db/default-data";
+import { buildGoogleMapsDirectionsUrl } from "@/lib/advice-format";
+import { DETOUR_ADVICE_PRESETS } from "@/lib/detour-advice-presets";
 import {
   MapPinned,
   ArrowRightLeft,
@@ -1536,6 +1539,37 @@ export function MapManagementTab({
     }
   };
 
+  // Links that open Google Maps with the drawn detour, to compare distance, time and road names by eye.
+  // (Google's directions text cannot be pulled in automatically: that needs a paid API key and its terms
+  // do not allow showing the result outside a Google map.)
+  const googleCompareLinks = React.useMemo(() => {
+    if (draftCoordinates.length < 2) return null;
+    const first = draftCoordinates[0];
+    const last = draftCoordinates[draftCoordinates.length - 1];
+    const middle = draftCoordinates.slice(1, -1);
+    return {
+      forward: buildGoogleMapsDirectionsUrl(first, last, middle),
+      reverse: buildGoogleMapsDirectionsUrl(last, first, middle.slice().reverse()),
+    };
+  }, [draftCoordinates]);
+
+  // The same text the public page will show for the selected view.
+  const adviceParts = extractDirectionalAdvice(detourDesc);
+  const advicePreviewText =
+    detourAdviceView === "FORWARD"
+      ? [adviceParts.forwardHeader, adviceParts.forward].filter(Boolean).join("\n")
+      : detourAdviceView === "REVERSE"
+      ? [adviceParts.reverseHeader, adviceParts.reverse].filter(Boolean).join("\n")
+      : detourDesc;
+
+  const handleApplyAdvicePreset = (presetId: string) => {
+    const preset = DETOUR_ADVICE_PRESETS.find((item) => item.id === presetId);
+    if (!preset) return;
+    if (detourDesc.trim() && !window.confirm("แทนที่ข้อความคำแนะนำเดิมด้วยข้อความตัวอย่างนี้ใช่หรือไม่?")) return;
+    setDetourDesc(preset.text);
+    setDetourAdviceView("COMBINED");
+  };
+
   return (
     <div className="space-y-5 max-w-4xl">
       <div className="border-b border-slate-800 pb-3 flex flex-wrap items-center justify-between gap-3">
@@ -2236,12 +2270,15 @@ export function MapManagementTab({
               }
               onChange={(e) => {
                 const val = e.target.value;
-                if (detourAdviceView === "FORWARD") {
+                if (detourAdviceView === "FORWARD" || detourAdviceView === "REVERSE") {
                   const ext = extractDirectionalAdvice(detourDesc);
-                  setDetourDesc(`=== ทิศทางขาไป: จุด A → จุด B ===\n${val}\n\n=== ทิศทางขากลับ: จุด B → จุด A ===\n${ext.reverse}`);
-                } else if (detourAdviceView === "REVERSE") {
-                  const ext = extractDirectionalAdvice(detourDesc);
-                  setDetourDesc(`=== ทิศทางขาไป: จุด A → จุด B ===\n${ext.forward}\n\n=== ทิศทางขากลับ: จุด B → จุด A ===\n${val}`);
+                  const forwardHeader = ext.forwardHeader || "=== ทิศทางขาไป: จุด A → จุด B ===";
+                  const reverseHeader = ext.reverseHeader || "=== ทิศทางขากลับ: จุด B → จุด A ===";
+                  // Text without direction headers is a single block: the other direction starts empty
+                  // (it used to be filled with a copy of the whole text).
+                  const forwardText = detourAdviceView === "FORWARD" ? val : ext.hasBoth ? ext.forward : "";
+                  const reverseText = detourAdviceView === "REVERSE" ? val : ext.hasBoth ? ext.reverse : "";
+                  setDetourDesc(`${forwardHeader}\n${forwardText}\n\n${reverseHeader}\n${reverseText}`);
                 } else {
                   setDetourDesc(val);
                 }
@@ -2249,6 +2286,61 @@ export function MapManagementTab({
               placeholder="วิเคราะห์คำแนะนำอัตโนมัติ หรือกรอกคำแนะนำทั้ง ๒ ทิศทาง..."
               className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-mono leading-relaxed"
             />
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="detour-advice-preset" className="text-xs text-slate-300">
+                  ใช้ข้อความตัวอย่างสไตล์มาตรฐาน
+                </label>
+                <select
+                  id="detour-advice-preset"
+                  value=""
+                  onChange={(event) => handleApplyAdvicePreset(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-white"
+                >
+                  <option value="">เลือกตัวอย่าง...</option>
+                  {DETOUR_ADVICE_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.title} — {preset.hint}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-slate-500">ตัวอย่างเป็นแนวทางรูปแบบ ต้องตรวจชื่อถนน ระยะทาง และเวลากับเส้นที่วาดจริงก่อนบันทึก</p>
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-slate-300">เทียบกับ Google Maps</p>
+                {googleCompareLinks ? (
+                  <div className="flex flex-wrap gap-2">
+                    <a
+                      href={googleCompareLinks.forward}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-10 items-center rounded-lg border border-slate-700 bg-slate-800 px-3 text-xs font-heading font-bold text-sky-300 hover:bg-slate-700"
+                    >
+                      ขาไป A → B ↗
+                    </a>
+                    <a
+                      href={googleCompareLinks.reverse}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-10 items-center rounded-lg border border-slate-700 bg-slate-800 px-3 text-xs font-heading font-bold text-sky-300 hover:bg-slate-700"
+                    >
+                      ขากลับ B → A ↗
+                    </a>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500">วาดหรือเลือกจุด A และ B ก่อน แล้วลิงก์เทียบเส้นทางจะปรากฏที่นี่</p>
+                )}
+                <p className="text-[11px] text-slate-500">เปิดในแท็บใหม่ ใช้ดูระยะทาง เวลา และชื่อถนนเปรียบเทียบด้วยตา (ระบบไม่ดึงข้อความจาก Google มาใส่ให้อัตโนมัติ)</p>
+              </div>
+            </div>
+
+            {detourDesc.trim() && (
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <p className="mb-2 text-xs font-semibold text-slate-400">ตัวอย่างที่ประชาชนจะเห็น</p>
+                <AdviceText text={advicePreviewText} className="text-slate-200" />
+              </div>
+            )}
 
             <div className="flex items-center justify-between text-[11px] text-slate-400">
               <span>💡 ประชาชนสามารถสลับทิศทางเดินทางได้ทันทีในหน้าหลัก</span>

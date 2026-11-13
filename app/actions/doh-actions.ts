@@ -1,5 +1,5 @@
 import type { SystemDataPayload, MapLineStyleItem, DohOfficeLocation, SystemSettingsConfig } from "@/db/default-data";
-import { invokeHdms } from "@/lib/hdms-api";
+import { HdmsHttpError, invokeHdms } from "@/lib/hdms-api";
 
 export async function restoreRouteAction(recordType: "FLOOD" | "DETOUR", id: string) {
   return invokeHdms("restoreRouteAction", [recordType, id]);
@@ -17,13 +17,19 @@ export async function getSystemDataAction(): Promise<SystemDataPayload> {
   return invokeHdms("getSystemDataAction", []);
 }
 
-// Public map data: same payload, but highway lines are the light (simplified) copy. Falls back to the
-// full payload when the server has not been updated yet, so the site keeps working during rollout.
+// Public map data: same payload, but highway lines are the light (simplified) copy.
+// Falls back to the full payload ONLY when the server answers "Unknown operation" (an Edge Function that
+// has not been updated yet). Any other failure (timeout, 5xx, network) is rethrown: retrying through a
+// second action would double the load on a backend that is already struggling, exactly when many
+// citizens are refreshing during a flood.
 export async function getPublicSystemDataAction(): Promise<SystemDataPayload> {
   try {
     return await invokeHdms("getPublicSystemDataAction", []);
-  } catch {
-    return invokeHdms("getSystemDataAction", []);
+  } catch (error) {
+    if (error instanceof HdmsHttpError && error.status === 400 && /unknown operation/i.test(error.message)) {
+      return invokeHdms("getSystemDataAction", []);
+    }
+    throw error;
   }
 }
 

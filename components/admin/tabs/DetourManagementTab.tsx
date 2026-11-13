@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { AdviceText } from "@/components/AdviceText";
 import { DetourRoute, SystemDataPayload } from "@/db/default-data";
 import {
   Signpost,
@@ -820,11 +821,19 @@ export function DetourManagementTab({
                 </div>
               </div>
               {(() => {
+                const ext = extractDirectionalAdvice(viewingDetour.description || "");
                 const parsed = splitDetourAdviceByDirection(viewingDetour.description || "", viewingDetour.direction_mode);
-                const adviceText = viewingDetourDir === "FORWARD" ? parsed.forwardText : parsed.reverseText;
+                const adviceText =
+                  ext.hasBoth && viewingDetour.direction_mode !== "FORWARD_ONLY" && viewingDetour.direction_mode !== "REVERSE_ONLY"
+                    ? viewingDetourDir === "FORWARD"
+                      ? [ext.forwardHeader, ext.forward].filter(Boolean).join("\n")
+                      : [ext.reverseHeader, ext.reverse].filter(Boolean).join("\n")
+                    : viewingDetourDir === "FORWARD"
+                      ? parsed.forwardText
+                      : parsed.reverseText;
                 return (
-                  <div className="rounded-xl border border-amber-500/20 bg-slate-950/80 p-3 text-xs text-amber-100/95 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto font-sans">
-                    {adviceText || "ไม่มีคำแนะนำการเดินทางเฉพาะทิศทาง"}
+                  <div className="rounded-xl border border-amber-500/20 bg-slate-950/80 p-3 text-xs text-amber-100/95 leading-relaxed max-h-48 overflow-y-auto font-sans">
+                    {adviceText ? <AdviceText text={adviceText} /> : "ไม่มีคำแนะนำการเดินทางเฉพาะทิศทาง"}
                   </div>
                 );
               })()}
