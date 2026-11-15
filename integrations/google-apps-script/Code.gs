@@ -121,7 +121,7 @@ function uploadMedia(body) {
   return {
     ok: true,
     mediaId: file.getId(),
-    url: "https://drive.google.com/uc?export=view&id=" + encodeURIComponent(file.getId()),
+    url: "https://lh3.googleusercontent.com/d/" + encodeURIComponent(file.getId()),
     mimeType: mimeType,
     sizeBytes: bytes.length,
     provider: "google-drive",

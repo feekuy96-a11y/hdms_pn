@@ -24,6 +24,48 @@ const typeTable = (type: unknown) => type === "FLOOD" ? "doh_flood_routes" : typ
 const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const externalImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
+function googleDrivePublicImageUrl(fileId: string) {
+  return `https://lh3.googleusercontent.com/d/${encodeURIComponent(fileId)}`;
+}
+
+function normalizeGoogleDriveImageUrl(value: unknown) {
+  if (typeof value !== "string" || !value) return value;
+  try {
+    const url = new URL(value);
+    if ((url.hostname === "drive.google.com" && url.pathname === "/uc") || url.hostname === "drive.usercontent.google.com") {
+      const fileId = url.searchParams.get("id");
+      if (fileId) return googleDrivePublicImageUrl(fileId);
+    }
+  } catch {
+    // Preserve malformed or non-URL legacy values so the caller can show its normal fallback.
+  }
+  return value;
+}
+
+function normalizeSystemMediaUrls(data: any) {
+  if (Array.isArray(data?.floodRoutes)) {
+    data.floodRoutes = data.floodRoutes.map((route: any) => {
+      const directionMeta = route?.direction_meta && typeof route.direction_meta === "object"
+        ? {
+            ...route.direction_meta,
+            photos: Array.isArray(route.direction_meta.photos)
+              ? route.direction_meta.photos.map((photo: any) => ({ ...photo, dataUrl: normalizeGoogleDriveImageUrl(photo?.dataUrl) }))
+              : route.direction_meta.photos,
+          }
+        : route?.direction_meta;
+      return { ...route, latest_photo_url: normalizeGoogleDriveImageUrl(route?.latest_photo_url), direction_meta: directionMeta };
+    });
+  }
+  if (Array.isArray(data?.mitigationProjects)) {
+    data.mitigationProjects = data.mitigationProjects.map((project: any) => ({
+      ...project,
+      before_image_url: normalizeGoogleDriveImageUrl(project?.before_image_url),
+      after_image_url: normalizeGoogleDriveImageUrl(project?.after_image_url),
+    }));
+  }
+  return data;
+}
+
 function base64Url(value: string | Uint8Array) {
   const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
   let binary = "";
@@ -120,7 +162,7 @@ async function uploadImageToGoogleDrive(payload: any) {
     await deleteGoogleDriveFile(file.id, accessToken).catch(() => undefined);
     fail("Google Drive permission update failed", 502);
   }
-  return { mediaId: file.id, url: `https://drive.google.com/uc?export=view&id=${encodeURIComponent(file.id)}`, mimeType, sizeBytes: bytes.byteLength, provider: "google-drive" };
+  return { mediaId: file.id, url: googleDrivePublicImageUrl(file.id), mimeType, sizeBytes: bytes.byteLength, provider: "google-drive" };
 }
 
 function appsScriptConfigured() {
@@ -155,7 +197,7 @@ async function uploadExternalMedia(payload: any) {
   if (typeof result.mediaId !== "string" || typeof result.url !== "string") fail("Apps Script returned invalid media data", 502);
   return {
     mediaId: result.mediaId,
-    url: result.url,
+    url: googleDrivePublicImageUrl(result.mediaId),
     mimeType: validated.mimeType,
     sizeBytes: validated.bytes.byteLength,
     provider: "google-drive",
@@ -229,7 +271,7 @@ Deno.serve(async (req) => {
       }
       if (!data || !Array.isArray(data.floodRoutes)) fail("Invalid system data", 502);
       data.systemSettings = data.systemSettings?.main || data.systemSettings;
-      return data;
+      return normalizeSystemMediaUrls(data);
     };
     if (action === "getSystemDataAction") return reply(await system());
     if (action === "getPublicSystemDataAction") {

@@ -10,6 +10,10 @@
 - **ความเสี่ยงที่ยอมรับ:** เจ้าของระบบสั่งวันที่ 2026-11-16 ให้ข้ามการตรวจตัวตนและคง `/admin` แบบไม่ล็อกอินจนกว่าจะร้องขอให้เปลี่ยนเอง.
 - **Production:** Apps Script ทดสอบ upload → อ่านรูปกลับ → sync row → delete media ผ่านแล้ว และลบแถว/ไฟล์ QA หลังทดสอบ; deploy `hdms-api` เวอร์ชัน 12 แล้ว พร้อมตรวจ public payload HTTP 200. Edge ยังตอบ `synced:false, reason:not-configured` จนกว่าจะตั้ง `APPS_SCRIPT_WEB_APP_URL` และ `APPS_SCRIPT_API_SECRET` ใน Supabase Secrets.
 - **Backlog:** B-001, B-020.
+
+### [LOCAL] 2026-11-16 แก้รูป Google Drive ไม่แสดงข้ามโดเมน
+- **สาเหตุ:** URL แบบ `drive.google.com/uc` redirect ไป `drive.usercontent.google.com` ซึ่งส่ง `Cross-Origin-Resource-Policy: same-site`; GitHub Pages จึงฝังรูปไม่ได้แม้ไฟล์เปิดดูใน Drive ได้.
+- **การแก้ไข:** ใช้ URL `lh3.googleusercontent.com/d/{fileId}` สำหรับไฟล์ใหม่ และ normalize URL เก่าใน payload ของ Edge Function ทั้งเหตุการณ์น้ำท่วมและโครงการ โดยไม่ต้องแก้ข้อมูลเดิมในฐานข้อมูล.
 ประวัติเก่า (UPDATE-001…047) อยู่ใน `SUPPLEMENTAL_RULES.md` — ใช้ grep ค้น ไม่อ่านทั้งไฟล์ เลขรายการต่อจาก 047
 
 ### [UPDATE-091] 2026-11-16 Compact Card, Detour Accordion, Reordering, Data Integrity & Detour Popup

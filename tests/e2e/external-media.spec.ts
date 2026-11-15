@@ -20,7 +20,7 @@ test("project evidence uploads before the record is saved and reporting sync run
         contentType: "application/json",
         body: JSON.stringify({
           mediaId: "drive-test-1",
-          url: "https://drive.google.com/uc?export=view&id=drive-test-1",
+          url: "https://lh3.googleusercontent.com/d/drive-test-1",
           mimeType: "image/png",
           sizeBytes: 68,
           provider: "google-drive",
@@ -51,7 +51,7 @@ test("project evidence uploads before the record is saved and reporting sync run
     "upsertMitigationProjectAction",
     "syncReportingRowAction",
   ]);
-  expect(calls[1].args[0].beforeImageUrl).toBe("https://drive.google.com/uc?export=view&id=drive-test-1");
+  expect(calls[1].args[0].beforeImageUrl).toBe("https://lh3.googleusercontent.com/d/drive-test-1");
   expect(calls[2].args[0].recordType).toBe("PROJECT");
 });
 
@@ -71,7 +71,7 @@ test("an unreferenced Drive upload is deleted when the project save fails", asyn
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ mediaId: "drive-orphan-1", url: "https://drive.google.com/uc?export=view&id=drive-orphan-1", mimeType: "image/png", sizeBytes: 68, provider: "google-drive" }),
+        body: JSON.stringify({ mediaId: "drive-orphan-1", url: "https://lh3.googleusercontent.com/d/drive-orphan-1", mimeType: "image/png", sizeBytes: 68, provider: "google-drive" }),
       });
     }
     if (body.action === "upsertMitigationProjectAction") {
