@@ -7,14 +7,16 @@ import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { splitDetourAdviceByDirection } from "@/lib/gis-utils";
 import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
 import {
+  calculatePolylineRoadDistanceKm,
   defaultDetourDirection,
-  detourDirectionBadge,
+  detourDirectionDetailedBadge,
   detourDistanceMeters,
-  formatDetourDistanceKm,
+  detourDurationSeconds,
+  getDetourTimelinePresentation,
   isDetourDirectionAllowed,
   isRecordedDetourDirection,
-  parseDetourAdvice,
   type DetourDirection,
+  type DetourTimelinePresentation,
 } from "@/lib/detour-presentation";
 import {
   groupFloodRoutesIntoEvents,
@@ -225,26 +227,88 @@ function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color: string
   `;
 }
 
-// Same presentation rules as the citizen detail sheet (lib/detour-presentation.ts):
-// numbered steps + notes, only recorded distance, never invented advice.
-function buildDetourAdviceHtml(text: string, meters: number | null): string {
-  const { steps, notes } = parseDetourAdvice(text);
-  const distance = meters !== null
-    ? `<div class="mt-1.5 rounded bg-slate-800/80 border border-slate-700 px-2 py-1 text-[10px] text-slate-200">ระยะทางตามข้อมูลที่บันทึก: <strong>${escapeHtml(formatDetourDistanceKm(meters))} กม.</strong></div>`
-    : "";
-  if (!steps.length && !notes.length) {
-    return `<p class="text-slate-300">ยังไม่มีคำแนะนำสำหรับทิศทางนี้ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>${distance}`;
+function buildDetourTimelineSectionHtml(presentation: DetourTimelinePresentation): string {
+  if (!presentation.steps.length) {
+    return `<div class="rounded-xl border border-slate-800 bg-[#0d1b36] p-3 text-xs text-slate-300 text-center">ไม่มีข้อมูลขั้นตอนการเดินทางสำหรับทิศทางนี้</div>`;
   }
-  const stepsHtml = steps.length
-    ? `<ol class="space-y-1.5">${steps.map((step, index) => `<li class="flex items-start gap-2"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-slate-950" aria-hidden="true">${index + 1}</span><span class="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">${escapeHtml(step)}</span></li>`).join("")}</ol>`
-    : "";
-  const notesHtml = notes.length
-    ? `<div class="mt-1.5 space-y-0.5 text-slate-300">${notes.map((note) => `<p class="break-words [overflow-wrap:anywhere]">${escapeHtml(note)}</p>`).join("")}</div>`
-    : "";
-  return `${stepsHtml}${notesHtml}${distance}`;
+
+  const stepsHtml = presentation.steps
+    .map((step, idx) => {
+      const isFirst = idx === 0;
+      const isLast = idx === presentation.steps.length - 1;
+      const isTurnRight = step.iconType === "turn_right";
+      const isTurnLeft = step.iconType === "turn_left";
+
+      const iconSvg = isFirst
+        ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="#10b981" class="shrink-0" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>`
+        : isTurnRight
+          ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>`
+          : isTurnLeft
+            ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>`
+            : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
+
+      return `
+      <div class="relative flex items-start gap-3">
+        ${!isLast ? `<div class="absolute left-[11px] top-6 bottom-[-8px] w-0.5 bg-slate-600/80" aria-hidden="true"></div>` : ""}
+        <div class="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#f59e0b] text-slate-950 text-xs font-black shadow" aria-hidden="true">
+          ${step.stepNumber}
+        </div>
+        <div class="flex-1 min-w-0 rounded-xl border border-slate-800 bg-[#0d1b36] p-2.5 shadow-sm">
+          <div class="flex items-center justify-between gap-1.5">
+            <div class="flex items-center gap-1.5 min-w-0">
+              ${iconSvg}
+              <span class="font-bold text-[#fbbf24] text-xs font-heading truncate">${escapeHtml(step.title)}</span>
+            </div>
+            <span class="shrink-0 rounded-full border border-slate-700 bg-slate-900/90 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+              ${escapeHtml(step.badge)}
+            </span>
+          </div>
+          <p class="mt-1 text-xs text-slate-300 leading-relaxed break-words [overflow-wrap:anywhere]">
+            ${escapeHtml(step.detail)}
+          </p>
+        </div>
+      </div>
+    `;
+    })
+    .join("");
+
+  return `
+    <div class="space-y-2">
+      <div class="space-y-2.5">
+        ${stepsHtml}
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800/80 bg-[#0d1b36] px-3 py-2 text-xs">
+        <div class="flex items-center gap-1.5 text-slate-300">
+          <span class="text-sm" aria-hidden="true">🛣</span>
+          <span>ระยะทางรวม</span>
+          <strong class="font-bold text-white text-xs">${escapeHtml(presentation.totalDistanceFormatted)} กม.</strong>
+        </div>
+        <span class="text-slate-600 hidden sm:inline" aria-hidden="true">|</span>
+        <div class="flex items-center gap-1.5 text-slate-300">
+          <span class="text-sm" aria-hidden="true">⏱</span>
+          <strong class="font-bold text-white text-xs">${escapeHtml(presentation.estimatedDurationText)}</strong>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-2 text-xs">
+        <div class="flex items-center gap-1.5 font-bold text-white text-xs">
+          <span class="text-sm" aria-hidden="true">🛣</span>
+          <span>สภาพเส้นทาง</span>
+        </div>
+        <span class="rounded-full border border-emerald-500/80 bg-emerald-950/80 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300 flex items-center gap-1">
+          <span class="text-xs" aria-hidden="true">✔</span>
+          <span>${escapeHtml(presentation.roadCondition)}</span>
+        </span>
+      </div>
+    </div>
+  `;
 }
 
-function buildDetourPopupHtml(detour: DetourRoute, color: string, defaultDir: DetourDirection = "FORWARD"): string {
+function buildDetourPopupHtml(
+  detour: DetourRoute,
+  color: string,
+  defaultDir: DetourDirection = "FORWARD",
+  floodRoutes: FloodRoute[] = []
+): string {
   const dirMode = detour.direction_mode || "TWO_WAY";
   const { forwardText, reverseText } = splitDetourAdviceByDirection(detour.description || "", dirMode);
   const safeId = String(detour.id || "").replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -253,77 +317,138 @@ function buildDetourPopupHtml(detour: DetourRoute, color: string, defaultDir: De
   const revAllowed = isDetourDirectionAllowed(dirMode, "REVERSE");
   const isRev = revAllowed && (!fwdAllowed || defaultDir === "REVERSE");
 
+  const linked = detour.flood_id_ref
+    ? floodRoutes.find((f) => f.id === detour.flood_id_ref)
+    : null;
+  const startHint = linked ? `ทล.${linked.route_no} (${linked.section_name})` : detour.route_name;
+  const areaParts = [
+    linked?.subdistrict ? `ต.${linked.subdistrict}` : "",
+    linked?.district ? `อ.${linked.district}` : "",
+    linked?.province ? `จ.${linked.province}` : "",
+  ].filter(Boolean);
+  const endHint = areaParts.length ? `(${areaParts.join(" ")})` : "";
+
+  const fwdRoadKm = detour.detour_meta?.forward_distance_km || calculatePolylineRoadDistanceKm(detour.coordinates_json);
+  const revRoadKm = detour.detour_meta?.reverse_distance_km || calculatePolylineRoadDistanceKm(detour.reverse_coordinates_json || detour.coordinates_json);
+
+  const forwardPresentation = getDetourTimelinePresentation(
+    forwardText,
+    detourDistanceMeters(detour.detour_meta, "FORWARD"),
+    fwdRoadKm,
+    startHint,
+    endHint,
+    detour.detour_meta?.road_condition,
+    detourDurationSeconds(detour.detour_meta, "FORWARD")
+  );
+
+  const reversePresentation = getDetourTimelinePresentation(
+    reverseText,
+    detourDistanceMeters(detour.detour_meta, "REVERSE"),
+    revRoadKm,
+    endHint || startHint,
+    startHint,
+    detour.detour_meta?.road_condition,
+    detourDurationSeconds(detour.detour_meta, "REVERSE")
+  );
+
+  const scopeText = linked
+    ? `ทล.${linked.route_no}${areaParts.length ? ` (${areaParts.join(" ")})` : ` (${linked.section_name})`}`
+    : (detour.flood_id_ref ? "เชื่อมโยงจุดน้ำท่วม" : "ทางเลี่ยงอิสระ (โครงข่ายทางหลวง)");
+
+  const activeBtnClass = "flex-1 min-h-[38px] py-2 px-2.5 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 bg-[#f59e0b] text-slate-950 font-black shadow-md";
+  const inactiveBtnClass = "flex-1 min-h-[38px] py-2 px-2.5 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 bg-[#13203c] border border-slate-700/80 text-slate-200 hover:text-white";
+
   return `
-    <div class="doh-detour-popup text-xs p-3 w-[min(320px,calc(100vw-64px))] max-w-full font-body bg-slate-950 text-white">
-      <!-- Header: ไอคอน + ชื่อเส้นทางเลี่ยง (ชื่อยาวขึ้นบรรทัดใหม่ ไม่ตัดด้วย ...) -->
-      <div class="flex items-start justify-between gap-2 border-b border-slate-800 pb-2">
-        <div class="flex items-start gap-2 min-w-0">
-          <span style="color:${color}" class="text-base font-bold shrink-0" aria-hidden="true">↪</span>
-          <h4 class="font-bold text-white text-sm font-heading leading-tight break-words [overflow-wrap:anywhere]">${escapeHtml(detour.route_name)}</h4>
+    <div class="doh-detour-popup text-xs p-3.5 w-[min(380px,calc(100vw-36px))] max-w-full font-body bg-[#070d1e] text-white rounded-2xl select-text">
+      <div class="flex items-center justify-between gap-2 pb-2.5 pr-7 border-b border-slate-800/80">
+        <div class="flex items-center gap-2 min-w-0">
+          <span style="color:${color}" class="text-lg font-black shrink-0 leading-none" aria-hidden="true">↔</span>
+          <h4 class="font-bold text-white text-base font-heading leading-tight truncate">เส้นทางเลี่ยง</h4>
         </div>
-        <span class="rounded bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold text-amber-300 whitespace-nowrap shrink-0">
-          ${escapeHtml(detourDirectionBadge(dirMode))}
+        <span class="rounded-full bg-amber-500/10 border border-amber-500/40 px-2.5 py-0.5 text-[11px] font-bold text-amber-300 whitespace-nowrap shrink-0">
+          ${escapeHtml(detourDirectionDetailedBadge(dirMode))}
         </span>
       </div>
 
-      <div class="mt-2 text-[11px] text-slate-300">
-        <span class="rounded bg-slate-900 border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-300">
-          ${detour.flood_id_ref ? "เชื่อมโยงจุดน้ำท่วม" : "ทางเลี่ยงอิสระ"}
-        </span>
-      </div>
-      ${recorded ? "" : `<p class="mt-2 text-[11px] text-amber-200" role="status">ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>`}
-
-      <!-- ปุ่มสลับทิศทาง: เปิดเฉพาะทิศทางที่บันทึกและอนุญาตจริง -->
-      <div class="mt-2.5 flex rounded-lg bg-slate-900 p-0.5 border border-slate-700/80">
-        <button
-          type="button"
-          id="detour-btn-fwd-${safeId}"
-          ${fwdAllowed ? "" : "disabled aria-disabled=\"true\""}
-          onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'FORWARD')"
-          class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md transition cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed ${
-            !isRev && fwdAllowed ? "bg-amber-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"
-          }"
-        >
-          ขาไป (A → B)
-        </button>
-        <button
-          type="button"
-          id="detour-btn-rev-${safeId}"
-          ${revAllowed ? "" : "disabled aria-disabled=\"true\""}
-          onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'REVERSE')"
-          class="flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md transition cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed ${
-            isRev ? "bg-amber-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"
-          }"
-        >
-          ขากลับ (B → A)
-        </button>
+      <div class="mt-2.5 rounded-2xl border border-sky-800/80 bg-[#0e2146] p-3 flex items-start gap-2.5 shadow-sm">
+        <div class="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-md" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        </div>
+        <div class="min-w-0 flex-1">
+          <h5 class="font-bold text-white text-sm font-heading leading-snug break-words [overflow-wrap:anywhere]">${escapeHtml(detour.route_name)}</h5>
+          <p class="text-[11px] text-sky-200/80 mt-0.5 break-words [overflow-wrap:anywhere]">${escapeHtml(scopeText)}</p>
+        </div>
       </div>
 
-      <!-- คำแนะนำเป็นขั้นตอน (ตรรกะเดียวกับหน้ารายละเอียดฝั่งประชาชน) -->
-      <div id="detour-desc-fwd-${safeId}" class="${!isRev ? "block" : "hidden"} text-slate-200 mt-2 text-[11px] max-h-36 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2.5 bg-slate-900/60">
-        ${buildDetourAdviceHtml(forwardText, detourDistanceMeters(detour.detour_meta, "FORWARD"))}
-      </div>
-      <div id="detour-desc-rev-${safeId}" class="${isRev ? "block" : "hidden"} text-slate-200 mt-2 text-[11px] max-h-36 overflow-y-auto leading-relaxed border border-slate-800/80 rounded-lg p-2.5 bg-slate-900/60">
-        ${buildDetourAdviceHtml(reverseText, detourDistanceMeters(detour.detour_meta, "REVERSE"))}
+      <div class="mt-2.5">
+        <div class="text-xs font-bold text-slate-200 mb-1.5">เลือกทิศทางการเดินทาง</div>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            id="detour-btn-fwd-${safeId}"
+            ${fwdAllowed ? "" : "disabled aria-disabled=\"true\""}
+            onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'FORWARD')"
+            class="${!isRev && fwdAllowed ? activeBtnClass : inactiveBtnClass} disabled:opacity-35 disabled:cursor-not-allowed"
+          >
+            <span aria-hidden="true">🚗</span>
+            <span>ขาไป (A ➔ B)</span>
+          </button>
+          <button
+            type="button"
+            id="detour-btn-rev-${safeId}"
+            ${revAllowed ? "" : "disabled aria-disabled=\"true\""}
+            onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'REVERSE')"
+            class="${isRev ? activeBtnClass : inactiveBtnClass} disabled:opacity-35 disabled:cursor-not-allowed"
+          >
+            <span aria-hidden="true">🚙</span>
+            <span>ขากลับ (B ➔ A)</span>
+          </button>
+        </div>
+        ${recorded ? "" : `<p class="mt-1.5 text-[11px] text-amber-300" role="status">⚠️ ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>`}
       </div>
 
-      <!-- Action Buttons: นำทาง Google Maps และ ดูรายละเอียดเต็ม -->
-      <div class="mt-3 pt-2 border-t border-slate-800 flex items-center gap-2">
+      <div class="mt-3">
+        <div class="flex items-center gap-1.5 mb-2">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19V9a4 4 0 0 1 4-4h9"/><path d="m15 2 3 3-3 3"/><path d="M9 19h10"/><path d="m16 16 3 3-3 3"/></svg>
+          <span class="font-bold text-white text-xs font-heading">คำแนะนำเส้นทาง</span>
+        </div>
+        <div id="detour-desc-fwd-${safeId}" class="${!isRev ? "block" : "hidden"} max-h-52 overflow-y-auto pr-0.5">
+          ${buildDetourTimelineSectionHtml(forwardPresentation)}
+        </div>
+        <div id="detour-desc-rev-${safeId}" class="${isRev ? "block" : "hidden"} max-h-52 overflow-y-auto pr-0.5">
+          ${buildDetourTimelineSectionHtml(reversePresentation)}
+        </div>
+      </div>
+
+      <div class="mt-3.5 pt-2.5 border-t border-slate-800/80 flex items-center gap-2">
         <button
           type="button"
           id="detour-nav-btn-${safeId}"
           ${recorded ? "" : "disabled aria-disabled=\"true\" title=\"รอเจ้าหน้าที่ตรวจสอบทิศทางเดินรถ\""}
           onclick="window.__openDetourGoogleMaps && window.__openDetourGoogleMaps('${safeId}', window.__getDetourCurrentDir ? window.__getDetourCurrentDir('${safeId}') : '${defaultDir}')"
-          class="doh-detour-nav-btn flex-1 min-h-[40px] py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow"
+          class="doh-detour-nav-btn flex-1 min-h-[44px] py-2 px-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-xl flex items-center justify-between shadow transition cursor-pointer border border-emerald-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          <span>🧭</span><span>นำทาง Google Maps</span>
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="w-6 h-6 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#059669"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
+            </div>
+            <div class="text-left min-w-0">
+              <div class="font-bold text-xs leading-tight truncate">นำทางด้วย Google Maps</div>
+              <div id="detour-nav-subtext-${safeId}" class="text-[10px] text-emerald-100 font-medium leading-tight mt-0.5 truncate">
+                ${isRev ? "(ขากลับ B ➔ A)" : "(ขาไป A ➔ B)"}
+              </div>
+            </div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-100 shrink-0 ml-1" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </button>
+
         <button
           type="button"
           onclick="window.__openDetourModal && window.__openDetourModal('${escapeHtml(detour.id)}')"
-          class="doh-detour-detail-btn min-h-[40px] py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-lg transition flex items-center justify-center cursor-pointer border border-slate-700"
+          class="doh-detour-detail-btn min-h-[44px] py-2 px-3 bg-[#13203c] hover:bg-[#1a2b50] border border-sky-800/80 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow transition cursor-pointer shrink-0"
         >
-          ดูรายละเอียด
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+          <span>ดูตำแหน่งบนแผนที่</span>
         </button>
       </div>
     </div>
@@ -637,22 +762,28 @@ export function LongdoGisMap({
       const revBtn = document.getElementById(`detour-btn-rev-${id}`);
       const fwdDesc = document.getElementById(`detour-desc-fwd-${id}`);
       const revDesc = document.getElementById(`detour-desc-rev-${id}`);
+      const navSub = document.getElementById(`detour-nav-subtext-${id}`);
       if (!fwdBtn || !revBtn || !fwdDesc || !revDesc) return;
 
+      const activeClasses = "flex-1 min-h-[38px] py-2 px-2.5 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 bg-[#f59e0b] text-slate-950 font-black shadow-md disabled:opacity-35 disabled:cursor-not-allowed";
+      const inactiveClasses = "flex-1 min-h-[38px] py-2 px-2.5 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 bg-[#13203c] border border-slate-700/80 text-slate-200 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed";
+
       if (dir === "FORWARD") {
-        fwdBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 transition cursor-pointer text-center";
-        revBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md text-slate-400 hover:text-white transition cursor-pointer text-center";
+        fwdBtn.className = activeClasses;
+        revBtn.className = inactiveClasses;
         fwdDesc.classList.remove("hidden");
         fwdDesc.classList.add("block");
         revDesc.classList.remove("block");
         revDesc.classList.add("hidden");
+        if (navSub) navSub.textContent = "(ขาไป A ➔ B)";
       } else {
-        revBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md bg-amber-500 text-slate-950 transition cursor-pointer text-center";
-        fwdBtn.className = "flex-1 py-1 px-1.5 text-[10px] font-bold rounded-md text-slate-400 hover:text-white transition cursor-pointer text-center";
+        revBtn.className = activeClasses;
+        fwdBtn.className = inactiveClasses;
         revDesc.classList.remove("hidden");
         revDesc.classList.add("block");
         fwdDesc.classList.remove("block");
         fwdDesc.classList.add("hidden");
+        if (navSub) navSub.textContent = "(ขากลับ B ➔ A)";
       }
     };
     return () => {
@@ -1199,7 +1330,8 @@ export function LongdoGisMap({
           baseWeight: detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight,
           baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
         });
-        polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir));
+        const detourPopupOpts = { maxWidth: 440, minWidth: 320, className: "doh-detour-leaflet-popup" };
+        polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData.floodRoutes || []), detourPopupOpts);
         polyline.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           polyline.openPopup(e.latlng);
@@ -1212,7 +1344,7 @@ export function LongdoGisMap({
           iconSize: [30, 30],
           iconAnchor: [15, 15],
         });
-        const detourMarker = L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir)).addTo(group);
+        const detourMarker = L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData.floodRoutes || []), detourPopupOpts).addTo(group);
         detourMarker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           detourMarker.openPopup();
@@ -1239,7 +1371,8 @@ export function LongdoGisMap({
             baseWeight: Math.max(3.5, (detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight) - 0.5),
             baseOpacity: detourStyle?.opacity ?? 0.9,
           });
-          revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir));
+          const revPopupOpts = { maxWidth: 440, minWidth: 320, className: "doh-detour-leaflet-popup" };
+          revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData.floodRoutes || []), revPopupOpts);
           revPolyline.on("click", (e: any) => {
             L.DomEvent.stopPropagation(e);
             revPolyline.openPopup(e.latlng);

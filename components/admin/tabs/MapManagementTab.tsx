@@ -313,6 +313,7 @@ export function MapManagementTab({
   }, [vertexEvent, freeEditEnabled, freeEditTarget, freeVertexTool, draftCoordinates, draftReverseCoordinates]);
 
   const [detourDistanceMeters, setDetourDistanceMeters] = useState<{ forward: number; reverse: number }>({ forward: 0, reverse: 0 });
+  const [detourDurationSeconds, setDetourDurationSeconds] = useState<{ forward: number; reverse: number }>({ forward: 0, reverse: 0 });
   const [closedRoadConflicts, setClosedRoadConflicts] = useState<string[]>([]);
 
   useEffect(() => {
@@ -538,6 +539,14 @@ export function MapManagementTab({
       setDetourGoogleMapsUrlFwd(detour.detour_meta?.google_maps_url_forward || detour.detour_meta?.google_maps_url || "");
       setDetourGoogleMapsUrlRev(detour.detour_meta?.google_maps_url_reverse || "");
       setDetourRoadCondition(detour.detour_meta?.road_condition || "");
+      setDetourDistanceMeters({
+        forward: Number(detour.detour_meta?.forward_distance_m) || 0,
+        reverse: Number(detour.detour_meta?.reverse_distance_m) || 0,
+      });
+      setDetourDurationSeconds({
+        forward: Number(detour.detour_meta?.forward_duration_s) || 0,
+        reverse: Number(detour.detour_meta?.reverse_duration_s) || 0,
+      });
       setSaveAsDraft(!detour.is_active);
       setStartLat(detour.lat_start || 0);
       setStartLon(detour.lon_start || 0);
@@ -678,13 +687,13 @@ export function MapManagementTab({
         // Pick a route from alternatives that avoids confirmed CLOSED flood routes
         const pickSafeRoute = (routingRes: any) => {
           const routes = Array.isArray(routingRes?.data?.routes) ? routingRes.data.routes : [];
-          if (routes.length === 0) return { coords: [] as [number, number][], distance: 0, conflicts: [] as ReturnType<typeof detectClosedRoadConflicts> };
+          if (routes.length === 0) return { coords: [] as [number, number][], distance: 0, duration: 0, conflicts: [] as ReturnType<typeof detectClosedRoadConflicts> };
           for (const candidate of routes) {
             const cCoords = candidate?.geometry?.coordinates;
             if (!Array.isArray(cCoords) || cCoords.length < 2) continue;
             const cConflicts = detectClosedRoadConflicts(cCoords, systemData.floodRoutes || []);
             if (cConflicts.length === 0) {
-              return { coords: cCoords as [number, number][], distance: Number(candidate.distance) || 0, conflicts: [] };
+              return { coords: cCoords as [number, number][], distance: Number(candidate.distance) || 0, duration: Number(candidate.duration) || 0, conflicts: [] };
             }
           }
           const primary = routes[0];
@@ -692,6 +701,7 @@ export function MapManagementTab({
           return {
             coords: pCoords,
             distance: Number(primary?.distance) || 0,
+            duration: Number(primary?.duration) || 0,
             conflicts: detectClosedRoadConflicts(pCoords, systemData.floodRoutes || []),
           };
         };
@@ -714,6 +724,10 @@ export function MapManagementTab({
         setDetourDistanceMeters({
           forward: detourDirectionMode === "REVERSE_ONLY" ? 0 : pickedAB.distance,
           reverse: detourDirectionMode === "FORWARD_ONLY" ? 0 : pickedBA.distance,
+        });
+        setDetourDurationSeconds({
+          forward: detourDirectionMode === "REVERSE_ONLY" ? 0 : pickedAB.duration,
+          reverse: detourDirectionMode === "FORWARD_ONLY" ? 0 : pickedBA.duration,
         });
 
         const allConflicts = [...pickedAB.conflicts, ...pickedBA.conflicts];
@@ -927,6 +941,7 @@ export function MapManagementTab({
     setDetourGoogleMapsUrlRev("");
     setDetourRoadCondition("");
     setDetourDistanceMeters({ forward: 0, reverse: 0 });
+    setDetourDurationSeconds({ forward: 0, reverse: 0 });
     setFieldImages([]);
     setDetailedPhotos([]);
     setParentEventMode("NEW");
@@ -1495,18 +1510,54 @@ export function MapManagementTab({
         reverseWaypoints: routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" ? draftReverseWaypoints : undefined,
         directionMode: routeMode === "DETOUR" ? detourDirectionMode : undefined,
         detourMeta: routeMode === "DETOUR"
-          ? {
-            ...((routeEditId ? (systemData.detourRoutes || []).find((d) => d.id === routeEditId)?.detour_meta : undefined) || {}),
-            forward_distance_m: detourDistanceMeters.forward || undefined,
-            reverse_distance_m: detourDistanceMeters.reverse || undefined,
-            show_arrows: true,
-            verified_no_closed_overlap: closedRoadConflicts.length === 0,
-            carriageway_type: separation?.isSymmetricSingleLine ? "SINGLE_CENTERLINE" : "ASYMMETRIC_DETOUR",
-            eventId: linkedEventId,
-            ...(detourGoogleMapsUrlFwd.trim() ? { google_maps_url_forward: detourGoogleMapsUrlFwd.trim(), google_maps_url: detourGoogleMapsUrlFwd.trim() } : {}),
-            ...(detourGoogleMapsUrlRev.trim() ? { google_maps_url_reverse: detourGoogleMapsUrlRev.trim() } : {}),
-            ...(detourRoadCondition.trim() ? { road_condition: detourRoadCondition.trim() } : {}),
-          }
+          ? (() => {
+            const existingDetour = routeEditId ? (systemData.detourRoutes || []).find((d) => d.id === routeEditId) : undefined;
+            const existingMeta = existingDetour?.detour_meta;
+            const resolveOrderIndex = (): number => {
+              if (detourRefId && existingMeta?.event_orders && typeof existingMeta.event_orders[detourRefId] === "number" && Number.isFinite(existingMeta.event_orders[detourRefId])) {
+                return existingMeta.event_orders[detourRefId];
+              }
+              if (existingDetour && (existingDetour.flood_id_ref || "") === (detourRefId || "") && typeof existingMeta?.order_index === "number" && Number.isFinite(existingMeta.order_index)) {
+                return existingMeta.order_index;
+              }
+              const siblings = (systemData.detourRoutes || []).filter(
+                (d) =>
+                  d.id !== routeEditId &&
+                  ((detourRefId && d.flood_id_ref === detourRefId) ||
+                    (linkedEventId && d.detour_meta?.eventId === linkedEventId))
+              );
+              let maxOrder = 0;
+              siblings.forEach((d, idx) => {
+                const raw = (detourRefId && d.detour_meta?.event_orders?.[detourRefId]) ?? d.detour_meta?.order_index;
+                const val = typeof raw === "number" && Number.isFinite(raw) ? raw : idx + 1;
+                if (val > maxOrder) maxOrder = val;
+              });
+              return maxOrder + 1;
+            };
+            const orderIndex = resolveOrderIndex();
+            const mergedEventOrders = {
+              ...(existingMeta?.event_orders || {}),
+              ...(detourRefId ? { [detourRefId]: orderIndex } : {}),
+            };
+            return {
+              ...(existingMeta || {}),
+              order_index: typeof existingMeta?.order_index === "number" && (!detourRefId || existingDetour?.flood_id_ref === detourRefId)
+                ? existingMeta.order_index
+                : orderIndex,
+              ...(Object.keys(mergedEventOrders).length > 0 ? { event_orders: mergedEventOrders } : {}),
+              forward_distance_m: detourDistanceMeters.forward || existingMeta?.forward_distance_m || undefined,
+              reverse_distance_m: detourDistanceMeters.reverse || existingMeta?.reverse_distance_m || undefined,
+              forward_duration_s: detourDurationSeconds.forward || existingMeta?.forward_duration_s || undefined,
+              reverse_duration_s: detourDurationSeconds.reverse || existingMeta?.reverse_duration_s || undefined,
+              show_arrows: true,
+              verified_no_closed_overlap: closedRoadConflicts.length === 0,
+              carriageway_type: separation?.isSymmetricSingleLine ? "SINGLE_CENTERLINE" : "ASYMMETRIC_DETOUR",
+              eventId: linkedEventId,
+              ...(detourGoogleMapsUrlFwd.trim() ? { google_maps_url_forward: detourGoogleMapsUrlFwd.trim(), google_maps_url: detourGoogleMapsUrlFwd.trim() } : {}),
+              ...(detourGoogleMapsUrlRev.trim() ? { google_maps_url_reverse: detourGoogleMapsUrlRev.trim() } : {}),
+              ...(detourRoadCondition.trim() ? { road_condition: detourRoadCondition.trim() } : {}),
+            };
+          })()
           : undefined,
       });
 

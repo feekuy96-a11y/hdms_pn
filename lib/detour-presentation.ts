@@ -56,8 +56,11 @@ export function parseDetourAdvice(rawAdvice: string): { steps: string[]; notes: 
   const notes: string[] = [];
   for (const entry of normalized.split(/\n+/).map((line) => line.trim()).filter(Boolean)) {
     if (/^={2,}\s*.+?\s*={2,}$/.test(entry)) continue;
-    if (/^[-•–]\s*/.test(entry)) notes.push(entry.replace(/^[-•–]\s*/, ""));
-    else steps.push(entry.replace(/^\d+[.)]\s*/, ""));
+    if (/^[-•–]\s*/.test(entry) || /^(?:รวมระยะทาง|สภาพเส้นทาง|หมายเหตุ)/i.test(entry)) {
+      notes.push(entry.replace(/^[-•–]\s*/, ""));
+    } else {
+      steps.push(entry.replace(/^\d+[.)]\s*/, ""));
+    }
   }
   return { steps, notes };
 }
@@ -90,12 +93,67 @@ export interface DetourTimelinePresentation {
   steps: DetourTimelineStep[];
   totalDistanceKm: number;
   totalDistanceFormatted: string;
-  estimatedMinutes: number;
+  estimatedMinutes: number | null;
+  estimatedDurationText: string;
   roadCondition: string;
 }
 
 /**
- * แปลงคำแนะนำเส้นทางเป็นไทม์ไลน์ตามภาพ Citizen Detour Modal 100%
+ * Duration in seconds for the chosen direction when genuinely recorded in detour_meta.
+ */
+export function detourDurationSeconds(
+  meta: {
+    forward_duration_min?: number;
+    reverse_duration_min?: number;
+    forward_duration_s?: number;
+    reverse_duration_s?: number;
+  } | null | undefined,
+  direction: DetourDirection
+): number | null {
+  if (!meta) return null;
+  const seconds = direction === "FORWARD"
+    ? meta.forward_duration_s ?? (meta.forward_duration_min != null ? meta.forward_duration_min * 60 : undefined)
+    : meta.reverse_duration_s ?? (meta.reverse_duration_min != null ? meta.reverse_duration_min * 60 : undefined);
+  return typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+
+/**
+ * คำนวณระยะทางรวมตามแนวเส้นทาง GIS (ผลรวมระยะระหว่างจุดดัดทุกคู่ ไม่ใช่เส้นตรง A-B)
+ */
+export function calculatePolylineRoadDistanceKm(coordinatesJson: unknown): number {
+  let coords: unknown = coordinatesJson;
+  if (typeof coords === "string") {
+    try {
+      coords = JSON.parse(coords);
+    } catch {
+      return 0;
+    }
+  }
+  if (!Array.isArray(coords) || coords.length < 2) return 0;
+  let total = 0;
+  const R = 6371;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const p1 = coords[i];
+    const p2 = coords[i + 1];
+    if (!Array.isArray(p1) || !Array.isArray(p2)) continue;
+    const lon1 = Number(p1[0]);
+    const lat1 = Number(p1[1]);
+    const lon2 = Number(p2[0]);
+    const lat2 = Number(p2[1]);
+    if (![lon1, lat1, lon2, lat2].every(Number.isFinite)) continue;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    total += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  return Number.isFinite(total) && total > 0 ? Number(total.toFixed(2)) : 0;
+}
+
+/**
+ * แปลงคำแนะนำเส้นทางเป็นไทม์ไลน์ (ไม่สมมติความเร็วหรือเวลาเดินทางเมื่อไม่มีข้อมูลจริง)
  */
 export function getDetourTimelinePresentation(
   rawAdvice: string,
@@ -103,16 +161,16 @@ export function getDetourTimelinePresentation(
   fallbackDistanceKm: number = 0,
   startLocationHint: string = "",
   endLocationHint: string = "",
-  explicitRoadCondition?: string
+  explicitRoadCondition?: string,
+  recordedDurationSeconds: number | null = null
 ): DetourTimelinePresentation {
-  const { steps: rawSteps, notes } = parseDetourAdvice(rawAdvice);
+  const { steps: rawSteps } = parseDetourAdvice(rawAdvice);
 
-  // 1. คำนวณระยะทางรวม (กม.)
+  // 1. คำนวณระยะทางรวม (กม.) — ใช้ค่าบันทึกจริงก่อน หากไม่มีใช้ระยะตามแนวเส้นทาง GIS
   let totalDistanceKm = 0;
   if (recordedDistanceMeters && recordedDistanceMeters > 0) {
     totalDistanceKm = recordedDistanceMeters / 1000;
   } else {
-    // ลองหาจากข้อความโน้ต
     const distMatch = rawAdvice.match(/รวมระยะทาง(?:เลี่ยง)?:\s*(?:ประมาณ\s*)?([0-9.]+)\s*กม/);
     if (distMatch && !isNaN(parseFloat(distMatch[1]))) {
       totalDistanceKm = parseFloat(distMatch[1]);
@@ -121,15 +179,21 @@ export function getDetourTimelinePresentation(
     }
   }
 
-  // 2. คำนวณเวลาเดินทางโดยประมาณ (นาที)
-  let estimatedMinutes = 0;
-  const durMatch = rawAdvice.match(/ใช้เวลาเดินทางประมาณ\s*([0-9]+)\s*นาที/);
-  if (durMatch && !isNaN(parseInt(durMatch[1], 10))) {
-    estimatedMinutes = parseInt(durMatch[1], 10);
-  } else if (totalDistanceKm > 0) {
-    estimatedMinutes = Math.max(1, Math.round((totalDistanceKm / 40) * 60));
+  // 2. เวลาเดินทางโดยประมาณ — ใช้ข้อมูลบันทึกจริงเท่านั้น ห้ามสมมติความเร็วเองเด็ดขาด
+  let estimatedMinutes: number | null = null;
+  let estimatedDurationText = "ยังไม่มีข้อมูลเวลาเดินทาง";
+  if (recordedDurationSeconds && recordedDurationSeconds > 0) {
+    estimatedMinutes = Math.max(1, Math.round(recordedDurationSeconds / 60));
+    estimatedDurationText = `เวลาประมาณ ${estimatedMinutes} นาที`;
   } else {
-    estimatedMinutes = 2;
+    const durMatch = rawAdvice.match(/ใช้เวลาเดินทาง(?:ประมาณ)?\s*([0-9]+(?:\s*[-–]\s*[0-9]+)?)\s*นาที/);
+    if (durMatch) {
+      const parsedMin = parseInt(durMatch[1], 10);
+      if (!isNaN(parsedMin) && parsedMin > 0) {
+        estimatedMinutes = parsedMin;
+      }
+      estimatedDurationText = `เวลาประมาณ ${durMatch[1].replace(/\s+/g, "")} นาที`;
+    }
   }
 
   // 3. วิเคราะห์สภาพเส้นทาง
@@ -258,8 +322,84 @@ export function getDetourTimelinePresentation(
   return {
     steps,
     totalDistanceKm,
-    totalDistanceFormatted: totalDistanceKm.toFixed(1),
+    totalDistanceFormatted: totalDistanceKm > 0 ? totalDistanceKm.toFixed(1) : "0.0",
     estimatedMinutes,
+    estimatedDurationText,
     roadCondition,
   };
+}
+
+/**
+ * สร้างคำแนะนำเส้นทางแบบสั้นสำหรับ Accordion สถานะพับ โดยอ้างอิงเฉพาะข้อมูลที่บันทึกจริง (ไม่แต่งชื่อถนน/สถานที่ขึ้นเอง)
+ */
+export function getDetourShortSummary(rawAdvice: string): string {
+  const { steps, notes } = parseDetourAdvice(rawAdvice);
+  const isHeaderOrMeta = (line: string) =>
+    /^(?:รวมระยะทาง|สภาพเส้นทาง|={2,}|(?:ทิศทาง)?(?:ขาไป|ขากลับ)(?:\s*\([^)]*\))?:?\s*$)/i.test(line.trim());
+  const cleanSteps = steps.filter((s) => !isHeaderOrMeta(s));
+  if (cleanSteps.length > 0) {
+    if (cleanSteps.length >= 2) {
+      const start = cleanSteps[0].replace(/^จุดเริ่มต้น:\s*/i, "").trim();
+      const end = cleanSteps[cleanSteps.length - 1]
+        .replace(/^(?:ถึงจุดบรรจบทางหลวงสายหลัก|ถึงจุดบรรจบ)\s*/i, "")
+        .replace(/\s*สัญจรต่อได้ตามปกติ\s*$/i, "")
+        .trim();
+      if (start && end && start !== end) {
+        return `${start} ➔ ${end}`;
+      }
+    }
+    return cleanSteps[0].replace(/^จุดเริ่มต้น:\s*/i, "").trim();
+  }
+  const cleanNote = notes.find((n) => !isHeaderOrMeta(n));
+  if (cleanNote) return cleanNote.replace(/^จุดเริ่มต้น:\s*/i, "").trim();
+  const trimmed = (rawAdvice || "").trim();
+  if (trimmed) {
+    const candidate = trimmed
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^={2,}\s*|\s*={2,}$/g, "").trim())
+      .find((line) => line && !isHeaderOrMeta(line));
+    if (candidate) {
+      return candidate.replace(/^จุดเริ่มต้น:\s*/i, "").trim();
+    }
+  }
+  return "กดขยายเพื่อดูรายละเอียดและเส้นทางแนะนำ";
+}
+
+/**
+ * อ่านค่าลำดับทางเลี่ยงที่ผูกกับเหตุการณ์ (รองรับ event_orders รายเหตุการณ์ และ order_index ทั่วไป)
+ */
+export function getDetourOrderIndex(
+  detour: { detour_meta?: Record<string, any> | null } | null | undefined,
+  floodId?: string | null
+): number {
+  const meta = detour?.detour_meta;
+  if (meta && typeof meta === "object") {
+    if (floodId && meta.event_orders && typeof meta.event_orders === "object") {
+      const perEvent = Number(meta.event_orders[floodId]);
+      if (Number.isFinite(perEvent)) return perEvent;
+    }
+    const orderVal = Number(meta.order_index);
+    if (Number.isFinite(orderVal)) return orderVal;
+  }
+  return Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * เรียงลำดับทางเลี่ยงตามลำดับที่เจ้าหน้าที่กำหนด (ค่าที่ยังไม่มี order_index จะคงลำดับเดิมต่อท้าย)
+ */
+export function sortDetoursByOrder<T extends { id: string; detour_meta?: Record<string, any> | null }>(
+  detours: T[],
+  floodId?: string | null
+): T[] {
+  return [...detours]
+    .map((item, originalIdx) => ({
+      item,
+      order: getDetourOrderIndex(item, floodId),
+      originalIdx,
+    }))
+    .sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      return a.originalIdx - b.originalIdx;
+    })
+    .map((entry) => entry.item);
 }

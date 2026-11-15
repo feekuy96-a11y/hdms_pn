@@ -1,0 +1,288 @@
+import { expect, test } from "@playwright/test";
+
+const base = process.env.BASE_PATH || "";
+
+test("compact flood card, detour jump link, ordered exclusive accordion, and real data integrity", async ({ page }) => {
+  const updatedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+  await page.route("**/functions/v1/hdms-api", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        updatedAt,
+        floodRoutes: [
+          {
+            id: "F-NARATHIWAT-1",
+            route_no: "4061",
+            section_name: "สะพานปะนาเระ",
+            km_start: "26+790",
+            km_end: "32+200",
+            lat_start: 6.45,
+            lon_start: 101.82,
+            lat_end: 6.46,
+            lon_end: 101.83,
+            coordinates_json: [[101.82, 6.45], [101.83, 6.46]],
+            water_level_cm: 45,
+            traffic_status: "LIGHT_VEHICLES_ONLY",
+            road_side: "LEFT",
+            direction_meta: {
+              schemaVersion: 2,
+              eventId: "EV-4061",
+              directionCode: "A_TO_B",
+              roadSide: "LEFT",
+              trafficStatusDetail: "NO_SMALL_VEHICLES",
+              waterLevelKnown: true,
+              affectedParts: ["LEFT_LANE"],
+              updatedAt,
+              photos: [],
+            },
+            latest_photo_url: "",
+            is_active: true,
+            updated_at: updatedAt,
+            subdistrict: "ตันหยงมัส",
+            district: "ระแงะ",
+            province: "นราธิวาส",
+            trend: "RISING",
+          },
+          {
+            id: "F-PARTIAL-2",
+            route_no: "418",
+            section_name: "ตอนมะพร้าวต้นเดียว",
+            km_start: "10+000",
+            km_end: "12+500",
+            lat_start: 6.81,
+            lon_start: 101.21,
+            lat_end: 6.82,
+            lon_end: 101.22,
+            coordinates_json: [[101.21, 6.81], [101.22, 6.82]],
+            water_level_cm: 20,
+            traffic_status: "WARNING",
+            road_side: "RIGHT",
+            direction_meta: {
+              schemaVersion: 2,
+              eventId: "EV-418",
+              directionCode: "B_TO_A",
+              roadSide: "RIGHT",
+              trafficStatusDetail: "CAUTION",
+              waterLevelKnown: true,
+              affectedParts: ["RIGHT_LANE"],
+              updatedAt,
+              photos: [],
+            },
+            latest_photo_url: "",
+            is_active: true,
+            updated_at: updatedAt,
+            district: "หนองจิก",
+            trend: "STEADY",
+          },
+        ],
+        detourRoutes: [
+          {
+            id: "D-SECOND",
+            flood_id_ref: "F-NARATHIWAT-1",
+            route_name: "ทางเลี่ยงสำรอง สาย ข",
+            direction_mode: "FORWARD_ONLY",
+            lat_start: 6.45,
+            lon_start: 101.82,
+            lat_end: 6.46,
+            lon_end: 101.83,
+            coordinates_json: [[101.82, 6.45], [101.825, 6.455], [101.83, 6.46]],
+            description: "1. จุดเริ่มต้น: แยกบ้านน้ำบ่อ\n2. ถึงจุดบรรจบแยกปะนาเระ สัญจรต่อได้ตามปกติ",
+            detour_meta: { order_index: 2, event_orders: { "EV-IGNORED": 9, "F-NARATHIWAT-1": 2 } },
+            is_active: true,
+            updated_at: updatedAt,
+          },
+          {
+            id: "D-FIRST",
+            flood_id_ref: "F-NARATHIWAT-1",
+            route_name: "ทางเลี่ยงหลัก สาย ก",
+            direction_mode: "TWO_WAY",
+            lat_start: 6.45,
+            lon_start: 101.82,
+            lat_end: 6.46,
+            lon_end: 101.83,
+            coordinates_json: [[101.82, 6.45], [101.822, 6.458], [101.83, 6.46]],
+            description: "=== ทิศทางขาไป ===\n1. จุดเริ่มต้น: แยกตะลุโบ๊ะ\n2. ถึงจุดบรรจบแยกสายหมอ สัญจรต่อได้ตามปกติ\n\n=== ทิศทางขากลับ ===\n1. จุดเริ่มต้น: แยกสายหมอ\n2. ถึงจุดบรรจบแยกตะลุโบ๊ะ สัญจรต่อได้ตามปกติ",
+            detour_meta: {
+              order_index: 1,
+              event_orders: { "F-NARATHIWAT-1": 1 },
+              forward_distance_m: 3400,
+              forward_duration_s: 300,
+              reverse_distance_m: 3600,
+              reverse_duration_s: 360,
+            },
+            is_active: true,
+            updated_at: updatedAt,
+          },
+        ],
+        timelineUpdates: [],
+        mitigationProjects: [],
+        highwayLayers: [],
+        offices: [],
+        mapStyles: null,
+        systemSettings: { name: "ระบบทดสอบ", org: "กรมทางหลวง", desc: "", phone: "1586" },
+      }),
+    });
+  });
+
+  await page.goto(`${base}/`);
+  if ((page.viewportSize()?.width || 1280) < 1024) {
+    await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
+  }
+
+  // Group 1-6 checks on first compact FloodCard (real non-Pattani province)
+  const firstCard = page.locator("article:visible").filter({ hasText: "สะพานปะนาเระ" }).first();
+  await expect(firstCard).toBeVisible();
+  await expect(firstCard).toContainText("ทล.4061 · ตอน สะพานปะนาเระ");
+  await expect(firstCard).toContainText("รถเล็กไม่สามารถผ่านได้");
+  await expect(firstCard).toContainText("กม.26+790 – กม.32+200");
+  await expect(firstCard).toContainText("ต.ตันหยงมัส อ.ระแงะ จ.นราธิวาส");
+  await expect(firstCard).toContainText("45 ซม.");
+  await expect(firstCard).toContainText("ซ้ายทาง (LT)");
+  await expect(firstCard).toContainText(/อัปเดต\s+5 นาทีที่แล้ว/);
+
+  // Ensure second card has real partial area ONLY (no hardcoded จ.ปัตตานี) and shows ไม่มีเส้นทางเลี่ยง
+  const partialCard = page.locator("article:visible").filter({ hasText: "ตอนมะพร้าวต้นเดียว" }).first();
+  await expect(partialCard).toBeVisible();
+  await expect(partialCard).toContainText("อ.หนองจิก");
+  await expect(partialCard).not.toContainText("ปัตตานี");
+  await expect(partialCard).toContainText("ไม่มีเส้นทางเลี่ยง");
+
+  // Click clickable detour count on first card -> opens dossier scrolled to detour section
+  await firstCard.getByRole("button", { name: "เส้นทางเลี่ยง 2 สาย" }).click();
+  const dialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+  await expect(dialog).toBeVisible();
+
+  // Accordions are ordered (#1 สาย ก, #2 สาย ข) and collapsed by default
+  const firstTrigger = dialog.getByRole("button", { name: /ทางเลี่ยงที่ 1.*ทางเลี่ยงหลัก สาย ก/ });
+  const secondTrigger = dialog.getByRole("button", { name: /ทางเลี่ยงที่ 2.*ทางเลี่ยงสำรอง สาย ข/ });
+  await expect(firstTrigger).toHaveAttribute("aria-expanded", "false");
+  await expect(secondTrigger).toHaveAttribute("aria-expanded", "false");
+
+  // Duration integrity: recorded 300s -> 5 นาที; unrecorded -> ยังไม่มีข้อมูลเวลาเดินทาง (never 40 km/h)
+  await expect(firstTrigger).toContainText("เวลาประมาณ 5 นาที");
+  await expect(secondTrigger).toContainText("ยังไม่มีข้อมูลเวลาเดินทาง");
+  await expect(dialog.getByText("ทางเลี่ยงหลัก สาย ก", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("นำทางด้วย Google Maps")).toHaveCount(0);
+
+  // Expand first accordion -> shows full advice, Google Maps button & Map focus button
+  await firstTrigger.click();
+  await expect(firstTrigger).toHaveAttribute("aria-expanded", "true");
+  await expect(dialog.getByRole("link", { name: /นำทางด้วย Google Maps/ })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /ดูตำแหน่งบนแผนที่/ })).toBeVisible();
+
+  // Expand second accordion -> exclusively collapses the first
+  await secondTrigger.click();
+  await expect(secondTrigger).toHaveAttribute("aria-expanded", "true");
+  await expect(firstTrigger).toHaveAttribute("aria-expanded", "false");
+});
+
+test("admin detour order controls swap order_index and persist updates", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Admin table reorder test targets desktop view");
+  const updated_at = "2026-11-15T10:00:00.000Z";
+  const state = {
+    updatedAt: updated_at,
+    floodRoutes: [
+      {
+        id: "F-ORD",
+        route_no: "42",
+        section_name: "ตอนทดสอบจัดลำดับ",
+        km_start: "0+000",
+        km_end: "1+000",
+        lat_start: 6.87,
+        lon_start: 101.25,
+        lat_end: 6.88,
+        lon_end: 101.26,
+        coordinates_json: [[101.25, 6.87], [101.26, 6.88]],
+        water_level_cm: 20,
+        traffic_status: "WARNING",
+        is_active: true,
+        updated_at,
+      },
+    ],
+    detourRoutes: [
+      {
+        id: "D-A",
+        route_name: "ทางเลี่ยงลำดับที่หนึ่ง",
+        flood_id_ref: "F-ORD",
+        lat_start: 6.87,
+        lon_start: 101.25,
+        lat_end: 6.88,
+        lon_end: 101.26,
+        coordinates_json: [[101.25, 6.87], [101.26, 6.88]],
+        description: "สาย ก",
+        direction_mode: "FORWARD_ONLY",
+        detour_meta: { order_index: 1, event_orders: { "F-ORD": 1 } },
+        is_active: true,
+        updated_at,
+      },
+      {
+        id: "D-B",
+        route_name: "ทางเลี่ยงลำดับที่สอง",
+        flood_id_ref: "F-ORD",
+        lat_start: 6.87,
+        lon_start: 101.25,
+        lat_end: 6.88,
+        lon_end: 101.26,
+        coordinates_json: [[101.25, 6.87], [101.26, 6.88]],
+        description: "สาย ข",
+        direction_mode: "FORWARD_ONLY",
+        detour_meta: { order_index: 2, event_orders: { "F-ORD": 2 } },
+        is_active: true,
+        updated_at,
+      },
+    ],
+    timelineUpdates: [],
+    mitigationProjects: [],
+    highwayLayers: [],
+    offices: [],
+    mapStyles: null,
+    systemSettings: { name: "ระบบทดสอบ", org: "แขวงทางหลวงปัตตานี", phone: "1586" },
+  };
+
+  const upsertPayloads: Array<{ id?: string; detourMeta?: Record<string, any> }> = [];
+
+  await page.route("**/functions/v1/hdms-api", async (route) => {
+    const req = route.request();
+    if (req.method() === "POST") {
+      const body = req.postDataJSON();
+      const p = body?.args?.[0] || body?.payload;
+      if (body?.action === "upsertRouteAction" && p) {
+        upsertPayloads.push({ id: p.id, detourMeta: p.detourMeta });
+        const target = state.detourRoutes.find((d) => d.id === p.id);
+        if (target && p.detourMeta) {
+          target.detour_meta = p.detourMeta;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, savedId: p.id, systemData: { ...state } }),
+        });
+        return;
+      }
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(state),
+    });
+  });
+
+  await page.goto(`${base}/admin/`);
+  const sidebar = page.getByRole("complementary");
+  await sidebar.getByRole("button", { name: /รายการทางเลี่ยง/ }).click();
+
+  const rows = page.locator("tbody tr");
+  await expect(rows.nth(0)).toContainText("ทางเลี่ยงลำดับที่หนึ่ง");
+  await expect(rows.nth(1)).toContainText("ทางเลี่ยงลำดับที่สอง");
+
+  await page.getByRole("button", { name: "เลื่อนทางเลี่ยง ทางเลี่ยงลำดับที่หนึ่ง ลง" }).click();
+
+  await expect(rows.nth(0)).toContainText("ทางเลี่ยงลำดับที่สอง");
+  await expect(rows.nth(1)).toContainText("ทางเลี่ยงลำดับที่หนึ่ง");
+  expect(upsertPayloads.find((p) => p.id === "D-B")?.detourMeta?.order_index).toBe(1);
+  expect(upsertPayloads.find((p) => p.id === "D-A")?.detourMeta?.order_index).toBe(2);
+  expect(upsertPayloads.find((p) => p.id === "D-B")?.detourMeta?.event_orders?.["F-ORD"]).toBe(1);
+  expect(upsertPayloads.find((p) => p.id === "D-A")?.detourMeta?.event_orders?.["F-ORD"]).toBe(2);
+});

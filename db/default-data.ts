@@ -43,6 +43,7 @@ export interface FloodRoute {
   updated_at: string;
   district?: string;
   subdistrict?: string;
+  province?: string;
   trend?: "RISING" | "FALLING" | "STEADY";
   diff_cm?: number;
   detour_note?: string;
@@ -55,8 +56,14 @@ export interface FloodRoute {
 }
 
 export interface DetourMeta {
+  order_index?: number;
+  event_orders?: Record<string, number>;
   forward_distance_km?: number;
   reverse_distance_km?: number;
+  forward_duration_min?: number;
+  reverse_duration_min?: number;
+  forward_duration_s?: number;
+  reverse_duration_s?: number;
   is_asymmetric?: boolean;
   closed_road_verified?: boolean;
   arrow_color_forward?: string;

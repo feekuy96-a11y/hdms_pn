@@ -22,6 +22,8 @@ import {
   Compass,
   Route,
   Navigation,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import {
   deleteRouteAction,
@@ -34,6 +36,7 @@ import {
   splitDetourAdviceByDirection,
 } from "@/lib/gis-utils";
 import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
+import { sortDetoursByOrder } from "@/lib/detour-presentation";
 import { parseFloodDirectionMeta } from "@/lib/flood-event-schema";
 import { exportLineFeatures, GisExportFormat, parseLineCoordinates } from "@/lib/gis-export";
 import { useModalAccessibility } from "@/components/ui/use-modal-accessibility";
@@ -78,6 +81,7 @@ export function DetourManagementTab({
   const [editDetourRoadCondition, setEditDetourRoadCondition] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
   const [selectedDetourIds, setSelectedDetourIds] = useState<Set<string>>(() => new Set());
   const [exportScope, setExportScope] = useState<"FILTERED" | "ALL" | "SELECTED">("FILTERED");
   const viewingDialog = useModalAccessibility(Boolean(viewingDetour), () => setViewingDetour(null));
@@ -90,25 +94,106 @@ export function DetourManagementTab({
   const activeCount = detourList.filter((d) => d.is_active).length;
   const inactiveCount = totalCount - activeCount;
 
-  // Filtered Detours
-  const filteredDetours = detourList.filter((d) => {
-    if (detourFilter === "ACTIVE" && !d.is_active) return false;
-    if (detourFilter === "INACTIVE" && d.is_active) return false;
-    if (floodFilter !== "ALL" && d.flood_id_ref !== floodFilter) return false;
+  // Filtered Detours sorted by explicit Admin order
+  const filteredDetours = React.useMemo(() => {
+    const matched = detourList.filter((d) => {
+      if (detourFilter === "ACTIVE" && !d.is_active) return false;
+      if (detourFilter === "INACTIVE" && d.is_active) return false;
+      if (floodFilter !== "ALL" && d.flood_id_ref !== floodFilter) return false;
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const linkedFlood = floodList.find((f) => f.id === d.flood_id_ref);
-      const matchName = d.route_name.toLowerCase().includes(q);
-      const matchDesc = (d.description || "").toLowerCase().includes(q);
-      const matchFlood =
-        linkedFlood &&
-        (linkedFlood.route_no.toLowerCase().includes(q) ||
-          linkedFlood.section_name.toLowerCase().includes(q));
-      return matchName || matchDesc || matchFlood;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const linkedFlood = floodList.find((f) => f.id === d.flood_id_ref);
+        const matchName = d.route_name.toLowerCase().includes(q);
+        const matchDesc = (d.description || "").toLowerCase().includes(q);
+        const matchFlood =
+          linkedFlood &&
+          (linkedFlood.route_no.toLowerCase().includes(q) ||
+            linkedFlood.section_name.toLowerCase().includes(q));
+        return matchName || matchDesc || matchFlood;
+      }
+      return true;
+    });
+    return sortDetoursByOrder(matched, floodFilter !== "ALL" ? floodFilter : undefined);
+  }, [detourList, floodList, detourFilter, floodFilter, searchQuery]);
+
+  // Sibling detours within the same flood scope (used for Up/Down reordering)
+  const getReorderSiblings = (item: DetourRoute): DetourRoute[] => {
+    const scopeKey = item.flood_id_ref || "";
+    const siblings = filteredDetours.filter((d) => (d.flood_id_ref || "") === scopeKey);
+    return sortDetoursByOrder(siblings, item.flood_id_ref || undefined);
+  };
+
+  const handleMoveDetourOrder = async (item: DetourRoute, direction: "UP" | "DOWN") => {
+    if (reorderingId) return;
+    const siblings = getReorderSiblings(item);
+    const currentIndex = siblings.findIndex((d) => d.id === item.id);
+    if (currentIndex === -1) return;
+    const targetIndex = direction === "UP" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= siblings.length) return;
+
+    const reordered = [...siblings];
+    const [moved] = reordered.splice(currentIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    setReorderingId(item.id);
+    try {
+      let latestRes: any = null;
+      const scopeFloodId = item.flood_id_ref || undefined;
+      for (let i = 0; i < reordered.length; i++) {
+        const d = reordered[i];
+        const nextOrder = i + 1;
+        const prevOrder = scopeFloodId
+          ? (d.detour_meta?.event_orders?.[scopeFloodId] ?? d.detour_meta?.order_index)
+          : d.detour_meta?.order_index;
+        if (prevOrder === nextOrder && d.id !== item.id && d.id !== siblings[targetIndex].id) {
+          continue;
+        }
+        const linkedFlood = d.flood_id_ref ? floodList.find((f) => f.id === d.flood_id_ref) : undefined;
+        const linkedEventId = linkedFlood
+          ? parseFloodDirectionMeta(linkedFlood.direction_meta, linkedFlood).eventId
+          : d.detour_meta?.eventId;
+        const nextMeta: Record<string, any> = {
+          ...(d.detour_meta || {}),
+          order_index: nextOrder,
+          ...(scopeFloodId
+            ? {
+              event_orders: {
+                ...(d.detour_meta?.event_orders || {}),
+                [scopeFloodId]: nextOrder,
+              },
+            }
+            : {}),
+          ...(linkedEventId ? { eventId: linkedEventId } : {}),
+        };
+
+        latestRes = await upsertRouteAction({
+          id: d.id,
+          recordType: "DETOUR",
+          detourName: d.route_name,
+          detourRefId: d.flood_id_ref || "",
+          detourDesc: d.description || "",
+          latStart: d.lat_start,
+          lonStart: d.lon_start,
+          latEnd: d.lat_end,
+          lonEnd: d.lon_end,
+          coordinates: typeof d.coordinates_json === "string" ? JSON.parse(d.coordinates_json) : d.coordinates_json,
+          reverseCoordinates: typeof d.reverse_coordinates_json === "string" ? JSON.parse(d.reverse_coordinates_json) : d.reverse_coordinates_json,
+          reverseWaypoints: typeof d.reverse_waypoints_json === "string" ? JSON.parse(d.reverse_waypoints_json) : d.reverse_waypoints_json,
+          directionMode: d.direction_mode,
+          detourMeta: nextMeta,
+        });
+      }
+      if (latestRes?.success) {
+        onDataRefresh(latestRes.systemData);
+        onToast(`ปรับลำดับ "${item.route_name}" เป็นทางเลี่ยงที่ ${targetIndex + 1} เรียบร้อย`);
+      }
+    } catch (err: any) {
+      onToast("ไม่สามารถบันทึกลำดับทางเลี่ยงได้: " + err.message);
+    } finally {
+      setReorderingId(null);
     }
-    return true;
-  });
+  };
 
   // Toggle active status
   const handleToggleStatus = async (detourId: string, currentActive: boolean) => {
@@ -193,8 +278,32 @@ export function DetourManagementTab({
     try {
       const linkedFlood = floodList.find((f) => f.id === editDetourRefId);
       const linkedEventId = linkedFlood ? parseFloodDirectionMeta(linkedFlood.direction_meta, linkedFlood).eventId : undefined;
+      const existingMeta = editingDetour.detour_meta || {};
+      const sameFlood = (editingDetour.flood_id_ref || "") === (editDetourRefId || "");
+      let resolvedOrder = existingMeta.order_index;
+      if (editDetourRefId && existingMeta.event_orders && typeof existingMeta.event_orders[editDetourRefId] === "number") {
+        resolvedOrder = existingMeta.event_orders[editDetourRefId];
+      } else if (!sameFlood || typeof resolvedOrder !== "number") {
+        const siblings = detourList.filter((d) => d.id !== editingDetour.id && (d.flood_id_ref || "") === (editDetourRefId || ""));
+        let maxOrder = 0;
+        siblings.forEach((d, i) => {
+          const raw = (editDetourRefId && d.detour_meta?.event_orders?.[editDetourRefId]) ?? d.detour_meta?.order_index;
+          const val = typeof raw === "number" && Number.isFinite(raw) ? raw : i + 1;
+          if (val > maxOrder) maxOrder = val;
+        });
+        resolvedOrder = maxOrder + 1;
+      }
       const updatedDetourMeta: Record<string, any> = {
-        ...(editingDetour.detour_meta || {}),
+        ...existingMeta,
+        order_index: resolvedOrder,
+        ...(editDetourRefId
+          ? {
+            event_orders: {
+              ...(existingMeta.event_orders || {}),
+              [editDetourRefId]: resolvedOrder,
+            },
+          }
+          : {}),
         eventId: linkedEventId,
       };
       if (editDetourGoogleMapsUrlFwd.trim()) {
@@ -472,14 +581,17 @@ export function DetourManagementTab({
             {filteredDetours.map((item, idx) => {
               const linkedFlood = floodList.find((f) => f.id === item.flood_id_ref);
               const ext = extractDirectionalAdvice(item.description || "");
+              const siblings = getReorderSiblings(item);
+              const groupPos = siblings.findIndex((d) => d.id === item.id);
+              const canMoveUp = groupPos > 0 && !reorderingId;
+              const canMoveDown = groupPos >= 0 && groupPos < siblings.length - 1 && !reorderingId;
 
               return (
                 <div
                   key={item.id}
                   onClick={() => setViewingDetour(item)}
-                  className={`p-3.5 rounded-2xl border border-slate-800 bg-slate-950/80 shadow-md space-y-2.5 cursor-pointer hover:border-slate-700 transition ${
-                    !item.is_active ? "opacity-60" : ""
-                  }`}
+                  className={`p-3.5 rounded-2xl border border-slate-800 bg-slate-950/80 shadow-md space-y-2.5 cursor-pointer hover:border-slate-700 transition ${!item.is_active ? "opacity-60" : ""
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -509,11 +621,10 @@ export function DetourManagementTab({
                         e.stopPropagation();
                         handleToggleStatus(item.id, item.is_active);
                       }}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border whitespace-nowrap transition ${
-                        item.is_active
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border whitespace-nowrap transition ${item.is_active
                           ? "bg-emerald-950 text-emerald-300 border-emerald-600"
                           : "bg-slate-900 text-slate-400 border-slate-700"
-                      }`}
+                        }`}
                     >
                       {item.is_active ? "เปิดใช้งาน" : "ปิดชั่วคราว"}
                     </button>
@@ -524,8 +635,8 @@ export function DetourManagementTab({
                       {item.direction_mode === "FORWARD_ONLY"
                         ? "→ เฉพาะขาไป (A → B)"
                         : item.direction_mode === "REVERSE_ONLY"
-                        ? "→ เฉพาะขากลับ (B → A)"
-                        : "⇄ เดินรถ ๒ ทิศทาง (A ⇄ B)"}
+                          ? "→ เฉพาะขากลับ (B → A)"
+                          : "⇄ เดินรถ ๒ ทิศทาง (A ⇄ B)"}
                     </span>
                     {linkedFlood && (
                       <span className="bg-amber-400/20 text-amber-300 border border-amber-500/40 text-[10px] px-1.5 py-0.2 rounded font-bold">
@@ -549,11 +660,31 @@ export function DetourManagementTab({
                     </p>
                   )}
 
-                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2 text-[11px]">
                     <span className="text-slate-400 font-mono">
-                      {Array.isArray(item.coordinates_json) ? item.coordinates_json.length : 0} จุดโหนด
+                      ลำดับที่ {groupPos + 1} · {Array.isArray(item.coordinates_json) ? item.coordinates_json.length : 0} จุดโหนด
                     </span>
-                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        aria-label={`เลื่อนทางเลี่ยง ${item.route_name} ขึ้น`}
+                        disabled={!canMoveUp}
+                        onClick={() => handleMoveDetourOrder(item, "UP")}
+                        title="เลื่อนลำดับขึ้น"
+                        className="min-h-9 px-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`เลื่อนทางเลี่ยง ${item.route_name} ลง`}
+                        disabled={!canMoveDown}
+                        onClick={() => handleMoveDetourOrder(item, "DOWN")}
+                        title="เลื่อนลำดับลง"
+                        className="min-h-9 px-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => setViewingDetour(item)}
@@ -602,14 +733,17 @@ export function DetourManagementTab({
                   const linkedFlood = floodList.find((f) => f.id === item.flood_id_ref);
                   const ext = extractDirectionalAdvice(item.description || "");
                   const coordsCount = Array.isArray(item.coordinates_json) ? item.coordinates_json.length : 0;
+                  const siblings = getReorderSiblings(item);
+                  const groupPos = siblings.findIndex((d) => d.id === item.id);
+                  const canMoveUp = groupPos > 0 && !reorderingId;
+                  const canMoveDown = groupPos >= 0 && groupPos < siblings.length - 1 && !reorderingId;
 
                   return (
                     <tr
                       key={item.id}
                       onClick={() => setViewingDetour(item)}
-                      className={`hover:bg-slate-900/60 transition ${
-                        !item.is_active ? "opacity-50 bg-slate-950/40" : ""
-                      }`}
+                      className={`hover:bg-slate-900/60 transition ${!item.is_active ? "opacity-50 bg-slate-950/40" : ""
+                        }`}
                     >
                       <td className="p-3 text-center font-mono text-slate-400">
                         <div className="flex items-center justify-center gap-2">
@@ -637,11 +771,10 @@ export function DetourManagementTab({
                         <button
                           type="button"
                           onClick={() => handleToggleStatus(item.id, item.is_active)}
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border whitespace-nowrap transition cursor-pointer ${
-                            item.is_active
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border whitespace-nowrap transition cursor-pointer ${item.is_active
                               ? "bg-emerald-950 text-emerald-300 border-emerald-600 hover:bg-emerald-900"
                               : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"
-                          }`}
+                            }`}
                           title={item.is_active ? "คลิกเพื่อปิดใช้งานชั่วคราว" : "คลิกเพื่อเปิดใช้งาน"}
                         >
                           {item.is_active ? "เปิดใช้งาน" : "ปิดชั่วคราว"}
@@ -660,8 +793,8 @@ export function DetourManagementTab({
                               {item.direction_mode === "FORWARD_ONLY"
                                 ? "→ เฉพาะขาไป (A → B)"
                                 : item.direction_mode === "REVERSE_ONLY"
-                                ? "→ เฉพาะขากลับ (B → A)"
-                                : "⇄ เดินรถ ๒ ทิศทาง (A ⇄ B)"}
+                                  ? "→ เฉพาะขากลับ (B → A)"
+                                  : "⇄ เดินรถ ๒ ทิศทาง (A ⇄ B)"}
                             </span>
                           </div>
                         </div>
@@ -721,6 +854,28 @@ export function DetourManagementTab({
                       {/* Actions */}
                       <td className="p-3 text-right whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
                         <div className="inline-flex items-center gap-1">
+                          {/* Move Order Up/Down */}
+                          <button
+                            type="button"
+                            aria-label={`เลื่อนทางเลี่ยง ${item.route_name} ขึ้น`}
+                            disabled={!canMoveUp}
+                            onClick={() => handleMoveDetourOrder(item, "UP")}
+                            title={`เลื่อนลำดับขึ้น (ปัจจุบันลำดับที่ ${groupPos + 1})`}
+                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`เลื่อนทางเลี่ยง ${item.route_name} ลง`}
+                            disabled={!canMoveDown}
+                            onClick={() => handleMoveDetourOrder(item, "DOWN")}
+                            title={`เลื่อนลำดับลง (ปัจจุบันลำดับที่ ${groupPos + 1})`}
+                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+
                           {/* Focus on map */}
                           {item.lat_start && item.lon_start && onFocusCoordinates && (
                             <button
@@ -970,33 +1125,30 @@ export function DetourManagementTab({
                       <button
                         type="button"
                         onClick={() => setEditDetourAdviceView("FORWARD")}
-                        className={`px-2 py-0.5 rounded transition ${
-                          editDetourAdviceView === "FORWARD"
+                        className={`px-2 py-0.5 rounded transition ${editDetourAdviceView === "FORWARD"
                             ? "bg-amber-500 text-slate-950"
                             : "text-slate-400 hover:text-white"
-                        }`}
+                          }`}
                       >
                         🚗 ขาไป (A → B)
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditDetourAdviceView("REVERSE")}
-                        className={`px-2 py-0.5 rounded transition ${
-                          editDetourAdviceView === "REVERSE"
+                        className={`px-2 py-0.5 rounded transition ${editDetourAdviceView === "REVERSE"
                             ? "bg-amber-500 text-slate-950"
                             : "text-slate-400 hover:text-white"
-                        }`}
+                          }`}
                       >
                         🚙 ขากลับ (B → A)
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditDetourAdviceView("COMBINED")}
-                        className={`px-2 py-0.5 rounded transition ${
-                          editDetourAdviceView === "COMBINED"
+                        className={`px-2 py-0.5 rounded transition ${editDetourAdviceView === "COMBINED"
                             ? "bg-amber-500 text-slate-950"
                             : "text-slate-400 hover:text-white"
-                        }`}
+                          }`}
                       >
                         📋 ทั้ง ๒ ทิศทาง
                       </button>
@@ -1018,8 +1170,8 @@ export function DetourManagementTab({
                     editDetourAdviceView === "FORWARD"
                       ? extractDirectionalAdvice(editDetourDesc).forward
                       : editDetourAdviceView === "REVERSE"
-                      ? extractDirectionalAdvice(editDetourDesc).reverse
-                      : editDetourDesc
+                        ? extractDirectionalAdvice(editDetourDesc).reverse
+                        : editDetourDesc
                   }
                   onChange={(e) => {
                     const val = e.target.value;

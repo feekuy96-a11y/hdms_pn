@@ -3,6 +3,18 @@
 รูปแบบสั้น: วันที่ · หัวข้อ · ไฟล์ · ทำอะไรและทำไม · ตรวจอะไรแล้ว/ยังไม่ได้ตรวจ · ความเสี่ยงที่ยอมรับ (ถ้ามี) · ลิงก์ BACKLOG
 ประวัติเก่า (UPDATE-001…047) อยู่ใน `SUPPLEMENTAL_RULES.md` — ใช้ grep ค้น ไม่อ่านทั้งไฟล์ เลขรายการต่อจาก 047
 
+### [UPDATE-091] 2026-11-16 Compact Card, Detour Accordion, Reordering, Data Integrity & Detour Popup
+- **ไฟล์:** `app/page.tsx`, `lib/detour-presentation.ts`, `components/map/LongdoGisMap.tsx`, `app/globals.css`, `components/admin/tabs/DetourManagementTab.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `db/default-data.ts`, `tests/e2e/compact-card-detour-accordion.spec.ts`
+- **การแก้ไข:**
+  1. **Phase 1 Compact FloodCard:** ปรับการ์ดสถานการณ์น้ำท่วมบนหน้าหลักประชาชนเป็น Compact Card 6 กลุ่มข้อมูล (หัวข้อ ทล.+ตอนควบคุม พร้อมชิปสถานะจราจร, ช่วงกิโลเมตร, พิกัดพื้นที่เกิดเหตุจริง ต./อ./จ. ไม่ฮาร์ดโค้ดปัตตานี, ระดับน้ำ+ฝั่งที่ท่วม LT/RT/BOTH, เวลาอัปเดตสัมพันธ์+ปุ่มจำนวนทางเลี่ยง, ปุ่มดูรายละเอียดล่างสุด) ใช้ `<article>` ห้ามมี nested `<button>`.
+  2. **Phase 2 Detour Jump Link:** ปุ่มจำนวนเส้นทางเลี่ยงในการ์ดกดแล้วเปิด Dossier modal และเลื่อนหน้าจอไปยังส่วน `#dossier-detour-section` อัตโนมัติ (กรณีไม่มีทางเลี่ยงแสดงข้อความนิ่ง).
+  3. **Phase 3 Detour Accordion:** แปลงรายการทางเลี่ยงใน Dossier modal เป็น Single-open Exclusive Accordion (เปิดได้ทีละ 1 เส้นทาง โดยเริ่มต้นพับไว้ทั้งหมด) แสดงลำดับ ทางเลี่ยงที่ 1..N, คำแนะนำสรุปย่อ, ระยะทางรวม, เวลาเดินทางโดยประมาณ, แผงกางออกแสดงขั้นตอนเดินทาง, ปุ่มสลับทิศทาง, ลิงก์นำทาง Google Maps และปุ่มดูตำแหน่งบนแผนที่.
+  4. **Phase 4 Detour Reordering:** รองรับการจัดลำดับทางเลี่ยงผ่าน `order_index` และ `event_orders` รายเหตุการณ์ ทั้งฝั่งประชาชนและการจัดการแอดมิน (ปุ่มเลื่อนขึ้น/เลื่อนลงในตารางและบัตรโมบายล์).
+  5. **Phase 5 Data Integrity:** คำนวณระยะทางตามแนวเส้นทาง GIS (ผลรวมระยะระหว่างจุดดัดทุกคู่) ไม่ใช้ระยะเส้นตรงคอร์ด A-B; เวลาเดินทางแสดงเฉพาะข้อมูลที่มีบันทึกจริง หากไม่มีแสดง "ยังไม่มีข้อมูลเวลาเดินทาง" ห้ามเดาความเร็ว 40 กม./ชม. เองเด็ดขาด; ตัดการฮาร์ดโค้ด "เมืองปัตตานี".
+  6. **Leaflet Detour Popup:** ปรับแต่ง Popup ทางเลี่ยงบนแผนที่ Leaflet ใน `LongdoGisMap.tsx` และ `globals.css` ให้ตรงตามภาพต้นแบบ 100% พร้อมปุ่มนำทาง Google Maps และปุ่มดูตำแหน่ง.
+- **ตรวจแล้ว:** `npm run typecheck`, `npm run lint`, `npm run build` (Next.js Static Export), Node unit assertions สำหรับตรรกะระยะทาง เวลา และการจัดลำดับ, Playwright E2E 62 passed / 28 skipped (0 failed).
+- **ย้อนกลับ:** `git checkout HEAD~1 -- app/ lib/ components/ db/ tests/`
+
 ### [UPDATE-090] 2026-11-13 ป้องกัน Draft หลุดใน Public API
 - **ไฟล์:** `supabase/migrations/20261113091500_public_payload_excludes_inactive_records.sql` (ใหม่), `supabase/functions/hdms-api/index.ts`, `docs/ARCHITECTURE.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`
 - **การแก้ไข:** เพิ่ม RPC wrapper `doh_get_public_system_data_display_rpc()` ซึ่งคง geometry แบบเบา แต่ตัด flood Draft, timeline ของ Draft และ detour ที่ผูกกับ Draft ก่อนส่งให้ประชาชน; Edge Function เรียก wrapper นี้เฉพาะ `getPublicSystemDataAction` และไม่ fallback ไป payload เต็มเมื่อ Public RPC ใช้ไม่ได้ เพื่อไม่ให้เกิดการรั่วข้อมูลซ้ำ.

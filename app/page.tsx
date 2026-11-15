@@ -47,6 +47,7 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   X,
   Navigation,
   Compass,
@@ -56,6 +57,7 @@ import {
   ArrowRightLeft,
   ArrowLeftRight,
   Droplets,
+  MapPin,
   MapPinned,
   Route,
   Maximize2,
@@ -70,14 +72,18 @@ import {
 import { extractDirectionalAdvice, splitDetourAdviceByDirection } from "@/lib/gis-utils";
 import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
 import {
+  calculatePolylineRoadDistanceKm,
   defaultDetourDirection,
   detourDirectionBadge,
   detourDirectionDetailedBadge,
   detourDistanceMeters,
+  detourDurationSeconds,
+  getDetourShortSummary,
   getDetourTimelinePresentation,
   isDetourDirectionAllowed,
   isRecordedDetourDirection,
   parseDetourAdvice,
+  sortDetoursByOrder,
 } from "@/lib/detour-presentation";
 import { parseFloodDirectionMeta, resolveEffectiveRoadSide, AFFECTED_ROAD_PART_LABELS } from "@/lib/flood-event-schema";
 import { usePollingActivity } from "@/lib/use-polling-activity";
@@ -190,38 +196,173 @@ function highwayIdsInDetour(route: DetourRoute, floods: FloodRoute[]): string[] 
   return [...ids];
 }
 
-// One card for the desktop sidebar and the mobile sheet (they used to be two diverging copies).
-function FloodCard({ flood, selected, onSelect }: { flood: FloodRoute; selected: boolean; onSelect: (flood: FloodRoute) => void }) {
+function formatAreaSegment(prefix: string, value?: string | null): string | null {
+  const trimmed = (value || "").trim();
+  if (!trimmed || trimmed === "-") return null;
+  return trimmed.startsWith(prefix) ? trimmed : `${prefix}${trimmed}`;
+}
+
+function formatFloodAreaLine(flood: FloodRoute): string | null {
+  const sub = formatAreaSegment("ต.", flood.subdistrict);
+  const dist = formatAreaSegment("อ.", flood.district);
+  const provRaw =
+    flood.province ||
+    (flood.direction_meta as { province?: string } | undefined)?.province;
+  const prov = formatAreaSegment("จ.", provRaw);
+  const parts = [sub, dist, prov].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(" ") : null;
+}
+
+function formatKmText(value?: string | number | null): string {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return "-";
+  return trimmed.startsWith("กม.") ? trimmed : `กม.${trimmed}`;
+}
+
+function parseRouteCoordinates(raw?: string | [number, number][] | null): [number, number][] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatRelativeUpdateTime(iso?: string | null): string {
+  if (!iso) return "อัปเดต ไม่ระบุเวลา";
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) return "อัปเดต ไม่ระบุเวลา";
+  const diffMs = Math.max(0, Date.now() - ts);
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "อัปเดต เมื่อสักครู่";
+  if (mins < 60) return `อัปเดต ${mins} นาทีที่แล้ว`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `อัปเดต ${hours} ชม.ที่แล้ว`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `อัปเดต ${days} วันที่แล้ว`;
+  return `อัปเดต ${new Date(ts).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}`;
+}
+
+function formatFloodSideShortLabel(side: ReturnType<typeof resolveEffectiveRoadSide>): string | null {
+  if (side === "LEFT") return "ซ้ายทาง (LT)";
+  if (side === "RIGHT") return "ขวาทาง (RT)";
+  if (side === "BOTH") return "ทั้งสองฝั่ง";
+  return null;
+}
+
+// Compact 6-group flood situation card shared between desktop sidebar and mobile drawer.
+function FloodCard({
+  flood,
+  selected,
+  detourCount,
+  onSelect,
+  onOpenDetours,
+}: {
+  flood: FloodRoute;
+  selected: boolean;
+  detourCount: number;
+  onSelect: (flood: FloodRoute) => void;
+  onOpenDetours: (flood: FloodRoute) => void;
+}) {
   const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
   const status = getTrafficPresentation(flood.traffic_status as TrafficStatus, flood.water_level_cm, meta.trafficStatusDetail);
-  const direction = meta.directionCode === "A_TO_B" ? "A → B" : meta.directionCode === "B_TO_A" ? "B → A" : meta.directionCode === "BOTH" ? "A ⇄ B" : "ไม่ระบุทิศทาง";
+  const sideLabel = formatFloodSideShortLabel(resolveEffectiveRoadSide(flood));
+  const areaLine = formatFloodAreaLine(flood);
+  const routeLabel = /^(?:ทล|ปน)\.?\s*/i.test(flood.route_no) ? flood.route_no : `ทล.${flood.route_no}`;
+  const trimmedSection = flood.section_name.trim();
+  const sectionLabel = trimmedSection.startsWith("ตอน") ? trimmedSection : `ตอน ${trimmedSection}`;
+  const waterDisplay = meta.waterLevelKnown === false && flood.water_level_cm === 0 ? "รอตรวจสอบ" : `${flood.water_level_cm} ซม.`;
+  const relativeUpdated = formatRelativeUpdateTime(flood.updated_at || meta.updatedAt);
+
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={() => onSelect(flood)}
-      className={`relative block min-h-12 w-full overflow-hidden rounded-2xl border bg-[#101d33] px-3.5 py-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${selected ? "border-amber-400 ring-1 ring-amber-400/50" : "border-slate-700/90 hover:border-amber-400/70"}`}
+    <article
+      className={`relative w-full rounded-2xl border bg-[#101d33] px-3 py-2.5 text-left transition ${
+        selected ? "border-amber-400 ring-1 ring-amber-400/50" : "border-slate-700/90 hover:border-amber-400/70"
+      }`}
     >
-      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: STATUS_BAR[status.color] }} />
-      <span className="flex flex-wrap items-start justify-between gap-2">
-        <span className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="rounded-md bg-amber-400 px-2 py-1 font-heading text-xs font-black text-slate-950">ทล.{flood.route_no}</span>
-          <span className="text-xs text-slate-300">กม.{flood.km_start} – {flood.km_end}</span>
+      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 rounded-l-2xl" style={{ backgroundColor: STATUS_BAR[status.color] }} />
+
+      {/* Groups 1–4 inside summary button (non-nested with Group 5 detour button & Group 6 detail button) */}
+      <button
+        type="button"
+        aria-pressed={selected}
+        onClick={() => onSelect(flood)}
+        className="block w-full min-w-0 cursor-pointer rounded-xl text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+      >
+        {/* Group 1: Route & Section + Traffic Status */}
+        <span className="flex min-w-0 flex-wrap items-start justify-between gap-x-2 gap-y-1.5">
+          <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-heading text-sm font-bold leading-snug text-white">
+            {routeLabel} · {sectionLabel}
+          </span>
+          <span className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold leading-tight ${STATUS_CHIP[status.color]}`}>
+            <span aria-hidden="true">{status.icon}</span>
+            <span>{status.label}</span>
+          </span>
         </span>
-        <span className={`rounded-lg border px-2 py-1 text-xs font-semibold ${STATUS_CHIP[status.color]}`}>
-          {status.icon} {status.label}
+
+        {/* Group 2: KM Range (before Area) */}
+        <span className="mt-1.5 block text-xs font-medium text-amber-200/95">
+          {formatKmText(flood.km_start)} – {formatKmText(flood.km_end)}
         </span>
-      </span>
-      <span className="mt-2 block break-words font-heading text-sm font-bold leading-snug text-white">{flood.section_name}</span>
-      <span className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs text-slate-300">
-        <span className="inline-flex items-center gap-1.5">
-          <Droplets aria-hidden="true" className="h-4 w-4 text-sky-300" /> ระดับน้ำ
-          <strong className="text-sm text-white">{flood.water_level_cm} ซม.</strong>
-          <span className="rounded bg-sky-950/70 px-1.5 py-1 text-[11px] text-sky-200">{direction}</span>
+
+        {/* Group 3: Real Area Coordinates (never hardcoded) */}
+        {areaLine && (
+          <span className="mt-1 flex min-w-0 items-start gap-1 text-xs text-slate-300">
+            <MapPin aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+            <span className="min-w-0 break-words">{areaLine}</span>
+          </span>
+        )}
+
+        {/* Group 4: Water Level & Flooded Side */}
+        <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-200">
+          <span className="inline-flex items-center gap-1">
+            <Droplets aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-sky-300" />
+            <span>ระดับน้ำ</span>
+            <strong className="font-mono text-sm text-white">{waterDisplay}</strong>
+          </span>
+          {sideLabel && (
+            <>
+              <span aria-hidden="true" className="text-slate-600">|</span>
+              <span className="min-w-0 break-words text-sky-200">
+                ฝั่งน้ำท่วม <strong className="font-semibold text-white">{sideLabel}</strong>
+              </span>
+            </>
+          )}
         </span>
-        <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-amber-300">รายละเอียด <ChevronRight aria-hidden="true" className="h-4 w-4" /></span>
-      </span>
-    </button>
+      </button>
+
+      {/* Group 5: Last Updated & Clickable Detour Count */}
+      <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-slate-800/80 pt-2 text-xs text-slate-300">
+        <span className="inline-flex min-w-0 items-center gap-1 text-slate-400">
+          <Clock aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{relativeUpdated}</span>
+        </span>
+        <span aria-hidden="true" className="hidden text-slate-700 sm:inline">|</span>
+        {detourCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => onOpenDetours(flood)}
+            className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-md border border-amber-400/50 bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+          >
+            <span>เส้นทางเลี่ยง {detourCount} สาย</span>
+          </button>
+        ) : (
+          <span className="text-xs text-slate-400">ไม่มีเส้นทางเลี่ยง</span>
+        )}
+      </div>
+
+      {/* Group 6: Bottom Detail Action Button */}
+      <button
+        type="button"
+        onClick={() => onSelect(flood)}
+        className="mt-2 flex min-h-9 w-full cursor-pointer items-center justify-center gap-1 rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-1.5 font-heading text-xs font-bold text-amber-300 transition hover:border-amber-400/60 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+      >
+        <span>ดูรายละเอียด</span>
+        <ChevronRight aria-hidden="true" className="h-3.5 w-3.5" />
+      </button>
+    </article>
   );
 }
 
@@ -235,8 +376,11 @@ export default function HomePage() {
   const detourDialogRef = useRef<HTMLDivElement | null>(null);
   const detourCloseRef = useRef<HTMLButtonElement | null>(null);
   const detourPreviousFocus = useRef<HTMLElement | null>(null);
+  const dossierDetourRef = useRef<HTMLDivElement | null>(null);
+  const scrollToDetourOnOpenRef = useRef<boolean>(false);
   const [selectedFloodId, setSelectedFloodId] = useState<string>("");
   const [showDossier, setShowDossier] = useState<boolean>(false);
+  const [expandedDetourId, setExpandedDetourId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRouteFilter, setSelectedRouteFilter] = useState("ALL");
@@ -304,7 +448,9 @@ export default function HomePage() {
   useEffect(() => {
     if (!showDossier) return;
     previousFocus.current = document.activeElement as HTMLElement;
-    closeDetailsRef.current?.focus();
+    if (!scrollToDetourOnOpenRef.current) {
+      closeDetailsRef.current?.focus();
+    }
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setShowDossier(false);
     };
@@ -314,6 +460,22 @@ export default function HomePage() {
       previousFocus.current?.focus();
     };
   }, [showDossier]);
+
+  // All detour accordions start collapsed when opening or switching flood events
+  useEffect(() => {
+    setExpandedDetourId(null);
+  }, [selectedFloodId, showDossier]);
+
+  // Auto-scroll to #dossier-detour-section when opening via FloodCard detour count button
+  useEffect(() => {
+    if (!showDossier || !scrollToDetourOnOpenRef.current) return;
+    scrollToDetourOnOpenRef.current = false;
+    const timer = window.setTimeout(() => {
+      dossierDetourRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      dossierDetourRef.current?.focus({ preventScroll: true });
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [showDossier, selectedFloodId]);
 
   const selectedFlood =
     systemData.floodRoutes.find((r) => r.id === selectedFloodId) || systemData.floodRoutes[0];
@@ -415,7 +577,8 @@ export default function HomePage() {
     selectedFlood?.water_level_cm ?? 0,
     selectedFlood?.direction_meta?.trafficStatusDetail
   );
-  const handleSelectFlood = (flood: FloodRoute) => {
+  const handleSelectFlood = (flood: FloodRoute, scrollToDetour: boolean = false) => {
+    scrollToDetourOnOpenRef.current = scrollToDetour;
     setSelectedFloodId(flood.id);
     const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
     if (meta.directionCode === "B_TO_A") {
@@ -447,7 +610,24 @@ export default function HomePage() {
       })();
     }
   };
+  const handleOpenFloodDetourSection = (flood: FloodRoute) => {
+    handleSelectFlood(flood, true);
+  };
   const activeDetours = (systemData.detourRoutes || []).filter((route) => route.is_active);
+  const detourCountByFloodId = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const flood of systemData.floodRoutes || []) {
+      if (!flood.is_active) continue;
+      const fMeta = parseFloodDirectionMeta(flood.direction_meta, flood);
+      const count = activeDetours.filter(
+        (route) =>
+          route.flood_id_ref === flood.id ||
+          (route.detour_meta?.eventId && fMeta?.eventId && route.detour_meta.eventId === fMeta.eventId)
+      ).length;
+      counts.set(flood.id, count);
+    }
+    return counts;
+  }, [systemData.floodRoutes, activeDetours]);
   const filteredDetours = activeDetours.filter((route) => {
     const query = searchQuery.trim().toLocaleLowerCase();
     const normalizedQuery = query.replace(/^(?:ทล|ปน)\.?\s*/i, "");
@@ -456,15 +636,17 @@ export default function HomePage() {
     const matchesHighway = selectedRouteFilter === "ALL" || highwayIdsInDetour(route, systemData.floodRoutes || []).includes(selectedRouteFilter);
     return matchesText && matchesHighway;
   });
-  const selectedFloodDetours = selectedFlood
-    ? activeDetours.filter(
+  const selectedFloodDetours = React.useMemo(() => {
+    if (!selectedFlood) return [];
+    const matched = activeDetours.filter(
       (route) =>
         route.flood_id_ref === selectedFlood.id ||
         (route.detour_meta?.eventId &&
           selectedFloodMeta?.eventId &&
           route.detour_meta.eventId === selectedFloodMeta.eventId)
-    )
-    : [];
+    );
+    return sortDetoursByOrder(matched, selectedFlood.id);
+  }, [activeDetours, selectedFlood, selectedFloodMeta]);
   const closeDetourDetails = () => {
     setViewingDetourModal(null);
     if (returnToDetourList) {
@@ -745,7 +927,14 @@ export default function HomePage() {
             {(sidebarTab === "ALL" || sidebarTab === "FLOOD") && (
               <>
                 {filteredFloods.map((flood) => (
-                  <FloodCard key={flood.id} flood={flood} selected={flood.id === selectedFloodId} onSelect={handleSelectFlood} />
+                  <FloodCard
+                    key={flood.id}
+                    flood={flood}
+                    selected={flood.id === selectedFloodId}
+                    detourCount={detourCountByFloodId.get(flood.id) ?? 0}
+                    onSelect={(item) => handleSelectFlood(item, false)}
+                    onOpenDetours={handleOpenFloodDetourSection}
+                  />
                 ))}
               </>
             )}
@@ -973,7 +1162,16 @@ export default function HomePage() {
                     {(sidebarTab === "ALL" || sidebarTab === "FLOOD") && (
                       <section aria-label="รายการน้ำท่วม" className="space-y-2">
                         {sidebarTab === "ALL" && filteredFloods.length > 0 && <h3 className="px-1 text-xs font-heading font-bold text-amber-300">น้ำท่วม ({filteredFloods.length} จุด)</h3>}
-                        {filteredFloods.map((flood) => <FloodCard key={flood.id} flood={flood} selected={flood.id === selectedFloodId} onSelect={handleSelectFlood} />)}
+                        {filteredFloods.map((flood) => (
+                          <FloodCard
+                            key={flood.id}
+                            flood={flood}
+                            selected={flood.id === selectedFloodId}
+                            detourCount={detourCountByFloodId.get(flood.id) ?? 0}
+                            onSelect={(item) => handleSelectFlood(item, false)}
+                            onOpenDetours={handleOpenFloodDetourSection}
+                          />
+                        ))}
                       </section>
                     )}
                     {(sidebarTab === "ALL" || sidebarTab === "DETOUR") && detourList}
@@ -1087,9 +1285,15 @@ export default function HomePage() {
                         )}
                       </div>
                       <h3 className="font-heading text-base font-bold leading-snug text-white">{selectedFlood.section_name}</h3>
-                      <p className="text-xs text-slate-300">
-                        กม.{selectedFlood.km_start} ถึง กม.{selectedFlood.km_end} ({selectedFlood.subdistrict || selectedFlood.district || "อ.หนองจิก"})
-                      </p>
+                      {(() => {
+                        const dossierArea = formatFloodAreaLine(selectedFlood);
+                        return (
+                          <p className="text-xs text-slate-300">
+                            {formatKmText(selectedFlood.km_start)} ถึง {formatKmText(selectedFlood.km_end)}
+                            {dossierArea ? ` (${dossierArea})` : ""}
+                          </p>
+                        );
+                      })()}
                       {selectedFloodMeta.villageOrLandmark && (
                         <p className="text-xs text-amber-300 font-medium">📍 {selectedFloodMeta.villageOrLandmark}</p>
                       )}
@@ -1264,133 +1468,287 @@ export default function HomePage() {
                       </div>
                     )}
 
-                    {/* Detour Recommendation Box (Yellow Banner) */}
-                    <div className="bg-amber-500/10 border border-amber-400/50 rounded-xl p-3.5 space-y-2.5">
-                      {selectedFloodDetours.map((route) => {
-                        const ext = extractDirectionalAdvice(route.description || "");
-                        const parsed = splitDetourAdviceByDirection(route.description || "", route.direction_mode);
-                        const displayText =
-                          ext.hasBoth && route.direction_mode !== "FORWARD_ONLY" && route.direction_mode !== "REVERSE_ONLY"
-                            ? citizenDetourDirection === "FORWARD"
-                              ? [ext.forwardHeader, ext.forward].filter(Boolean).join("\n")
-                              : [ext.reverseHeader, ext.reverse].filter(Boolean).join("\n")
-                            : citizenDetourDirection === "FORWARD"
-                              ? parsed.forwardText
-                              : parsed.reverseText;
-                        return (
-                          <div key={route.id} className="rounded-lg border border-amber-400/30 bg-slate-950/70 p-3 text-sm text-amber-100">
-                            <div className="flex items-center justify-between gap-2">
-                              <strong className="block text-amber-300 font-heading">{route.route_name}</strong>
-                              <span className="rounded bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold text-amber-300 shrink-0">
-                                {route.direction_mode === "FORWARD_ONLY" ? "A → B (ทิศทางเดียว)" : route.direction_mode === "REVERSE_ONLY" ? "B → A (ทิศทางเดียว)" : "ไป-กลับ (A ⇄ B)"}
-                              </span>
-                            </div>
-                            {route.description ? (
-                              <AdviceText text={displayText} className="mt-2" />
-                            ) : (
-                              <p className="mt-1 text-xs">ยังไม่มีคำแนะนำการเดินทาง</p>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {selectedFloodDetours.length === 0 && !selectedFlood.detour_advice && (
-                        <p className="text-[11px] text-amber-100/90">ยังไม่มีทางเลี่ยงที่ยืนยันและผูกกับจุดน้ำท่วมนี้ โปรดโทร 1586 ก่อนเดินทาง</p>
-                      )}
+                    {/* Detour Recommendation Box (Exclusive Single-Open Accordion) */}
+                    <div
+                      id="dossier-detour-section"
+                      ref={dossierDetourRef}
+                      tabIndex={-1}
+                      className="bg-amber-500/10 border border-amber-400/50 rounded-xl p-3.5 space-y-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 text-amber-300 text-xs font-heading font-bold">
-                          <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <div className="flex flex-wrap items-center gap-1.5 text-amber-300 text-xs font-heading font-bold">
+                          <Compass className="w-4 h-4 text-amber-400 shrink-0" />
                           <span>คำแนะนำเส้นทางเลี่ยงน้ำท่วม</span>
+                          {selectedFloodDetours.length > 0 && (
+                            <span className="rounded-md bg-amber-400/20 border border-amber-400/40 px-1.5 py-0.5 text-[11px] font-bold text-amber-200">
+                              {selectedFloodDetours.length} สาย
+                            </span>
+                          )}
                           {selectedFloodMeta.directionCode === "B_TO_A" && (
-                            <span className="text-[10px] font-normal text-amber-200/80 bg-amber-950/80 border border-amber-500/30 px-1.5 py-0.2 rounded">
+                            <span className="text-[10px] font-normal text-amber-200/80 bg-amber-950/80 border border-amber-500/30 px-1.5 py-0.5 rounded">
                               (ปรับทิศทางขากลับอัตโนมัติ)
                             </span>
                           )}
                           {selectedFloodMeta.directionCode === "A_TO_B" && (
-                            <span className="text-[10px] font-normal text-amber-200/80 bg-amber-950/80 border border-amber-500/30 px-1.5 py-0.2 rounded">
+                            <span className="text-[10px] font-normal text-amber-200/80 bg-amber-950/80 border border-amber-500/30 px-1.5 py-0.5 rounded">
                               (ปรับทิศทางขาไปอัตโนมัติ)
                             </span>
                           )}
                         </div>
+                      </div>
 
-                        <div className="flex items-center gap-2">
-                          {/* Direction Switcher Toggle if bidirectional advice or detour exists */}
-                          {(directionalAdvice.hasBoth || selectedFloodDetours.length > 0) && (
-                            <div className="flex items-center bg-slate-950/80 p-0.5 rounded-lg border border-amber-500/40 text-[10px] font-heading font-bold">
-                              <button
-                                type="button"
-                                onClick={() => setCitizenDetourDirection("FORWARD")}
-                                className={`min-h-9 px-2.5 py-1 rounded transition flex items-center gap-1 cursor-pointer ${citizenDetourDirection === "FORWARD"
-                                    ? "bg-amber-500 text-slate-950 shadow"
-                                    : "text-amber-300/80 hover:text-white"
-                                  }`}
-                              >
-                                <span>🚗 ขาไป (A → B)</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setCitizenDetourDirection("REVERSE")}
-                                className={`min-h-9 px-2.5 py-1 rounded transition flex items-center gap-1 cursor-pointer ${citizenDetourDirection === "REVERSE"
-                                    ? "bg-amber-500 text-slate-950 shadow"
-                                    : "text-amber-300/80 hover:text-white"
-                                  }`}
-                              >
-                                <span>🚙 ขากลับ (B → A)</span>
-                              </button>
-                            </div>
-                          )}
-
-                          {(() => {
-                            const linkedDetour = selectedFloodDetours[0] || null;
-                            const detourNav = linkedDetour
-                              ? resolveDetourGoogleMapsNavigation(linkedDetour, citizenDetourDirection, systemData.floodRoutes)
+                      {selectedFloodDetours.length > 0 && (
+                        <div className="space-y-2">
+                          {selectedFloodDetours.map((route, idx) => {
+                            const isExpanded = expandedDetourId === route.id;
+                            const isTwoWay =
+                              isDetourDirectionAllowed(route.direction_mode, "FORWARD") &&
+                              isDetourDirectionAllowed(route.direction_mode, "REVERSE");
+                            const effectiveDirection: "FORWARD" | "REVERSE" = isTwoWay
+                              ? citizenDetourDirection
+                              : defaultDetourDirection(route.direction_mode);
+                            const meters = detourDistanceMeters(route.detour_meta, effectiveDirection);
+                            const durationSec = detourDurationSeconds(route.detour_meta, effectiveDirection);
+                            const fwdCoords = parseRouteCoordinates(route.coordinates_json);
+                            const revCoords = parseRouteCoordinates(route.reverse_coordinates_json);
+                            const polyCoords =
+                              effectiveDirection === "REVERSE" && revCoords.length > 0
+                                ? revCoords
+                                : fwdCoords;
+                            const polyKm =
+                              (effectiveDirection === "REVERSE"
+                                ? route.detour_meta?.reverse_distance_km
+                                : route.detour_meta?.forward_distance_km) ||
+                              calculatePolylineRoadDistanceKm(polyCoords);
+                            const ext = extractDirectionalAdvice(route.description || "");
+                            const parsed = splitDetourAdviceByDirection(route.description || "", route.direction_mode);
+                            const displayText =
+                              ext.hasBoth && route.direction_mode !== "FORWARD_ONLY" && route.direction_mode !== "REVERSE_ONLY"
+                                ? effectiveDirection === "FORWARD"
+                                  ? [ext.forwardHeader, ext.forward].filter(Boolean).join("\n")
+                                  : [ext.reverseHeader, ext.reverse].filter(Boolean).join("\n")
+                                : effectiveDirection === "FORWARD"
+                                  ? parsed.forwardText
+                                  : parsed.reverseText;
+                            const timeline = getDetourTimelinePresentation(
+                              displayText || "",
+                              meters,
+                              polyKm,
+                              selectedFlood ? `ทล.${selectedFlood.route_no} (${selectedFlood.section_name})` : route.route_name,
+                              "",
+                              route.detour_meta?.road_condition,
+                              durationSec
+                            );
+                            const shortSummary = getDetourShortSummary(displayText || route.description || "");
+                            const { notes: warnings } = parseDetourAdvice(displayText || "");
+                            const detourNav = isExpanded
+                              ? resolveDetourGoogleMapsNavigation(route, effectiveDirection, systemData.floodRoutes)
                               : null;
 
-                            if (detourNav && detourNav.isValid && detourNav.url) {
-                              return (
-                                <a
-                                  href={detourNav.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-black text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-md shrink-0 transition"
-                                >
-                                  <Navigation className="w-3.5 h-3.5" /> นำทางด้วยทางเลี่ยง
-                                </a>
-                              );
-                            }
                             return (
-                              <span
-                                className="bg-slate-800 text-slate-400 font-heading text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 shrink-0 border border-slate-700"
-                                title="ยังไม่มีเส้นทางเลี่ยงที่ยืนยันสำหรับการนำทางอัตโนมัติ โปรดศึกษาคำแนะนำด้านล่างหรือโทร 1586"
+                              <div
+                                key={route.id}
+                                className={`rounded-xl border transition ${
+                                  isExpanded
+                                    ? "border-amber-400/70 bg-slate-950/90 shadow-lg"
+                                    : "border-amber-400/30 bg-slate-950/75 hover:border-amber-400/55"
+                                } text-sm text-amber-100`}
                               >
-                                <Navigation className="w-3.5 h-3.5 opacity-50" /> ยังไม่ยืนยันนำทาง
-                              </span>
+                                <button
+                                  type="button"
+                                  aria-expanded={isExpanded}
+                                  aria-controls={`dossier-detour-panel-${route.id}`}
+                                  onClick={() => setExpandedDetourId((current) => (current === route.id ? null : route.id))}
+                                  className="flex w-full min-h-11 cursor-pointer items-start justify-between gap-2.5 rounded-xl p-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                                >
+                                  <span className="min-w-0 flex-1 space-y-1.5">
+                                    <span className="flex min-w-0 flex-wrap items-center gap-2">
+                                      <span className="shrink-0 rounded bg-amber-400 px-1.5 py-0.5 font-heading text-[11px] font-black text-slate-950">
+                                        ทางเลี่ยงที่ {idx + 1}
+                                      </span>
+                                      <span className="min-w-0 break-words [overflow-wrap:anywhere] font-heading font-bold text-amber-300">
+                                        {route.route_name}
+                                      </span>
+                                    </span>
+
+                                    {shortSummary && (
+                                      <span className="block line-clamp-2 text-xs leading-snug text-amber-100/90 break-words">
+                                        {shortSummary}
+                                      </span>
+                                    )}
+
+                                    <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-slate-300">
+                                      <span className="inline-flex items-center gap-1 font-medium text-slate-100">
+                                        <Route aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                                        {timeline.totalDistanceKm > 0 ? `${timeline.totalDistanceFormatted} กม.` : "ไม่ระบุระยะทาง"}
+                                      </span>
+                                      <span aria-hidden="true" className="text-slate-600">|</span>
+                                      <span className="inline-flex items-center gap-1 text-slate-200">
+                                        <Clock aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-sky-300" />
+                                        {timeline.estimatedDurationText}
+                                      </span>
+                                    </span>
+                                  </span>
+                                  <ChevronDown
+                                    aria-hidden="true"
+                                    className={`mt-0.5 h-5 w-5 shrink-0 text-amber-300 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                                  />
+                                </button>
+
+                                {isExpanded && (
+                                  <div
+                                    id={`dossier-detour-panel-${route.id}`}
+                                    className="space-y-2.5 border-t border-amber-400/25 p-3"
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <span className="rounded border border-amber-500/40 bg-amber-500/20 px-2 py-0.5 text-[11px] font-bold text-amber-300">
+                                        {detourDirectionDetailedBadge(route.direction_mode)}
+                                      </span>
+                                      {isTwoWay && (
+                                        <div className="flex items-center rounded-lg border border-amber-500/40 bg-slate-900/90 p-0.5 text-[11px] font-heading font-bold">
+                                          <button
+                                            type="button"
+                                            onClick={() => setCitizenDetourDirection("FORWARD")}
+                                            className={`min-h-8 cursor-pointer rounded px-2.5 py-1 transition ${
+                                              effectiveDirection === "FORWARD"
+                                                ? "bg-amber-500 text-slate-950 shadow"
+                                                : "text-amber-300/80 hover:text-white"
+                                            }`}
+                                          >
+                                            🚗 ขาไป (A → B)
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setCitizenDetourDirection("REVERSE")}
+                                            className={`min-h-8 cursor-pointer rounded px-2.5 py-1 transition ${
+                                              effectiveDirection === "REVERSE"
+                                                ? "bg-amber-500 text-slate-950 shadow"
+                                                : "text-amber-300/80 hover:text-white"
+                                            }`}
+                                          >
+                                            🚙 ขากลับ (B → A)
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {displayText ? (
+                                      <AdviceText text={displayText} className="rounded-lg border border-slate-800 bg-slate-900/75 p-2.5" />
+                                    ) : (
+                                      <p className="text-xs text-slate-300">ยังไม่มีคำแนะนำการเดินทาง</p>
+                                    )}
+
+                                    {warnings.length > 0 && (
+                                      <div className="rounded-lg border border-amber-500/35 bg-amber-950/40 px-2.5 py-2 text-xs text-amber-200 space-y-1">
+                                        {warnings.map((w, wIdx) => (
+                                          <p key={wIdx}>⚠️ {w}</p>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
+                                      {detourNav && detourNav.isValid && detourNav.url ? (
+                                        <a
+                                          href={detourNav.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 font-heading text-xs font-black text-white shadow-md transition hover:bg-emerald-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                                        >
+                                          <Navigation aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                                          <span>นำทางด้วย Google Maps</span>
+                                        </a>
+                                      ) : (
+                                        <span
+                                          className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/90 px-3 py-2 font-heading text-xs text-slate-300"
+                                          title={detourNav?.warning || "ยังไม่มีเส้นทางเลี่ยงที่ยืนยันสำหรับการนำทางอัตโนมัติ"}
+                                        >
+                                          <Navigation aria-hidden="true" className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                                          <span>ยังไม่ยืนยันนำทางอัตโนมัติ</span>
+                                        </span>
+                                      )}
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (Number.isFinite(route.lon_start) && Number.isFinite(route.lat_start)) {
+                                            setFocusCoordinates([route.lon_start, route.lat_start]);
+                                          } else if (Array.isArray(polyCoords) && polyCoords.length > 0 && Array.isArray(polyCoords[0])) {
+                                            const mid = polyCoords[Math.floor(polyCoords.length / 2)];
+                                            const a = Number(mid[0]);
+                                            const b = Number(mid[1]);
+                                            if (Number.isFinite(a) && Number.isFinite(b)) {
+                                              setFocusCoordinates(Math.abs(a) <= 90 && Math.abs(b) > 90 ? [b, a] : [a, b]);
+                                            }
+                                          }
+                                          setShowDossier(false);
+                                        }}
+                                        className="flex min-h-10 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 font-heading text-xs font-bold text-slate-100 transition hover:border-amber-400/60 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                                      >
+                                        <MapPinned aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-amber-300" />
+                                        <span>ดูตำแหน่งบนแผนที่</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {selectedFloodDetours.length === 0 && !selectedFlood.detour_advice && (
+                        <p className="text-xs text-amber-100/90">
+                          ยังไม่มีทางเลี่ยงที่ยืนยันและผูกกับจุดน้ำท่วมนี้ โปรดโทร 1586 ก่อนเดินทาง
+                        </p>
+                      )}
+
+                      {selectedFlood.detour_advice && (
+                        <div className="space-y-2 border-t border-amber-400/25 pt-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs font-heading font-bold text-amber-200">คำแนะนำเพิ่มเติมจากเหตุการณ์</span>
+                            {directionalAdvice.hasBoth && (
+                              <div className="flex items-center rounded-lg border border-amber-500/40 bg-slate-950/80 p-0.5 text-[10px] font-heading font-bold">
+                                <button
+                                  type="button"
+                                  onClick={() => setCitizenDetourDirection("FORWARD")}
+                                  className={`min-h-8 cursor-pointer rounded px-2.5 py-1 transition ${
+                                    citizenDetourDirection === "FORWARD"
+                                      ? "bg-amber-500 text-slate-950 shadow"
+                                      : "text-amber-300/80 hover:text-white"
+                                  }`}
+                                >
+                                  🚗 ขาไป (A → B)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setCitizenDetourDirection("REVERSE")}
+                                  className={`min-h-8 cursor-pointer rounded px-2.5 py-1 transition ${
+                                    citizenDetourDirection === "REVERSE"
+                                      ? "bg-amber-500 text-slate-950 shadow"
+                                      : "text-amber-300/80 hover:text-white"
+                                  }`}
+                                >
+                                  🚙 ขากลับ (B → A)
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          {(() => {
+                            const ext = directionalAdvice;
+                            const displayText = ext.hasBoth
+                              ? citizenDetourDirection === "FORWARD"
+                                ? [ext.forwardHeader, ext.forward].filter(Boolean).join("\n")
+                                : [ext.reverseHeader, ext.reverse].filter(Boolean).join("\n")
+                              : selectedFlood.detour_advice;
+
+                            return (
+                              <div className="rounded-lg border border-amber-500/20 bg-slate-950/70 p-3 font-sans text-amber-100/95 sm:max-h-56 sm:overflow-y-auto">
+                                <AdviceText text={displayText} />
+                              </div>
                             );
                           })()}
                         </div>
-                      </div>
-
-                      {/* Detour Text Content with Direction Handling */}
-                      {(() => {
-                        if (!selectedFlood.detour_advice) {
-                          return (
-                            <p className="text-[11px] text-amber-100/90 leading-snug">
-                              ยังไม่มีคำแนะนำเส้นทางเลี่ยงที่ยืนยันแล้ว โปรดโทร 1586 ก่อนเดินทาง
-                            </p>
-                          );
-                        }
-                        const ext = directionalAdvice;
-                        const displayText = ext.hasBoth
-                          ? citizenDetourDirection === "FORWARD"
-                            ? [ext.forwardHeader, ext.forward].filter(Boolean).join("\n")
-                            : [ext.reverseHeader, ext.reverse].filter(Boolean).join("\n")
-                          : selectedFlood.detour_advice;
-
-                        return (
-                          <div className="bg-slate-950/70 p-3 rounded-lg border border-amber-500/20 text-amber-100/95 font-sans sm:max-h-56 sm:overflow-y-auto">
-                            <AdviceText text={displayText} />
-                          </div>
-                        );
-                      })()}
+                      )}
                     </div>
 
 
@@ -1657,19 +2015,33 @@ export default function HomePage() {
                     );
                     const adviceText = modalDetourDirection === "FORWARD" ? parsed.forwardText : parsed.reverseText;
                     const meters = detourDistanceMeters(viewingDetourModal.detour_meta, modalDetourDirection);
+                    const durationSeconds = detourDurationSeconds(viewingDetourModal.detour_meta, modalDetourDirection);
+                    const fwdCoords = parseRouteCoordinates(viewingDetourModal.coordinates_json);
+                    const revCoords = parseRouteCoordinates(viewingDetourModal.reverse_coordinates_json);
+                    const polyCoords =
+                      modalDetourDirection === "REVERSE" && revCoords.length > 0
+                        ? revCoords
+                        : fwdCoords;
+                    const fallbackPolyKm =
+                      (modalDetourDirection === "REVERSE"
+                        ? viewingDetourModal.detour_meta?.reverse_distance_km
+                        : viewingDetourModal.detour_meta?.forward_distance_km) ||
+                      calculatePolylineRoadDistanceKm(polyCoords);
                     const linked = viewingDetourModal.flood_id_ref
                       ? systemData.floodRoutes.find((f) => f.id === viewingDetourModal.flood_id_ref)
                       : null;
                     const startHint = linked ? `ทล.${linked.route_no} (${linked.section_name})` : viewingDetourModal.route_name;
-                    const endHint = linked ? `(ต.${linked.subdistrict || 'เมือง'} อ.${linked.district || 'เมืองปัตตานี'})` : "";
+                    const areaText = linked ? formatFloodAreaLine(linked) : null;
+                    const endHint = areaText ? `(${areaText})` : "";
 
                     const timeline = getDetourTimelinePresentation(
                       adviceText,
                       meters,
-                      viewingDetourModal.detour_meta?.forward_distance_km || 0,
+                      fallbackPolyKm,
                       startHint,
                       endHint,
-                      viewingDetourModal.detour_meta?.road_condition
+                      viewingDetourModal.detour_meta?.road_condition,
+                      durationSeconds
                     );
 
                     return (
@@ -1741,7 +2113,7 @@ export default function HomePage() {
                             <Clock className="w-4 h-4 text-slate-300" />
                             <span className="text-xs text-slate-300">เวลาโดยประมาณ</span>
                             <strong className="font-heading font-bold text-sm sm:text-base text-white">
-                              {timeline.estimatedMinutes} นาที
+                              {timeline.estimatedMinutes !== null ? `${timeline.estimatedMinutes} นาที` : timeline.estimatedDurationText}
                             </strong>
                           </div>
                         </div>
