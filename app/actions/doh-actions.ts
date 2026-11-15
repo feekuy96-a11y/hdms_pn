@@ -89,6 +89,31 @@ export async function upsertRouteAction(payload: {
   return invokeHdms("upsertRouteAction", [payload]);
 }
 
+export async function uploadExternalMediaAction(payload: {
+  dataUrl: string;
+  fileName?: string;
+  ownerType?: "FLOOD" | "PROJECT";
+  ownerId?: string;
+}): Promise<{ mediaId: string; url: string; mimeType: "image/jpeg" | "image/png" | "image/webp"; sizeBytes: number; provider: "google-drive" }> {
+  return invokeHdms("uploadExternalMediaAction", [payload]);
+}
+
+export async function deleteExternalMediaAction(mediaId: string): Promise<{ success: boolean }> {
+  return invokeHdms("deleteExternalMediaAction", [{ mediaId }]);
+}
+
+export async function syncReportingRowAction(payload: {
+  recordId: string;
+  recordType: "FLOOD" | "DETOUR" | "PROJECT";
+  routeNo?: string;
+  sectionName?: string;
+  status?: string;
+  isActive?: boolean;
+  updatedAt: string;
+}): Promise<{ success: boolean; synced: boolean; reason?: string }> {
+  return invokeHdms("syncReportingRowAction", [payload]);
+}
+
 export async function deleteRouteAction(
   recordType: "FLOOD" | "DETOUR",
   id: string

@@ -26,7 +26,7 @@ import {
   MapPin,
   RotateCw,
 } from "lucide-react";
-import { upsertRouteAction, snapRouteAction } from "@/app/actions/doh-actions";
+import { deleteExternalMediaAction, upsertRouteAction, snapRouteAction, syncReportingRowAction, uploadExternalMediaAction } from "@/app/actions/doh-actions";
 import {
   fetchOsrmWithFailover,
   generateAutoDetourAdvice,
@@ -1296,6 +1296,8 @@ export function MapManagementTab({
       }
     }
 
+    const uploadedMediaIds: string[] = [];
+    let mediaPersisted = false;
     setIsSubmitting(true);
     try {
       const coords = (
@@ -1319,6 +1321,17 @@ export function MapManagementTab({
       const currentEventId = selectedParentEventId || `EV-${chosenRouteNo}-${Date.now()}`;
       const currentEventCode = eventCode.trim() || generateNextEventCode(chosenRouteNo, existingParentEvents);
       const currentEventTitle = eventTitle.trim() || (sectionName ? `ทล.${chosenRouteNo} ตอน${sectionName}` : "เหตุการณ์น้ำท่วมทางหลวง");
+      const storedPhotos = await Promise.all(detailedPhotos.map(async (photo, index) => {
+        if (!photo.dataUrl.startsWith("data:")) return photo;
+        const uploaded = await uploadExternalMediaAction({
+          dataUrl: photo.dataUrl,
+          fileName: photo.caption || `flood-${currentEventId}-${index + 1}.${photo.format === "jpeg" ? "jpg" : "webp"}`,
+          ownerType: "FLOOD",
+          ownerId: routeEditId || currentEventId,
+        });
+        uploadedMediaIds.push(uploaded.mediaId);
+        return { ...photo, dataUrl: uploaded.url, sizeBytes: uploaded.sizeBytes, format: uploaded.mimeType === "image/jpeg" ? "jpeg" as const : "webp" as const };
+      }));
       const effectiveRoadSide: RoadSideType = roadSide;
       const lanesSummary = affectedParts.includes("ALL_LANES")
         ? "ทุกช่องจราจร"
@@ -1330,8 +1343,25 @@ export function MapManagementTab({
           : affectedParts.includes("RIGHT_SHOULDER")
             ? "RIGHT"
             : "NONE";
-      const primaryPhoto = detailedPhotos[0]?.dataUrl || fieldImages[0] || undefined;
+      const primaryPhoto = storedPhotos[0]?.dataUrl || fieldImages[0] || undefined;
       const dbTrafficStatus = (routeStatus as string) === "PENDING_VERIFICATION" ? "WARNING" : routeStatus;
+      const syncReport = async (recordId?: string, status = String(dbTrafficStatus)) => {
+        if (!recordId) return;
+        try {
+          const result = await syncReportingRowAction({
+            recordId,
+            recordType: routeMode,
+            routeNo: chosenRouteNo,
+            sectionName: routeMode === "FLOOD" ? sectionName : detourName,
+            status,
+            isActive: !saveAsDraft,
+            updatedAt: new Date().toISOString(),
+          });
+          if (!result.synced) onToast("บันทึกแล้ว แต่ยังไม่ได้ตั้งค่าการส่งรายงาน Google Sheets");
+        } catch {
+          onToast("บันทึกแล้ว แต่ส่งรายงาน Google Sheets ไม่สำเร็จ");
+        }
+      };
 
       const floodDirectionMeta: FloodSegmentDirectionMeta = {
         schemaVersion: 2,
@@ -1351,7 +1381,7 @@ export function MapManagementTab({
         updatedAt: new Date().toISOString(),
         zeroConfirmedAt: waterLevelKnown && numWaterLevel === 0 ? new Date().toISOString() : null,
         causeAndNote: causeAndNote.trim(),
-        photos: detailedPhotos,
+        photos: storedPhotos,
         arrow_direction: directionCode === "A_TO_B" ? "FORWARD" : directionCode === "B_TO_A" ? "REVERSE" : directionCode === "BOTH" ? "TWO_WAY" : "UNKNOWN",
         show_arrows: true,
         carriageway_type: useCarriagewaySnapping ? "DUAL_CARRIAGEWAY" : "SINGLE_CENTERLINE",
@@ -1368,7 +1398,7 @@ export function MapManagementTab({
           roadSide: "LEFT",
         };
 
-        await upsertRouteAction({
+        const forwardRes = await upsertRouteAction({
           recordType: "FLOOD",
           routeNo: chosenRouteNo,
           kmStart,
@@ -1389,6 +1419,10 @@ export function MapManagementTab({
           reporterName: reporterName.trim() || "เจ้าหน้าที่แขวงทางหลวงปัตตานี",
           directionMeta: forwardDirectionMeta,
         });
+        if (forwardRes.success) {
+          mediaPersisted = true;
+          await syncReport(forwardRes.savedId, String(dbTrafficStatus));
+        }
 
         // 2. Reverse segment (B -> A)
         let reverseCoords: [number, number][] = [];
@@ -1466,6 +1500,8 @@ export function MapManagementTab({
         });
 
         if (res.success) {
+          mediaPersisted = true;
+          await syncReport(res.savedId, String(revTrafficStatus));
           try { await onDataRefresh(res.systemData); } catch { onToast("บันทึกแล้ว แต่ไม่สามารถโหลดข้อมูลล่าสุด กรุณารีเฟรชหน้าจอ"); }
           showSuccessModal(
             "บันทึกเหตุการณ์ ๒ ทิศทางสำเร็จ",
@@ -1562,6 +1598,8 @@ export function MapManagementTab({
       });
 
       if (res.success) {
+        mediaPersisted = true;
+        await syncReport(res.savedId);
         try { await onDataRefresh(res.systemData); } catch { onToast("บันทึกแล้ว แต่ไม่สามารถโหลดข้อมูลล่าสุด กรุณารีเฟรชหน้าจอ"); }
         showSuccessModal(
           saveAsDraft ? "บันทึกร่างสำเร็จ" : routeEditId ? "แก้ไขข้อมูลสำเร็จ" : routeMode === "DETOUR" ? "บันทึกทางเลี่ยงสำเร็จ" : "บันทึกเหตุการณ์น้ำท่วมสำเร็จ",
@@ -1578,6 +1616,9 @@ export function MapManagementTab({
         if (routeMode === "FLOOD" && onNavigateToIncidents) onNavigateToIncidents();
       }
     } catch (err: any) {
+      if (!mediaPersisted && uploadedMediaIds.length > 0) {
+        await Promise.allSettled(uploadedMediaIds.map((mediaId) => deleteExternalMediaAction(mediaId)));
+      }
       if (showErrorModal) {
         showErrorModal("เกิดข้อผิดพลาดในการบันทึก", err.message);
       } else {

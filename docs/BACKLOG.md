@@ -5,7 +5,7 @@
 
 | ID | ระดับ | เรื่อง | สถานะ |
 |---|---|---|---|
-| B-001 | **วิกฤต** | Edge Function เขียนข้อมูลด้วย service role โดยไม่ตรวจสิทธิ์ผู้เรียก | เปิด (ต้องตัดสินใจ) |
+| B-001 | **วิกฤต** | Edge Function เขียนข้อมูลด้วย service role โดยไม่ตรวจสิทธิ์ผู้เรียก | ยอมรับความเสี่ยง (เจ้าของระบบ, 2026-11-16) |
 | B-002 | สูง | `.mcp.json` ให้ AI เข้าถึง Supabase production พร้อมสิทธิ์ฐานข้อมูล ขัด ADR-001 | เปิด (ต้องตัดสินใจ) |
 | B-003 | สูง | Deploy ไม่รอ CI/e2e และเจ้าของ push ตรงเข้า main | เปิด (ต้องตัดสินใจ) |
 | B-004 | กลาง | หน้าแอดมินยังโหลด GeoJSON ทางหลวงเต็มความละเอียดทุกครั้ง | ปิด (2026-11-10, ดู UPDATE-063) |
@@ -24,6 +24,12 @@
 | B-017 | ต่ำ | รัน Playwright ในเครื่องโดยไม่ build พร้อม public config ทำให้หน้า public ค้าง Loading และ test ที่ mock Edge Function ล้ม | ปิด (2026-11-12, UPDATE-074) |
 | B-018 | กลาง | Modal รายละเอียด/แก้ไขใน Admin ยังไม่ใช้ focus trap และ Escape กลางครบทุกตัว | กำลังทำ (UPDATE-075) |
 | B-019 | สูง | Public API ส่ง Draft/inactive payload แม้หน้าเว็บจะกรองไม่แสดง | ปิด (2026-11-13, UPDATE-090) |
+| B-020 | กลาง | ย้ายรูปหลักฐานและรูปโครงการไป Google Drive พร้อมส่งสำเนารายงานไป Sheets | กำลังทำ (Apps Script จริงผ่าน, Edge v12 deploy แล้ว, รอตั้ง 2 secrets และทดสอบผ่าน Edge) |
+
+## B-020 [กลาง] Google Drive media และ Google Sheets reporting
+- **หลักฐาน:** รูปเหตุการณ์เดิมถูกเก็บเป็น Base64 ใน `direction_meta`; รูปโครงการเดิมอัปโหลดไป Supabase Storage โดยตรง.
+- **การแก้ไข:** เพิ่ม Drive upload/delete ผ่าน `hdms-api`, เปลี่ยนสองฟอร์มให้เก็บ URL, ลบไฟล์ Drive ชดเชยเมื่อการบันทึก DB ล้มก่อนมี reference และเพิ่ม Apps Script ที่ upsert รายงานด้วย idempotency key.
+- **สถานะ:** Apps Script จริงผ่าน upload/read/sync/delete แล้ว; `hdms-api` Production v12 deploy และ public read ผ่าน; รอตั้ง `APPS_SCRIPT_WEB_APP_URL` กับ `APPS_SCRIPT_API_SECRET` ใน Supabase Secrets แล้วตรวจผ่าน Edge.
 
 ---
 
@@ -41,6 +47,7 @@
 - **การแก้ไข:** ใช้ทางเลือก A ผ่าน `npm run test:e2e:local`; script อ่าน public configuration, `npm run build`, แล้วส่งต่อ argument ให้ Playwright โดยไม่สร้างหรือบันทึก `.env.local`.
 
 ## B-001 [วิกฤต] Edge Function เขียนข้อมูลโดยไม่ตรวจสิทธิ์
+- **การตัดสินใจ 2026-11-16:** เจ้าของระบบกำหนดให้ข้ามระบบล็อกอิน/ตรวจตัวตน และให้คง `/admin` แบบไม่ต้องล็อกอิน ความเสี่ยงนี้ได้รับการยอมรับตามคำสั่งโดยตรง; ไม่ให้ AI หยุดถามเรื่องนี้ซ้ำจนกว่าเจ้าของจะเปลี่ยนข้อกำหนด.
 - **หลักฐาน:** `supabase/functions/hdms-api/index.ts` — ทุก action ที่ไม่ใช่ read ใช้ `SUPABASE_SERVICE_ROLE_KEY` และไม่มีโค้ดตรวจ token/บทบาท (ค้น `getUser`/`app_metadata` ไม่พบ) · `supabase/config.toml`: `verify_jwt = false` พร้อมคอมเมนต์ว่าตั้งใจให้ `/admin` ไม่ต้อง login · `PRODUCTION.md` เขียนตรงข้าม (อ้างว่าตรวจ JWT และบทบาท) **(ต้องยืนยันกับฟังก์ชันที่ deploy จริง)**
 - **ผลกระทบ:** URL ของฟังก์ชันเปิดเผยในไฟล์ JS สาธารณะ ผู้ใดก็ส่ง POST เพื่อเปลี่ยนสถานะจราจร (เช่น ตั้งว่า "ผ่านได้ปกติ" ทั้งที่น้ำท่วม), ลบ/แก้เส้นทางหลวง, ลบเหตุการณ์ได้ ในช่วงน้ำท่วมจริง ข้อมูลผิดอาจทำให้ประชาชนเดินทางเข้าพื้นที่อันตราย CORS ไม่ใช่การควบคุมสิทธิ์
 - **ทางเลือก:**

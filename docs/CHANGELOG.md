@@ -1,6 +1,15 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
 รูปแบบสั้น: วันที่ · หัวข้อ · ไฟล์ · ทำอะไรและทำไม · ตรวจอะไรแล้ว/ยังไม่ได้ตรวจ · ความเสี่ยงที่ยอมรับ (ถ้ามี) · ลิงก์ BACKLOG
+
+### [LOCAL] 2026-11-16 Google Drive media และ Google Sheets reporting
+- **ไฟล์:** `supabase/functions/hdms-api/index.ts`, `app/actions/doh-actions.ts`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/GovernorProjectsTab.tsx`, `integrations/google-apps-script/*`, `docs/EXTERNAL_MEDIA_INTEGRATION.md`, `docs/BACKLOG.md`.
+- **การเปลี่ยนแปลง:** รูปน้ำท่วมและรูปโครงการใหม่อัปโหลดไป Google Drive ก่อนบันทึกข้อมูล; เก็บเฉพาะ URL ในระบบ; ลบไฟล์ Drive ชดเชยเมื่อ DB save ล้ม; ส่งสำเนารายงานไป Apps Script/Sheets ด้วย idempotency key และรอผลโดยไม่ย้อน DB save เมื่อ Sheets ล้ม.
+- **การตั้งค่าอัตโนมัติ:** เพิ่ม `setupHdmsIntegration` สำหรับสร้างโฟลเดอร์ Drive, Spreadsheet, หัวตาราง, Script Properties และ integration secret ในการ Run ครั้งเดียว; Web App เดียวรองรับ upload/delete รูปและ sync รายงาน โดยคง direct Drive API เป็น fallback.
+- **ความเข้ากันได้/ทดสอบ:** รองรับโฟลเดอร์ Shared Drive ด้วย `supportsAllDrives=true`; E2E จำลองผ่านทั้ง upload → save → sync และ compensating delete เมื่อ DB save ล้ม; lint, typecheck และ production build ผ่าน; Playwright ทั้งชุดผ่าน 64 / ข้ามตามเงื่อนไข viewport/fixtures 30 / ล้มเหลว 0.
+- **ความเสี่ยงที่ยอมรับ:** เจ้าของระบบสั่งวันที่ 2026-11-16 ให้ข้ามการตรวจตัวตนและคง `/admin` แบบไม่ล็อกอินจนกว่าจะร้องขอให้เปลี่ยนเอง.
+- **Production:** Apps Script ทดสอบ upload → อ่านรูปกลับ → sync row → delete media ผ่านแล้ว และลบแถว/ไฟล์ QA หลังทดสอบ; deploy `hdms-api` เวอร์ชัน 12 แล้ว พร้อมตรวจ public payload HTTP 200. Edge ยังตอบ `synced:false, reason:not-configured` จนกว่าจะตั้ง `APPS_SCRIPT_WEB_APP_URL` และ `APPS_SCRIPT_API_SECRET` ใน Supabase Secrets.
+- **Backlog:** B-001, B-020.
 ประวัติเก่า (UPDATE-001…047) อยู่ใน `SUPPLEMENTAL_RULES.md` — ใช้ grep ค้น ไม่อ่านทั้งไฟล์ เลขรายการต่อจาก 047
 
 ### [UPDATE-091] 2026-11-16 Compact Card, Detour Accordion, Reordering, Data Integrity & Detour Popup

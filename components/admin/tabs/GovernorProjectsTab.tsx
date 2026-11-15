@@ -4,8 +4,7 @@ import React, { useEffect, useState } from "react";
 import { MitigationProject, SystemDataPayload } from "@/db/default-data";
 import { HIGHWAY_ROUTES } from "@/lib/constants";
 import { Briefcase, Plus, Printer, Save, Edit, Trash2, Image as ImageIcon } from "lucide-react";
-import { upsertMitigationProjectAction, deleteMitigationProjectAction } from "@/app/actions/doh-actions";
-import { createClient } from "@/lib/supabase/client";
+import { deleteExternalMediaAction, upsertMitigationProjectAction, deleteMitigationProjectAction, syncReportingRowAction, uploadExternalMediaAction } from "@/app/actions/doh-actions";
 
 interface GovernorProjectsTabProps {
   systemData: SystemDataPayload;
@@ -58,15 +57,18 @@ export function GovernorProjectsTab({
     if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error("เลือกรูป JPG, PNG หรือ WebP เท่านั้น");
     if (file.size > 500 * 1024) throw new Error("ขนาดรูปต้องไม่เกิน 500 KB");
     const extension = file.type === "image/jpeg" ? "jpg" : file.type.split("/")[1];
-    const path = `projects/${projectId}/${side}-${crypto.randomUUID()}.${extension}`;
-    const client = createClient();
-    const { error } = await client.storage.from("flood-images").upload(path, file, {
-      contentType: file.type,
-      cacheControl: "3600",
-      upsert: false,
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("ไม่สามารถอ่านไฟล์รูปได้"));
+      reader.onerror = () => reject(new Error("ไม่สามารถอ่านไฟล์รูปได้"));
+      reader.readAsDataURL(file);
     });
-    if (error) throw error;
-    return client.storage.from("flood-images").getPublicUrl(path).data.publicUrl;
+    return uploadExternalMediaAction({
+      dataUrl,
+      fileName: `project-${projectId}-${side}.${extension}`,
+      ownerType: "PROJECT",
+      ownerId: projectId,
+    });
   };
 
   const handleSaveProject = async () => {
@@ -75,10 +77,18 @@ export function GovernorProjectsTab({
       return;
     }
     const id = projId || `P-${Date.now()}`;
+    const uploadedMediaIds: string[] = [];
+    let mediaPersisted = false;
     setIsSaving(true);
     try {
-      const beforeImageUrl = projBeforeFile ? await uploadProjectImage(projBeforeFile, "before", id) : projBeforeImg;
-      const afterImageUrl = projAfterFile ? await uploadProjectImage(projAfterFile, "after", id) : projAfterImg;
+      const [beforeUpload, afterUpload] = await Promise.all([
+        projBeforeFile ? uploadProjectImage(projBeforeFile, "before", id) : Promise.resolve(null),
+        projAfterFile ? uploadProjectImage(projAfterFile, "after", id) : Promise.resolve(null),
+      ]);
+      if (beforeUpload) uploadedMediaIds.push(beforeUpload.mediaId);
+      if (afterUpload) uploadedMediaIds.push(afterUpload.mediaId);
+      const beforeImageUrl = beforeUpload?.url || projBeforeImg;
+      const afterImageUrl = afterUpload?.url || projAfterImg;
       const res = await upsertMitigationProjectAction({
         projectId: id,
         routeNo: projRouteNo,
@@ -92,11 +102,29 @@ export function GovernorProjectsTab({
       });
 
       if (res.success) {
+        mediaPersisted = true;
+        try {
+          const sync = await syncReportingRowAction({
+            recordId: id,
+            recordType: "PROJECT",
+            routeNo: projRouteNo,
+            sectionName: projLocation,
+            status: projStatus,
+            isActive: true,
+            updatedAt: new Date().toISOString(),
+          });
+          if (!sync.synced) onToast("บันทึกแล้ว แต่ยังไม่ได้ตั้งค่าการส่งรายงาน Google Sheets");
+        } catch {
+          onToast("บันทึกแล้ว แต่ส่งรายงาน Google Sheets ไม่สำเร็จ");
+        }
         onDataRefresh(res.systemData);
         showSuccessModal("บันทึกโครงการสำเร็จ", `บันทึกข้อมูลโครงการ [${id}] เรียบร้อยแล้ว`);
         setIsProjectFormOpen(false);
       }
     } catch (e: any) {
+      if (!mediaPersisted && uploadedMediaIds.length > 0) {
+        await Promise.allSettled(uploadedMediaIds.map((mediaId) => deleteExternalMediaAction(mediaId)));
+      }
       onToast("เกิดข้อผิดพลาด: " + e.message);
     } finally {
       setIsSaving(false);

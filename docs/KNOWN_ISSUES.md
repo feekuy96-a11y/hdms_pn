@@ -25,6 +25,10 @@
 
 ## 2. ทะเบียนปัญหาที่ทราบและข้อจำกัดทางเทคนิค (Known Issues & Technical Constraints)
 
+### KI-010: Google Drive/Sheets integration รอตั้งค่า Supabase Secrets
+- Apps Script จริงผ่าน upload, อ่าน URL รูป, sync report และ compensating delete แล้ว; Edge Function Production v12 ทำงานและ public read ผ่าน แต่ยังไม่เห็น `APPS_SCRIPT_WEB_APP_URL` และ `APPS_SCRIPT_API_SECRET` จึงยังตอบ `synced:false, reason:not-configured`.
+- หาก Sheets ล้ม เหตุการณ์ยังบันทึกสำเร็จและ UI แจ้งเตือน; รอบนี้ยังไม่มี durable retry queue สำหรับรายการที่ sync ไม่สำเร็จ.
+
 ### KI-001: ข้อจำกัดจำนวน Waypoints ของ Google Maps Direction URLs
 - **รายละเอียด:** การสร้าง Universal URL สำหรับเปิด Google Maps นำทาง (`https://www.google.com/maps/dir/?api=1...`) มีข้อจำกัดความยาวของ URL query string หากใส่พิกัดจุดเลี้ยว (Waypoints) เกิน 8–9 จุด อาจทำให้เบราว์เซอร์หรือแอปพลิเคชัน Google Maps บนมือถือตัดทอน URL หรือไม่สามารถประมวลผลเส้นทางได้
 - **การจัดการใน Phase 5:** ฟังก์ชัน [`sampleWaypointsForGoogleMaps`](file:///f:/DOH_Pattani_Flood/hdms_pn/lib/detour-navigation.ts) จะทำการ Downsample พิกัดจุดหักเลี้ยวตามระยะทาง (Chord distance) ให้เหลือไม่เกิน 8 จุดสำคัญ เพื่อรับประกันว่า Google Maps จะเปิดและนำทางตามแนวทางเลี่ยงได้อย่างแม่นยำและไม่เกิดข้อผิดพลาด URL ล้น

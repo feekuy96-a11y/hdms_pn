@@ -217,6 +217,7 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
 // leave the admin unsure whether the save went through.
 const HEAVY_ACTION_TIMEOUT_MS = 90_000;
 const DEFAULT_ACTION_TIMEOUT_MS = 20_000;
+const MEDIA_ACTION_TIMEOUT_MS = 35_000;
 // Actions that only read. Every other action is a write: for those the app reloads the data itself
 // afterwards, so it asks the server not to send the whole system payload back a second time.
 const READ_ONLY_ACTIONS = new Set(["getSystemDataAction", "getPublicSystemDataAction", "getDeletedRoutesAction", "snapRouteAction"]);
@@ -248,7 +249,13 @@ export async function invokeHdms<T = any>(action: string, args: unknown[]): Prom
         ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
       },
       body: JSON.stringify(READ_ONLY_ACTIONS.has(action) ? { action, args } : { action, args, light: true }),
-      signal: AbortSignal.timeout(action === "updateHighwayLayerAction" ? HEAVY_ACTION_TIMEOUT_MS : DEFAULT_ACTION_TIMEOUT_MS),
+      signal: AbortSignal.timeout(
+        action === "updateHighwayLayerAction"
+          ? HEAVY_ACTION_TIMEOUT_MS
+          : action === "uploadExternalMediaAction"
+            ? MEDIA_ACTION_TIMEOUT_MS
+            : DEFAULT_ACTION_TIMEOUT_MS
+      ),
     });
 
   } catch {

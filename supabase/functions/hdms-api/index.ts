@@ -21,6 +21,153 @@ const detourDir = (value: unknown) => {
 };
 const typeTable = (type: unknown) => type === "FLOOD" ? "doh_flood_routes" : type === "DETOUR" ? "doh_detour_routes" : fail("Invalid record type");
 
+const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const externalImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function base64Url(value: string | Uint8Array) {
+  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+function pemToBytes(pem: string) {
+  const base64 = pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, "");
+  const binary = atob(base64);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function googleDriveAccessToken() {
+  const email = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_EMAIL");
+  const privateKey = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY")?.replaceAll("\\n", "\n");
+  if (!email || !privateKey) fail("Google Drive is not configured", 503);
+  const now = Math.floor(Date.now() / 1000);
+  const head = base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const claims = base64Url(JSON.stringify({ iss: email, scope: GOOGLE_DRIVE_SCOPE, aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3500 }));
+  const key = await crypto.subtle.importKey("pkcs8", pemToBytes(privateKey), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  const signature = new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(`${head}.${claims}`)));
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: `${head}.${claims}.${base64Url(signature)}` }),
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!response.ok) fail("Google Drive authorization failed", 502);
+  const data = await response.json();
+  if (typeof data.access_token !== "string") fail("Google Drive authorization failed", 502);
+  return data.access_token;
+}
+
+function decodeImageDataUrl(value: unknown) {
+  const raw = text(value, "Image data");
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/i.exec(raw);
+  if (!match || !externalImageTypes.has(match[1].toLowerCase())) fail("Unsupported image format", 422);
+  const binary = atob(match[2]);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  if (bytes.byteLength === 0 || bytes.byteLength > 500 * 1024) fail("Image must be 500 KB or smaller", 422);
+  return { mimeType: match[1].toLowerCase(), bytes };
+}
+
+async function deleteGoogleDriveFile(fileId: string, accessToken?: string) {
+  const token = accessToken || await googleDriveAccessToken();
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?supportsAllDrives=true`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!response.ok && response.status !== 404) fail("Google Drive cleanup failed", 502);
+}
+
+async function uploadImageToGoogleDrive(payload: any) {
+  const { mimeType, bytes } = decodeImageDataUrl(payload.dataUrl);
+  const folderId = text(Deno.env.get("GOOGLE_DRIVE_FOLDER_ID"), "Google Drive folder");
+  const extension = mimeType === "image/jpeg" ? "jpg" : mimeType.split("/")[1];
+  const safeName = typeof payload.fileName === "string" && /^[\p{L}\p{N} _.-]{1,120}$/u.test(payload.fileName)
+    ? payload.fileName
+    : `hdms-${crypto.randomUUID()}.${extension}`;
+  const accessToken = await googleDriveAccessToken();
+  const boundary = `hdms-${crypto.randomUUID()}`;
+  const metadata = JSON.stringify({
+    name: safeName,
+    parents: [folderId],
+    mimeType,
+    appProperties: {
+      hdmsType: typeof payload.ownerType === "string" ? payload.ownerType.slice(0, 40) : "media",
+      hdmsRecordId: typeof payload.ownerId === "string" ? payload.ownerId.slice(0, 120) : "pending",
+    },
+  });
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`,
+    bytes,
+    `\r\n--${boundary}--`,
+  ]);
+  const uploaded = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,mimeType,size", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+    body,
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!uploaded.ok) fail("Google Drive upload failed", 502);
+  const file = await uploaded.json();
+  if (typeof file.id !== "string") fail("Google Drive upload failed", 502);
+  const permission = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}/permissions?supportsAllDrives=true`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "anyone", role: "reader" }),
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!permission.ok) {
+    await deleteGoogleDriveFile(file.id, accessToken).catch(() => undefined);
+    fail("Google Drive permission update failed", 502);
+  }
+  return { mediaId: file.id, url: `https://drive.google.com/uc?export=view&id=${encodeURIComponent(file.id)}`, mimeType, sizeBytes: bytes.byteLength, provider: "google-drive" };
+}
+
+function appsScriptConfigured() {
+  return Boolean(Deno.env.get("APPS_SCRIPT_WEB_APP_URL") && Deno.env.get("APPS_SCRIPT_API_SECRET"));
+}
+
+async function callAppsScript(action: string, payload: Record<string, unknown>, timeoutMs = 20_000) {
+  const endpoint = text(Deno.env.get("APPS_SCRIPT_WEB_APP_URL"), "Apps Script URL");
+  const secret = text(Deno.env.get("APPS_SCRIPT_API_SECRET"), "Apps Script secret");
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ secret, action, ...payload }),
+    redirect: "follow",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!response.ok) fail("Apps Script request failed", 502);
+  const result = await response.json().catch(() => null);
+  if (!result || result.ok !== true) fail(`Apps Script request failed${result?.error ? `: ${result.error}` : ""}`, 502);
+  return result;
+}
+
+async function uploadExternalMedia(payload: any) {
+  const validated = decodeImageDataUrl(payload.dataUrl);
+  if (!appsScriptConfigured()) return uploadImageToGoogleDrive(payload);
+  const result = await callAppsScript("uploadMedia", {
+    dataUrl: payload.dataUrl,
+    fileName: payload.fileName,
+    ownerType: payload.ownerType,
+    ownerId: payload.ownerId,
+  }, 25_000);
+  if (typeof result.mediaId !== "string" || typeof result.url !== "string") fail("Apps Script returned invalid media data", 502);
+  return {
+    mediaId: result.mediaId,
+    url: result.url,
+    mimeType: validated.mimeType,
+    sizeBytes: validated.bytes.byteLength,
+    provider: "google-drive",
+  };
+}
+
+async function syncReportingRow(payload: any) {
+  if (!appsScriptConfigured()) return { success: true, synced: false, reason: "not-configured" };
+  await callAppsScript("syncReportingRow", { source: "hdms-pn", idempotencyKey: text(payload.recordId, "Record ID"), record: payload }, 12_000);
+  return { success: true, synced: true };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
   try {
@@ -92,6 +239,14 @@ Deno.serve(async (req) => {
     }
     if (mutation && !serviceKey) return reply({ error: "Server mutation key is not configured" }, 503);
     const [p, second] = args;
+    if (action === "uploadExternalMediaAction") return reply(await uploadExternalMedia(p));
+    if (action === "deleteExternalMediaAction") {
+      const mediaId = text(p?.mediaId, "Media ID");
+      if (appsScriptConfigured()) await callAppsScript("deleteMedia", { mediaId }, 12_000);
+      else await deleteGoogleDriveFile(mediaId);
+      return reply({ success: true });
+    }
+    if (action === "syncReportingRowAction") return reply(await syncReportingRow(p));
     const now = new Date().toISOString();
     let savedRouteId: string | undefined;
     const patch = async (table: string, id: string, changes: Record<string, unknown>, idColumn = "id") => {
