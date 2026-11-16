@@ -33,6 +33,7 @@ test("admin can inspect and retry failed background copies", async ({ page }) =>
 });
 
 test("project evidence stages in Supabase before save and reporting queues last", async ({ page }) => {
+  test.skip(true, "เมนูโครงการผู้ว่าฯ ถูกซ่อนจาก UI ตามข้อกำหนดปัจจุบัน (คงโค้ดและ API ไว้)");
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop administration workflow");
 
   const calls: Array<{ action: string; args: any[] }> = [];
@@ -86,6 +87,7 @@ test("project evidence stages in Supabase before save and reporting queues last"
 });
 
 test("an unreferenced staged upload is deleted when the project save fails", async ({ page }) => {
+  test.skip(true, "เมนูโครงการผู้ว่าฯ ถูกซ่อนจาก UI ตามข้อกำหนดปัจจุบัน (คงโค้ดและ API ไว้)");
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop administration workflow");
 
   const actions: string[] = [];

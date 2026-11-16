@@ -15,17 +15,8 @@ test("admin report and confirmation dialogs restore keyboard focus", async ({ pa
   });
   await page.goto(`${base}/admin/`);
 
-  const print = page.getByRole("button", { name: "ออกรายงานเสนอผู้ว่าฯ (ด่วนที่สุด)" });
-  await print.focus();
-  await page.keyboard.press("Enter");
-  const report = page.getByRole("dialog", { name: "แบบรายงานสถานการณ์อุทกภัย" });
-  await expect(report).toBeVisible();
-  await report.getByRole("button", { name: "ปิดแบบรายงาน" }).focus();
-  await page.keyboard.press("Tab");
-  await expect(report.getByRole("button", { name: /พิมพ์แบบรายงาน/ })).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(report).toHaveCount(0);
-  await expect(print).toBeFocused();
+  // Verify hidden quick governor dispatch button is not exposed in UI
+  await expect(page.getByRole("button", { name: "ออกรายงานเสนอผู้ว่าฯ (ด่วนที่สุด)" })).toHaveCount(0);
 
   await page.getByRole("complementary").getByRole("button", { name: /รายการเหตุการณ์/ }).click();
   const deleteButton = page.getByRole("button", { name: "ลบช่วงนี้ (กู้คืนได้)" }).first();

@@ -7,7 +7,7 @@ const menus = [
   ["รายการทางเลี่ยง", "เส้นทางเลี่ยงทั้งหมด"],
   ["โครงข่ายสายทาง", "โครงข่ายสายทาง"],
   ["สไตล์เส้นทาง", "สตูดิโอปรับแต่งสไตล์เส้น"],
-  ["โครงการผู้ว่าฯ", "แผนงานโครงการแก้ไขปัญหาน้ำท่วม"],
+  ["งานเบื้องหลัง", "งานส่งข้อมูลเบื้องหลัง"],
 ] as const;
 const base = process.env.BASE_PATH || "";
 const openMenu = async (page: import("@playwright/test").Page, menu: string) => {
@@ -68,13 +68,18 @@ test("admin workspaces expose their primary controls", async ({ page }) => {
     ["รายการเหตุการณ์", "เพิ่มเหตุการณ์"],
     ["รายการทางเลี่ยง", "วาดทางเลี่ยงใหม่บนแผนที่"],
     ["โครงข่ายสายทาง", "เลือกไฟล์โครงข่ายเส้นทางหลวง"],
-    ["โครงการผู้ว่าฯ", "เพิ่มโครงการใหม่"],
   ] as const;
 
   for (const [menu, control] of checks) {
     await openMenu(page, menu);
     await expect(page.getByText(control, { exact: false }).first()).toBeVisible({ timeout: 10_000 });
   }
+
+  // Hidden Governor & Executive View controls per current UI scope
+  await expect(page.getByRole("button", { name: /โครงการผู้ว่า/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /รายงานผู้ว่าฯ ด่วน/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /รายงานผู้ว่าฯ \/ KPI/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /ระบบหลังบ้าน/ })).toHaveCount(0);
 });
 
 test("route editor keeps A and B markers visible and permits a map bend point", async ({ page }) => {

@@ -273,11 +273,17 @@ export function AdminConsole({
     },
   ];
 
+  // UI visibility flag: hide Governor & Quick Dispatch controls without removing APIs, tables, or permissions
+  const HIDE_GOVERNOR_EXECUTIVE_UI = true;
+
   // Menu grouped by what the officer is doing, in the order of a normal working day.
   const NAV_GROUPS: Array<{ title: string; ids: Array<(typeof NAV_ITEMS)[number]["id"]> }> = [
     { title: "สถานการณ์น้ำท่วม", ids: ["incidents", "map", "detours"] },
     { title: "ข้อมูลโครงข่ายและแผนที่", ids: ["routes", "style"] },
-    { title: "บริหารและรายงาน", ids: ["projects", "jobs", "system"] },
+    {
+      title: "บริหารและรายงาน",
+      ids: HIDE_GOVERNOR_EXECUTIVE_UI ? ["jobs", "system"] : ["projects", "jobs", "system"],
+    },
   ];
 
   return (
@@ -380,15 +386,17 @@ export function AdminConsole({
 
         {/* Sidebar Footer Actions */}
         <div className="p-3 border-t border-white/10 space-y-2">
-          <button
-            type="button"
-            onClick={() => setIsDispatchModalOpen(true)}
-            className="w-full flex items-center justify-center gap-2 p-2 rounded-xl bg-red-600/90 hover:bg-red-600 text-white text-xs font-heading font-bold shadow transition"
-            title="ออกรายงานเสนอผู้ว่าฯ (ด่วนที่สุด)"
-          >
-            <FileText className="w-4 h-4 shrink-0" />
-            {!isPaneCollapsed && !isSidebarCollapsed && <span>รายงานผู้ว่าฯ ด่วน</span>}
-          </button>
+          {!HIDE_GOVERNOR_EXECUTIVE_UI && (
+            <button
+              type="button"
+              onClick={() => setIsDispatchModalOpen(true)}
+              className="w-full flex items-center justify-center gap-2 p-2 rounded-xl bg-red-600/90 hover:bg-red-600 text-white text-xs font-heading font-bold shadow transition"
+              title="ออกรายงานเสนอผู้ว่าฯ (ด่วนที่สุด)"
+            >
+              <FileText className="w-4 h-4 shrink-0" />
+              {!isPaneCollapsed && !isSidebarCollapsed && <span>รายงานผู้ว่าฯ ด่วน</span>}
+            </button>
+          )}
 
           <button
             type="button"
@@ -438,7 +446,7 @@ export function AdminConsole({
       <main className={`flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-950 ${isPaneCollapsed ? "hidden lg:hidden" : ""}`}>
         {/* Mobile / Tablet Horizontal Navigation Bar */}
         <div className="lg:hidden flex items-center overflow-x-auto border-b border-slate-800 p-2 gap-1.5 bg-slate-900 shrink-0">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter((item) => !(HIDE_GOVERNOR_EXECUTIVE_UI && item.id === "projects")).map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (

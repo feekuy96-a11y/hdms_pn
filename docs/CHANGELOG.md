@@ -1,5 +1,14 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-092] 2026-11-16 Popup สรุปน้ำท่วมไม่ซ้อน, Full Dossier 2 คอลัมน์ Dark Navy, ทิศทางแยกตามสาย, ตัวกรอง 2 ประเภท และซ่อน UI ผู้ว่าฯ
+- **ไฟล์:** `components/map/LongdoGisMap.tsx`, `components/map/FloodEventMiniMap.tsx` (ใหม่), `app/page.tsx`, `app/globals.css`, `components/admin/AdminConsole.tsx`, `app/admin/page.tsx`, `tests/e2e/compact-card-detour-accordion.spec.ts`, `tests/e2e/smoke.spec.ts`, `tests/e2e/admin-menus.spec.ts`, `tests/e2e/admin-shared-dialog-keyboard.spec.ts`, `tests/e2e/external-media.spec.ts`
+- **การแก้ไข:**
+  1. **Summary Popup แผนที่ (`LongdoGisMap.tsx` + `globals.css`):** คลิกหมุด/เส้นน้ำท่วมเปิดเฉพาะ Leaflet Summary Popup Dark Navy ขอบทอง, ตัดกราฟ SVG และคำเตือนอีกฝั่งออก, ช่องจราจรแสดงตรงตาม DB (`affected_lanes` / `affectedParts`) โดยไม่เติมคำ; กด `ดูรายละเอียด` เพื่อปิด Summary Popup และเปิด Full Dossier Modal.
+  2. **Full Dossier 2 คอลัมน์ (`app/page.tsx` + `FloodEventMiniMap.tsx`):** แยกทิศทาง `A → B` / `B → A` เป็นอิสระต่อสาย (`detourDirectionById`), ปุ่ม `นำทาง` และ `ดูตำแหน่งบนแผนที่` เฉพาะในรายละเอียดของสายที่ขยาย, กล่องรูปภาพจริงจาก DB พร้อมเลื่อนซ้าย/ขวาและขยายเต็มจอ, คอลัมน์ขวาตรึง Mini-Map เหตุการณ์น้ำท่วม, ปุ่มพับ/เปิด `ดูประวัติระดับน้ำท่วม` ด้านล่าง และตัดข้อความเตือน *"อีกฝั่งจราจรยังไม่ยืนยันความปลอดภัย..."* ออกทั้งหมด.
+  3. **ตัวกรองประชาชน (`app/page.tsx` + `LongdoGisMap.tsx`):** ตัดแท็บ `"ทั้งหมด"` เหลือเฉพาะ `"น้ำท่วม"` (ค่าเริ่มต้น) และ `"ทางเลี่ยง"`, เชื่อม `citizenLayerFilter` กรองชั้นข้อมูลแผนที่โดยไม่ลบข้อมูลออกจากฐานข้อมูล.
+  4. **Admin UI (`AdminConsole.tsx` + `app/admin/page.tsx`):** ซ่อนเฉพาะ UI ของเมนู `"โครงการผู้ว่าฯ"`, ปุ่ม `"รายงานผู้ว่าฯ ด่วน"`, และชุดแท็บด้านบน `"รายงานผู้ว่าฯ / KPI"` / `"ระบบหลังบ้าน"` โดยคง API, Schema และสิทธิ์เดิมไว้ครบถ้วน.
+- **ตรวจแล้ว:** `npm run typecheck`, `npm run lint` (`--max-warnings=0`), `npm run build` (`NEXT_OUTPUT=export`), และ Playwright E2E (`64 passed, 34 skipped, 0 failed` — ข้าม 2 เคสฟอร์มโครงการผู้ว่าฯ ใน `external-media.spec.ts` และ 32 เคสตามเงื่อนไข viewport/fixture).
+
 ### [LOCAL] 2026-11-16 หน้าติดตามงาน Drive/Sheets ใน Admin
 - เพิ่มแท็บ `งานเบื้องหลัง` แสดงจำนวน pending/processing/done/failed, งานที่ต้องติดตามสูงสุด 50 งาน และงานสำเร็จล่าสุด 20 งาน พร้อม Loading/Empty/Error/Success และปุ่มลองงาน failed ใหม่.
 - Edge ส่งเฉพาะ metadata ที่จำเป็น ไม่ส่ง payload รูปหรือค่า integration กลับเว็บ; retry รับเฉพาะ UUID และเปลี่ยนได้เฉพาะงานสถานะ failed ก่อนปลุก worker.

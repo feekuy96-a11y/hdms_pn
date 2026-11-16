@@ -43,6 +43,7 @@ export default function AdminPage() {
   const isPollingActive = usePollingActivity();
   const [selectedFloodId, setSelectedFloodId] = useState<string>("");
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
+  const HIDE_EXECUTIVE_VIEW_SWITCHER = true;
   const [adminViewMode, setAdminViewMode] = useState<"console" | "executive">("console");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [workspacePaneWidth, setWorkspacePaneWidth] = useState<number | null>(null);
@@ -209,32 +210,34 @@ export default function AdminPage() {
         </div>
 
         {/* View Switcher: (รายงานผู้ว่าฯ / KPI vs ระบบหลังบ้าน Admin) */}
-        <div className="order-3 lg:order-none w-full lg:w-auto flex items-center justify-center lg:justify-start gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-700 shrink-0">
-          <button
-            type="button"
-            onClick={() => setAdminViewMode("executive")}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-heading font-bold transition flex items-center gap-1.5 ${
-              adminViewMode === "executive"
-                ? "bg-amber-500 text-slate-950 shadow-md"
-                : "text-slate-300 hover:text-white"
-            }`}
-            title="แดชบอร์ดสรุปผลผู้ว่าฯ และ KPI เชิงยุทธศาสตร์"
-          >
-            <PieChart className="w-3.5 h-3.5" /> <span className="hidden sm:inline">รายงานผู้ว่าฯ / KPI</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setAdminViewMode("console")}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-heading font-bold transition flex items-center gap-1.5 ${
-              adminViewMode === "console"
-                ? "bg-amber-500 text-slate-950 shadow-md"
-                : "text-slate-300 hover:text-white"
-            }`}
-            title="ระบบจัดการข้อมูลหลังบ้าน Admin"
-          >
-            <Settings className="w-3.5 h-3.5" /> <span className="hidden sm:inline">ระบบหลังบ้าน</span>
-          </button>
-        </div>
+        {!HIDE_EXECUTIVE_VIEW_SWITCHER && (
+          <div className="order-3 lg:order-none w-full lg:w-auto flex items-center justify-center lg:justify-start gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-700 shrink-0">
+            <button
+              type="button"
+              onClick={() => setAdminViewMode("executive")}
+              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-heading font-bold transition flex items-center gap-1.5 ${
+                adminViewMode === "executive"
+                  ? "bg-amber-500 text-slate-950 shadow-md"
+                  : "text-slate-300 hover:text-white"
+              }`}
+              title="แดชบอร์ดสรุปผลผู้ว่าฯ และ KPI เชิงยุทธศาสตร์"
+            >
+              <PieChart className="w-3.5 h-3.5" /> <span className="hidden sm:inline">รายงานผู้ว่าฯ / KPI</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAdminViewMode("console")}
+              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-heading font-bold transition flex items-center gap-1.5 ${
+                adminViewMode === "console"
+                  ? "bg-amber-500 text-slate-950 shadow-md"
+                  : "text-slate-300 hover:text-white"
+              }`}
+              title="ระบบจัดการข้อมูลหลังบ้าน Admin"
+            >
+              <Settings className="w-3.5 h-3.5" /> <span className="hidden sm:inline">ระบบหลังบ้าน</span>
+            </button>
+          </div>
+        )}
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {isError && <span role="status" className="rounded-lg border border-red-700/70 bg-red-950/80 px-2 py-1 text-[10px] text-red-200">โหลดข้อมูลฐานข้อมูลไม่สำเร็จ</span>}

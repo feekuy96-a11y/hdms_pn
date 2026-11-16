@@ -166,11 +166,12 @@ test("compact flood card, detour jump link, ordered exclusive accordion, and rea
   await expect(dialog.getByText("ทางเลี่ยงหลัก สาย ก", { exact: true })).toBeVisible();
   await expect(dialog.getByText("นำทางด้วย Google Maps")).toHaveCount(0);
 
-  // Expand first accordion -> shows full advice, Google Maps button & Map focus button
+  // Expand first accordion -> shows full advice, Google Maps button & Map focus button inside this detour panel
   await firstTrigger.click();
   await expect(firstTrigger).toHaveAttribute("aria-expanded", "true");
-  await expect(dialog.getByRole("link", { name: /นำทางด้วย Google Maps/ })).toBeVisible();
-  await expect(dialog.getByRole("button", { name: /ดูตำแหน่งบนแผนที่/ })).toBeVisible();
+  const firstPanel = dialog.locator("#dossier-detour-panel-D-FIRST");
+  await expect(firstPanel.getByRole("link", { name: /นำทางด้วย Google Maps/ })).toBeVisible();
+  await expect(firstPanel.getByRole("button", { name: /ดูตำแหน่งบนแผนที่/ })).toBeVisible();
 
   // Expand second accordion -> exclusively collapses the first
   await secondTrigger.click();
@@ -285,4 +286,155 @@ test("admin detour order controls swap order_index and persist updates", async (
   expect(upsertPayloads.find((p) => p.id === "D-A")?.detourMeta?.order_index).toBe(2);
   expect(upsertPayloads.find((p) => p.id === "D-B")?.detourMeta?.event_orders?.["F-ORD"]).toBe(1);
   expect(upsertPayloads.find((p) => p.id === "D-A")?.detourMeta?.event_orders?.["F-ORD"]).toBe(2);
+});
+
+test("map flood pin opens summary popup without stacking, per-route detour direction stays isolated, and citizen filter hides ALL", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 1024, "Map pin click integration runs in desktop view");
+  const updatedAt = new Date(Date.now() - 8 * 60 * 1000).toISOString();
+
+  await page.route("**/functions/v1/hdms-api", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        updatedAt,
+        floodRoutes: [
+          {
+            id: "F-MAP-1",
+            route_no: "42",
+            section_name: "ดอนยาง - บ้านดี",
+            km_start: "103+200",
+            km_end: "104+850",
+            lat_start: 6.86,
+            lon_start: 101.24,
+            lat_end: 6.87,
+            lon_end: 101.25,
+            coordinates_json: [[101.24, 6.86], [101.25, 6.87]],
+            water_level_cm: 35,
+            traffic_status: "WARNING",
+            road_side: "RIGHT",
+            affected_lanes: "ช่องจราจรขวา",
+            direction_meta: {
+              schemaVersion: 2,
+              eventId: "EV-MAP-42",
+              directionCode: "BOTH",
+              roadSide: "RIGHT",
+              trafficStatusDetail: "CAUTION",
+              waterLevelKnown: true,
+              affectedParts: ["RIGHT_LANE"],
+              updatedAt,
+              photos: [],
+            },
+            latest_photo_url: "",
+            is_active: true,
+            updated_at: updatedAt,
+            subdistrict: "บ้านนอก",
+            district: "ปะนาเระ",
+            province: "ปัตตานี",
+            trend: "STEADY",
+          },
+        ],
+        detourRoutes: [
+          {
+            id: "D-MAP-1",
+            flood_id_ref: "F-MAP-1",
+            route_name: "ทางเลี่ยงหลัก สาย 1",
+            direction_mode: "TWO_WAY",
+            lat_start: 6.86,
+            lon_start: 101.24,
+            lat_end: 6.87,
+            lon_end: 101.25,
+            coordinates_json: [[101.24, 6.86], [101.25, 6.87]],
+            description: "=== ทิศทางขาไป ===\n1. จุดเริ่มต้น: แยกเมาะมาวี\n2. ถึงจุดบรรจบแยกบ้านดี\n\n=== ทิศทางขากลับ ===\n1. จุดเริ่มต้น: แยกบ้านดี\n2. ถึงจุดบรรจบแยกเมาะมาวี",
+            detour_meta: {
+              order_index: 1,
+              forward_distance_m: 12600,
+              reverse_distance_m: 14100,
+              reverse_duration_s: 960,
+            },
+            is_active: true,
+            updated_at: updatedAt,
+          },
+          {
+            id: "D-MAP-2",
+            flood_id_ref: "F-MAP-1",
+            route_name: "ทางเลี่ยงรอง สาย 2",
+            direction_mode: "TWO_WAY",
+            lat_start: 6.86,
+            lon_start: 101.24,
+            lat_end: 6.87,
+            lon_end: 101.25,
+            coordinates_json: [[101.24, 6.86], [101.25, 6.87]],
+            description: "=== ทิศทางขาไป ===\n1. จุดเริ่มต้น: สาย 2 ขาไป\n\n=== ทิศทางขากลับ ===\n1. จุดเริ่มต้น: สาย 2 ขากลับ",
+            detour_meta: { order_index: 2, forward_distance_m: 5400, reverse_distance_m: 5900 },
+            is_active: true,
+            updated_at: updatedAt,
+          },
+        ],
+        timelineUpdates: [],
+        mitigationProjects: [],
+        highwayLayers: [],
+        offices: [],
+        mapStyles: null,
+        systemSettings: { name: "ระบบทดสอบ", org: "กรมทางหลวง", desc: "", phone: "1586" },
+      }),
+    });
+  });
+
+  await page.goto(`${base}/`);
+
+  // Filter tabs have only น้ำท่วม (default) and ทางเลี่ยง — NO ทั้งหมด button
+  await expect(page.getByRole("button", { name: /^ทั้งหมด/ })).toHaveCount(0);
+  const floodTab = page.getByRole("button", { name: /น้ำท่วม \(1\)/ }).first();
+  const detourTab = page.getByRole("button", { name: /ทางเลี่ยง \(2\)/ }).first();
+  await expect(floodTab).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".doh-map-capsule-pin").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".doh-detour-symbol")).toHaveCount(0);
+
+  // Switch to Detour tab -> detour layer renders, flood pins hide
+  await detourTab.click();
+  await expect(page.locator(".doh-detour-symbol").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".doh-map-capsule-pin")).toHaveCount(0);
+
+  // Switch back to Flood tab -> flood pin returns
+  await floodTab.click();
+  const floodPin = page.locator(".doh-map-capsule-pin").first();
+  await expect(floodPin).toBeVisible();
+
+  // Click flood marker -> ONLY summary popup opens; full dossier dialog does NOT auto-open
+  await floodPin.click({ force: true });
+  const popup = page.locator(".doh-flood-leaflet-popup");
+  await expect(popup).toBeVisible();
+  await expect(page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ })).toHaveCount(0);
+  await expect(popup).toContainText("ช่องจราจร: ช่องจราจรขวา");
+  await expect(popup).not.toContainText("ช่องจราจรขวาทาง");
+  await expect(popup).not.toContainText("อีกฝั่งจราจร");
+
+  // Click ดูรายละเอียด inside summary popup -> closes popup and opens full Dossier modal
+  await popup.getByRole("button", { name: "ดูรายละเอียด" }).click();
+  await expect(popup).toHaveCount(0);
+  const dialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).not.toContainText("อีกฝั่งจราจร");
+  await expect(dialog.getByText("ช่องจราจรขวา", { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel(/แผนที่แสดงตำแหน่งเหตุการณ์ ทล\.42/)).toBeVisible();
+
+  // Toggle direction on Route 1 to B -> A; Route 2 must remain A -> B independently
+  const r1Trigger = dialog.getByRole("button", { name: /ทางเลี่ยงที่ 1 – ทางเลี่ยงหลัก สาย 1/ });
+  await r1Trigger.click();
+  const r1Panel = dialog.locator("#dossier-detour-panel-D-MAP-1");
+  await r1Panel.getByRole("button", { name: "⇄ B → A" }).click();
+  await expect(r1Panel.getByText(/จุดเริ่มต้น: แยกบ้านดี/)).toBeVisible();
+  await expect(r1Panel.getByText("14.1 กม.")).toBeVisible();
+  await expect(r1Panel.getByText("เวลาประมาณ 16 นาที")).toBeVisible();
+
+  const r2Trigger = dialog.getByRole("button", { name: /ทางเลี่ยงที่ 2 – ทางเลี่ยงรอง สาย 2/ });
+  await r2Trigger.click();
+  const r2Panel = dialog.locator("#dossier-detour-panel-D-MAP-2");
+  await expect(r2Panel.getByRole("button", { name: "→ A → B" })).toHaveAttribute("aria-pressed", "true");
+  await expect(r2Panel.getByText(/สาย 2 ขาไป/)).toBeVisible();
+
+  // Expand water level history -> shows real empty-history message when no DB history exists
+  await dialog.getByRole("button", { name: "ดูประวัติระดับน้ำท่วม" }).click();
+  await expect(dialog.getByText("ยังไม่มีข้อมูลประวัติระดับน้ำสำหรับจุดนี้")).toBeVisible();
 });

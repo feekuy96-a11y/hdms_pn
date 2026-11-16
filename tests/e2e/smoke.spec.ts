@@ -12,7 +12,7 @@ test("public flood map loads without horizontal overflow", async ({ page }) => {
 test("admin route opens directly", async ({ page }) => {
   await page.goto(`${base}/admin/`);
   await expect(page).toHaveURL(/\/admin\/?$/);
-  await expect(page.getByTitle("ระบบจัดการข้อมูลหลังบ้าน Admin")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });
 
 test("public search exposes a recoverable empty state", async ({ page }) => {
@@ -77,7 +77,9 @@ test("public incident details group linked detours and keep standalone detours s
     await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
   }
 
+  await page.getByRole("button", { name: /ทางเลี่ยง \(/ }).filter({ visible: true }).first().click();
   await expect(page.getByRole("button", { name: /ทางเลี่ยงอิสระสายทดสอบ/ }).filter({ visible: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: /น้ำท่วม \(/ }).filter({ visible: true }).first().click();
   await page.getByRole("button").filter({ hasText: "ตอนบ้านดี - ปะลัส", visible: true }).first().click();
   const dialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
   await expect(dialog).toBeVisible();

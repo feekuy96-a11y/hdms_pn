@@ -147,6 +147,44 @@
   border-color: #0284c7 !important;
 }
 
+/* Flood Summary Leaflet Popup (Dark Navy + Gold Border per UI Prototype) */
+.doh-flood-leaflet-popup .leaflet-popup-content-wrapper {
+  background: #081120 !important;
+  color: #f8fafc !important;
+  border: 1.5px solid #f59e0b !important;
+  border-radius: 22px !important;
+  padding: 0 !important;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.88), 0 0 22px rgba(245, 158, 11, 0.18) !important;
+  overflow: hidden !important;
+}
+
+.doh-flood-leaflet-popup .leaflet-popup-tip {
+  background: #081120 !important;
+  border: 1.5px solid #f59e0b !important;
+}
+
+.doh-flood-leaflet-popup .leaflet-popup-close-button {
+  color: #cbd5e1 !important;
+  top: 12px !important;
+  right: 12px !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  width: 28px !important;
+  height: 28px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 9999px !important;
+  background: rgba(15, 23, 42, 0.72) !important;
+  border: 1px solid rgba(71, 85, 105, 0.7) !important;
+  transition: all 0.2s ease !important;
+}
+
+.doh-flood-leaflet-popup .leaflet-popup-close-button:hover {
+  color: #ffffff !important;
+  background: rgba(51, 65, 85, 0.95) !important;
+}
+
 /* Prevent Leaflet zoom controls from overlapping top status badges on mobile & desktop */
 .leaflet-top.leaflet-left {
   top: 54px !important;
