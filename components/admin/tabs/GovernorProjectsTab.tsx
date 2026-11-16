@@ -113,7 +113,7 @@ export function GovernorProjectsTab({
             isActive: true,
             updatedAt: new Date().toISOString(),
           });
-          if (!sync.synced) onToast("บันทึกแล้ว แต่ยังไม่ได้ตั้งค่าการส่งรายงาน Google Sheets");
+          if (!sync.synced && !sync.queued) onToast("บันทึกแล้ว แต่ยังไม่ได้ตั้งค่าการส่งรายงาน Google Sheets");
         } catch {
           onToast("บันทึกแล้ว แต่ส่งรายงาน Google Sheets ไม่สำเร็จ");
         }

@@ -94,7 +94,7 @@ export async function uploadExternalMediaAction(payload: {
   fileName?: string;
   ownerType?: "FLOOD" | "PROJECT";
   ownerId?: string;
-}): Promise<{ mediaId: string; url: string; mimeType: "image/jpeg" | "image/png" | "image/webp"; sizeBytes: number; provider: "google-drive" }> {
+}): Promise<{ mediaId: string; url: string; mimeType: "image/jpeg" | "image/png" | "image/webp"; sizeBytes: number; provider: "supabase-staging" | "google-drive" }> {
   return invokeHdms("uploadExternalMediaAction", [payload]);
 }
 
@@ -110,7 +110,7 @@ export async function syncReportingRowAction(payload: {
   status?: string;
   isActive?: boolean;
   updatedAt: string;
-}): Promise<{ success: boolean; synced: boolean; reason?: string }> {
+}): Promise<{ success: boolean; synced: boolean; queued?: boolean; reason?: string }> {
   return invokeHdms("syncReportingRowAction", [payload]);
 }
 

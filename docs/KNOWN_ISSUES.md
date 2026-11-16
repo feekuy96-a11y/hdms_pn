@@ -26,8 +26,8 @@
 ## 2. ทะเบียนปัญหาที่ทราบและข้อจำกัดทางเทคนิค (Known Issues & Technical Constraints)
 
 ### KI-010: Google Sheets sync ยังไม่มี durable retry queue
-- Drive/Sheets integration, Supabase Secrets, Edge upload และการแสดงรูปบนเว็บผ่าน Production แล้ว.
-- หาก Sheets ล้มนาน เหตุการณ์ยังบันทึกสำเร็จและ UI แจ้งเตือน แต่รายการที่ sync ไม่สำเร็จยังไม่มีคิวถาวรสำหรับลองใหม่อัตโนมัติ.
+- ปิดส่วน durable retry แล้วบน Production: `doh_external_jobs`, Edge worker v16, retry/backoff สูงสุด 8 ครั้ง และ Cron ปลุกทุก 2 นาทีผ่านการทดสอบจริง.
+- คงข้อจำกัดด้านปฏิบัติการ: งานที่ล้มครบ 8 ครั้งต้องตรวจ `status='failed'` และ requeue ด้วย SQL; ยังไม่มีหน้าจอ Admin สำหรับตรวจและลองใหม่.
 
 ### KI-001: ข้อจำกัดจำนวน Waypoints ของ Google Maps Direction URLs
 - **รายละเอียด:** การสร้าง Universal URL สำหรับเปิด Google Maps นำทาง (`https://www.google.com/maps/dir/?api=1...`) มีข้อจำกัดความยาวของ URL query string หากใส่พิกัดจุดเลี้ยว (Waypoints) เกิน 8–9 จุด อาจทำให้เบราว์เซอร์หรือแอปพลิเคชัน Google Maps บนมือถือตัดทอน URL หรือไม่สามารถประมวลผลเส้นทางได้

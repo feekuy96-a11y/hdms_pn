@@ -1,5 +1,13 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [PRODUCTION BACKEND / LOCAL WEB] 2026-11-16 พักรูปใน Supabase และส่ง Drive/Sheets หลังบันทึก
+- เพิ่ม migration `20261116090000_async_external_integrations.sql` สำหรับ bucket พักรูป คิวงานถาวร trigger เข้าคิวรายงานแบบ atomic กับ DB save และ claim แบบ `SKIP LOCKED`.
+- เปลี่ยน Edge `uploadExternalMediaAction` ให้พักรูปและเข้าคิวก่อน; `syncReportingRowAction` เข้าคิวแทนรอ Apps Script. Worker ส่งต่อ Google, เปลี่ยน URL รูปใน record, ลบไฟล์พักเมื่อสำเร็จ และ retry แบบ backoff. Admin read เรียก retry ที่ค้าง.
+- ปรับสองฟอร์มไม่แจ้งว่าตั้งค่า Sheets ขาดเมื่อผลตอบกลับเป็น `queued` และปรับชนิดข้อมูล adapter. SQL ทั้งสอง migration และ Edge `hdms-api` v16 deploy Production แล้ว; เว็บส่วน adapter/UI ยังไม่ได้ push/deploy.
+- ตรวจในเครื่อง: `npm run lint`, `npm run typecheck`, `npm run build:pages`, Edge TypeScript syntax และ `tests/e2e/external-media.spec.ts` บน Desktop (2 ผ่านโดย mock API); ตรวจ schema Production แบบอ่านอย่างเดียวเพื่อยืนยันคอลัมน์ที่ migration อ้างถึง. ยังไม่ได้ทดสอบ worker กับ Drive/Sheets จริงหรือวัดเวลา save ก่อน–หลัง.
+- เพิ่ม migration `20261116093000_schedule_external_jobs.sql` เพื่อปลุก worker ทุก 2 นาทีผ่าน `pg_cron` + `pg_net`; ไม่สร้างรายงาน heartbeat และไม่โหลด system payload.
+- **Production verification:** staging upload HTTP 200, MEDIA และ REPORT เปลี่ยนเป็น `done` ครั้งแรกโดยไม่มี error, record URL เปลี่ยนจาก Supabase Storage เป็น Google Drive, staging object ถูกลบ, Drive image HTTP 200, Google Sheet แถวจริงตรงกับ Supabase และ Cron run แรก `succeeded`. ลบ project/object/Drive file/Sheet row/queue jobs ของ QA แล้ว (จำนวนคงเหลือ 0).
+
 รูปแบบสั้น: วันที่ · หัวข้อ · ไฟล์ · ทำอะไรและทำไม · ตรวจอะไรแล้ว/ยังไม่ได้ตรวจ · ความเสี่ยงที่ยอมรับ (ถ้ามี) · ลิงก์ BACKLOG
 
 ### [LOCAL] 2026-11-16 Google Drive media และ Google Sheets reporting

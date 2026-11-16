@@ -1,6 +1,6 @@
 # Google Drive media and Google Sheets reporting
 
-Large HDMS photos are uploaded through `hdms-api` to Google Drive. The browser receives only the public media URL and saves that URL in the existing database fields. Google Sheets receives a reporting copy after the database save succeeds.
+New HDMS photos are first staged in Supabase Storage through `hdms-api`. The browser stores that temporary public URL in the existing database field. A durable Supabase outbox then copies the media to Google Drive and the report to Google Sheets in the background. Supabase remains the source of truth.
 
 ## Edge Function secrets
 
@@ -19,22 +19,25 @@ The recommended setup uses only the two Apps Script variables. Run `setupHdmsInt
 ## Save lifecycle
 
 1. The browser compresses flood evidence to at most 300 KB or validates project images at at most 500 KB.
-2. `uploadExternalMediaAction` validates the data URL again, uploads it to Drive and grants read access.
-3. The incident or project stores the returned Drive URL. If the database save fails before a media reference is persisted, `deleteExternalMediaAction` removes the uploaded file.
-4. `syncReportingRowAction` sends a bounded reporting payload to Apps Script and waits for an `{ ok: true }` response. A Sheets failure shows a warning after the HDMS save; it does not undo the saved incident.
+2. `uploadExternalMediaAction` validates the image, writes it to the public `hdms-media-staging` bucket, and inserts a `MEDIA` outbox job. It returns the temporary URL without waiting for Google.
+3. The incident or project saves that URL in Supabase. If the save fails before a media reference exists, `deleteExternalMediaAction` removes the temporary image and pending job.
+4. Database triggers insert a `REPORT` job in the same transaction as a saved flood route, detour, or project. `syncReportingRowAction` only wakes the worker after the form finishes all writes. `EdgeRuntime.waitUntil` processes pending work after the response. Worker retries use exponential backoff and a `SKIP LOCKED` claim; an Admin read triggers recovery after Edge interruption. Once Drive upload and database URL replacement succeed, the temporary object is removed.
+5. Migration `20261116093000` schedules a lightweight worker wake-up every two minutes. Failed jobs after eight attempts still require inspection and manual requeue; there is no operator UI for that yet (KI-010/B-021).
 
 ## Deployment order
 
 1. Paste `integrations/google-apps-script/Code.gs` into a new Apps Script project and run `setupHdmsIntegration`.
 2. Deploy it as a Web App.
 3. Set `APPS_SCRIPT_WEB_APP_URL` and `APPS_SCRIPT_API_SECRET` as Edge Function secrets.
-4. Deploy `supabase/functions/hdms-api/index.ts`.
-5. Deploy the static website.
+4. Apply `supabase/migrations/20261116090000_async_external_integrations.sql` (new bucket, outbox table, claim RPC).
+5. Deploy `supabase/functions/hdms-api/index.ts`.
+6. Apply `supabase/migrations/20261116093000_schedule_external_jobs.sql` after Edge deployment.
+7. Deploy the static website and verify a new image reloads while staged, then later resolves to the Drive URL and a matching Sheets row appears.
 
 Rollback the website first, then restore the previous Edge Function. Existing Drive URLs remain readable and existing Supabase Storage URLs remain supported.
 
 ## Verification status
 
 - Lint, TypeScript, static production build, Admin regression and mobile smoke pass locally.
-- Browser integration tests verify upload → database URL → reporting order and compensating deletion after a simulated database failure.
-- Google Drive and Apps Script still require an end-to-end staging check with real secrets. Do not mark external integration complete until an uploaded image can be reloaded from its saved public URL and the matching Sheets row is confirmed.
+- Browser integration tests use mocked API responses to verify stage → database URL → queue order and cleanup after a simulated database failure.
+- The new outbox, worker, Google transfer, and Storage cleanup still require an end-to-end staging/Production check with real services. Do not mark migration complete until the staged image loads, the saved URL changes to Drive, the staging object is removed, and the matching Sheets row is confirmed.

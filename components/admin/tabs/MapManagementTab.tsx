@@ -1357,7 +1357,7 @@ export function MapManagementTab({
             isActive: !saveAsDraft,
             updatedAt: new Date().toISOString(),
           });
-          if (!result.synced) onToast("บันทึกแล้ว แต่ยังไม่ได้ตั้งค่าการส่งรายงาน Google Sheets");
+          if (!result.synced && !result.queued) onToast("บันทึกแล้ว แต่ยังไม่ได้ตั้งค่าการส่งรายงาน Google Sheets");
         } catch {
           onToast("บันทึกแล้ว แต่ส่งรายงาน Google Sheets ไม่สำเร็จ");
         }
@@ -1421,7 +1421,6 @@ export function MapManagementTab({
         });
         if (forwardRes.success) {
           mediaPersisted = true;
-          await syncReport(forwardRes.savedId, String(dbTrafficStatus));
         }
 
         // 2. Reverse segment (B -> A)
@@ -1501,6 +1500,7 @@ export function MapManagementTab({
 
         if (res.success) {
           mediaPersisted = true;
+          await syncReport(forwardRes.savedId, String(dbTrafficStatus));
           await syncReport(res.savedId, String(revTrafficStatus));
           try { await onDataRefresh(res.systemData); } catch { onToast("บันทึกแล้ว แต่ไม่สามารถโหลดข้อมูลล่าสุด กรุณารีเฟรชหน้าจอ"); }
           showSuccessModal(

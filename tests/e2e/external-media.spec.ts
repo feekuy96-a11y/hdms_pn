@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const base = process.env.BASE_PATH || "";
 
-test("project evidence uploads before the record is saved and reporting sync runs last", async ({ page }) => {
+test("project evidence stages in Supabase before save and reporting queues last", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop administration workflow");
 
   const calls: Array<{ action: string; args: any[] }> = [];
@@ -19,18 +19,18 @@ test("project evidence uploads before the record is saved and reporting sync run
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          mediaId: "drive-test-1",
-          url: "https://lh3.googleusercontent.com/d/drive-test-1",
+          mediaId: "f2d5f818-cba7-41a0-ac3f-4b1d5dc4d72e.png",
+          url: "https://example.supabase.co/storage/v1/object/public/hdms-media-staging/f2d5f818-cba7-41a0-ac3f-4b1d5dc4d72e.png",
           mimeType: "image/png",
           sizeBytes: 68,
-          provider: "google-drive",
+          provider: "supabase-staging",
         }),
       });
     }
     if (body.action === "upsertMitigationProjectAction") {
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) });
     }
-    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, synced: true }) });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, synced: false, queued: true }) });
   });
 
   await page.goto(`${base}/admin/`);
@@ -51,11 +51,11 @@ test("project evidence uploads before the record is saved and reporting sync run
     "upsertMitigationProjectAction",
     "syncReportingRowAction",
   ]);
-  expect(calls[1].args[0].beforeImageUrl).toBe("https://lh3.googleusercontent.com/d/drive-test-1");
+  expect(calls[1].args[0].beforeImageUrl).toContain("/hdms-media-staging/");
   expect(calls[2].args[0].recordType).toBe("PROJECT");
 });
 
-test("an unreferenced Drive upload is deleted when the project save fails", async ({ page }) => {
+test("an unreferenced staged upload is deleted when the project save fails", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop administration workflow");
 
   const actions: string[] = [];
@@ -71,7 +71,7 @@ test("an unreferenced Drive upload is deleted when the project save fails", asyn
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ mediaId: "drive-orphan-1", url: "https://lh3.googleusercontent.com/d/drive-orphan-1", mimeType: "image/png", sizeBytes: 68, provider: "google-drive" }),
+        body: JSON.stringify({ mediaId: "f2d5f818-cba7-41a0-ac3f-4b1d5dc4d72e.png", url: "https://example.supabase.co/storage/v1/object/public/hdms-media-staging/f2d5f818-cba7-41a0-ac3f-4b1d5dc4d72e.png", mimeType: "image/png", sizeBytes: 68, provider: "supabase-staging" }),
       });
     }
     if (body.action === "upsertMitigationProjectAction") {

@@ -186,28 +186,139 @@ async function callAppsScript(action: string, payload: Record<string, unknown>, 
 }
 
 async function uploadExternalMedia(payload: any) {
-  const validated = decodeImageDataUrl(payload.dataUrl);
-  if (!appsScriptConfigured()) return uploadImageToGoogleDrive(payload);
-  const result = await callAppsScript("uploadMedia", {
-    dataUrl: payload.dataUrl,
-    fileName: payload.fileName,
-    ownerType: payload.ownerType,
-    ownerId: payload.ownerId,
-  }, 25_000);
-  if (typeof result.mediaId !== "string" || typeof result.url !== "string") fail("Apps Script returned invalid media data", 502);
-  return {
-    mediaId: result.mediaId,
-    url: googleDrivePublicImageUrl(result.mediaId),
-    mimeType: validated.mimeType,
-    sizeBytes: validated.bytes.byteLength,
-    provider: "google-drive",
-  };
+  const { mimeType, bytes } = decodeImageDataUrl(payload.dataUrl);
+  const url = text(Deno.env.get("SUPABASE_URL"), "Supabase URL");
+  const key = text(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"), "Service role key");
+  const db = createClient(url, key, { auth: { persistSession: false } });
+  const ext = mimeType === "image/jpeg" ? "jpg" : mimeType.split("/")[1];
+  const path = `${crypto.randomUUID()}.${ext}`;
+  const { error } = await db.storage.from("hdms-media-staging").upload(path, bytes, { contentType: mimeType, upsert: false });
+  if (error) fail("ไม่สามารถพักรูปใน Supabase ได้", 502);
+  const publicUrl = db.storage.from("hdms-media-staging").getPublicUrl(path).data.publicUrl;
+  const queued = await db.from("doh_external_jobs").insert({ kind: "MEDIA", payload: {
+    path, url: publicUrl, fileName: payload.fileName, ownerType: payload.ownerType,
+    ownerId: payload.ownerId, mimeType,
+  } });
+  if (queued.error) {
+    await db.storage.from("hdms-media-staging").remove([path]);
+    fail("ไม่สามารถเข้าคิวส่งรูปได้", 502);
+  }
+  return { mediaId: path, url: publicUrl, mimeType, sizeBytes: bytes.byteLength, provider: "supabase-staging" };
 }
 
 async function syncReportingRow(payload: any) {
-  if (!appsScriptConfigured()) return { success: true, synced: false, reason: "not-configured" };
-  await callAppsScript("syncReportingRow", { source: "hdms-pn", idempotencyKey: text(payload.recordId, "Record ID"), record: payload }, 12_000);
-  return { success: true, synced: true };
+  text(payload.recordId, "Record ID");
+  const db = createClient(text(Deno.env.get("SUPABASE_URL"), "Supabase URL"), text(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"), "Service role key"));
+  // The database trigger enqueued this report atomically with the saved row.
+  // This call only nudges the worker after the UI has finished all route writes.
+  scheduleExternalJobs(db);
+  return { success: true, synced: false, queued: true };
+}
+
+function scheduleExternalJobs(db: any) {
+  const runtime = (globalThis as any).EdgeRuntime;
+  if (runtime?.waitUntil) runtime.waitUntil(processExternalJobs(db).catch((error: unknown) => console.error("External queue worker failed", error)));
+}
+
+async function processExternalJobs(db: any) {
+  const { data: jobs, error } = await db.rpc("doh_claim_external_jobs", { p_limit: 5 });
+  if (error) throw error;
+  for (const job of jobs || []) {
+    try {
+      if (job.kind === "REPORT") {
+        if (!appsScriptConfigured()) throw new Error("Apps Script is not configured");
+        await callAppsScript("syncReportingRow", {
+          source: "hdms-pn", idempotencyKey: text(job.payload.recordId, "Record ID"), record: job.payload,
+        }, 12_000);
+      } else {
+        await processStagedMedia(db, job);
+      }
+      await db.from("doh_external_jobs").update({ status: "done", last_error: null, updated_at: new Date().toISOString() }).eq("id", job.id);
+    } catch (cause) {
+      const attempts = Number(job.attempts) || 1;
+      const status = attempts >= 8 ? "failed" : "pending";
+      // A save that never completed must not leave the temporary bucket growing forever.
+      // Keep failed jobs for diagnosis, but remove their orphaned object after one day.
+      if (status === "failed" && job.kind === "MEDIA" &&
+          String(cause).includes("no saved record") &&
+          Date.now() - new Date(job.created_at).getTime() > 24 * 60 * 60_000) {
+        await db.storage.from("hdms-media-staging").remove([job.payload.path]);
+      }
+      await db.from("doh_external_jobs").update({
+        status, last_error: String(cause).slice(0, 500),
+        next_attempt_at: new Date(Date.now() + Math.min(60 * 60_000, 30_000 * 2 ** (attempts - 1))).toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq("id", job.id);
+    }
+  }
+}
+
+async function processStagedMedia(db: any, job: any) {
+  const { path, url, ownerType, fileName, ownerId, mimeType } = job.payload;
+  const tempUrl = text(url, "Temporary URL");
+  let fileId = job.external_id;
+  // Find a persisted reference before transferring. A failed route save leaves only a
+  // temporary object; retries can resolve it after the record is saved.
+  let rows: any[] = [];
+  if (ownerType === "PROJECT") {
+    const result = await db.from("doh_mitigation_projects").select("project_id,before_image_url,after_image_url,updated_at").eq("project_id", ownerId);
+    if (result.error) throw result.error;
+    rows = (result.data || []).filter((r: any) => r.before_image_url === tempUrl || r.after_image_url === tempUrl);
+  } else {
+    const [primary, gallery] = await Promise.all([
+      db.from("doh_flood_routes").select("id,latest_photo_url,direction_meta,updated_at").eq("latest_photo_url", tempUrl),
+      db.from("doh_flood_routes").select("id,latest_photo_url,direction_meta,updated_at").contains("direction_meta", { photos: [{ dataUrl: tempUrl }] }),
+    ]);
+    if (primary.error || gallery.error) throw primary.error || gallery.error;
+    rows = [...new Map([...(primary.data || []), ...(gallery.data || [])].map((row: any) => [row.id, row])).values()];
+  }
+  if (!rows.length && fileId) {
+    const removed = await db.storage.from("hdms-media-staging").remove([path]);
+    if (removed.error) throw removed.error;
+    return;
+  }
+  if (!rows.length) throw new Error("Temporary media has no saved record yet");
+  if (!fileId) {
+    const downloaded = await db.storage.from("hdms-media-staging").download(text(path, "Storage path"));
+    if (downloaded.error || !downloaded.data) throw downloaded.error || new Error("Staged image unavailable");
+    const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    const uploaded = await uploadExternalMediaToDrive({ dataUrl: `data:${mimeType};base64,${btoa(binary)}`, fileName, ownerType, ownerId });
+    fileId = uploaded.mediaId;
+    const saved = await db.from("doh_external_jobs").update({ external_id: fileId }).eq("id", job.id);
+    if (saved.error) throw saved.error;
+  }
+  const driveUrl = googleDrivePublicImageUrl(fileId);
+  for (const row of rows) {
+    if (ownerType === "PROJECT") {
+      const changes: Record<string, string> = {};
+      if (row.before_image_url === tempUrl) changes.before_image_url = driveUrl;
+      if (row.after_image_url === tempUrl) changes.after_image_url = driveUrl;
+      const result = await db.from("doh_mitigation_projects").update(changes).eq("project_id", row.project_id).eq("updated_at", row.updated_at).select("project_id");
+      if (result.error || !result.data?.length) throw result.error || new Error("Project changed during media transfer");
+    } else {
+      const photos = Array.isArray(row.direction_meta?.photos) ? row.direction_meta.photos : [];
+      const changes: Record<string, unknown> = {};
+      if (row.latest_photo_url === tempUrl) changes.latest_photo_url = driveUrl;
+      if (photos.some((photo: any) => photo.dataUrl === tempUrl)) {
+        changes.direction_meta = { ...row.direction_meta, photos: photos.map((photo: any) => photo.dataUrl === tempUrl ? { ...photo, dataUrl: driveUrl } : photo) };
+      }
+      if (Object.keys(changes).length) {
+        const result = await db.from("doh_flood_routes").update(changes).eq("id", row.id).eq("updated_at", row.updated_at).select("id");
+        if (result.error || !result.data?.length) throw result.error || new Error("Flood route changed during media transfer");
+      }
+    }
+  }
+  const removed = await db.storage.from("hdms-media-staging").remove([path]);
+  if (removed.error) throw removed.error;
+}
+
+async function uploadExternalMediaToDrive(payload: any) {
+  if (!appsScriptConfigured()) return uploadImageToGoogleDrive(payload);
+  const result = await callAppsScript("uploadMedia", payload, 25_000);
+  if (typeof result.mediaId !== "string") fail("Apps Script returned invalid media data", 502);
+  return { mediaId: result.mediaId };
 }
 
 Deno.serve(async (req) => {
@@ -273,7 +384,10 @@ Deno.serve(async (req) => {
       data.systemSettings = data.systemSettings?.main || data.systemSettings;
       return normalizeSystemMediaUrls(data);
     };
-    if (action === "getSystemDataAction") return reply(await system());
+    if (action === "getSystemDataAction") {
+      if (serviceKey) scheduleExternalJobs(createClient(url, serviceKey));
+      return reply(await system());
+    }
     if (action === "getPublicSystemDataAction") {
       return reply(await system(true, true), 200, {
         "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
@@ -284,7 +398,11 @@ Deno.serve(async (req) => {
     if (action === "uploadExternalMediaAction") return reply(await uploadExternalMedia(p));
     if (action === "deleteExternalMediaAction") {
       const mediaId = text(p?.mediaId, "Media ID");
-      if (appsScriptConfigured()) await callAppsScript("deleteMedia", { mediaId }, 12_000);
+      if (/^[0-9a-f-]{36}\.(jpg|png|webp)$/.test(mediaId)) {
+        const removed = await db.storage.from("hdms-media-staging").remove([mediaId]);
+        if (removed.error) fail("Temporary media cleanup failed", 502);
+        await db.from("doh_external_jobs").delete().eq("kind", "MEDIA").eq("payload->>path", mediaId).eq("status", "pending");
+      } else if (appsScriptConfigured()) await callAppsScript("deleteMedia", { mediaId }, 12_000);
       else await deleteGoogleDriveFile(mediaId);
       return reply({ success: true });
     }
