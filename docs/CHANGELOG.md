@@ -1,5 +1,10 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [VERIFIED EXTERNAL] 2026-11-16 Apps Script Web App ใหม่ผ่าน idempotency check
+- **Web App:** URL `/exec` ใหม่ตอบ JSON ได้จริง; คำขอไม่มี secret ถูกปฏิเสธ และ `uploadMedia` สองครั้งด้วย `operationId` เดียวคืน `mediaId` เดียวกัน. ลบไฟล์ QA หลังทดสอบสำเร็จ จึงไม่เหลือรูปทดลองใน Drive.
+- **ค้าง:** ต้องเปลี่ยน `APPS_SCRIPT_WEB_APP_URL` ใน Supabase Edge Function secrets เป็น URL ใหม่และ deploy `hdms-api` v18 ซ้ำ. ไม่สามารถทำขั้นนี้ผ่าน connection ปัจจุบันเพราะไม่มี Supabase secrets-management tool หรือ CLI ที่ authenticated.
+- **Backlog:** B-022.
+
 ### [UPDATE-093] 2026-11-16 ตรวจครบ keyboard focus ของ Admin dialog
 - **ไฟล์ที่ตรวจ:** `components/ui/use-modal-accessibility.ts`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `components/admin/tabs/GisHighwayModals.tsx`, `components/ui/AnimatedStatusModal.tsx`, `components/admin/OfficialReportDispatchModal.tsx`, และ E2E keyboard specs.
 - **ผล:** dialog ของ Admin ทุกตัวที่มี `role="dialog"` ใช้ hook เดียวกันสำหรับ initial focus, Tab/Shift+Tab trap, Escape และคืน focus ไป trigger. ไม่ต้องเปลี่ยน code เพราะ source ปัจจุบันครอบคลุมครบ.
