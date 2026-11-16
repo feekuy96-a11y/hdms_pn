@@ -16,6 +16,7 @@ import {
   ChevronRight,
   ShieldCheck,
   FileText,
+  Activity,
 } from "lucide-react";
 import { AnimatedStatusModal } from "@/components/ui/AnimatedStatusModal";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
@@ -46,6 +47,10 @@ const LineStylingTab = dynamic(
 );
 const GovernorProjectsTab = dynamic(
   () => import("@/components/admin/tabs/GovernorProjectsTab").then((m) => m.GovernorProjectsTab),
+  { ssr: false }
+);
+const ExternalJobsTab = dynamic(
+  () => import("@/components/admin/tabs/ExternalJobsTab").then((m) => m.ExternalJobsTab),
   { ssr: false }
 );
 
@@ -122,7 +127,7 @@ export function AdminConsole({
 }: AdminConsoleProps) {
   // Navigation & View
   const [activeTab, setActiveTab] = useState<
-    "system" | "map" | "incidents" | "detours" | "routes" | "style" | "projects"
+    "system" | "map" | "incidents" | "detours" | "routes" | "style" | "projects" | "jobs"
   >("map");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   // Desktop workspace width: drag the divider without changing the map's flex layout.
@@ -255,6 +260,12 @@ export function AdminConsole({
       icon: Palette,
     },
     {
+      id: "jobs" as const,
+      label: "งานเบื้องหลัง",
+      subLabel: "สถานะการส่ง Drive & Sheets",
+      icon: Activity,
+    },
+    {
       id: "projects" as const,
       label: "โครงการผู้ว่าฯ",
       subLabel: `แผนงบประมาณ 10 จุด (${systemData.mitigationProjects?.length || 0} โครงการ)`,
@@ -266,7 +277,7 @@ export function AdminConsole({
   const NAV_GROUPS: Array<{ title: string; ids: Array<(typeof NAV_ITEMS)[number]["id"]> }> = [
     { title: "สถานการณ์น้ำท่วม", ids: ["incidents", "map", "detours"] },
     { title: "ข้อมูลโครงข่ายและแผนที่", ids: ["routes", "style"] },
-    { title: "บริหารและรายงาน", ids: ["projects", "system"] },
+    { title: "บริหารและรายงาน", ids: ["projects", "jobs", "system"] },
   ];
 
   return (
@@ -602,6 +613,8 @@ export function AdminConsole({
               showSuccessModal={showSuccessModal}
             />
           )}
+
+          {activeTab === "jobs" && <ExternalJobsTab onToast={onToast} />}
         </div>
       </main>
 

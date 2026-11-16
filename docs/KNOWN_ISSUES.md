@@ -27,7 +27,7 @@
 
 ### KI-010: Google Sheets sync ยังไม่มี durable retry queue
 - ปิดส่วน durable retry แล้วบน Production: `doh_external_jobs`, Edge worker v16, retry/backoff สูงสุด 8 ครั้ง และ Cron ปลุกทุก 2 นาทีผ่านการทดสอบจริง.
-- คงข้อจำกัดด้านปฏิบัติการ: งานที่ล้มครบ 8 ครั้งต้องตรวจ `status='failed'` และ requeue ด้วย SQL; ยังไม่มีหน้าจอ Admin สำหรับตรวจและลองใหม่.
+- หน้าจอ Admin สำหรับตรวจ 50 งานล่าสุดและลองงาน `failed` ใหม่ทำแล้วในโค้ด; รอ deploy Edge/web และตรวจบน Production ก่อนปิดข้อจำกัดนี้.
 
 ### KI-001: ข้อจำกัดจำนวน Waypoints ของ Google Maps Direction URLs
 - **รายละเอียด:** การสร้าง Universal URL สำหรับเปิด Google Maps นำทาง (`https://www.google.com/maps/dir/?api=1...`) มีข้อจำกัดความยาวของ URL query string หากใส่พิกัดจุดเลี้ยว (Waypoints) เกิน 8–9 จุด อาจทำให้เบราว์เซอร์หรือแอปพลิเคชัน Google Maps บนมือถือตัดทอน URL หรือไม่สามารถประมวลผลเส้นทางได้
