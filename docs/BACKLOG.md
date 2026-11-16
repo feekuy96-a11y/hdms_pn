@@ -16,7 +16,7 @@
 | B-009 | ต่ำ | `npm run check` ไม่ได้ build แบบ Pages (ที่ใช้ deploy จริง) | ปิด (2026-11-16, UPDATE-095) |
 | B-010 | กลาง | อ่านข้อมูลสาธารณะทุกครั้งโดน DB (ไม่มีแคช) ช่วงคนเข้าเยอะ | ปิด (เพิ่ม GET & Cache-Control ใน UPDATE-065) |
 | B-011 | กลาง | e2e ยังไม่ครอบคลุมฟีเจอร์ใหม่ (ตัวแก้ไขเส้นอิสระ, แถบสรุป, bottom sheet) | ปิดบางส่วน (เพิ่ม detour-navigation.spec.ts 12 ข้อใน UPDATE-066) |
-| B-012 | ต่ำ | `reactStrictMode: false` ซ่อนบั๊ก cleanup ของ effect | เปิด |
+| B-012 | ต่ำ | `reactStrictMode: false` ซ่อนบั๊ก cleanup ของ effect | ปิด (2026-11-16, UPDATE-096) |
 | B-013 | ต่ำ | ข้อจำกัด Google Maps Universal URL Waypoints ไม่เกิน 8-9 จุด | เปิด (ใช้ sampleWaypointsForGoogleMaps บรรเทาแล้ว) |
 | B-014 | **วิกฤต** | Edge Function Production v9 ไม่ส่งค่าฝั่งถนน/ช่องจราจร/ทิศทางไปยัง DB (ตรวจอ่านอย่างเดียว 2026-11-11) | เปิด: แก้ source แล้ว ต้อง Security Review + deploy และทดสอบ staging |
 | B-015 | สูง | Phase 6 ยังไม่ผ่าน Build/E2E/CRUD integration บน staging เพราะ dependencies ในสภาพแวดล้อมทดสอบไม่ครบ | ปิด (2026-11-11, ดู UPDATE-070: Playwright E2E 46 passed, lint 0 warnings, typecheck 0 errors, build:pages 6/6 ผ่านสมบูรณ์) |
@@ -139,7 +139,9 @@
 - เพิ่ม: เพิ่ม/ลบ/ลากจุด และเชื่อม/ตัดเส้นในโหมดอิสระ · แถบสรุปสถานการณ์และการเรียงตามความรุนแรง · bottom sheet รายละเอียดบนมือถือ · เมนูแอดมินแบบแถบไอคอนที่จอ 1280px
 
 ## B-012 [ต่ำ] `reactStrictMode: false`
-- เปิดเฉพาะ dev เพื่อจับ effect ที่ cleanup ไม่ครบ (ระวัง double-invoke กับโค้ดที่อ่าน event/โหลด Leaflet)
+- เปิดเฉพาะ dev เพื่อจับ effect/listener ที่ cleanup ไม่ครบ; production static export ใช้ `NODE_ENV=production` จึงไม่เปลี่ยน runtime ของประชาชนหรือ Admin.
+- **ตรวจ:** `npm run check:deploy` ผ่าน; ตรวจ config production ได้ค่า `false`.
+- **สถานะ:** ปิด (2026-11-16, UPDATE-096).
 
 ## บันทึกเพิ่ม B-015 / Phase 6 Public UI (2026-11-11)
 - มี Playwright test ใหม่ `tests/e2e/public-route-sheet.spec.ts` สำหรับหน้ารายการมือถือและหน้ารายละเอียดทางเลี่ยง โดยยังไม่ได้รันจริงเพราะ `npm ci` ดึงแพ็กเกจไม่สำเร็จ (`EAI_AGAIN`); ต้องรัน E2E สองโหมด + ตรวจการล้นจอ 360/412/1280px ก่อน production.

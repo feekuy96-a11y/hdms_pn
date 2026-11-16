@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: false,
+  // Development only: detect effects/listeners that are not cleaned up without
+  // changing the production static export's runtime behavior.
+  reactStrictMode: process.env.NODE_ENV !== "production",
   output: process.env.NEXT_OUTPUT === 'export' ? 'export' : process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
   turbopack: {
     root: process.cwd(),

@@ -1,5 +1,11 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-096] 2026-11-16 เปิด React Strict Mode เฉพาะ development
+- **ไฟล์:** `next.config.mjs`, `docs/BACKLOG.md`.
+- **การแก้ไข:** ตั้ง `reactStrictMode` ตาม `NODE_ENV !== "production"` เพื่อให้ local development ตรวจ effect/listener cleanup สองรอบ แต่ไม่เปลี่ยน production static export.
+- **ตรวจแล้ว:** `npm run check:deploy` ผ่าน และ `NODE_ENV=production` ให้ค่า config เป็น `false`.
+- **Backlog:** ปิด B-012.
+
 ### [UPDATE-095] 2026-11-16 คำสั่งตรวจก่อน deploy ให้ตรง GitHub Pages
 - **ไฟล์:** `package.json`, `docs/BACKLOG.md`.
 - **การแก้ไข:** เพิ่ม `npm run check:deploy` ให้รัน lint, typecheck และ `build:pages` ตาม pipeline static export จริง; คง `npm run check` เดิมสำหรับ server build compatibility.
