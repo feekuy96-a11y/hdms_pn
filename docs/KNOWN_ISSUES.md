@@ -29,6 +29,9 @@
 - ปิดส่วน durable retry แล้วบน Production: `doh_external_jobs`, Edge worker v16, retry/backoff สูงสุด 8 ครั้ง และ Cron ปลุกทุก 2 นาทีผ่านการทดสอบจริง.
 - ปิดข้อจำกัดด้านปฏิบัติการแล้ว: หน้า Admin แสดงงานที่ต้องติดตามสูงสุด 50 งาน งานสำเร็จล่าสุด 20 งาน และลองงาน `failed` ใหม่ได้; Edge v17 และเว็บ deploy แล้ว พร้อมตรวจ Production read และ live browser.
 
+### KI-011: Apps Script ยังต้อง publish source เวอร์ชัน idempotent
+- Edge v18 และ RPC promotion แบบ atomic ถูก deploy แล้ว แต่ repository ไม่สามารถ publish Apps Script Web App ได้เอง. จนกว่าจะ replace `integrations/google-apps-script/Code.gs` และ Deploy version ใหม่ ยังยืนยันไม่ได้ว่า retry ของ MEDIA จะคืนไฟล์เดิมและ REPORT เก่าจะไม่เขียนทับแถวใหม่; ดู B-022.
+
 ### KI-001: ข้อจำกัดจำนวน Waypoints ของ Google Maps Direction URLs
 - **รายละเอียด:** การสร้าง Universal URL สำหรับเปิด Google Maps นำทาง (`https://www.google.com/maps/dir/?api=1...`) มีข้อจำกัดความยาวของ URL query string หากใส่พิกัดจุดเลี้ยว (Waypoints) เกิน 8–9 จุด อาจทำให้เบราว์เซอร์หรือแอปพลิเคชัน Google Maps บนมือถือตัดทอน URL หรือไม่สามารถประมวลผลเส้นทางได้
 - **การจัดการใน Phase 5:** ฟังก์ชัน [`sampleWaypointsForGoogleMaps`](file:///f:/DOH_Pattani_Flood/hdms_pn/lib/detour-navigation.ts) จะทำการ Downsample พิกัดจุดหักเลี้ยวตามระยะทาง (Chord distance) ให้เหลือไม่เกิน 8 จุดสำคัญ เพื่อรับประกันว่า Google Maps จะเปิดและนำทางตามแนวทางเลี่ยงได้อย่างแม่นยำและไม่เกิดข้อผิดพลาด URL ล้น

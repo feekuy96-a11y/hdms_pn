@@ -105,11 +105,17 @@ function uploadMedia(body) {
   if (!folderId) return { ok: false, error: "drive-not-configured" };
   const mimeType = match[1].toLowerCase();
   const extension = mimeType === "image/jpeg" ? "jpg" : mimeType.split("/")[1];
+  const operationId = safeText(body.operationId, 80);
+  const folder = DriveApp.getFolderById(folderId);
+  if (operationId) {
+    const existing = findMediaByOperation(folder, operationId);
+    if (existing) return mediaResult(existing, mimeType, bytes.length);
+  }
   const requestedName = safeText(body.fileName, 120);
   const fileName = /^[\p{L}\p{N} _.-]{1,120}$/u.test(requestedName)
     ? requestedName
-    : "hdms-" + Utilities.getUuid() + "." + extension;
-  const file = DriveApp.getFolderById(folderId).createFile(Utilities.newBlob(bytes, mimeType, fileName));
+    : "hdms-" + (operationId || Utilities.getUuid()) + "." + extension;
+  const file = folder.createFile(Utilities.newBlob(bytes, mimeType, fileName));
   try {
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   } catch (error) {
@@ -117,13 +123,31 @@ function uploadMedia(body) {
     console.error(error);
     return { ok: false, error: "public-sharing-failed" };
   }
-  file.setDescription(JSON.stringify({ ownerType: safeText(body.ownerType, 40), ownerId: safeText(body.ownerId, 120) }));
+  file.setDescription(JSON.stringify({ operationId: operationId, ownerType: safeText(body.ownerType, 40), ownerId: safeText(body.ownerId, 120) }));
+  return mediaResult(file, mimeType, bytes.length);
+}
+
+function findMediaByOperation(folder, operationId) {
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const file = files.next();
+    try {
+      const description = JSON.parse(file.getDescription() || "{}");
+      if (description.operationId === operationId) return file;
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+  return null;
+}
+
+function mediaResult(file, mimeType, sizeBytes) {
   return {
     ok: true,
     mediaId: file.getId(),
     url: "https://lh3.googleusercontent.com/d/" + encodeURIComponent(file.getId()),
     mimeType: mimeType,
-    sizeBytes: bytes.length,
+    sizeBytes: sizeBytes,
     provider: "google-drive",
   };
 }
@@ -154,6 +178,11 @@ function syncReportingRow(body) {
   const existing = sheet.getLastRow() > 1
     ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).createTextFinder(key).matchEntireCell(true).findNext()
     : null;
+  const existingUpdatedAt = existing ? new Date(String(sheet.getRange(existing.getRow(), 8).getValue() || "")).getTime() : NaN;
+  const incomingUpdatedAt = new Date(String(record.updatedAt || "")).getTime();
+  if (existing && Number.isFinite(existingUpdatedAt) && Number.isFinite(incomingUpdatedAt) && incomingUpdatedAt < existingUpdatedAt) {
+    return { ok: true, operation: "skipped-stale" };
+  }
   if (existing) sheet.getRange(existing.getRow(), 1, 1, HDMS_HEADERS.length).setValues([row]);
   else sheet.appendRow(row);
   return { ok: true, operation: existing ? "updated" : "inserted" };

@@ -1,5 +1,12 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [PRODUCTION BACKEND / LOCAL DOCS] 2026-11-16 Outbox phase 1: idempotent media และ atomic promotion
+- **ไฟล์:** `supabase/migrations/20261116100000_outbox_media_atomic_promotion.sql`, `supabase/functions/hdms-api/index.ts`, `integrations/google-apps-script/Code.gs`, `docs/ARCHITECTURE.md`, `docs/EXTERNAL_MEDIA_INTEGRATION.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`.
+- **การแก้ไข:** งาน MEDIA ใช้ UUID ของ outbox job เป็น idempotency key; Direct Drive ค้น `appProperties` และ Apps Script ค้น file description ก่อนสร้างไฟล์. Worker เปลี่ยน URL พักไป Drive ผ่าน RPC เดียวที่ไม่แตะ `updated_at`, จึงไม่สร้าง REPORT trigger ซ้ำ. Apps Script เปรียบเทียบ `updatedAt` ก่อนเขียน Sheets และตอบ `skipped-stale` เมื่อคิวเก่ากว่า.
+- **Production:** apply migration `20261116100000` แล้ว และ deploy `hdms-api` v18 แล้ว. เรียก action อ่านคิวจริงตอบ HTTP 200 โดยมี pending/processing/failed = 0; ทดสอบ RPC ด้วย URL ที่ไม่มี record ได้ผล `total = 0` จึงไม่แก้ข้อมูลจริง.
+- **ตรวจแล้ว:** `npm run lint`, `npm run typecheck`, `npm run build:pages` บน code ที่ rebase กับ `origin/main` commit `f19ab05` ผ่าน. ไม่ได้ใช้ Deno ในเครื่อง (ไม่มี binary); การ deploy Edge v18 สำเร็จเป็นหลักฐานว่า source compile ที่ Supabase ได้.
+- **ข้อจำกัด:** source `Code.gs` ใน repository ยังต้อง copy/replace และ Deploy เป็น version ใหม่ใน Apps Script project เดิมด้วยมือ (B-022); จึงยังไม่อ้างว่า guard ฝั่ง Apps Script ทำงานจริง.
+
 ### [UPDATE-092] 2026-11-16 Popup สรุปน้ำท่วมไม่ซ้อน, Full Dossier 2 คอลัมน์ Dark Navy, ทิศทางแยกตามสาย, ตัวกรอง 2 ประเภท และซ่อน UI ผู้ว่าฯ
 - **ไฟล์:** `components/map/LongdoGisMap.tsx`, `components/map/FloodEventMiniMap.tsx` (ใหม่), `app/page.tsx`, `app/globals.css`, `components/admin/AdminConsole.tsx`, `app/admin/page.tsx`, `tests/e2e/compact-card-detour-accordion.spec.ts`, `tests/e2e/smoke.spec.ts`, `tests/e2e/admin-menus.spec.ts`, `tests/e2e/admin-shared-dialog-keyboard.spec.ts`, `tests/e2e/external-media.spec.ts`
 - **การแก้ไข:**

@@ -16,9 +16,10 @@
 - GitHub Pages ไม่มี Server Actions/middleware/API routes ดังนั้น `app/actions/doh-actions.ts` ชื่อ "Action" แต่เป็น **client adapter** ที่เรียก `invokeHdms`
 
 ## 2. การไหลของข้อมูล
-### สำเนา Google แบบไม่บล็อกการบันทึก (รอ deploy migration/Edge/web)
+### สำเนา Google แบบไม่บล็อกการบันทึก
 - ฟอร์มส่งรูปไป `uploadExternalMediaAction` ซึ่งพักไฟล์ใน bucket `hdms-media-staging` และสร้างงาน `MEDIA` ใน `doh_external_jobs`; URL พักใช้แสดงรูปได้ระหว่างรอ Google Drive.
-- trigger ของตารางเหตุการณ์ ทางเลี่ยง และโครงการสร้างงาน `REPORT` ในธุรกรรมเดียวกับการบันทึกข้อมูลหลัก; `syncReportingRowAction` เพียงปลุก worker หลังฟอร์มเขียนครบ. Edge ใช้ `EdgeRuntime.waitUntil` ประมวลผลงานหลังตอบกลับ. การเปิด Admin ครั้งถัดไปช่วยเรียกคิวที่ต้องลองใหม่. งานอ้างอิง DB ด้วย URL พักและเปลี่ยน URL หลังอัปโหลด Drive สำเร็จ ก่อนลบไฟล์พัก.
+- trigger ของตารางเหตุการณ์ ทางเลี่ยง และโครงการสร้างงาน `REPORT` ในธุรกรรมเดียวกับการบันทึกข้อมูลหลัก; `syncReportingRowAction` เพียงปลุก worker หลังฟอร์มเขียนครบ. Edge ใช้ `EdgeRuntime.waitUntil` ประมวลผลงานหลังตอบกลับ. การเปิด Admin ครั้งถัดไปช่วยเรียกคิวที่ต้องลองใหม่. งานอ้างอิง DB ด้วย URL พักและเปลี่ยน URL หลังอัปโหลด Drive สำเร็จผ่าน RPC `doh_promote_staged_media` เพียงครั้งเดียว ก่อนลบไฟล์พัก; RPC นี้ไม่แก้ `updated_at` จึงไม่สร้าง REPORT ซ้ำ.
+- งาน `MEDIA` ใช้ UUID ของ outbox job เป็น idempotency key ทั้ง Direct Drive (`appProperties.hdmsOperationId`) และ Apps Script (file description) เพื่อให้ retry หลัง timeout คืนไฟล์เดิมแทนสร้างไฟล์ซ้ำ. Apps Script ปฏิเสธ REPORT ที่ `updatedAt` เก่ากว่าแถวเดิม เพื่อกันคิวเก่าเขียนทับข้อมูลใหม่.
 - คิวเก็บ `attempts`, `next_attempt_at`, `last_error`, `external_id`; `doh_claim_external_jobs` ใช้ `FOR UPDATE SKIP LOCKED` กัน worker ซ้ำ. migration `20261116093000` ใช้ Supabase Cron ปลุก worker ทุก 2 นาที; Admin read ยังช่วยปลุกคิวเพิ่มเติม. งานที่ล้มครบ 8 ครั้งคงสถานะ `failed` เพื่อให้ตรวจและ requeue ภายหลัง; ดู KI-010.
 | ขั้น | ไฟล์ | หมายเหตุ |
 |---|---|---|
@@ -34,7 +35,7 @@
 - หน้าแอดมินต้องใช้ `geojson_data` เต็ม เพราะตัวแก้ไขเส้นบันทึกกลับ **ห้ามให้แอดมินแก้บนเส้นที่ลดจุดแล้ว** (เส้นเสียถาวร)
 - `timelineUpdates` จำกัด 60 รายการต่อจุดน้ำท่วม (migration `20261107000100`) ห้ามเพิ่ม query ที่ไม่มี limit/ขอบเขต
 - งานที่เปลี่ยนขนาด payload ต้องรายงานตัวเลขก่อน-หลัง (F12 → Network → `hdms-api`)
-- **สถานะ migration ทั้งสองไฟล์:** สร้างแล้วในรีโป **(ต้องยืนยันว่าเจ้าของรันบน Supabase แล้ว)** — โค้ดฝั่งเว็บและ Edge Function ย้อนไปใช้แบบเดิมได้เองถ้ายังไม่รัน
+- **สถานะ migration:** `20261116090000`, `20261116093000` และ `20261116100000_outbox_media_atomic_promotion.sql` ถูกใช้กับ Production แล้ว. Edge `hdms-api` v18 ใช้ RPC ตัวหลังแล้ว; source ของ Apps Script ต้อง publish เวอร์ชันที่มีอยู่ใน `integrations/google-apps-script/Code.gs` ก่อนจึงจะได้ idempotency/stale-write guard ฝั่ง Apps Script.
 
 ## 3. ฐานข้อมูล (Supabase / PostGIS)
 - ตาราง: `doh_flood_routes`, `doh_detour_routes`, `doh_timeline_updates`, `doh_mitigation_projects`, `doh_highway_layers`, `doh_offices`, `doh_map_styles`, `doh_system_settings` (+ `deleted_at` soft delete บน flood/detour)

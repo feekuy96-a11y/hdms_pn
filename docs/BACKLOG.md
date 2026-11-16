@@ -26,6 +26,14 @@
 | B-019 | สูง | Public API ส่ง Draft/inactive payload แม้หน้าเว็บจะกรองไม่แสดง | ปิด (2026-11-13, UPDATE-090) |
 | B-020 | กลาง | ย้ายรูปหลักฐานและรูปโครงการไป Google Drive พร้อมส่งสำเนารายงานไป Sheets | ปิด (2026-11-16, ดู CHANGELOG: Google Drive media และ Google Sheets reporting) |
 | B-021 | กลาง | ตั้ง schedule อิสระสำหรับคิวส่ง Drive/Sheets และหน้าตรวจงานที่ `failed` | ปิด (2026-11-16) — Cron, Edge v17 และหน้า Admin deploy แล้ว; Production read + live browser ผ่าน |
+| B-022 | สูง | Apps Script Web App ที่ใช้งานจริงอาจยังเป็น source เวอร์ชันก่อน idempotency/stale-write guard | เปิด (ต้อง publish source เวอร์ชันใหม่ด้วยมือ) |
+
+## B-022 [สูง] Publish Apps Script source สำหรับ outbox idempotency
+- **หลักฐาน:** `integrations/google-apps-script/Code.gs` เพิ่มการค้นหาไฟล์ตาม `operationId` ก่อนสร้างรูป และปฏิเสธ REPORT ที่ `updatedAt` เก่ากว่าแถวเดิม; Edge `hdms-api` v18 และ migration atomic promotion อยู่ Production แล้ว แต่ repository ไม่มี Apps Script project ID หรือ deployment channel จึงไม่สามารถยืนยันว่า Web App `/exec` ใช้ source ชุดนี้.
+- **ผลกระทบ:** หาก network timeout หลัง Apps Script สร้างรูปสำเร็จ worker อาจ retry แล้วเกิดไฟล์ Drive ซ้ำได้; REPORT เก่าจากคิวที่ช้าอาจเขียนทับข้อมูลที่ใหม่กว่าใน Google Sheets.
+- **ทางเลือก:** A) แทนที่ `Code.gs` ใน Apps Script project เดิม แล้ว Deploy เป็น version ใหม่ (คง `/exec` URL เดิม) · B) สร้าง deployment ใหม่และเปลี่ยน Edge secret URL · C) คง version เดิมชั่วคราวพร้อมตรวจงานซ้ำด้วยมือ.
+- **คำแนะนำ:** A เพราะไม่กระทบ URL หรือข้อมูลเดิม และเปิด guard ที่ source/Edge เตรียมไว้แล้ว.
+- **สถานะ:** เปิด (2026-11-16).
 
 ## B-020 [กลาง] Google Drive media และ Google Sheets reporting
 - **หลักฐาน:** รูปเหตุการณ์เดิมถูกเก็บเป็น Base64 ใน `direction_meta`; รูปโครงการเดิมอัปโหลดไป Supabase Storage โดยตรง.
