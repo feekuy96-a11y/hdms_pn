@@ -1,6 +1,32 @@
 import type { SystemDataPayload, MapLineStyleItem, DohOfficeLocation, SystemSettingsConfig } from "@/db/default-data";
 import { HdmsHttpError, invokeHdms } from "@/lib/hdms-api";
 
+export type ExternalJobStatus = "pending" | "processing" | "done" | "failed";
+export type ExternalJobKind = "MEDIA" | "REPORT";
+export interface ExternalJobItem {
+  id: string;
+  kind: ExternalJobKind;
+  status: ExternalJobStatus;
+  recordId: string;
+  attempts: number;
+  lastError: string;
+  createdAt: string;
+  updatedAt: string;
+  nextAttemptAt: string;
+}
+export interface ExternalJobsResult {
+  jobs: ExternalJobItem[];
+  counts: Record<ExternalJobStatus, number>;
+}
+
+export async function getExternalJobsAction(): Promise<ExternalJobsResult> {
+  return invokeHdms("getExternalJobsAction", []);
+}
+
+export async function retryExternalJobAction(jobId: string): Promise<{ success: boolean }> {
+  return invokeHdms("retryExternalJobAction", [jobId]);
+}
+
 export async function restoreRouteAction(recordType: "FLOOD" | "DETOUR", id: string) {
   return invokeHdms("restoreRouteAction", [recordType, id]);
 }

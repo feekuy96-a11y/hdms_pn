@@ -355,7 +355,7 @@ Deno.serve(async (req) => {
     // server-only service role because this deployment is configured to allow
     // direct /admin access without a login session. Never expose serviceKey to
     // the browser or include it in a response.
-    const mutation = !["getSystemDataAction", "getPublicSystemDataAction"].includes(action);
+    const mutation = !["getSystemDataAction", "getPublicSystemDataAction", "getExternalJobsAction"].includes(action);
     const db = createClient(url, mutation && serviceKey ? serviceKey : key, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: !mutation && authorization ? { Authorization: authorization } : {} } });
     const check = async (query: PromiseLike<{ data: any; error: any }>) => {
       const { data, error } = await query;
@@ -393,6 +393,40 @@ Deno.serve(async (req) => {
         "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
       });
     }
+    if (action === "getExternalJobsAction") {
+      if (!serviceKey) return reply({ error: "External job service is not configured" }, 503);
+      const jobsDb = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+      const statuses = ["pending", "processing", "done", "failed"] as const;
+      const counts: Record<string, number> = {};
+      await Promise.all(statuses.map(async (status) => {
+        const { count, error } = await jobsDb.from("doh_external_jobs").select("id", { count: "exact", head: true }).eq("status", status);
+        if (error) fail("External job summary unavailable", 502);
+        counts[status] = count || 0;
+      }));
+      const { data: activeRows, error: activeError } = await jobsDb.from("doh_external_jobs")
+        .select("id,kind,status,payload,attempts,last_error,created_at,updated_at,next_attempt_at")
+        .in("status", ["pending", "processing", "failed"])
+        .order("created_at", { ascending: false }).limit(50);
+      const { data: doneRows, error: doneError } = await jobsDb.from("doh_external_jobs")
+        .select("id,kind,status,payload,attempts,last_error,created_at,updated_at,next_attempt_at")
+        .eq("status", "done").order("updated_at", { ascending: false }).limit(20);
+      if (activeError || doneError) fail("External jobs unavailable", 502);
+      const rows = [...(activeRows || []), ...(doneRows || [])];
+      return reply({
+        counts,
+        jobs: (rows || []).map((job: any) => ({
+          id: job.id,
+          kind: job.kind,
+          status: job.status,
+          recordId: typeof job.payload?.recordId === "string" ? job.payload.recordId : (typeof job.payload?.ownerId === "string" ? job.payload.ownerId : "-"),
+          attempts: job.attempts || 0,
+          lastError: typeof job.last_error === "string" ? job.last_error.slice(0, 500) : "",
+          createdAt: job.created_at,
+          updatedAt: job.updated_at,
+          nextAttemptAt: job.next_attempt_at,
+        })),
+      });
+    }
     if (mutation && !serviceKey) return reply({ error: "Server mutation key is not configured" }, 503);
     const [p, second] = args;
     if (action === "uploadExternalMediaAction") return reply(await uploadExternalMedia(p));
@@ -407,6 +441,18 @@ Deno.serve(async (req) => {
       return reply({ success: true });
     }
     if (action === "syncReportingRowAction") return reply(await syncReportingRow(p));
+    if (action === "retryExternalJobAction") {
+      const jobId = text(p, "Job ID");
+      if (!/^[0-9a-f-]{36}$/i.test(jobId)) fail("Invalid job ID");
+      const { data, error } = await db.from("doh_external_jobs").update({
+        status: "pending", attempts: 0, next_attempt_at: new Date().toISOString(),
+        claimed_at: null, last_error: null, updated_at: new Date().toISOString(),
+      }).eq("id", jobId).eq("status", "failed").select("id").maybeSingle();
+      if (error) fail("External job retry failed", 502);
+      if (!data) fail("Only failed jobs can be retried", 409);
+      scheduleExternalJobs(db);
+      return reply({ success: true });
+    }
     const now = new Date().toISOString();
     let savedRouteId: string | undefined;
     const patch = async (table: string, id: string, changes: Record<string, unknown>, idColumn = "id") => {

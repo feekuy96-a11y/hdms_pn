@@ -2,6 +2,36 @@ import { expect, test } from "@playwright/test";
 
 const base = process.env.BASE_PATH || "";
 
+test("admin can inspect and retry failed background copies", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop administration workflow");
+
+  const retried: string[] = [];
+  await page.route("**/functions/v1/hdms-api", async (route) => {
+    const request = route.request();
+    if (request.method() !== "POST") return route.continue();
+    const body = request.postDataJSON() as { action?: string; args?: any[] };
+    if (body.action === "getExternalJobsAction") {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+        counts: { pending: 1, processing: 0, done: 12, failed: 1 },
+        jobs: [{ id: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa", kind: "REPORT", status: "failed", recordId: "F-42", attempts: 8, lastError: "Apps Script unavailable", createdAt: "2026-11-16T08:00:00.000Z", updatedAt: "2026-11-16T08:10:00.000Z", nextAttemptAt: "2026-11-16T08:10:00.000Z" }],
+      }) });
+    }
+    if (body.action === "retryExternalJobAction") {
+      retried.push(String(body.args?.[0] || ""));
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) });
+    }
+    return route.continue();
+  });
+
+  await page.goto(`${base}/admin/`);
+  await page.getByRole("complementary").getByRole("button", { name: /งานเบื้องหลัง/ }).click();
+  await expect(page.getByRole("heading", { name: "งานส่งข้อมูลเบื้องหลัง" })).toBeVisible();
+  await expect(page.getByText("Apps Script unavailable")).toBeVisible();
+  await page.getByRole("button", { name: "ลองส่งใหม่" }).click();
+  await expect.poll(() => retried).toEqual(["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"]);
+  await expect(page.getByText("ส่งงานกลับเข้าคิวแล้ว")).toBeVisible();
+});
+
 test("project evidence stages in Supabase before save and reporting queues last", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop administration workflow");
 

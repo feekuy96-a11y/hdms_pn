@@ -1,5 +1,11 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [LOCAL] 2026-11-16 หน้าติดตามงาน Drive/Sheets ใน Admin
+- เพิ่มแท็บ `งานเบื้องหลัง` แสดงจำนวน pending/processing/done/failed, งานที่ต้องติดตามสูงสุด 50 งาน และงานสำเร็จล่าสุด 20 งาน พร้อม Loading/Empty/Error/Success และปุ่มลองงาน failed ใหม่.
+- Edge ส่งเฉพาะ metadata ที่จำเป็น ไม่ส่ง payload รูปหรือค่า integration กลับเว็บ; retry รับเฉพาะ UUID และเปลี่ยนได้เฉพาะงานสถานะ failed ก่อนปลุก worker.
+- เพิ่ม E2E ครอบคลุมการเปิดหน้าสถานะและลองส่งใหม่; `npm run lint`, `npm run typecheck`, `npm run build:pages` ผ่าน และ Playwright static Desktop/Mobile ผ่าน 65 / ข้ามตาม viewport/fixture 31 / ล้มเหลว 0. ยังไม่ได้ deploy หรือทดสอบ action ใหม่บน Production.
+- **Backlog:** B-021.
+
 ### [PRODUCTION BACKEND / LOCAL WEB] 2026-11-16 พักรูปใน Supabase และส่ง Drive/Sheets หลังบันทึก
 - เพิ่ม migration `20261116090000_async_external_integrations.sql` สำหรับ bucket พักรูป คิวงานถาวร trigger เข้าคิวรายงานแบบ atomic กับ DB save และ claim แบบ `SKIP LOCKED`.
 - เปลี่ยน Edge `uploadExternalMediaAction` ให้พักรูปและเข้าคิวก่อน; `syncReportingRowAction` เข้าคิวแทนรอ Apps Script. Worker ส่งต่อ Google, เปลี่ยน URL รูปใน record, ลบไฟล์พักเมื่อสำเร็จ และ retry แบบ backoff. Admin read เรียก retry ที่ค้าง.
