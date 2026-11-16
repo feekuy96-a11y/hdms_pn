@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
     "test:e2e:local": "node scripts/test-e2e-with-public-config.mjs",
-    "check": "npm run lint && npm run typecheck && npm run build"
+    "check": "npm run lint && npm run typecheck && npm run build",
+    "check:deploy": "npm run lint && npm run typecheck && npm run build:pages"
   },
   "engines": {
     "node": ">=22"
