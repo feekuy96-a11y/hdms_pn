@@ -3,7 +3,8 @@
 ### [LOCAL] 2026-11-16 หน้าติดตามงาน Drive/Sheets ใน Admin
 - เพิ่มแท็บ `งานเบื้องหลัง` แสดงจำนวน pending/processing/done/failed, งานที่ต้องติดตามสูงสุด 50 งาน และงานสำเร็จล่าสุด 20 งาน พร้อม Loading/Empty/Error/Success และปุ่มลองงาน failed ใหม่.
 - Edge ส่งเฉพาะ metadata ที่จำเป็น ไม่ส่ง payload รูปหรือค่า integration กลับเว็บ; retry รับเฉพาะ UUID และเปลี่ยนได้เฉพาะงานสถานะ failed ก่อนปลุก worker.
-- เพิ่ม E2E ครอบคลุมการเปิดหน้าสถานะและลองส่งใหม่; `npm run lint`, `npm run typecheck`, `npm run build:pages` ผ่าน และ Playwright static Desktop/Mobile ผ่าน 65 / ข้ามตาม viewport/fixture 31 / ล้มเหลว 0. ยังไม่ได้ deploy หรือทดสอบ action ใหม่บน Production.
+- เพิ่ม E2E ครอบคลุมการเปิดหน้าสถานะและลองส่งใหม่; `npm run lint`, `npm run typecheck`, `npm run build:pages` ผ่าน และ Playwright static Desktop/Mobile ผ่าน 65 / ข้ามตาม viewport/fixture 31 / ล้มเหลว 0.
+- **Production:** deploy Edge `hdms-api` v17 และเว็บ commit `a015376`; action อ่านสถานะตอบ HTTP 200 ใน 3.33 วินาทีจากการเรียกครั้งแรกและไม่ส่ง payload ภายในกลับเว็บ. Live browser เปิดแท็บใหม่ได้ ไม่มี Error state หรือ console error. ยังไม่กด retry กับข้อมูลจริงเพราะไม่มีงาน failed และไม่สร้างงานล้มเหลวเทียมใน Production.
 - **Backlog:** B-021.
 
 ### [PRODUCTION BACKEND / LOCAL WEB] 2026-11-16 พักรูปใน Supabase และส่ง Drive/Sheets หลังบันทึก
