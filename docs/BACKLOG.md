@@ -22,7 +22,7 @@
 | B-015 | สูง | Phase 6 ยังไม่ผ่าน Build/E2E/CRUD integration บน staging เพราะ dependencies ในสภาพแวดล้อมทดสอบไม่ครบ | ปิด (2026-11-11, ดู UPDATE-070: Playwright E2E 46 passed, lint 0 warnings, typecheck 0 errors, build:pages 6/6 ผ่านสมบูรณ์) |
 | B-016 | กลาง | ตราครุฑทางการสำหรับป้ายทางหลวงยังไม่มี Asset ที่ผ่านอนุมัติ | เปิด |
 | B-017 | ต่ำ | รัน Playwright ในเครื่องโดยไม่ build พร้อม public config ทำให้หน้า public ค้าง Loading และ test ที่ mock Edge Function ล้ม | ปิด (2026-11-12, UPDATE-074) |
-| B-018 | กลาง | Modal รายละเอียด/แก้ไขใน Admin ยังไม่ใช้ focus trap และ Escape กลางครบทุกตัว | กำลังทำ (UPDATE-075) |
+| B-018 | กลาง | Modal รายละเอียด/แก้ไขใน Admin ยังไม่ใช้ focus trap และ Escape กลางครบทุกตัว | ปิด (2026-11-16, UPDATE-093) |
 | B-019 | สูง | Public API ส่ง Draft/inactive payload แม้หน้าเว็บจะกรองไม่แสดง | ปิด (2026-11-13, UPDATE-090) |
 | B-020 | กลาง | ย้ายรูปหลักฐานและรูปโครงการไป Google Drive พร้อมส่งสำเนารายงานไป Sheets | ปิด (2026-11-16, ดู CHANGELOG: Google Drive media และ Google Sheets reporting) |
 | B-021 | กลาง | ตั้ง schedule อิสระสำหรับคิวส่ง Drive/Sheets และหน้าตรวจงานที่ `failed` | ปิด (2026-11-16) — Cron, Edge v17 และหน้า Admin deploy แล้ว; Production read + live browser ผ่าน |
@@ -34,6 +34,11 @@
 - **ทางเลือก:** A) แทนที่ `Code.gs` ใน Apps Script project เดิม แล้ว Deploy เป็น version ใหม่ (คง `/exec` URL เดิม) · B) สร้าง deployment ใหม่และเปลี่ยน Edge secret URL · C) คง version เดิมชั่วคราวพร้อมตรวจงานซ้ำด้วยมือ.
 - **คำแนะนำ:** A เพราะไม่กระทบ URL หรือข้อมูลเดิม และเปิด guard ที่ source/Edge เตรียมไว้แล้ว.
 - **สถานะ:** เปิด (2026-11-16).
+
+## B-018 [กลาง] Keyboard focus ของ Admin dialog — ปิดแล้ว
+- **หลักฐานก่อนปิด:** `useModalAccessibility` ครอบ dialog ใน Incident Registry, Detour Management, GIS route dialogs, Animated status และ Official report. ค้น `role="dialog"` ใน `components/admin`, `components/ui`, `app/admin` แล้วไม่พบ dialog ที่อยู่นอก hook นี้.
+- **การตรวจ:** `npm run test:e2e:local -- tests/e2e/admin-dialog-keyboard.spec.ts tests/e2e/gis-dialog-keyboard.spec.ts tests/e2e/admin-shared-dialog-keyboard.spec.ts --project=desktop-chromium --project=mobile-chromium --workers=1` ผ่าน 5 / ข้าม 5 (desktop-only workflow ตาม test guard) โดยยืนยัน Escape, Tab wrap และคืน focus.
+- **สถานะ:** ปิด (2026-11-16, UPDATE-093).
 
 ## B-020 [กลาง] Google Drive media และ Google Sheets reporting
 - **หลักฐาน:** รูปเหตุการณ์เดิมถูกเก็บเป็น Base64 ใน `direction_meta`; รูปโครงการเดิมอัปโหลดไป Supabase Storage โดยตรง.
