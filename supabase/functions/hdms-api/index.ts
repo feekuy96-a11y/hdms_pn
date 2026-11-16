@@ -124,10 +124,16 @@ async function uploadImageToGoogleDrive(payload: any) {
   const { mimeType, bytes } = decodeImageDataUrl(payload.dataUrl);
   const folderId = text(Deno.env.get("GOOGLE_DRIVE_FOLDER_ID"), "Google Drive folder");
   const extension = mimeType === "image/jpeg" ? "jpg" : mimeType.split("/")[1];
+  const operationId = typeof payload.operationId === "string" && /^[0-9a-f-]{36}$/i.test(payload.operationId)
+    ? payload.operationId : "";
+  const accessToken = await googleDriveAccessToken();
+  if (operationId) {
+    const existing = await findGoogleDriveUpload(accessToken, folderId, operationId);
+    if (existing) return { mediaId: existing, url: googleDrivePublicImageUrl(existing), mimeType, sizeBytes: bytes.byteLength, provider: "google-drive" };
+  }
   const safeName = typeof payload.fileName === "string" && /^[\p{L}\p{N} _.-]{1,120}$/u.test(payload.fileName)
     ? payload.fileName
-    : `hdms-${crypto.randomUUID()}.${extension}`;
-  const accessToken = await googleDriveAccessToken();
+    : `hdms-${operationId || crypto.randomUUID()}.${extension}`;
   const boundary = `hdms-${crypto.randomUUID()}`;
   const metadata = JSON.stringify({
     name: safeName,
@@ -136,6 +142,7 @@ async function uploadImageToGoogleDrive(payload: any) {
     appProperties: {
       hdmsType: typeof payload.ownerType === "string" ? payload.ownerType.slice(0, 40) : "media",
       hdmsRecordId: typeof payload.ownerId === "string" ? payload.ownerId.slice(0, 120) : "pending",
+      ...(operationId ? { hdmsOperationId: operationId } : {}),
     },
   });
   const body = new Blob([
@@ -163,6 +170,19 @@ async function uploadImageToGoogleDrive(payload: any) {
     fail("Google Drive permission update failed", 502);
   }
   return { mediaId: file.id, url: googleDrivePublicImageUrl(file.id), mimeType, sizeBytes: bytes.byteLength, provider: "google-drive" };
+}
+
+async function findGoogleDriveUpload(accessToken: string, folderId: string, operationId: string): Promise<string | null> {
+  const query = new URLSearchParams({
+    q: `'${folderId}' in parents and trashed = false and appProperties has { key='hdmsOperationId' and value='${operationId}' }`,
+    fields: "files(id)", pageSize: "1", supportsAllDrives: "true", includeItemsFromAllDrives: "true",
+  });
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files?${query}`, {
+    headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(12_000),
+  });
+  if (!response.ok) fail("Google Drive idempotency lookup failed", 502);
+  const body = await response.json();
+  return typeof body?.files?.[0]?.id === "string" ? body.files[0].id : null;
 }
 
 function appsScriptConfigured() {
@@ -284,32 +304,15 @@ async function processStagedMedia(db: any, job: any) {
     const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
     let binary = "";
     for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-    const uploaded = await uploadExternalMediaToDrive({ dataUrl: `data:${mimeType};base64,${btoa(binary)}`, fileName, ownerType, ownerId });
+    const uploaded = await uploadExternalMediaToDrive({ dataUrl: `data:${mimeType};base64,${btoa(binary)}`, fileName, ownerType, ownerId, operationId: job.id });
     fileId = uploaded.mediaId;
     const saved = await db.from("doh_external_jobs").update({ external_id: fileId }).eq("id", job.id);
     if (saved.error) throw saved.error;
   }
   const driveUrl = googleDrivePublicImageUrl(fileId);
-  for (const row of rows) {
-    if (ownerType === "PROJECT") {
-      const changes: Record<string, string> = {};
-      if (row.before_image_url === tempUrl) changes.before_image_url = driveUrl;
-      if (row.after_image_url === tempUrl) changes.after_image_url = driveUrl;
-      const result = await db.from("doh_mitigation_projects").update(changes).eq("project_id", row.project_id).eq("updated_at", row.updated_at).select("project_id");
-      if (result.error || !result.data?.length) throw result.error || new Error("Project changed during media transfer");
-    } else {
-      const photos = Array.isArray(row.direction_meta?.photos) ? row.direction_meta.photos : [];
-      const changes: Record<string, unknown> = {};
-      if (row.latest_photo_url === tempUrl) changes.latest_photo_url = driveUrl;
-      if (photos.some((photo: any) => photo.dataUrl === tempUrl)) {
-        changes.direction_meta = { ...row.direction_meta, photos: photos.map((photo: any) => photo.dataUrl === tempUrl ? { ...photo, dataUrl: driveUrl } : photo) };
-      }
-      if (Object.keys(changes).length) {
-        const result = await db.from("doh_flood_routes").update(changes).eq("id", row.id).eq("updated_at", row.updated_at).select("id");
-        if (result.error || !result.data?.length) throw result.error || new Error("Flood route changed during media transfer");
-      }
-    }
-  }
+  const promoted = await db.rpc("doh_promote_staged_media", { p_temp_url: tempUrl, p_drive_url: driveUrl });
+  if (promoted.error) throw promoted.error;
+  if (!promoted.data?.total) throw new Error("Temporary media reference changed during transfer");
   const removed = await db.storage.from("hdms-media-staging").remove([path]);
   if (removed.error) throw removed.error;
 }
