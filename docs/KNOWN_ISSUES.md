@@ -32,6 +32,9 @@
 ### KI-011: Edge secret ยังชี้ Apps Script URL เดิม
 - Web App ใหม่ผ่านการทดสอบ `uploadMedia` ซ้ำด้วย operation ID เดียวกันแล้ว (คืนไฟล์เดิมและลบ QA file สำเร็จ). เหลือเปลี่ยน `APPS_SCRIPT_WEB_APP_URL` ใน Supabase Edge secrets แล้ว deploy `hdms-api` v18 ซ้ำ; เครื่องมือ Supabase ที่เชื่อมในเซสชันนี้ไม่มีสิทธิ์จัดการ secrets. ดู B-022.
 
+### KI-012: ยังไม่มี field telemetry สำหรับ RAM/CPU ของตัวแก้แนวเส้น
+- Lab test 1,200 จุดยืนยัน canvas เดียวและเพดาน 400 handle แต่ไม่สามารถรายงาน JS heap หรือ CPU บนเครื่องเจ้าหน้าที่จริงได้อย่างน่าเชื่อถือใน CI/headless. เก็บ Chrome Performance trace/Task Manager จากเครื่องที่เคยค้างก่อนเปลี่ยนเพดานหรือเพิ่ม Web Worker; ดู B-005.
+
 ### KI-001: ข้อจำกัดจำนวน Waypoints ของ Google Maps Direction URLs
 - **รายละเอียด:** การสร้าง Universal URL สำหรับเปิด Google Maps นำทาง (`https://www.google.com/maps/dir/?api=1...`) มีข้อจำกัดความยาวของ URL query string หากใส่พิกัดจุดเลี้ยว (Waypoints) เกิน 8–9 จุด อาจทำให้เบราว์เซอร์หรือแอปพลิเคชัน Google Maps บนมือถือตัดทอน URL หรือไม่สามารถประมวลผลเส้นทางได้
 - **การจัดการใน Phase 5:** ฟังก์ชัน [`sampleWaypointsForGoogleMaps`](file:///f:/DOH_Pattani_Flood/hdms_pn/lib/detour-navigation.ts) จะทำการ Downsample พิกัดจุดหักเลี้ยวตามระยะทาง (Chord distance) ให้เหลือไม่เกิน 8 จุดสำคัญ เพื่อรับประกันว่า Google Maps จะเปิดและนำทางตามแนวทางเลี่ยงได้อย่างแม่นยำและไม่เกิดข้อผิดพลาด URL ล้น

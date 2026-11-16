@@ -1,5 +1,10 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-094] 2026-11-16 Stress test ตัวแก้แนวเส้น GIS
+- **ขอบเขต:** ใช้ Playwright headless กับ Highway LineString จำลอง 1,200 จุดใน freeform editor โดยไม่ส่ง write ไป Supabase.
+- **ผล:** canvas overlay = 1, handle = 401 ตาม `MAX_VERTEX_HANDLES=400`, midpoint = 0 เมื่อเกินเพดาน; ลาก handle 20 ช่วงใช้ 645 ms และจำนวน canvas/handle ไม่เพิ่ม. ยืนยันว่า drag path ใช้ `setLatLngs` บน line เดิมและ React state เปลี่ยนตอน `dragend`.
+- **ข้อจำกัด:** ไม่ใช่ field measurement ของ RAM/CPU และไม่อ้างผลกับเครื่องเจ้าหน้าที่จริง. บันทึก KI-012/B-005 สำหรับการเก็บ trace บนเครื่องที่เคยค้าง.
+
 ### [VERIFIED EXTERNAL] 2026-11-16 Apps Script Web App ใหม่ผ่าน idempotency check
 - **Web App:** URL `/exec` ใหม่ตอบ JSON ได้จริง; คำขอไม่มี secret ถูกปฏิเสธ และ `uploadMedia` สองครั้งด้วย `operationId` เดียวคืน `mediaId` เดียวกัน. ลบไฟล์ QA หลังทดสอบสำเร็จ จึงไม่เหลือรูปทดลองใน Drive.
 - **ค้าง:** ต้องเปลี่ยน `APPS_SCRIPT_WEB_APP_URL` ใน Supabase Edge Function secrets เป็น URL ใหม่และ deploy `hdms-api` v18 ซ้ำ. ไม่สามารถทำขั้นนี้ผ่าน connection ปัจจุบันเพราะไม่มี Supabase secrets-management tool หรือ CLI ที่ authenticated.
