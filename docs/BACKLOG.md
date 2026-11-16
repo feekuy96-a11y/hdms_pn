@@ -40,6 +40,13 @@
 - **การตรวจ:** `npm run test:e2e:local -- tests/e2e/admin-dialog-keyboard.spec.ts tests/e2e/gis-dialog-keyboard.spec.ts tests/e2e/admin-shared-dialog-keyboard.spec.ts --project=desktop-chromium --project=mobile-chromium --workers=1` ผ่าน 5 / ข้าม 5 (desktop-only workflow ตาม test guard) โดยยืนยัน Escape, Tab wrap และคืน focus.
 - **สถานะ:** ปิด (2026-11-16, UPDATE-093).
 
+## B-005 [กลาง] ประสิทธิภาพตัวแก้แนวเส้น — ตรวจ stress test เพิ่ม
+- **หลักฐาน:** Playwright headless สร้าง Highway LineString 1,200 จุดใน Admin freeform editor: canvas overlay คงที่ `1`, handle ถูกจำกัดที่ `401` (400 จุดใน viewport + endpoint), midpoint handle ไม่ถูกสร้างเมื่อเกินเพดาน. ลากหนึ่ง handle 20 ช่วงใช้เวลารวม 645 ms และจำนวน canvas/handle คงเดิมหลังลาก.
+- **ผลกระทบ:** ไม่พบการสร้าง canvas/layer ซ้ำจากการลากจุดตามอาการ RAM พุ่งเดิม. ผลนี้เป็น synthetic lab test ไม่ใช่การวัด RAM/CPU หรือ field performance ของเครื่องเจ้าหน้าที่.
+- **ทางเลือก:** A) เก็บ telemetry ใน browser/เครื่องจริงก่อนปรับเพิ่ม · B) ลด `MAX_VERTEX_HANDLES` ต่ำกว่า 400 สำหรับเครื่องสเปกต่ำ · C) ย้าย geometry simplification ไป Web Worker.
+- **คำแนะนำ:** A ก่อน เพราะ current guard ทำงานแล้ว และการลด handle อาจทำให้แก้เส้นยากโดยยังไม่มีหลักฐานว่าเครื่องจริงเกินเพดาน.
+- **สถานะ:** ปิดบางส่วน (2026-11-16, UPDATE-094).
+
 ## B-020 [กลาง] Google Drive media และ Google Sheets reporting
 - **หลักฐาน:** รูปเหตุการณ์เดิมถูกเก็บเป็น Base64 ใน `direction_meta`; รูปโครงการเดิมอัปโหลดไป Supabase Storage โดยตรง.
 - **การแก้ไข:** เพิ่ม Drive upload/delete ผ่าน `hdms-api`, เปลี่ยนสองฟอร์มให้เก็บ URL, ลบไฟล์ Drive ชดเชยเมื่อการบันทึก DB ล้มก่อนมี reference และเพิ่ม Apps Script ที่ upsert รายงานด้วย idempotency key.
