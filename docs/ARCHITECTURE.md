@@ -16,6 +16,10 @@
 - GitHub Pages ไม่มี Server Actions/middleware/API routes ดังนั้น `app/actions/doh-actions.ts` ชื่อ "Action" แต่เป็น **client adapter** ที่เรียก `invokeHdms`
 
 ## 2. การไหลของข้อมูล
+### สำเนา Google แบบไม่บล็อกการบันทึก (รอ deploy migration/Edge/web)
+- ฟอร์มส่งรูปไป `uploadExternalMediaAction` ซึ่งพักไฟล์ใน bucket `hdms-media-staging` และสร้างงาน `MEDIA` ใน `doh_external_jobs`; URL พักใช้แสดงรูปได้ระหว่างรอ Google Drive.
+- trigger ของตารางเหตุการณ์ ทางเลี่ยง และโครงการสร้างงาน `REPORT` ในธุรกรรมเดียวกับการบันทึกข้อมูลหลัก; `syncReportingRowAction` เพียงปลุก worker หลังฟอร์มเขียนครบ. Edge ใช้ `EdgeRuntime.waitUntil` ประมวลผลงานหลังตอบกลับ. การเปิด Admin ครั้งถัดไปช่วยเรียกคิวที่ต้องลองใหม่. งานอ้างอิง DB ด้วย URL พักและเปลี่ยน URL หลังอัปโหลด Drive สำเร็จ ก่อนลบไฟล์พัก.
+- คิวเก็บ `attempts`, `next_attempt_at`, `last_error`, `external_id`; `doh_claim_external_jobs` ใช้ `FOR UPDATE SKIP LOCKED` กัน worker ซ้ำ. migration `20261116093000` ใช้ Supabase Cron ปลุก worker ทุก 2 นาที; Admin read ยังช่วยปลุกคิวเพิ่มเติม. งานที่ล้มครบ 8 ครั้งคงสถานะ `failed` เพื่อให้ตรวจและ requeue ภายหลัง; ดู KI-010.
 | ขั้น | ไฟล์ | หมายเหตุ |
 |---|---|---|
 | เรียก API | `lib/hdms-api.ts` `invokeHdms(action,args)` | POST ไป `${SUPABASE_URL}/functions/v1/hdms-api`; timeout 20 วินาที (บันทึกเลเยอร์ทางหลวง 90 วินาที); เฉพาะ read มี fallback ไปเรียก RPC ตรง |
