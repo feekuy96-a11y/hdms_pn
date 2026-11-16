@@ -14,6 +14,7 @@
 ### [LOCAL] 2026-11-16 แก้รูป Google Drive ไม่แสดงข้ามโดเมน
 - **สาเหตุ:** URL แบบ `drive.google.com/uc` redirect ไป `drive.usercontent.google.com` ซึ่งส่ง `Cross-Origin-Resource-Policy: same-site`; GitHub Pages จึงฝังรูปไม่ได้แม้ไฟล์เปิดดูใน Drive ได้.
 - **การแก้ไข:** ใช้ URL `lh3.googleusercontent.com/d/{fileId}` สำหรับไฟล์ใหม่ และ normalize URL เก่าใน payload ของ Edge Function ทั้งเหตุการณ์น้ำท่วมและโครงการ โดยไม่ต้องแก้ข้อมูลเดิมในฐานข้อมูล.
+- **Production verification:** Edge `hdms-api` v15 ส่ง URL CDN; Chromium จาก origin GitHub Pages โหลดภาพจริงได้ `1162×860`; เหตุการณ์จริงมีแถวใน `HDMS_Reports`; CI และ Pages ของ commit `55eff28` ผ่าน.
 ประวัติเก่า (UPDATE-001…047) อยู่ใน `SUPPLEMENTAL_RULES.md` — ใช้ grep ค้น ไม่อ่านทั้งไฟล์ เลขรายการต่อจาก 047
 
 ### [UPDATE-091] 2026-11-16 Compact Card, Detour Accordion, Reordering, Data Integrity & Detour Popup

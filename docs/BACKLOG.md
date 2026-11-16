@@ -24,12 +24,13 @@
 | B-017 | ต่ำ | รัน Playwright ในเครื่องโดยไม่ build พร้อม public config ทำให้หน้า public ค้าง Loading และ test ที่ mock Edge Function ล้ม | ปิด (2026-11-12, UPDATE-074) |
 | B-018 | กลาง | Modal รายละเอียด/แก้ไขใน Admin ยังไม่ใช้ focus trap และ Escape กลางครบทุกตัว | กำลังทำ (UPDATE-075) |
 | B-019 | สูง | Public API ส่ง Draft/inactive payload แม้หน้าเว็บจะกรองไม่แสดง | ปิด (2026-11-13, UPDATE-090) |
-| B-020 | กลาง | ย้ายรูปหลักฐานและรูปโครงการไป Google Drive พร้อมส่งสำเนารายงานไป Sheets | กำลังทำ (Apps Script จริงผ่าน, Edge v12 deploy แล้ว, รอตั้ง 2 secrets และทดสอบผ่าน Edge) |
+| B-020 | กลาง | ย้ายรูปหลักฐานและรูปโครงการไป Google Drive พร้อมส่งสำเนารายงานไป Sheets | ปิด (2026-11-16, ดู CHANGELOG: Google Drive media และ Google Sheets reporting) |
 
 ## B-020 [กลาง] Google Drive media และ Google Sheets reporting
 - **หลักฐาน:** รูปเหตุการณ์เดิมถูกเก็บเป็น Base64 ใน `direction_meta`; รูปโครงการเดิมอัปโหลดไป Supabase Storage โดยตรง.
 - **การแก้ไข:** เพิ่ม Drive upload/delete ผ่าน `hdms-api`, เปลี่ยนสองฟอร์มให้เก็บ URL, ลบไฟล์ Drive ชดเชยเมื่อการบันทึก DB ล้มก่อนมี reference และเพิ่ม Apps Script ที่ upsert รายงานด้วย idempotency key.
-- **สถานะ:** Apps Script จริงผ่าน upload/read/sync/delete แล้ว; `hdms-api` Production v12 deploy และ public read ผ่าน; รอตั้ง `APPS_SCRIPT_WEB_APP_URL` กับ `APPS_SCRIPT_API_SECRET` ใน Supabase Secrets แล้วตรวจผ่าน Edge.
+- **การตรวจและปิดงาน:** Apps Script และ Edge Production ผ่าน upload/read/sync/delete; เหตุการณ์จริง `F-4b5bfca3-dff9-4ef8-baa3-07fa0614081b` แสดงรูปบนเว็บและมีแถวรายงานใน Sheets; Edge normalize URL เก่าไป Google CDN; CI และ GitHub Pages ที่ commit `55eff28` ผ่าน.
+- **สถานะ:** ปิด (2026-11-16).
 
 ---
 
