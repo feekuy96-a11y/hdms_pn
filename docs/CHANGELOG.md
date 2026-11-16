@@ -1,5 +1,11 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-095] 2026-11-16 คำสั่งตรวจก่อน deploy ให้ตรง GitHub Pages
+- **ไฟล์:** `package.json`, `docs/BACKLOG.md`.
+- **การแก้ไข:** เพิ่ม `npm run check:deploy` ให้รัน lint, typecheck และ `build:pages` ตาม pipeline static export จริง; คง `npm run check` เดิมสำหรับ server build compatibility.
+- **ตรวจแล้ว:** `npm run check:deploy` ผ่าน.
+- **Backlog:** ปิด B-009.
+
 ### [UPDATE-094] 2026-11-16 Stress test ตัวแก้แนวเส้น GIS
 - **ขอบเขต:** ใช้ Playwright headless กับ Highway LineString จำลอง 1,200 จุดใน freeform editor โดยไม่ส่ง write ไป Supabase.
 - **ผล:** canvas overlay = 1, handle = 401 ตาม `MAX_VERTEX_HANDLES=400`, midpoint = 0 เมื่อเกินเพดาน; ลาก handle 20 ช่วงใช้ 645 ms และจำนวน canvas/handle ไม่เพิ่ม. ยืนยันว่า drag path ใช้ `setLatLngs` บน line เดิมและ React state เปลี่ยนตอน `dragend`.

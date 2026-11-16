@@ -13,7 +13,7 @@
 | B-006 | กลาง | `SUPPLEMENTAL_RULES.md` ~120 KB ถูกบังคับให้อ่านทุกเซสชัน | ปิดบางส่วน (ยกเลิกบังคับใน AGENTS.md; ยังไม่ได้ย้ายไฟล์) |
 | B-007 | ต่ำ | โค้ดค้างที่ไม่อยู่ใน path จริง (better-auth, supabase-server, routing-service, Docker Postgres) | ปิด (ลบไฟล์ค้างแล้วใน UPDATE-065) |
 | B-008 | กลาง | พึ่ง OSRM สาธารณะ (`router.project-osrm.org`) ไม่มี SLA | เปิด |
-| B-009 | ต่ำ | `npm run check` ไม่ได้ build แบบ Pages (ที่ใช้ deploy จริง) | เปิด |
+| B-009 | ต่ำ | `npm run check` ไม่ได้ build แบบ Pages (ที่ใช้ deploy จริง) | ปิด (2026-11-16, UPDATE-095) |
 | B-010 | กลาง | อ่านข้อมูลสาธารณะทุกครั้งโดน DB (ไม่มีแคช) ช่วงคนเข้าเยอะ | ปิด (เพิ่ม GET & Cache-Control ใน UPDATE-065) |
 | B-011 | กลาง | e2e ยังไม่ครอบคลุมฟีเจอร์ใหม่ (ตัวแก้ไขเส้นอิสระ, แถบสรุป, bottom sheet) | ปิดบางส่วน (เพิ่ม detour-navigation.spec.ts 12 ข้อใน UPDATE-066) |
 | B-012 | ต่ำ | `reactStrictMode: false` ซ่อนบั๊ก cleanup ของ effect | เปิด |
@@ -127,7 +127,9 @@
 - **ยังไม่ทำ:** self-host OSRM ข้อมูลประเทศไทย (ทางออกถาวร) — `server/routing-service.mjs` เป็นจุดเริ่มต้นที่มีอยู่แล้ว ตัดสินใจเมื่อมีโฮสต์ให้ใช้
 
 ## B-009 [ต่ำ] สคริปต์ตรวจไม่ตรง deploy
-- เพิ่ม `"check:deploy": "npm run lint && npm run typecheck && npm run build:pages"` ใน `package.json` (ยังไม่ได้แก้ เพราะต้องอัปโหลดไฟล์เพิ่ม) จนกว่าจะเพิ่ม ให้ใช้คำสั่งเต็มตาม R6
+- เพิ่ม `"check:deploy": "npm run lint && npm run typecheck && npm run build:pages"` ใน `package.json` แล้ว. คำสั่งนี้ตรงกับ validation ก่อน deploy ของ GitHub Pages.
+- **ตรวจ:** `npm run check:deploy` ผ่านบน branch นี้.
+- **สถานะ:** ปิด (2026-11-16, UPDATE-095).
 
 ## B-010 [กลาง] การอ่านข้อมูลสาธารณะ — ปรับแนวทาง
 - **สิ่งที่พบและแก้ได้จริง:** ฝั่งเว็บขยายโหลดตอนระบบมีปัญหา — ปรับแล้ว: ห่วงโซ่สำรองไปใช้ action เดิมเฉพาะเมื่อ server ตอบ "Unknown operation" เท่านั้น (`app/actions/doh-actions.ts`, `HdmsHttpError` ใน `lib/hdms-api.ts`) และ retry เหลือ 2 ครั้งพร้อมหน่วงแบบสุ่ม (`QueryProvider.tsx`)
