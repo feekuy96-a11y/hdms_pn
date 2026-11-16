@@ -1,5 +1,11 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-093] 2026-11-16 ตรวจครบ keyboard focus ของ Admin dialog
+- **ไฟล์ที่ตรวจ:** `components/ui/use-modal-accessibility.ts`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `components/admin/tabs/GisHighwayModals.tsx`, `components/ui/AnimatedStatusModal.tsx`, `components/admin/OfficialReportDispatchModal.tsx`, และ E2E keyboard specs.
+- **ผล:** dialog ของ Admin ทุกตัวที่มี `role="dialog"` ใช้ hook เดียวกันสำหรับ initial focus, Tab/Shift+Tab trap, Escape และคืน focus ไป trigger. ไม่ต้องเปลี่ยน code เพราะ source ปัจจุบันครอบคลุมครบ.
+- **ตรวจแล้ว:** `npm run test:e2e:local -- tests/e2e/admin-dialog-keyboard.spec.ts tests/e2e/gis-dialog-keyboard.spec.ts tests/e2e/admin-shared-dialog-keyboard.spec.ts --project=desktop-chromium --project=mobile-chromium --workers=1` ผ่าน 5; ข้าม 5 case ที่ test ระบุ desktop-only.
+- **Backlog:** ปิด B-018.
+
 ### [PRODUCTION BACKEND / LOCAL DOCS] 2026-11-16 Outbox phase 1: idempotent media และ atomic promotion
 - **ไฟล์:** `supabase/migrations/20261116100000_outbox_media_atomic_promotion.sql`, `supabase/functions/hdms-api/index.ts`, `integrations/google-apps-script/Code.gs`, `docs/ARCHITECTURE.md`, `docs/EXTERNAL_MEDIA_INTEGRATION.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`.
 - **การแก้ไข:** งาน MEDIA ใช้ UUID ของ outbox job เป็น idempotency key; Direct Drive ค้น `appProperties` และ Apps Script ค้น file description ก่อนสร้างไฟล์. Worker เปลี่ยน URL พักไป Drive ผ่าน RPC เดียวที่ไม่แตะ `updated_at`, จึงไม่สร้าง REPORT trigger ซ้ำ. Apps Script เปรียบเทียบ `updatedAt` ก่อนเขียน Sheets และตอบ `skipped-stale` เมื่อคิวเก่ากว่า.
