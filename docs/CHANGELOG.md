@@ -1,5 +1,11 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [IN PROGRESS] 2026-11-18 Sync future Flood saves into Event–Detour foundation
+- **สาเหตุ:** migration แรก backfill เฉพาะข้อมูลเดิม; Edge legacy `upsertRouteAction` สร้าง/แก้ `doh_flood_routes.direction_meta.eventId` ได้ แต่ไม่ได้เพิ่มแถวใน `doh_flood_events` และ `doh_event_segments`. หากทำ Admin editor ก่อนจะแก้ relationship ของ event ที่เพิ่งสร้างไม่ได้ (`EVENT_NOT_FOUND`).
+- **การแก้ไขที่เตรียม:** เพิ่ม migration `20261117192000_sync_flood_event_segments.sql` เป็น `AFTER INSERT OR UPDATE OF direction_meta` trigger. Trigger สร้าง event master เมื่อจำเป็น, คงลำดับเดิมเมื่อแก้ segment เดิม, lock event row ก่อนจัดลำดับ segment ใหม่ และไม่แตะ legacy fields.
+- **ยังไม่ apply/deploy:** ต้องให้ PR ผ่านก่อน apply Production แล้วตรวจว่า insert/update flood route สร้างหรืออัปเดต membership ได้ใน transaction ที่ rollback. ระหว่างนี้ห้ามเปิด Admin editor ใหม่.
+- **ย้อนกลับ:** drop trigger และ function ตามหัว migration; schema/link ที่มีอยู่และ legacy save path ยังทำงานเหมือนเดิม.
+
 ### [UPDATE-106] 2026-11-18 Deploy Edge compatibility API สำหรับ Event–Detour
 - **ไฟล์/ลำดับเผยแพร่:** Production migration `20261117135032_event_detour_relationships.sql` → Edge `hdms-api` v19 → เว็บจาก commit `2b5ca1c` (PR #34).
 - **การเปลี่ยนแปลง:** deploy action `getEventDetourLinksAction` และ `replaceEventDetourLinksAction`. Edge ตรวจ input ทั้งชนิด, ขนาด, ทิศทาง, ลำดับ และ review version; PostgreSQL RPC ยังคงเป็นจุดเดียวที่รับประกันธุรกรรม, optimistic version และ idempotency.
