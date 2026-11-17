@@ -186,6 +186,36 @@ test("map workflows expose import, safe reset, and multi-format exports", async 
   for (const value of ["csv", "geojson", "kml", "kmz", "shapefile"]) await expect(detourExport.locator(`option[value="${value}"]`)).toHaveCount(1);
 });
 
+test("GIS import parses GeoJSON, KML, and GPX into a review-only preview", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "GIS import review is desktop-first");
+  const fixtures = [
+    {
+      name: "routes.geojson",
+      mimeType: "application/geo+json",
+      buffer: Buffer.from(JSON.stringify({ type: "FeatureCollection", features: [{ type: "Feature", properties: { route_no: "42", section_name: "GeoJSON QA" }, geometry: { type: "LineString", coordinates: [[101.18, 6.83], [101.19, 6.84]] } }] })),
+    },
+    {
+      name: "routes.kml",
+      mimeType: "application/vnd.google-earth.kml+xml",
+      buffer: Buffer.from('<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>KML QA</name><LineString><coordinates>101.18,6.83,0 101.19,6.84,0</coordinates></LineString></Placemark></Document></kml>'),
+    },
+    {
+      name: "routes.gpx",
+      mimeType: "application/gpx+xml",
+      buffer: Buffer.from('<?xml version="1.0"?><gpx version="1.1" creator="HDMS QA"><trk><name>GPX QA</name><trkseg><trkpt lat="6.83" lon="101.18"/><trkpt lat="6.84" lon="101.19"/></trkseg></trk></gpx>'),
+    },
+  ];
+
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "โครงข่ายสายทาง");
+  const upload = page.locator('input[type="file"]').first();
+  for (const fixture of fixtures) {
+    await upload.setInputFiles(fixture);
+    await expect(page.getByText("พรีวิวตรวจสอบโครงข่าย: พบ 1 เส้นทาง", { exact: false })).toBeVisible();
+    await expect(page.getByText("ไฟล์ข้อมูลไม่ถูกต้อง", { exact: true })).toHaveCount(0);
+  }
+});
+
 test("line styling accepts precise low-resource line widths and casing", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop style studio");
   await page.goto(`${base}/admin/`);
