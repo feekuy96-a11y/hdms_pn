@@ -1,5 +1,13 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-105] 2026-11-18 อัปเดตสถานะ Public Fallback (ปิด B-019), ซิงก์ docs/AI_HANDOFF.md และปิด KI-014
+- **ไฟล์:** `docs/AI_HANDOFF.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/CHANGELOG.md`
+- **การแก้ไข:**
+  1. ปิดรายการ B-019 ใน `docs/BACKLOG.md` และ KI-014 ใน `docs/KNOWN_ISSUES.md` หลัง PR #32 และ PR #33 (commit `866eb93`) ผ่าน CI run `44104409978` และ Deploy GitHub Pages run `44104409962` สำเร็จ
+  2. อัปเดต `docs/AI_HANDOFF.md` ให้บันทึกแหล่งความจริงของ `origin/main` และ GitHub Pages ล่าสุดเป็น commit `866eb93` (HTTP 200) เพื่อให้ AI ทุกค่าย (Codex, Gemini, Claude) ซิงก์ฐานข้อมูลตรงกัน
+  3. ปรับสถานะรายการ B-023 ใน `docs/AI_HANDOFF.md` ว่า DB migration และ data contract รวมเข้า `main` ผ่าน PR #32 แล้ว แต่ยังไม่ apply บน Production DB
+- **ย้อนกลับ:** revert commit นี้ได้ทันที (เอกสารเท่านั้น ไม่แก้โค้ดระบบ, ฐานข้อมูล หรือ Edge Function)
+
 ### [UPDATE-104] 2026-11-17 ปรับสคริปต์ build:pages ให้เป็น Cross-Platform ผ่าน Node.js
 - **ไฟล์:** `package.json`, `scripts/build-pages.mjs` (ใหม่), `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/CHANGELOG.md`
 - **การแก้ไข:**
@@ -13,7 +21,7 @@
 - **การแก้ไข:** fallback แบบ network เรียกได้เฉพาะ `doh_get_public_system_data_display_rpc()`; ถ้า RPC สาธารณะใช้ไม่ได้ให้ Query แสดง Error/Retry แทน และตัด fallback จาก public action ไป `getSystemDataAction()` ออก.
 - **ตรวจแล้ว:** Playwright `public-fallback-contract.spec.ts` ผ่าน desktop และ mobile (4/4): เมื่อ abort Edge request มีเฉพาะ request ไป public RPC และไม่มี request ไป RPC ฝั่ง Admin; เมื่อ Edge รุ่นเก่าตอบ `Unknown operation` ระบบ retry เฉพาะ public action และแสดง Error/Retry โดยไม่เรียก full Admin action.
 - **CI stability:** หลัง merge ครั้งแรก CI พบ assertion Error/Retry flaky เพราะ React Query backoff ใช้เวลามากกว่า default 5 วินาทีบน runner; เพิ่ม timeout test เป็น 15 วินาทีตามพฤติกรรม retry จริง และรัน regression ซ้ำผ่าน 4/4 ในเครื่อง.
-- **สถานะ:** source ผ่านการทดสอบแล้ว แต่ยังไม่อยู่ `main`/GitHub Pages; ห้ามอ้างว่า Production แก้แล้วจนกว่า PR, CI และ Pages workflow จะผ่าน.
+- **สถานะ:** ปิดแล้ว (2026-11-17) — รวมเข้า main ผ่าน PR #32 และ PR #33 (commit `866eb93`), CI run `44104409978` และ Deploy Pages run `44104409962` สำเร็จแล้ว (ดู [UPDATE-105]).
 
 ### [IN PROGRESS] 2026-11-17 Event–Detour many-to-many
 - เจ้าของอนุมัติ Phase 2 และการพัฒนาความสัมพันธ์กลางแล้ว; branch `codex/event-detour-links` ซิงก์กับ `origin/main` `4ab9737`.

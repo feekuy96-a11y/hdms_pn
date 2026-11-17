@@ -23,7 +23,7 @@
 | B-016 | กลาง | ตราครุฑทางการสำหรับป้ายทางหลวงยังไม่มี Asset ที่ผ่านอนุมัติ | เปิด |
 | B-017 | ต่ำ | รัน Playwright ในเครื่องโดยไม่ build พร้อม public config ทำให้หน้า public ค้าง Loading และ test ที่ mock Edge Function ล้ม | ปิด (2026-11-12, UPDATE-074) |
 | B-018 | กลาง | Modal รายละเอียด/แก้ไขใน Admin ยังไม่ใช้ focus trap และ Escape กลางครบทุกตัว | ปิด (2026-11-16, UPDATE-093) |
-| B-019 | สูง | Public API ส่ง Draft/inactive payload แม้หน้าเว็บจะกรองไม่แสดง | กำลังทำ (source fallback แก้แล้ว; รอ PR/Pages deploy) |
+| B-019 | สูง | Public API ส่ง Draft/inactive payload แม้หน้าเว็บจะกรองไม่แสดง | ปิด (2026-11-17, ดู PR #32, PR #33 และ Deploy Pages 44104409962) |
 | B-020 | กลาง | ย้ายรูปหลักฐานและรูปโครงการไป Google Drive พร้อมส่งสำเนารายงานไป Sheets | ปิด (2026-11-16, ดู CHANGELOG: Google Drive media และ Google Sheets reporting) |
 | B-021 | กลาง | ตั้ง schedule อิสระสำหรับคิวส่ง Drive/Sheets และหน้าตรวจงานที่ `failed` | ปิด (2026-11-16) — Cron, Edge v17 และหน้า Admin deploy แล้ว; Production read + live browser ผ่าน |
 | B-022 | สูง | Apps Script Web App ที่ใช้งานจริงอาจยังเป็น source เวอร์ชันก่อน idempotency/stale-write guard | กำลังทำ (Web App ยืนยันแล้ว; เหลือเปลี่ยน Edge secret URL) |
@@ -78,7 +78,7 @@
 - **การตรวจเดิม:** deploy SQL ก่อน Edge Function v11 แล้วทดสอบ Production วันที่ 2026-11-13 ด้วย flood/detour QA: Admin อ่าน Draft ได้; Public API และ UI ไม่พบ Draft/detour ที่ผูก; เมื่อเปิดใช้งาน Public พบทั้งคู่; หลัง soft delete Public ไม่พบทั้งคู่. ลบ QA ออกจาก DB แล้ว ตรวจคงเหลือ `0`.
 - **Regression ที่พบ 2026-11-17:** เมื่อ Edge network failure `lib/hdms-api.ts` เคย fallback ไป `doh_get_system_data_display_rpc()` แล้ว `doh_get_system_data_rpc()`; และ compatibility branch ใน `app/actions/doh-actions.ts` เคย fallback ไป `getSystemDataAction()`. ทั้งสอง path สามารถข้าม public wrapper ได้.
 - **การแก้ source:** fallback เรียกเฉพาะ `doh_get_public_system_data_display_rpc()` และ error/retry เมื่อ wrapper ใช้ไม่ได้; Playwright desktop/mobile ยืนยันไม่มี request ไป Admin RPC ระหว่าง Edge outage.
-- **สถานะ:** กำลังทำ (2026-11-17) — source และ regression test พร้อม แต่ต้องผ่าน PR/CI/Pages deploy แล้วจึงปิดอีกครั้ง.
+- **สถานะ:** ปิด (2026-11-17) — รวมเข้า main ผ่าน PR #32 และ PR #33 (commit `866eb93`); CI run `44104409978` และ Deploy GitHub Pages run `44104409962` สำเร็จ.
 
 ## B-017 [ต่ำ] คำสั่ง E2E ในเครื่องไม่เตรียม public build configuration — ปิดแล้ว
 - **หลักฐาน:** `tests/e2e/public-route-sheet.spec.ts` ล้มที่ข้อความ `จุดเฝ้าระวังน้ำท่วม 2 จุด` เมื่อรันจาก clone ที่ไม่มี `.env.local`; `next build` ฝังค่า `NEXT_PUBLIC_*` ตอน build แล้ว `npm run start` ไม่รับค่าใหม่ภายหลัง. เมื่อ build โดยใช้ค่าจาก `.github/hdms-public.json` แล้วทดสอบซ้ำ ผลผ่าน 1/1.

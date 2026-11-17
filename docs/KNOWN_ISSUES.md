@@ -2,7 +2,7 @@
 
 **ระบบ:** ศูนย์ข้อมูลน้ำท่วมและโครงข่ายทางหลวง แขวงทางหลวงปัตตานี (HDMS_PN)  
 **Production URLs:** [https://feekuy96-a11y.github.io/hdms_pn/](https://feekuy96-a11y.github.io/hdms_pn/) (หน้าประชาชน) \| [https://feekuy96-a11y.github.io/hdms_pn/admin](https://feekuy96-a11y.github.io/hdms_pn/admin) (หน้าแอดมิน)  
-**อัปเดตล่าสุด:** 2026-11-17 (Public fallback source patch และ Event–Detour foundation ยังไม่เผยแพร่)
+**อัปเดตล่าสุด:** 2026-11-18 (เผยแพร่ Public fallback patch และทดสอบเสถียรภาพเรียบร้อยใน commit `866eb93`; Event–Detour DB foundation รวมเข้า main แล้วแต่ยังไม่ apply Production)
 
 > UPDATE-073: ปิดช่องว่างการแสดง Stroke/Casing ของแผนที่แล้ว โดย `LongdoGisMap` วาดเส้นฐานแบบ Canvas สำหรับน้ำท่วม ทางเลี่ยง และโครงข่ายสายทางเมื่อเปิดค่า Stroke/Casing; ผล lint, typecheck และ build:pages ผ่าน. ยังต้องตรวจภาพจริงหลังนำเว็บขึ้น GitHub Pages เพราะการทดสอบอัตโนมัติยืนยันการโหลดแผนที่และพฤติกรรม ไม่สามารถอ่านสีพิกเซลของ Canvas ได้อย่างน่าเชื่อถือ.
 
@@ -41,8 +41,8 @@
 - Migration `20261117135032_event_detour_relationships.sql` และ `lib/event-detour-links.ts` ผ่าน PostgreSQL 16 แยกและ typecheck แล้ว แต่ **ยังไม่ apply Production**. Edge Function, data reader, public payload, admin editor, export/import และ report ยังอ้าง `flood_id_ref` / `detour_meta.event_orders` เดิม.
 - จนกว่า B-023 จะปิด ห้ามทำให้หน้าประชาชนอ่าน link table ใหม่เพียงอย่างเดียว เพราะ legacy detour อาจหายจากแผนที่. Geometry revision จะมีผลก็ต่อเมื่อ migration ถูกใช้แล้วเท่านั้น.
 
-### KI-014: Source patch ของ public fallback ยังไม่เผยแพร่
-- `lib/hdms-api.ts` และ `app/actions/doh-actions.ts` ถูกปรับให้ fallback ได้เฉพาะ public RPC หรือแสดง Error/Retry แล้ว; regression test ผ่าน desktop/mobile. จนกว่า merge และ GitHub Pages workflow ของ commit นี้ผ่าน หน้าเว็บจริงยังอยู่กับพฤติกรรมจาก `main` เดิม.
+### KI-014: Public fallback patch เผยแพร่แล้ว — ปิดแล้ว
+- รวมเข้า `main` ผ่าน PR #32 และ PR #33 (commit `866eb93`) Deploy GitHub Pages สำเร็จ (Run `44104409962`); fallback ฝั่ง browser ถูกจำกัดเฉพาะ public RPC หรือแสดง Error/Retry พร้อม regression test ผ่านครบ (ดู B-019).
 
 ### KI-001: ข้อจำกัดจำนวน Waypoints ของ Google Maps Direction URLs
 - **รายละเอียด:** การสร้าง Universal URL สำหรับเปิด Google Maps นำทาง (`https://www.google.com/maps/dir/?api=1...`) มีข้อจำกัดความยาวของ URL query string หากใส่พิกัดจุดเลี้ยว (Waypoints) เกิน 8–9 จุด อาจทำให้เบราว์เซอร์หรือแอปพลิเคชัน Google Maps บนมือถือตัดทอน URL หรือไม่สามารถประมวลผลเส้นทางได้

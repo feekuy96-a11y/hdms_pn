@@ -1,6 +1,6 @@
 # AI Handoff — สถานะร่วมของโครงการ HDMS_PN
 
-> อัปเดต: 17 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` ที่ commit `4ab9737` (cross-platform `build:pages`); commit ที่ยืนยัน Pages ล่าสุดในเอกสารเดิมคือ `361f7da`. ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
+> อัปเดต: 18 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` ที่ commit `866eb93` (PR #33: stabilize public fallback retry assertion); commit ที่ยืนยัน Pages ล่าสุดคือ `866eb93`. ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
 
 ## ก่อนเริ่มงานทุกครั้ง
 
@@ -11,8 +11,8 @@
 
 ## สถานะเผยแพร่ล่าสุด
 
-- GitHub Pages: `https://feekuy96-a11y.github.io/hdms_pn/` ตอบ HTTP 200 หลัง deploy commit `361f7da`
-- Deploy run `44048195368` และ CI run `44048195551` สำเร็จ: lint, typecheck, production build, static Pages build และ Playwright E2E ผ่านครบ
+- GitHub Pages: `https://feekuy96-a11y.github.io/hdms_pn/` ตอบ HTTP 200 หลัง deploy commit `866eb93`
+- Deploy run `44104409962` และ CI run `44104409978` สำเร็จ: lint, typecheck, production build, static Pages build และ Playwright E2E ผ่านครบ
 - ห้ามอ้างว่า deploy สำเร็จจาก local build เพียงอย่างเดียว; ต้องยืนยัน workflow ของ commit ที่จะเผยแพร่
 
 ## สิ่งที่เพิ่งเปลี่ยนและห้ามทำย้อนกลับโดยไม่ตั้งใจ
@@ -41,7 +41,7 @@
 2. Apps Script outbox: ต้องยืนยันว่า Edge secret ชี้ไป URL `/exec` ของ Apps Script รุ่นมี idempotency แล้วจึง deploy Edge v18 ใหม่ (B-022)
 3. OSRM สาธารณะไม่มี SLA (B-008); คง `server/routing-service.mjs` และ Docker/OSRM local ไว้เพราะอาจใช้เป็นทางเลือก LAN ห้ามลบเป็น cleanup
 4. ข้อจำกัด waypoint ของ Google Maps ยังมีอยู่ (B-013); ใช้ `sampleWaypointsForGoogleMaps` เสมอ
-5. ความสัมพันธ์ Flood Event ↔ Detour แบบหลายต่อหลายกำลังพัฒนาบน branch `codex/event-detour-links`: migration `20261117135032_event_detour_relationships.sql` ผ่าน PostgreSQL 16 แยกแล้ว แต่ **ยังไม่อยู่ Production** และยังไม่มี Edge reader/action, UI หรือ public-payload cutover. ระหว่างนี้ทุกหน้าต้องใช้ `flood_id_ref` และ `detour_meta.event_orders` เดิมต่อไป (B-023).
+5. ความสัมพันธ์ Flood Event ↔ Detour แบบหลายต่อหลาย: migration `20261117135032_event_detour_relationships.sql` และ `lib/event-detour-links.ts` รวมเข้า `main` ผ่าน PR #32 แล้ว แต่ **ยังไม่อยู่ Production DB** และยังไม่มี Edge reader/action, UI หรือ public-payload cutover. ระหว่างนี้ทุกหน้าต้องใช้ `flood_id_ref` และ `detour_meta.event_orders` เดิมต่อไป (B-023).
 
 ## วิธีส่งงานร่วมกัน
 
