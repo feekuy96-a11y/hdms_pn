@@ -23,8 +23,8 @@
 - คิวเก็บ `attempts`, `next_attempt_at`, `last_error`, `external_id`; `doh_claim_external_jobs` ใช้ `FOR UPDATE SKIP LOCKED` กัน worker ซ้ำ. migration `20261116093000` ใช้ Supabase Cron ปลุก worker ทุก 2 นาที; Admin read ยังช่วยปลุกคิวเพิ่มเติม. งานที่ล้มครบ 8 ครั้งคงสถานะ `failed` เพื่อให้ตรวจและ requeue ภายหลัง; ดู KI-010.
 | ขั้น | ไฟล์ | หมายเหตุ |
 |---|---|---|
-| เรียก API | `lib/hdms-api.ts` `invokeHdms(action,args)` | POST ไป `${SUPABASE_URL}/functions/v1/hdms-api`; timeout 20 วินาที (บันทึกเลเยอร์ทางหลวง 90 วินาที); เฉพาะ read มี fallback ไปเรียก RPC ตรง |
-| Adapter | `app/actions/doh-actions.ts` | `getSystemDataAction` (เต็ม), `getPublicSystemDataAction` (เบา, ย้อนไปใช้เต็มถ้า server ยังไม่อัปเดต) |
+| เรียก API | `lib/hdms-api.ts` `invokeHdms(action,args)` | POST ไป `${SUPABASE_URL}/functions/v1/hdms-api`; timeout 20 วินาที (บันทึกเลเยอร์ทางหลวง 90 วินาที); read ฝั่ง Public fallback ได้เฉพาะ public RPC, ส่วน Admin ใช้ full RPC |
+| Adapter | `app/actions/doh-actions.ts` | `getSystemDataAction` (เต็มสำหรับ Admin), `getPublicSystemDataAction` (เบาและกรอง Public; wrapper ล้มให้ Error/Retry ไม่ย้อนใช้ full payload) |
 | Edge Function | `supabase/functions/hdms-api/index.ts` | `verify_jwt=false` (`supabase/config.toml`); อ่าน = anon key; **เขียน = service role และไม่มีการตรวจสิทธิ์ผู้เรียก** (ดู §6) |
 | เขียนข้อมูล | `invokeHdms` ส่ง `light:true` | server ตอบ `{success:true}` อย่างเดียว; หน้าแอดมินเรียก `refetch()` หนึ่งครั้ง (เดิมโหลดซ้ำ 2 รอบ) |
 | Query key | หน้าประชาชน `["dohSystemData"]`, หน้าแอดมิน `["dohAdminSystemData"]` | staleTime 0, refetch ทุก 30 นาทีเมื่อผู้ใช้ active (`lib/use-polling-activity.ts`), ไม่ refetch ตอนกลับมาที่แท็บ |
@@ -39,6 +39,7 @@
 
 ## 3. ฐานข้อมูล (Supabase / PostGIS)
 - ตาราง: `doh_flood_routes`, `doh_detour_routes`, `doh_timeline_updates`, `doh_mitigation_projects`, `doh_highway_layers`, `doh_offices`, `doh_map_styles`, `doh_system_settings` (+ `deleted_at` soft delete บน flood/detour)
+- ความสัมพันธ์ Event↔Detour หลายต่อหลายยัง **ไม่อยู่ Production**: migration ที่เตรียมไว้คือ `20261117135032_event_detour_relationships.sql` ซึ่งเพิ่ม event/segment/link/operation tables และ `geometry_revision` ของ detour. จนกว่า reader/UI cutover จะผ่าน ให้ถือ `flood_id_ref` และ `detour_meta.event_orders` เป็นแหล่งความจริงที่ใช้งานจริง.
 - RPC: `doh_get_system_data_rpc` (Admin เต็ม), `doh_get_system_data_display_rpc` (display ภายใน), `doh_get_public_system_data_display_rpc` (ประชาชนเฉพาะ active), `doh_import_routes_rpc` (รับ LineString ≥ 2 จุด WGS84), `doh_update_timeline_rpc`, `doh_snap_line_rpc`
 - trigger `trg_doh_highway_layer_geom` สร้างคอลัมน์ `geom`; `trg_doh_highway_layer_display` สร้าง `geojson_display`
 - **ไฟล์ SQL ในรีโปไม่ใช่สถานะจริงของ DB** — มีการแพตช์ฟังก์ชันภายหลังด้วย `pg_get_functiondef` + `replace` (เช่น soft delete) ก่อนแก้ฟังก์ชันใดต้องอ่านนิยามจริงจาก DB ก่อน (R4)

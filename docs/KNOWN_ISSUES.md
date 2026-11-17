@@ -2,11 +2,11 @@
 
 **ระบบ:** ศูนย์ข้อมูลน้ำท่วมและโครงข่ายทางหลวง แขวงทางหลวงปัตตานี (HDMS_PN)  
 **Production URLs:** [https://feekuy96-a11y.github.io/hdms_pn/](https://feekuy96-a11y.github.io/hdms_pn/) (หน้าประชาชน) \| [https://feekuy96-a11y.github.io/hdms_pn/admin](https://feekuy96-a11y.github.io/hdms_pn/admin) (หน้าแอดมิน)  
-**อัปเดตล่าสุด:** 2026-11-17 (UPDATE-104)
+**อัปเดตล่าสุด:** 2026-11-17 (Public fallback source patch และ Event–Detour foundation ยังไม่เผยแพร่)
 
 > UPDATE-073: ปิดช่องว่างการแสดง Stroke/Casing ของแผนที่แล้ว โดย `LongdoGisMap` วาดเส้นฐานแบบ Canvas สำหรับน้ำท่วม ทางเลี่ยง และโครงข่ายสายทางเมื่อเปิดค่า Stroke/Casing; ผล lint, typecheck และ build:pages ผ่าน. ยังต้องตรวจภาพจริงหลังนำเว็บขึ้น GitHub Pages เพราะการทดสอบอัตโนมัติยืนยันการโหลดแผนที่และพฤติกรรม ไม่สามารถอ่านสีพิกเซลของ Canvas ได้อย่างน่าเชื่อถือ.
 
-> UPDATE-090: ปิดการส่ง Draft จาก Public API แล้ว: Public RPC ใหม่กรอง flood/timeline/detour ที่ inactive หรือผูกกับ Draft ขณะที่ Admin ยังเห็น Draft ได้ครบ. ตรวจ lifecycle บน Production และลบ QA data แล้ว.
+> UPDATE-090: Public RPC ใหม่กรอง flood/timeline/detour ที่ inactive หรือผูกกับ Draft ขณะที่ Admin ยังเห็น Draft ได้ครบ. พบ regression ใน source วันที่ 2026-11-17: fallback ฝั่ง browser เคยข้าม wrapper ได้เมื่อ Edge ล่ม; แก้ source และมี regression test แล้ว แต่ต้องรอ PR/Pages deploy ก่อนจึงถือว่าปิดอีกครั้ง.
 
 > UPDATE-102/103: รวมศูนย์สถานะจราจร 5 ค่าไว้ที่ `lib/traffic-presentation.ts` (R1) พร้อมปรับการ์ดเหตุการณ์แอดมินด้วย CSS Container Queries; เพิ่ม `docs/AI_HANDOFF.md` และปรับ `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `CLAUDE.md` ให้ชี้สู่ `AGENTS.md` และ `docs/AI_HANDOFF.md` ตรงกันทั้งหมด.
 
@@ -36,6 +36,13 @@
 
 ### KI-012: ยังไม่มี field telemetry สำหรับ RAM/CPU ของตัวแก้แนวเส้น
 - Lab test 1,200 จุดยืนยัน canvas เดียวและเพดาน 400 handle แต่ไม่สามารถรายงาน JS heap หรือ CPU บนเครื่องเจ้าหน้าที่จริงได้อย่างน่าเชื่อถือใน CI/headless. เก็บ Chrome Performance trace/Task Manager จากเครื่องที่เคยค้างก่อนเปลี่ยนเพดานหรือเพิ่ม Web Worker; ดู B-005.
+
+### KI-013: ความสัมพันธ์ Event↔Detour หลายต่อหลายยังไม่ผ่านเส้นทางจริง
+- Migration `20261117135032_event_detour_relationships.sql` และ `lib/event-detour-links.ts` ผ่าน PostgreSQL 16 แยกและ typecheck แล้ว แต่ **ยังไม่ apply Production**. Edge Function, data reader, public payload, admin editor, export/import และ report ยังอ้าง `flood_id_ref` / `detour_meta.event_orders` เดิม.
+- จนกว่า B-023 จะปิด ห้ามทำให้หน้าประชาชนอ่าน link table ใหม่เพียงอย่างเดียว เพราะ legacy detour อาจหายจากแผนที่. Geometry revision จะมีผลก็ต่อเมื่อ migration ถูกใช้แล้วเท่านั้น.
+
+### KI-014: Source patch ของ public fallback ยังไม่เผยแพร่
+- `lib/hdms-api.ts` และ `app/actions/doh-actions.ts` ถูกปรับให้ fallback ได้เฉพาะ public RPC หรือแสดง Error/Retry แล้ว; regression test ผ่าน desktop/mobile. จนกว่า merge และ GitHub Pages workflow ของ commit นี้ผ่าน หน้าเว็บจริงยังอยู่กับพฤติกรรมจาก `main` เดิม.
 
 ### KI-001: ข้อจำกัดจำนวน Waypoints ของ Google Maps Direction URLs
 - **รายละเอียด:** การสร้าง Universal URL สำหรับเปิด Google Maps นำทาง (`https://www.google.com/maps/dir/?api=1...`) มีข้อจำกัดความยาวของ URL query string หากใส่พิกัดจุดเลี้ยว (Waypoints) เกิน 8–9 จุด อาจทำให้เบราว์เซอร์หรือแอปพลิเคชัน Google Maps บนมือถือตัดทอน URL หรือไม่สามารถประมวลผลเส้นทางได้

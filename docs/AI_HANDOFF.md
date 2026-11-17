@@ -1,6 +1,6 @@
 # AI Handoff — สถานะร่วมของโครงการ HDMS_PN
 
-> อัปเดต: 17 พฤศจิกายน 2026 · แหล่งความจริงของสถานะปัจจุบันคือ `origin/main` ที่ commit `361f7da` ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
+> อัปเดต: 17 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` ที่ commit `4ab9737` (cross-platform `build:pages`); commit ที่ยืนยัน Pages ล่าสุดในเอกสารเดิมคือ `361f7da`. ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
 
 ## ก่อนเริ่มงานทุกครั้ง
 
@@ -20,6 +20,7 @@
 - สถานะจราจร 5 ค่าใช้ `lib/traffic-presentation.ts` (`getTrafficPresentation`, `TRAFFIC_STATUS_OPTIONS`, `formatRelativeUpdateTime`) เป็นแหล่งความจริงเดียวทั้งหน้าประชาชน แผนที่ (`LongdoGisMap.tsx`) และแอดมิน (R1)
 - การ์ดทะเบียนเหตุการณ์แอดมิน (`IncidentRegistryTab.tsx`) และฟอร์มมาตรฐาน (`MapManagementTab.tsx`) ซ่อนรหัส `FL-...` จาก UI ปกติ, ใช้ CSS Container Queries (`.doh-incident-container`) รองรับการย่อขยายแผงซ้าย, ตัดตัวเลือก `"รอตรวจสอบสถานะ"` ออกจาก dropdown (บันทึกแล้วถือว่าตรวจสอบแล้ว `status_verified: true`), และแสดงป้าย `"⚠️ ข้อมูลไม่ครบ"` จาก `getFloodCompletenessIssues()` เฉพาะเมื่อข้อมูลขาด
 - หน้าประชาชน: แท็บน้ำท่วม/ทางเลี่ยงและตัวกรองสถานะกรอง **เฉพาะรายการ**; แผนที่คงแสดงเส้นน้ำท่วมและทางเลี่ยงที่เปิดใช้งานทั้งหมด จนผู้ใช้ปิด layer เอง
+- การ fallback ของหน้าประชาชนต้องเรียกได้เฉพาะ `doh_get_public_system_data_display_rpc()`; หาก wrapper หรือ Edge ใช้ไม่ได้ต้องแสดง Error/Retry ห้าม fallback ไป `getSystemDataAction()` หรือ RPC ฝั่ง Admin
 - คำอธิบายสัญลักษณ์แผนที่เริ่มแบบพับ; ไอคอนน้ำท่วมใช้สีพื้นตามสีเส้นและคลื่นสีขาวตรงกันทั้งแผนที่และทะเบียนแอดมิน; ทางเลี่ยงใช้สีตามเส้นจาก map style
 - `/admin` ต้องเรียก `getSystemDataAction()` เพื่อให้เห็นรายการ inactive/Draft ที่ต้องเปิดกลับได้; หน้าประชาชนใช้ข้อมูล public เท่านั้น
 - Modal ของ Admin ใช้ `useModalAccessibility`: Escape ปิดได้ทุกตำแหน่ง focus, Tab ถูกกักใน modal และเมื่อปิดต้องคืน focus เดิม
@@ -40,6 +41,7 @@
 2. Apps Script outbox: ต้องยืนยันว่า Edge secret ชี้ไป URL `/exec` ของ Apps Script รุ่นมี idempotency แล้วจึง deploy Edge v18 ใหม่ (B-022)
 3. OSRM สาธารณะไม่มี SLA (B-008); คง `server/routing-service.mjs` และ Docker/OSRM local ไว้เพราะอาจใช้เป็นทางเลือก LAN ห้ามลบเป็น cleanup
 4. ข้อจำกัด waypoint ของ Google Maps ยังมีอยู่ (B-013); ใช้ `sampleWaypointsForGoogleMaps` เสมอ
+5. ความสัมพันธ์ Flood Event ↔ Detour แบบหลายต่อหลายกำลังพัฒนาบน branch `codex/event-detour-links`: migration `20261117135032_event_detour_relationships.sql` ผ่าน PostgreSQL 16 แยกแล้ว แต่ **ยังไม่อยู่ Production** และยังไม่มี Edge reader/action, UI หรือ public-payload cutover. ระหว่างนี้ทุกหน้าต้องใช้ `flood_id_ref` และ `detour_meta.event_orders` เดิมต่อไป (B-023).
 
 ## วิธีส่งงานร่วมกัน
 

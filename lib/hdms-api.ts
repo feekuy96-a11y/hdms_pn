@@ -19,13 +19,15 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
       return (await refreshSystemData()) as T;
 
     case "getPublicSystemDataAction": {
-      // Light highway geometry when the display RPC exists, otherwise the normal full payload.
-      const { data, error } = await client.rpc("doh_get_system_data_display_rpc");
+      // A direct fallback must retain the same public-only contract as the Edge
+      // endpoint. Never fall through to an Admin RPC here: an Edge outage must
+      // show a recoverable error, not expose Draft/inactive records.
+      const { data, error } = await client.rpc("doh_get_public_system_data_display_rpc");
       if (!error && data && Array.isArray(data.floodRoutes)) {
         data.systemSettings = data.systemSettings?.main || data.systemSettings;
         return data as T;
       }
-      return (await refreshSystemData()) as T;
+      throw new Error("ไม่สามารถโหลดข้อมูลสาธารณะได้ในขณะนี้");
     }
 
     case "setIncidentStatusAction": {

@@ -23,10 +23,12 @@
 | B-016 | กลาง | ตราครุฑทางการสำหรับป้ายทางหลวงยังไม่มี Asset ที่ผ่านอนุมัติ | เปิด |
 | B-017 | ต่ำ | รัน Playwright ในเครื่องโดยไม่ build พร้อม public config ทำให้หน้า public ค้าง Loading และ test ที่ mock Edge Function ล้ม | ปิด (2026-11-12, UPDATE-074) |
 | B-018 | กลาง | Modal รายละเอียด/แก้ไขใน Admin ยังไม่ใช้ focus trap และ Escape กลางครบทุกตัว | ปิด (2026-11-16, UPDATE-093) |
-| B-019 | สูง | Public API ส่ง Draft/inactive payload แม้หน้าเว็บจะกรองไม่แสดง | ปิด (2026-11-13, UPDATE-090) |
+| B-019 | สูง | Public API ส่ง Draft/inactive payload แม้หน้าเว็บจะกรองไม่แสดง | กำลังทำ (source fallback แก้แล้ว; รอ PR/Pages deploy) |
 | B-020 | กลาง | ย้ายรูปหลักฐานและรูปโครงการไป Google Drive พร้อมส่งสำเนารายงานไป Sheets | ปิด (2026-11-16, ดู CHANGELOG: Google Drive media และ Google Sheets reporting) |
 | B-021 | กลาง | ตั้ง schedule อิสระสำหรับคิวส่ง Drive/Sheets และหน้าตรวจงานที่ `failed` | ปิด (2026-11-16) — Cron, Edge v17 และหน้า Admin deploy แล้ว; Production read + live browser ผ่าน |
 | B-022 | สูง | Apps Script Web App ที่ใช้งานจริงอาจยังเป็น source เวอร์ชันก่อน idempotency/stale-write guard | กำลังทำ (Web App ยืนยันแล้ว; เหลือเปลี่ยน Edge secret URL) |
+| B-023 | สูง | Cutover ความสัมพันธ์ Flood Event ↔ Detour หลายต่อหลายจาก legacy field | กำลังทำ (DB foundation ผ่าน local PostgreSQL 16; ยังไม่อยู่ Production) |
+| B-024 | กลาง | Event–Detour operation ledger ไม่มีนโยบาย retention/archival | เปิด |
 
 ## B-022 [สูง] Publish Apps Script source สำหรับ outbox idempotency
 - **หลักฐาน:** Web App URL ใหม่ตอบ JSON, ปฏิเสธคำขอไม่มี secret, และการเรียก `uploadMedia` ซ้ำด้วย `operationId` เดียวกันคืน Drive `mediaId` เดิม; ลบไฟล์ QA หลังทดสอบสำเร็จ. Edge `hdms-api` v18 และ migration atomic promotion อยู่ Production แล้ว.
@@ -34,6 +36,20 @@
 - **ทางเลือก:** A) ตั้ง `APPS_SCRIPT_WEB_APP_URL` ใน Supabase Edge secrets ให้เป็น URL ใหม่ แล้ว deploy Edge v18 ซ้ำ · B) ใช้ URL เดิมต่อชั่วคราว. 
 - **คำแนะนำ:** A เพราะ URL ใหม่พิสูจน์ idempotency ของ MEDIA แล้ว.
 - **สถานะ:** กำลังทำ (2026-11-16) — การเชื่อมต่อ Supabase ในเซสชันนี้ไม่มีเครื่องมือเปลี่ยน Edge secret; ต้องตั้งค่าหนึ่งครั้งใน Dashboard หรือ Supabase CLI ที่ authenticated.
+
+## B-023 [สูง] Cutover ความสัมพันธ์ Flood Event ↔ Detour หลายต่อหลาย
+- **หลักฐาน:** โค้ดจริงยังอ้าง `flood_id_ref` และ `detour_meta.event_orders` ใน `app/page.tsx`, `LongdoGisMap.tsx`, `DetourManagementTab.tsx`, รายงาน และ export; การเรียงลำดับเดิมบันทึกทีละรายการจึงมีความเสี่ยง partial write. Migration `20261117135032_event_detour_relationships.sql` ผ่าน PostgreSQL 16 แยก: backfill แบบครั้งเดียว, optimistic version, idempotency, rollback เมื่อ validation ล้ม, geometry revision (รวม `reverse_waypoints_json`) และ RLS/role grant. ตรวจ schema Production แบบอ่านอย่างเดียวแล้วว่าคอลัมน์/ชนิดข้อมูลที่ migration พึ่งพาตรงกับ `doh_flood_routes`/`doh_detour_routes` จริง.
+- **ผลกระทบ:** หากสลับ reader หรือ UI ก่อนมี compatibility layer อาจทำให้ detour หายจากประชาชน/แอดมิน หรือสถานะแนะนำชี้ geometry ที่ถูกแก้แล้ว.
+- **ทางเลือก:** A) ทำ Edge read wrapper + atomic write action + compatibility reader แล้วค่อยทำ UI และ public cutover; B) ย้าย UI ตรงไปใช้ schema ใหม่; C) คง legacy model ต่อไป.
+- **คำแนะนำ:** A เพราะคง `flood_id_ref` เดิมไว้จนทดสอบ migration, Edge, public draft filtering, split event และ mobile/desktop regression ครบ.
+- **สถานะ:** กำลังทำ (2026-11-17) — ห้าม apply production migration หรือเปลี่ยน public reader ในงานเดียวกับฐานข้อมูล foundation; ต้องตรวจ RPC Production แบบอ่านอย่างเดียวและเปิด PR แยกสำหรับ Edge/UI.
+
+## B-024 [กลาง] Event–Detour operation ledger ต้องมี retention/archival policy
+- **หลักฐาน:** `doh_event_detour_operations` เก็บ request/before/result JSONB ทุกครั้งเพื่อ idempotency และ audit แต่ migration ยังไม่มีนโยบายเก็บรักษา/ย้ายออก. หากมีการจัดลำดับบ่อย ตารางและ index `created_at` จะโตไม่จำกัด.
+- **ผลกระทบ:** ระยะยาวอาจเพิ่ม storage, backup time และต้นทุน query ทั้งที่ไม่เกี่ยวกับการใช้งานปัจจุบัน.
+- **ทางเลือก:** A) ตั้ง retention ตามระยะเวลาที่หน่วยงานกำหนดแล้ว archive เป็นไฟล์/ตาราง audit; B) partition รายเดือน; C) เก็บถาวรทั้งหมด.
+- **คำแนะนำ:** A โดยกำหนดระยะเวลาที่ตรวจสอบย้อนหลังได้ก่อน และทำ worker/migration แยกพร้อม dry-run count; ห้ามลบ audit history อัตโนมัติโดยไม่มีนโยบายเจ้าของ.
+- **สถานะ:** เปิด — ไม่ขัดขวาง database foundation หรือ public cutover ระยะแรก.
 
 ## B-018 [กลาง] Keyboard focus ของ Admin dialog — ปิดแล้ว
 - **หลักฐานก่อนปิด:** `useModalAccessibility` ครอบ dialog ใน Incident Registry, Detour Management, GIS route dialogs, Animated status และ Official report. ค้น `role="dialog"` ใน `components/admin`, `components/ui`, `app/admin` แล้วไม่พบ dialog ที่อยู่นอก hook นี้.
@@ -59,8 +75,10 @@
 - **หลักฐาน:** ทดสอบ Production วันที่ 2026-11-13 ด้วยรายการ QA Draft พบว่า `getPublicSystemDataAction` ส่งรายการ `is_active=false` กลับมา แม้ `app/page.tsx` และ `LongdoGisMap.tsx` จะกรองก่อนวาด จึงไม่เห็นใน UI.
 - **ผลกระทบ:** ผู้เรียก API โดยตรงเข้าถึงรายละเอียดเหตุการณ์ที่เจ้าหน้าที่ตั้งใจเก็บเป็น Draft ได้ และดาวน์โหลด payload ใหญ่เกินจำเป็น.
 - **แนวทางแก้:** เพิ่ม `doh_get_public_system_data_display_rpc()` เป็น wrapper ของ display RPC เพื่อคง Admin payload เดิม พร้อมตัด flood/detour/timeline ที่ inactive หรือเชื่อมกับ Draft; Edge Function เรียก wrapper นี้เฉพาะ `getPublicSystemDataAction` และตอบ 503 แทนการ fallback ไป payload เต็ม.
-- **การตรวจและปิดงาน:** deploy SQL ก่อน Edge Function v11 แล้วทดสอบ Production วันที่ 2026-11-13 ด้วย flood/detour QA: Admin อ่าน Draft ได้; Public API และ UI ไม่พบ Draft/detour ที่ผูก; เมื่อเปิดใช้งาน Public พบทั้งคู่; หลัง soft delete Public ไม่พบทั้งคู่. ลบ QA ออกจาก DB แล้ว ตรวจคงเหลือ `0`.
-- **สถานะ:** ปิด (2026-11-13, UPDATE-090).
+- **การตรวจเดิม:** deploy SQL ก่อน Edge Function v11 แล้วทดสอบ Production วันที่ 2026-11-13 ด้วย flood/detour QA: Admin อ่าน Draft ได้; Public API และ UI ไม่พบ Draft/detour ที่ผูก; เมื่อเปิดใช้งาน Public พบทั้งคู่; หลัง soft delete Public ไม่พบทั้งคู่. ลบ QA ออกจาก DB แล้ว ตรวจคงเหลือ `0`.
+- **Regression ที่พบ 2026-11-17:** เมื่อ Edge network failure `lib/hdms-api.ts` เคย fallback ไป `doh_get_system_data_display_rpc()` แล้ว `doh_get_system_data_rpc()`; และ compatibility branch ใน `app/actions/doh-actions.ts` เคย fallback ไป `getSystemDataAction()`. ทั้งสอง path สามารถข้าม public wrapper ได้.
+- **การแก้ source:** fallback เรียกเฉพาะ `doh_get_public_system_data_display_rpc()` และ error/retry เมื่อ wrapper ใช้ไม่ได้; Playwright desktop/mobile ยืนยันไม่มี request ไป Admin RPC ระหว่าง Edge outage.
+- **สถานะ:** กำลังทำ (2026-11-17) — source และ regression test พร้อม แต่ต้องผ่าน PR/CI/Pages deploy แล้วจึงปิดอีกครั้ง.
 
 ## B-017 [ต่ำ] คำสั่ง E2E ในเครื่องไม่เตรียม public build configuration — ปิดแล้ว
 - **หลักฐาน:** `tests/e2e/public-route-sheet.spec.ts` ล้มที่ข้อความ `จุดเฝ้าระวังน้ำท่วม 2 จุด` เมื่อรันจาก clone ที่ไม่มี `.env.local`; `next build` ฝังค่า `NEXT_PUBLIC_*` ตอน build แล้ว `npm run start` ไม่รับค่าใหม่ภายหลัง. เมื่อ build โดยใช้ค่าจาก `.github/hdms-public.json` แล้วทดสอบซ้ำ ผลผ่าน 1/1.

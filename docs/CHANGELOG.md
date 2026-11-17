@@ -7,6 +7,20 @@
   2. ปรับ `package.json` สคริปต์ `build:pages` จาก `NEXT_OUTPUT=export next build` เป็น `node scripts/build-pages.mjs` ทำให้คำสั่ง `npm run build:pages` และ `npm run check:deploy` รันได้สมบูรณ์ทั้งบน Windows (CMD/PowerShell) และ Linux/CI โดยไม่ต้องพึ่ง external dependencies
 - **ย้อนกลับ:** revert commit นี้ได้ทันที (ไม่แก้ SQL, Edge Function หรือข้อมูลจริง)
 
+### [IN PROGRESS] 2026-11-17 รักษาขอบเขตข้อมูล Public เมื่อ Edge ใช้งานไม่ได้
+- **ไฟล์:** `lib/hdms-api.ts`, `app/actions/doh-actions.ts`, `tests/e2e/public-fallback-contract.spec.ts`, `docs/*`
+- **สาเหตุ:** direct fallback ใน browser และ compatibility fallback ของ `getPublicSystemDataAction()` เคยย้อนกลับไป RPC/payload ฝั่ง Admin ได้ เมื่อ Edge ล่มหรือเป็นรุ่นเก่า ซึ่งขัดกับ public wrapper ที่ตั้งใจกรอง Draft/inactive ไว้แล้ว.
+- **การแก้ไข:** fallback แบบ network เรียกได้เฉพาะ `doh_get_public_system_data_display_rpc()`; ถ้า RPC สาธารณะใช้ไม่ได้ให้ Query แสดง Error/Retry แทน และตัด fallback จาก public action ไป `getSystemDataAction()` ออก.
+- **ตรวจแล้ว:** Playwright `public-fallback-contract.spec.ts` ผ่าน desktop และ mobile (4/4): เมื่อ abort Edge request มีเฉพาะ request ไป public RPC และไม่มี request ไป RPC ฝั่ง Admin; เมื่อ Edge รุ่นเก่าตอบ `Unknown operation` ระบบ retry เฉพาะ public action และแสดง Error/Retry โดยไม่เรียก full Admin action.
+- **สถานะ:** source ผ่านการทดสอบแล้ว แต่ยังไม่อยู่ `main`/GitHub Pages; ห้ามอ้างว่า Production แก้แล้วจนกว่า PR, CI และ Pages workflow จะผ่าน.
+
+### [IN PROGRESS] 2026-11-17 Event–Detour many-to-many
+- เจ้าของอนุมัติ Phase 2 และการพัฒนาความสัมพันธ์กลางแล้ว; branch `codex/event-detour-links` ซิงก์กับ `origin/main` `4ab9737`.
+- เพิ่ม `lib/event-detour-links.ts` เป็นสัญญาข้อมูลร่วมที่ parse input runtime อย่างปลอดภัย แยกทิศทางเหตุการณ์จากทิศทาง Geometry และตรวจลำดับ/ความสัมพันธ์ซ้ำ/เงื่อนไขก่อนแนะนำ.
+- สร้าง migration ใหม่ `supabase/migrations/20261117135032_event_detour_relationships.sql`: event master, segment membership, many-to-many links, operation history, optimistic version/idempotency RPC, conservative one-time legacy backfill, และ geometry revision ที่ลดสถานะ `RECOMMENDED` เป็น `PENDING` เมื่อแนวทางเลี่ยงเปลี่ยน.
+- ตรวจบน PostgreSQL 16 แยกแล้ว: apply migration และ rerun ผ่าน; backfill ไม่สร้างซ้ำ, full replacement เป็น atomic, retry ด้วย operation ID เดิมคืนผลเดิม, version conflict/ลำดับขาด/direction mismatch/revision เก่าถูกปฏิเสธ, และ `service_role` เรียก RPC ได้ ขณะที่ `anon`/`authenticated` ไม่มีสิทธิ์ execute. การแก้ `reverse_waypoints_json` เพิ่ม `geometry_revision` และลด `RECOMMENDED` เป็น `PENDING` แล้ว.
+- ยังไม่ apply migration บน Production, ยังไม่มี Edge action/reader ใหม่, UI, public payload cutover หรือ deploy; ระบบจริงยังใช้ `flood_id_ref` และ `detour_meta.event_orders` เดิมทั้งหมด.
+
 ### [UPDATE-103] 2026-11-17 เอกสารส่งต่องานร่วม (AI Handoff) และปรับไฟล์กติกาตัวชี้ให้ตรงกับ AGENTS.md
 - **ไฟล์:** `docs/AI_HANDOFF.md` (ใหม่), `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `SUPPLEMENTAL_RULES.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/CHANGELOG.md`
 - **การแก้ไข:**
