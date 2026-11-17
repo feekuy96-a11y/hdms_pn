@@ -1,5 +1,11 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-098] 2026-11-17 อัปเกรด Next.js 16.4.4 → 16.4.6 ปิดช่องโหว่ความปลอดภัย
+- **ไฟล์:** `package.json`, `package-lock.json`, `docs/CHANGELOG.md`
+- **การแก้ไข:** อัปเดต `next` และ `eslint-config-next` จาก `16.4.4` เป็น `16.4.6` แบบ exact version ใน worktree แยก (`chore/nextjs-security-upgrade` จาก `origin/main` `ab8372f`) โดยไม่อัปเกรดเมเจอร์แพ็กเกจอื่นตามขอบเขต R8
+- **ตรวจแล้ว:** `npx next --version` (`Next.js v16.4.6`), `npm audit` (`found 0 vulnerabilities`), `npm run lint`, `npm run typecheck`, `NEXT_OUTPUT=export BASE_PATH=/hdms_pn npx next build` (6/6 หน้า ไม่มีคำเตือน SecurityFatalError), และ `PLAYWRIGHT_STATIC=1` E2E ผ่าน 66 passed / 0 failed (34 skipped)
+- **ลำดับ deploy:** เว็บไซต์ GitHub Pages เท่านั้น · ย้อนกลับด้วย `git revert` commit นี้
+
 ### [UPDATE-097] 2026-11-17 แผนที่ประชาชนแสดงทุกประเภทพร้อมกัน
 - แท็บน้ำท่วม/ทางเลี่ยงและตัวกรองสถานะกรองเฉพาะรายการ ไม่ซ่อนเส้นอีกประเภทหรือเส้นน้ำท่วมบนแผนที่โดยอัตโนมัติ; ผู้ใช้ยังเปิดปิดเลเยอร์เองได้ในคำอธิบายสัญลักษณ์.
 - คำอธิบายสัญลักษณ์เริ่มพับไว้ แต่ปุ่ม "ตำแหน่งของฉัน" และข้อความสถานะตำแหน่งยังคงกดและมองเห็นได้ทันทีโดยไม่ต้องกางคำอธิบายสัญลักษณ์. ไอคอนคลื่นน้ำใช้พื้นหลังสีเดียวกับเส้นน้ำท่วมและคลื่นสีขาว; ไอคอนทางเลี่ยงและตัวอย่างในคำอธิบายใช้สีเส้นทางเลี่ยงจากสไตล์เดียวกัน.
