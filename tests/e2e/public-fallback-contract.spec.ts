@@ -76,7 +76,9 @@ test("an old Edge response does not retry the full Admin action", async ({ page 
   });
 
   await page.goto(`${base}/`);
-  await expect(page.getByText("ตรวจสอบข้อมูลล่าสุดไม่สำเร็จ โปรดลองอีกครั้ง", { exact: true })).toBeVisible();
+  // The default React Query backoff can take about seven seconds before it
+  // exposes the final recoverable error on a slower CI runner.
+  await expect(page.getByText("ตรวจสอบข้อมูลล่าสุดไม่สำเร็จ โปรดลองอีกครั้ง", { exact: true })).toBeVisible({ timeout: 15_000 });
   // TanStack Query retries a recoverable read, but every retry must preserve
   // the public action instead of switching to getSystemDataAction().
   expect(actions.length).toBeGreaterThan(0);
