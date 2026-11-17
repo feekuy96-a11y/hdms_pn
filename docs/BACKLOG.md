@@ -117,7 +117,7 @@
 - เหลือ: ย้ายไฟล์ไป `docs/archive/` + ปรับลิงก์ (ต้องแก้ไฟล์ใหญ่ ควรทำแยกครั้ง)
 
 ## B-007 [ต่ำ] โค้ดค้าง — ปิดบางส่วน
-- **ถอดแล้ว:** `lib/auth.ts` (better-auth) และ `db/supabase-server.ts` — ค้นทั้งรีโปแล้วไม่มีโค้ด สคริปต์ หรือ Docker ใดนำเข้า
+- **ถอดแล้ว:** `lib/auth.ts` (better-auth) และ `db/supabase-server.ts` รวมทั้ง dependencies `better-auth`, `flatpickr`, `pg`, `@types/pg` ที่ค้นทั้งรีโปแล้วไม่มีโค้ดหรือสคริปต์นำเข้า
 - **คงไว้:** `server/routing-service.mjs` **ไม่ใช่โค้ดค้าง** เป็นบริการ OSRM ในเครื่อง/LAN ที่เป็น Tier 1 ของ `fetchOsrmWithFailover` (ผ่าน `NEXT_PUBLIC_OSRM_LOCAL_URL`) จึงคงไว้และห้ามลบ
 - **ยังเหลือ:** บริการ Postgres ใน `docker-compose.yml` ที่ตัวแอปไม่ใช้ · ข้อความ Server Actions/Docker ที่เก่าใน `DESIGN.md`/`MANUAL.md`
 

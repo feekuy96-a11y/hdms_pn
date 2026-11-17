@@ -2117,6 +2117,10 @@ export function LongdoGisMap({
         );
       }
 
+      // While editing a line, keep the map focused on the draft. Rebuilding
+      // decorative markers for every active route competes with vertex dragging.
+      if (vertexEditable) return;
+
       // 2. Active Detour Route Arrows (Item 4)
       const detourStyle = mapStyles.detour;
       const showDetourArrows = detourStyle?.showArrows ?? true;
@@ -2212,7 +2216,7 @@ export function LongdoGisMap({
       map.off("moveend zoomend", schedule);
       group.clearLayers();
     };
-  }, [mapReady, systemData.highwayLayers, systemData.detourRoutes, mapStyles, showMainHwy, showSecHwy, showDetourLayer, showSecondaryAtCurrentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode]);
+  }, [mapReady, systemData.highwayLayers, systemData.detourRoutes, mapStyles, showMainHwy, showSecHwy, showDetourLayer, showSecondaryAtCurrentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode, vertexEditable]);
 
   // 4h. Freeform vertex editor: draggable handle on every vertex + "+" handle on every segment middle.
   // Only vertices inside the viewport are drawn (at most MAX_VERTEX_HANDLES), so long lines stay fast.

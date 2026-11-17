@@ -1,5 +1,10 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-100] 2026-11-17 ลดภาระแผนที่ขณะแก้แนวเส้น และลบ dependency ที่ไม่ใช้
+- **ไฟล์:** `components/map/LongdoGisMap.tsx`, `package.json`, `package-lock.json`, `docs/BACKLOG.md`, `docs/ARCHITECTURE.md`.
+- **การแก้ไข:** ระหว่างใช้ตัวแก้ vertex แผนที่จะวาดเฉพาะลูกศรของแนวร่างที่กำลังแก้ ไม่สร้างลูกศรตกแต่งของทางเลี่ยงและโครงข่ายเดิมซ้ำเมื่อเลื่อนหรือซูม. ถอด `better-auth`, `flatpickr`, `pg`, `@types/pg` ซึ่งค้นทั้งรีโปแล้วไม่มี runtime import.
+- **ย้อนกลับ:** revert commit นี้ได้ทันที; ไม่เปลี่ยน SQL, Edge Function หรือข้อมูลจริง.
+
 ### [UPDATE-100] 2026-11-17 ปรับปรุงการโหลดรูปภาพหน้างาน ตัวกรองทางเลี่ยง และความสอดคล้องสถานะจราจรบนแผนที่
 - **ไฟล์:** `lib/flood-event-schema.ts`, `app/page.tsx`, `components/map/LongdoGisMap.tsx`, `docs/CHANGELOG.md`
 - **การแก้ไข:**

@@ -37,6 +37,9 @@ test("repeated vertex dragging keeps the editor canvas stable", async ({ page },
   const routeRow = page.getByRole("row").filter({ hasText: "ตอนทดสอบลากจุด" }).first();
   await routeRow.getByRole("button", { name: "แนวถนน", exact: true }).click();
   await page.getByRole("button", { name: "วาด/แก้ไขอิสระ" }).click();
+  // Only the active draft may keep direction arrows; background layers must not
+  // add marker work while vertices are being dragged.
+  expect(await page.locator(".doh-dir-arrow-icon").count()).toBeLessThanOrEqual(2);
   const canvasCount = await page.locator(".leaflet-overlay-pane canvas").count();
   const initialHeap = await heapBytes(page);
   const undo = page.getByRole("button", { name: "ย้อนกลับ" });
