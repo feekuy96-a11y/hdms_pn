@@ -389,15 +389,17 @@ test("map flood pin opens summary popup without stacking, per-route detour direc
   const detourTab = page.getByRole("button", { name: /ทางเลี่ยง \(2\)/ }).first();
   await expect(floodTab).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".doh-map-capsule-pin").first()).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator(".doh-detour-symbol")).toHaveCount(0);
-
-  // Switch to Detour tab -> detour layer renders, flood pins hide
-  await detourTab.click();
   await expect(page.locator(".doh-detour-symbol").first()).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator(".doh-map-capsule-pin")).toHaveCount(0);
 
-  // Switch back to Flood tab -> flood pin returns
+  // Switch to Detour tab -> list filters to detours while both map layers remain visible
+  await detourTab.click();
+  await expect(detourTab).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".doh-detour-symbol").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".doh-map-capsule-pin").first()).toBeVisible({ timeout: 10_000 });
+
+  // Switch back to Flood tab -> flood list returns and flood pin stays clickable
   await floodTab.click();
+  await expect(floodTab).toHaveAttribute("aria-pressed", "true");
   const floodPin = page.locator(".doh-map-capsule-pin").first();
   await expect(floodPin).toBeVisible();
 

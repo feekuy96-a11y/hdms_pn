@@ -2368,6 +2368,27 @@ export function LongdoGisMap({
         )}
       </div>
 
+      {/* Quick Geolocation Control & Live Status when Legend is collapsed */}
+      {isLayerControlCollapsed && (
+        <div className="absolute top-12 right-3 z-[400] flex flex-col items-end gap-1.5 pointer-events-none">
+          <button
+            type="button"
+            onClick={locateUser}
+            disabled={isLocating}
+            aria-label="ตำแหน่งของฉัน"
+            className="pointer-events-auto inline-flex min-h-11 sm:min-h-9 items-center gap-1.5 rounded-lg border border-slate-700/80 bg-[#0b162c]/95 px-2.5 py-1 text-[11px] sm:text-xs font-semibold text-sky-300 shadow-lg backdrop-blur-md transition hover:bg-[#0f1d3a] hover:text-sky-200 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+          >
+            <LocateFixed className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>{isLocating ? "กำลังหา…" : "ตำแหน่งของฉัน"}</span>
+          </button>
+          {locationStatus && (
+            <p role="status" aria-live="polite" className="pointer-events-auto max-w-[220px] rounded-md border border-slate-700/80 bg-slate-950/90 px-2.5 py-1 text-[11px] leading-snug text-slate-200 shadow-lg backdrop-blur-md">
+              {locationStatus}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Expanded Legend Panel (positioned cleanly at top-3 right-3, drops down smoothly) */}
       {!isLayerControlCollapsed && (
         <div className="absolute top-3 right-3 z-[410] bg-[#0b162c]/95 backdrop-blur border border-slate-700/80 rounded-2xl p-3 sm:p-3.5 shadow-2xl min-w-[215px] sm:min-w-[240px] max-w-[calc(100vw-24px)] text-xs pointer-events-auto animate-fade-in max-h-[85vh] overflow-y-auto">
