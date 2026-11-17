@@ -1,5 +1,12 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-103] 2026-11-17 เอกสารส่งต่องานร่วม (AI Handoff) และปรับไฟล์กติกาตัวชี้ให้ตรงกับ AGENTS.md
+- **ไฟล์:** `docs/AI_HANDOFF.md` (ใหม่), `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `SUPPLEMENTAL_RULES.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/CHANGELOG.md`
+- **การแก้ไข:**
+  1. เพิ่ม `docs/AI_HANDOFF.md` เป็นสถานะกลางของ `origin/main` ล่าสุด (`361f7da`): สรุปสถานะ deploy, สิ่งที่ห้ามทำย้อนกลับ (รวมถึง `lib/traffic-presentation.ts` และ Container Queries ในหน้าแอดมิน), งานค้างที่มีหลักฐาน และขั้นตอนส่งงานร่วมกันระหว่าง AI ทุกค่าย
+  2. ปรับ `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `CLAUDE.md` และหัวไฟล์ `SUPPLEMENTAL_RULES.md` ให้ชี้ไปที่ `AGENTS.md` และ `docs/AI_HANDOFF.md` โดยตรง ยกเลิกคำสั่งเก่าที่บังคับอ่าน `SUPPLEMENTAL_RULES.md` ทั้งไฟล์หรืออ้างอิง Server Actions / Better Auth
+- **ย้อนกลับ:** revert commit นี้ได้ทันที (ไม่เปลี่ยนโค้ดระบบ, ฐานข้อมูล, Edge Function หรือข้อมูลจริง)
+
 ### [UPDATE-102] 2026-11-17 ปรับปรุงการ์ดทะเบียนเหตุการณ์แอดมิน รวมศูนย์สถานะจราจร และแก้บั๊กการยืนยันสถานะ
 - **ไฟล์:** `lib/traffic-presentation.ts`, `lib/flood-event-schema.ts`, `app/page.tsx`, `components/map/LongdoGisMap.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `app/globals.css`, `tests/e2e/admin-menus.spec.ts`, `docs/UI_CONTRACT.md`, `docs/CHANGELOG.md`
 - **การแก้ไข:**

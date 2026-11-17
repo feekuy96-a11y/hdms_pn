@@ -9,11 +9,12 @@
 
 ## 0. ลำดับการอ่าน (อ่านเท่าที่งานต้องใช้ ไม่ต้องอ่านทั้งหมด)
 1. ไฟล์นี้ (ทุกครั้ง)
-2. `docs/ARCHITECTURE.md` — ก่อนแตะโค้ดหรือฐานข้อมูล
-3. `docs/UI_CONTRACT.md` — ก่อนแตะหน้าจอ ปุ่ม ฟอร์ม หรือข้อความที่ test อ้างถึง
-4. `docs/PLAYBOOKS.md` — เลือก playbook ที่ตรงกับงาน (UI / DB / Edge Function / ประสิทธิภาพ / deploy / CI แดง)
-5. `docs/BACKLOG.md` และ `docs/KNOWN_ISSUES.md` — ดูข้อที่เปิดอยู่ ปัญหาที่ทราบ ข้อจำกัดทางเทคนิค และหลักฐานการทดสอบ
-6. `docs/CHANGELOG.md`, `SUPPLEMENTAL_RULES.md`, `DECISION_LOG.md` — **ค้นด้วย grep ตามชื่อโมดูล ห้ามอ่านทั้งไฟล์** (`SUPPLEMENTAL_RULES.md` ใหญ่ ~120 KB เป็นประวัติเก่า ใช้เป็นคลังอ้างอิงเท่านั้น)
+2. `docs/AI_HANDOFF.md` — สถานะ main ล่าสุด, งานค้าง และข้อห้ามร่วมของ AI ทุกฝั่ง
+3. `docs/ARCHITECTURE.md` — ก่อนแตะโค้ดหรือฐานข้อมูล
+4. `docs/UI_CONTRACT.md` — ก่อนแตะหน้าจอ ปุ่ม ฟอร์ม หรือข้อความที่ test อ้างถึง
+5. `docs/PLAYBOOKS.md` — เลือก playbook ที่ตรงกับงาน (UI / DB / Edge Function / ประสิทธิภาพ / deploy / CI แดง)
+6. `docs/BACKLOG.md` และ `docs/KNOWN_ISSUES.md` — ดูข้อที่เปิดอยู่ ปัญหาที่ทราบ ข้อจำกัดทางเทคนิค และหลักฐานการทดสอบ
+7. `docs/CHANGELOG.md`, `SUPPLEMENTAL_RULES.md`, `DECISION_LOG.md` — **ค้นด้วย grep ตามชื่อโมดูล ห้ามอ่านทั้งไฟล์** (`SUPPLEMENTAL_RULES.md` ใหญ่ ~120 KB เป็นประวัติเก่า ใช้เป็นคลังอ้างอิงเท่านั้น)
 ถ้าเอกสารขัดกับโค้ดจริง **โค้ดชนะ** และต้องแก้เอกสารให้ตรงในงานเดียวกัน (ที่ทราบว่าเก่าแล้ว: `DESIGN.md` ส่วน Server Actions/Docker, `MANUAL.md`, `PRODUCTION.md` บางย่อหน้า)
 
 ---
