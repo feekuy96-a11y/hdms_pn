@@ -1,5 +1,11 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-101] 2026-11-17 แก้ Escape ของหน้าต่างสถานะ Admin
+- **ไฟล์:** `components/ui/use-modal-accessibility.ts`.
+- **สาเหตุ:** Escape รับเฉพาะเมื่อเหตุการณ์ bubble ถึง dialog จึงปิดหน้าต่างสถานะไม่สม่ำเสมอในการทดสอบและบางตำแหน่ง focus.
+- **การแก้ไข:** ดัก Escape ระดับหน้าต่างแบบ capture เฉพาะขณะที่ modal เปิด และคง Tab focus trap กับการคืน focus เดิมไว้.
+- **ตรวจแล้ว:** E2E กรณีเปิด/ปิดสถานะทางเลี่ยง และชุด keyboard modal ทั้ง desktop/mobile ผ่าน.
+
 ### [UPDATE-100] 2026-11-17 ลดภาระแผนที่ขณะแก้แนวเส้น และลบ dependency ที่ไม่ใช้
 - **ไฟล์:** `components/map/LongdoGisMap.tsx`, `package.json`, `package-lock.json`, `docs/BACKLOG.md`, `docs/ARCHITECTURE.md`.
 - **การแก้ไข:** ระหว่างใช้ตัวแก้ vertex แผนที่จะวาดเฉพาะลูกศรของแนวร่างที่กำลังแก้ ไม่สร้างลูกศรตกแต่งของทางเลี่ยงและโครงข่ายเดิมซ้ำเมื่อเลื่อนหรือซูม. ถอด `better-auth`, `flatpickr`, `pg`, `@types/pg` ซึ่งค้นทั้งรีโปแล้วไม่มี runtime import.
