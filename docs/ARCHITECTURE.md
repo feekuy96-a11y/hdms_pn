@@ -78,4 +78,4 @@
 - `npm run check` = lint + typecheck + `build` (ไม่ใช่ `build:pages`) จึงอาจผ่านทั้งที่ deploy ไม่ผ่าน
 
 ## 8. โค้ดเก่าที่ไม่อยู่ใน path จริง (ห้ามขยาย ดู B-007)
-`lib/auth.ts` (better-auth, ไม่มีใครนำเข้า และ throw ถ้าไม่มี `BETTER_AUTH_SECRET`), `db/supabase-server.ts`, `server/routing-service.mjs`, Postgres ใน `docker-compose.yml`, ข้อความ "Server Actions"/Docker ใน `DESIGN.md`/`MANUAL.md`
+`server/routing-service.mjs`, Postgres ใน `docker-compose.yml`, ข้อความ "Server Actions"/Docker ใน `DESIGN.md`/`MANUAL.md`
