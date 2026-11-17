@@ -40,6 +40,52 @@ export async function snapRouteAction(start: [number, number], end: [number, num
   return invokeHdms("snapRouteAction", [start, end]);
 }
 
+export interface GoogleReverseGeocodeResult {
+  configured: boolean;
+  available: boolean;
+  found?: boolean;
+  status?: number;
+  road?: string;
+  village?: string;
+  subdistrict?: string;
+  district?: string;
+  province?: string;
+  formattedAddress?: string;
+  placeId?: string;
+}
+
+export interface GoogleRouteStep {
+  maneuver: string;
+  instructions: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  startLocation: [number, number] | null;
+}
+
+export interface GoogleDetourRouteResult {
+  configured: boolean;
+  available: boolean;
+  found?: boolean;
+  status?: number;
+  distanceMeters?: number;
+  durationSeconds?: number;
+  encodedPolyline?: string;
+  steps?: GoogleRouteStep[];
+}
+
+export async function reverseGeocodeGoogleAction(lon: number, lat: number): Promise<GoogleReverseGeocodeResult> {
+  return invokeHdms("reverseGeocodeGoogleAction", [lon, lat]);
+}
+
+export async function computeGoogleDetourRouteAction(payload: {
+  origin: [number, number];
+  destination: [number, number];
+  intermediates?: [number, number][];
+  routingPreference?: "TRAFFIC_UNAWARE" | "TRAFFIC_AWARE";
+}): Promise<GoogleDetourRouteResult> {
+  return invokeHdms("computeGoogleDetourRouteAction", [payload]);
+}
+
 export async function getSystemDataAction(): Promise<SystemDataPayload> {
   return invokeHdms("getSystemDataAction", []);
 }

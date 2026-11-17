@@ -1,6 +1,6 @@
 # AI Handoff — สถานะร่วมของโครงการ HDMS_PN
 
-> อัปเดต: 18 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` ที่ commit `f4b39a6` (PR #36: sync new flood segments into event links); commit ที่ยืนยัน Pages ล่าสุดคือ `f4b39a6` (และมี Admin Relationship Editor `[UPDATE-107]` รอ PR/deploy). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
+> อัปเดต: 18 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` ที่ commit `28e1fff` (PR #37: Admin Relationship Editor `[UPDATE-107]`); commit ที่ยืนยัน Pages ล่าสุดตามบันทึกคือ `f4b39a6` / PR #37 (`28e1fff`) และงานรอบนี้ (`UPDATE-108`) เพิ่ม Hybrid Google Maps Geocoding/Routes proxy บนสาขาใหม่รอ PR/Edge deploy. ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
 
 ## ก่อนเริ่มงานทุกครั้ง
 
@@ -39,8 +39,8 @@
 
 1. เก็บ Chrome Performance trace/Task Manager จากเครื่องเจ้าหน้าที่จริงเมื่อแก้เส้นที่มีปัญหา RAM/CPU; อย่าลด `MAX_VERTEX_HANDLES` หรือเพิ่ม Web Worker โดยไม่มี measurement (B-005, KI-012)
 2. Apps Script outbox: ต้องยืนยันว่า Edge secret ชี้ไป URL `/exec` ของ Apps Script รุ่นมี idempotency แล้วจึง deploy Edge v18 ใหม่ (B-022)
-3. OSRM สาธารณะไม่มี SLA (B-008); คง `server/routing-service.mjs` และ Docker/OSRM local ไว้เพราะอาจใช้เป็นทางเลือก LAN ห้ามลบเป็น cleanup
-4. ข้อจำกัด waypoint ของ Google Maps ยังมีอยู่ (B-013); ใช้ `sampleWaypointsForGoogleMaps` เสมอ
+3. OSRM สาธารณะไม่มี SLA (B-008); เพิ่ม Google Routes v2 (`computeRoutes`) และ Geocoding v4 proxy เป็น Tier 1 ใน Edge `hdms-api` แล้ว (เปิดใช้เมื่อตั้ง `GOOGLE_MAPS_API_KEY` ใน Supabase Edge Secrets; มิฉะนั้นตัดวงจรอัตโนมัติไป OSRM/Nominatim/local) และคง `server/routing-service.mjs` / Docker/OSRM local ไว้เป็นทางเลือก LAN ห้ามลบเป็น cleanup
+4. ข้อจำกัด waypoint ของ Google Maps ยังมีอยู่ (B-013); `sampleWaypointsForGoogleMaps` อัปเกรดเป็นคัดจุดหักเลี้ยวสำคัญ (Douglas-Peucker ≤ 8 จุดเรียงตามเส้นทาง) และต้องคงการใช้ฟังก์ชันนี้เสมอ
 5. ความสัมพันธ์ Flood Event ↔ Detour แบบหลายต่อหลาย: migration `20261117135032_event_detour_relationships.sql` และ trigger `20261117192000_sync_flood_event_segments.sql` (`trg_doh_sync_flood_event_segment`) ถูก apply Production แล้ว และตรวจอ่านกลับได้ `18` events, `18` segments, `13` links (`12` PENDING, `1` WITHDRAWN, ไม่มี RECOMMENDED ที่ยังไม่ได้ review). Edge `hdms-api` v19 มี reader และ atomic replacement action แล้ว. หน้าต่าง Admin Relationship Editor (`components/admin/EventDetourLinkModal.tsx`, `[UPDATE-107]`) พัฒนาและผ่าน E2E ในเครื่องแล้ว (แยกออกจากฟอร์มเดิมเพื่อกันการเขียนทับ `flood_id_ref`) รอ deploy ขึ้น GitHub Pages และทดสอบบันทึก/reload กับฐานข้อมูลจริง ส่วนหน้าประชาชน, public-payload, export/import และ report ยังต้องใช้ `flood_id_ref` และ `detour_meta.event_orders` เดิมจนกว่าจะผ่าน PR cutover แยก (B-023).
 
 ## วิธีส่งงานร่วมกัน

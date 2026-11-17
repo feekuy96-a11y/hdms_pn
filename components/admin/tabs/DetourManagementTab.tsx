@@ -254,6 +254,20 @@ export function DetourManagementTab({
       return;
     }
 
+    const parseCoordArray = (val: unknown): [number, number][] | undefined => {
+      if (!val) return undefined;
+      if (Array.isArray(val)) return val as [number, number][];
+      if (typeof val === "string") {
+        try {
+          const parsed = JSON.parse(val);
+          return Array.isArray(parsed) ? parsed : undefined;
+        } catch {
+          return undefined;
+        }
+      }
+      return undefined;
+    };
+
     const advice = await generateAutoDetourAdvice(
       [editingDetour.lon_start, editingDetour.lat_start],
       [editingDetour.lon_end, editingDetour.lat_end],
@@ -261,7 +275,11 @@ export function DetourManagementTab({
       linkedFlood?.route_no || "43",
       systemData.highwayLayers || [],
       reverseCoords,
-      editingDetour.direction_mode
+      editingDetour.direction_mode,
+      {
+        forwardWaypoints: parseCoordArray(editingDetour.detour_meta?.waypoints_json),
+        reverseWaypoints: parseCoordArray(editingDetour.reverse_waypoints_json),
+      }
     );
 
     setEditDetourDesc(advice);

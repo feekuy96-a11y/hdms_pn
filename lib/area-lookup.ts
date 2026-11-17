@@ -8,9 +8,10 @@
 // asked once per route step), and when the network was down every call waited out a 3.5 second timeout.
 //
 // What this module does:
-//   - one answer per point, in the same order for every screen: Longdo (if a key is set) -> Nominatim -> local data
+//   - one answer per point, in the same order for every screen:
+//     Google Geocoding proxy (if server key configured) -> Longdo -> Nominatim -> local data
 //   - 30 day cache in memory and in localStorage (administrative names do not change), in-flight de-duplication,
-//     and reuse of a nearby answer (150 m) when only the area name is needed
+//     and reuse of a nearby answer (35 m) when only the area name is needed
 //   - Nominatim calls are queued at least one second apart, retried once for 429/5xx/timeouts, and after a failure
 //     the online sources are skipped for a minute so offline use is not slowed down
 //   - an honest confidence level: only an online answer that names the tambon is "high". The local dataset
@@ -19,6 +20,7 @@
 // The old public helpers (isPointInPolygon, findPattaniDistrictName, cleanThaiAdminPrefix) live here now and are
 // re-exported from lib/gis-utils.ts, so existing imports keep working.
 
+import { reverseGeocodeGoogleAction } from "@/app/actions/doh-actions";
 import { PATTANI_DISTRICTS_GEOJSON, PATTANI_SUBDISTRICTS_DATA } from "./gis-data";
 
 export interface AreaInfo {
@@ -32,7 +34,7 @@ export interface AreaInfo {
   province: string;
   /** Road name from the reverse geocoder ("" if unknown). */
   road: string;
-  source: "longdo" | "nominatim" | "local" | "district";
+  source: "google" | "longdo" | "nominatim" | "local" | "district";
   /** high: online answer naming the tambon · medium: tambon taken from a municipality/town field · low: local data. */
   confidence: "high" | "medium" | "low";
 }
@@ -117,26 +119,28 @@ export function localArea(lon: number, lat: number): AreaInfo {
     return lon >= minX && lon <= maxX && lat >= minY && lat <= maxY;
   });
   const district = cleanThaiAdminPrefix(findPattaniDistrictName([lon, lat]));
+  const refined = district ? matches.filter((m) => m.amphoe === district) : matches;
+  const pool = refined.length > 0 ? refined : matches;
 
-  if (matches.length === 1) {
+  if (pool.length === 1) {
     return {
       village: "",
-      tambon: matches[0].tambon,
-      amphoe: matches[0].amphoe,
+      tambon: pool[0].tambon,
+      amphoe: pool[0].amphoe,
       province: "ปัตตานี",
       road: "",
       source: "local",
       confidence: "low",
     };
   }
-  const amphoes = Array.from(new Set(matches.map((m) => m.amphoe)));
+  const amphoes = Array.from(new Set(pool.map((m) => m.amphoe)));
   return {
     village: "",
     tambon: "",
     amphoe: amphoes.length === 1 ? amphoes[0] : district,
     province: "ปัตตานี",
     road: "",
-    source: matches.length > 1 ? "local" : "district",
+    source: pool.length > 1 ? "local" : "district",
     confidence: "low",
   };
 }
@@ -149,13 +153,24 @@ const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const LOCAL_ANSWER_TTL_MS = 2 * 60 * 1000;
 const STORE_KEY = "doh-area-cache-v1";
 const STORE_MAX_ENTRIES = 300;
-const NEARBY_REUSE_METERS = 150;
+const NEARBY_REUSE_METERS = 35;
 const NOMINATIM_MIN_GAP_MS = 1000;
 const NOMINATIM_TIMEOUT_MS = 3500;
 const LONGDO_TIMEOUT_MS = 3000;
 const RETRY_DELAY_MS = 1500;
 const BREAKER_MS = 60 * 1000;
 const RATE_LIMIT_BREAKER_MS = 120 * 1000;
+const UNCONFIGURED_COOLDOWN_MS = 5 * 60 * 1000;
+const NON_TAMBON_TOWN_LABELS = new Set([
+  "ปัตตานี",
+  "เมืองปัตตานี",
+  "หนองจิก",
+  "ยะหริ่ง",
+  "สายบุรี",
+  "ทุ่งยางแดง",
+  "กะพ้อ",
+  "ไม้แก่น",
+]);
 
 const memory = new Map<string, { at: number; ttl: number; info: AreaInfo }>();
 const inflight = new Map<string, Promise<AreaInfo>>();
@@ -165,6 +180,9 @@ let nominatimQueue: Promise<unknown> = Promise.resolve();
 let lastNominatimAt = 0;
 let nominatimDownUntil = 0;
 let longdoDownUntil = 0;
+let googleDownUntil = 0;
+let googleGeoConfirmed = false;
+let googleGeoProbePromise: Promise<void> | null = null;
 
 /** Clears caches and counters (tests, or after the data source changes). */
 export function resetAreaLookup() {
@@ -176,6 +194,9 @@ export function resetAreaLookup() {
   lastNominatimAt = 0;
   nominatimDownUntil = 0;
   longdoDownUntil = 0;
+  googleDownUntil = 0;
+  googleGeoConfirmed = false;
+  googleGeoProbePromise = null;
   try {
     if (typeof window !== "undefined" && window.localStorage) window.localStorage.removeItem(STORE_KEY);
   } catch {
@@ -311,7 +332,8 @@ async function queryNominatim(lon: number, lat: number): Promise<Partial<AreaInf
   const village = cleanThaiAdminPrefix(addr.village || addr.hamlet || addr.neighbourhood);
   // Fields that name a ตำบล are trusted more than a municipality/town name, which only often equals it.
   const strongTambon = cleanThaiAdminPrefix(addr.subdistrict || addr.suburb);
-  const weakTambon = cleanThaiAdminPrefix(addr.municipality || addr.town || addr.city_district);
+  const rawWeakTambon = cleanThaiAdminPrefix(addr.municipality || addr.town || addr.city_district);
+  const weakTambon = NON_TAMBON_TOWN_LABELS.has(rawWeakTambon) ? "" : rawWeakTambon;
   const tambon = strongTambon || weakTambon;
   const amphoe = cleanThaiAdminPrefix(addr.district || addr.county || addr.city_district || addr.city);
   if (!tambon && !amphoe && !village && !addr.road) return null;
@@ -324,6 +346,63 @@ async function queryNominatim(lon: number, lat: number): Promise<Partial<AreaInf
     source: "nominatim",
     confidence: strongTambon ? "high" : tambon ? "medium" : "low",
   };
+}
+
+async function queryGoogleGeocode(lon: number, lat: number): Promise<Partial<AreaInfo> | null> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)) {
+    return null;
+  }
+  if (Date.now() < googleDownUntil) return null;
+
+  if (!googleGeoConfirmed && googleGeoProbePromise) {
+    await googleGeoProbePromise;
+    if (!googleGeoConfirmed || Date.now() < googleDownUntil) return null;
+  }
+
+  let resolveProbe: (() => void) | null = null;
+  if (!googleGeoConfirmed && !googleGeoProbePromise) {
+    googleGeoProbePromise = new Promise<void>((resolve) => {
+      resolveProbe = resolve;
+    });
+  }
+
+  try {
+    const res = await reverseGeocodeGoogleAction(lon, lat);
+    if (!res || !res.configured) {
+      googleGeoConfirmed = false;
+      googleDownUntil = Date.now() + UNCONFIGURED_COOLDOWN_MS;
+      return null;
+    }
+    googleGeoConfirmed = true;
+    if (!res.available) {
+      googleDownUntil = Date.now() + (res.status === 429 ? RATE_LIMIT_BREAKER_MS : BREAKER_MS);
+      return null;
+    }
+    if (!res.found) return null;
+    const tambon = cleanThaiAdminPrefix(res.subdistrict);
+    const amphoe = cleanThaiAdminPrefix(res.district);
+    const village = cleanThaiAdminPrefix(res.village);
+    const province = cleanThaiAdminPrefix(res.province) || "ปัตตานี";
+    const road = typeof res.road === "string" ? res.road.trim() : "";
+    if (!tambon && !amphoe && !village && !road) return null;
+    return {
+      village,
+      tambon,
+      amphoe,
+      province,
+      road,
+      source: "google",
+      confidence: tambon ? "high" : amphoe ? "medium" : "low",
+    };
+  } catch {
+    googleDownUntil = Date.now() + BREAKER_MS;
+    return null;
+  } finally {
+    if (resolveProbe) {
+      googleGeoProbePromise = null;
+      resolveProbe();
+    }
+  }
 }
 
 async function resolveOnline(lon: number, lat: number): Promise<AreaInfo | null> {
@@ -340,6 +419,11 @@ async function resolveOnline(lon: number, lat: number): Promise<AreaInfo | null>
       confidence: online.tambon ? online.confidence || "medium" : tambonFromLocal ? "low" : online.confidence || "low",
     };
   };
+
+  if (Date.now() >= googleDownUntil) {
+    const fromGoogle = await queryGoogleGeocode(lon, lat);
+    if (fromGoogle) return merge(fromGoogle);
+  }
 
   const longdoKey = process.env.NEXT_PUBLIC_LONGDO_MAP_KEY;
   if (longdoKey && Date.now() >= longdoDownUntil) {
@@ -372,9 +456,15 @@ export async function resolveArea(lon: number, lat: number, options: ResolveArea
     return stored.v;
   }
 
-  // Only the area name is needed: an online answer for a point within 150 m is good enough.
+  // Only the area name is needed: reuse a nearby online answer within 35 m unless local boundary differs.
   if (!options.needRoad) {
-    const near = recent.find((item) => metersBetween(lon, lat, item.lon, item.lat) <= NEARBY_REUSE_METERS);
+    const localHint = localArea(lon, lat);
+    const near = recent.find((item) => {
+      if (metersBetween(lon, lat, item.lon, item.lat) > NEARBY_REUSE_METERS) return false;
+      if (localHint.amphoe && item.info.amphoe && localHint.amphoe !== item.info.amphoe) return false;
+      if (localHint.tambon && item.info.tambon && localHint.tambon !== item.info.tambon) return false;
+      return true;
+    });
     if (near) return { ...near.info, road: "" };
   }
 

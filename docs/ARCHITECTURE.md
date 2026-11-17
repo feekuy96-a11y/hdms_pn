@@ -23,9 +23,9 @@
 - คิวเก็บ `attempts`, `next_attempt_at`, `last_error`, `external_id`; `doh_claim_external_jobs` ใช้ `FOR UPDATE SKIP LOCKED` กัน worker ซ้ำ. migration `20261116093000` ใช้ Supabase Cron ปลุก worker ทุก 2 นาที; Admin read ยังช่วยปลุกคิวเพิ่มเติม. งานที่ล้มครบ 8 ครั้งคงสถานะ `failed` เพื่อให้ตรวจและ requeue ภายหลัง; ดู KI-010.
 | ขั้น | ไฟล์ | หมายเหตุ |
 |---|---|---|
-| เรียก API | `lib/hdms-api.ts` `invokeHdms(action,args)` | POST ไป `${SUPABASE_URL}/functions/v1/hdms-api`; timeout 20 วินาที (บันทึกเลเยอร์ทางหลวง 90 วินาที); read ฝั่ง Public fallback ได้เฉพาะ public RPC, ส่วน Admin ใช้ full RPC |
-| Adapter | `app/actions/doh-actions.ts` | `getSystemDataAction` (เต็มสำหรับ Admin), `getPublicSystemDataAction` (เบาและกรอง Public; wrapper ล้มให้ Error/Retry ไม่ย้อนใช้ full payload) |
-| Edge Function | `supabase/functions/hdms-api/index.ts` | `verify_jwt=false` (`supabase/config.toml`); อ่าน = anon key; **เขียน = service role และไม่มีการตรวจสิทธิ์ผู้เรียก** (ดู §6) |
+| เรียก API | `lib/hdms-api.ts` `invokeHdms(action,args)` | POST ไป `${SUPABASE_URL}/functions/v1/hdms-api`; timeout 20 วินาที (บันทึกเลเยอร์ทางหลวง 90 วินาที); read ฝั่ง Public fallback ได้เฉพาะ public RPC, ส่วน Admin ใช้ full RPC; มี read-only proxy `reverseGeocodeGoogleAction` / `computeGoogleDetourRouteAction` ที่คืน `configured:false` เมื่อยังไม่ตั้ง `GOOGLE_MAPS_API_KEY` |
+| Adapter | `app/actions/doh-actions.ts` | `getSystemDataAction` (เต็มสำหรับ Admin), `getPublicSystemDataAction` (เบาและกรอง Public; wrapper ล้มให้ Error/Retry ไม่ย้อนใช้ full payload), `reverseGeocodeGoogleAction` และ `computeGoogleDetourRouteAction` |
+| Edge Function | `supabase/functions/hdms-api/index.ts` | `verify_jwt=false` (`supabase/config.toml`); อ่าน + proxy Google Maps = ไม่ใช้ service role; **เขียน = service role และไม่มีการตรวจสิทธิ์ผู้เรียก** (ดู §6) |
 | เขียนข้อมูล | `invokeHdms` ส่ง `light:true` | server ตอบ `{success:true}` อย่างเดียว; หน้าแอดมินเรียก `refetch()` หนึ่งครั้ง (เดิมโหลดซ้ำ 2 รอบ) |
 | Query key | หน้าประชาชน `["dohSystemData"]`, หน้าแอดมิน `["dohAdminSystemData"]` | staleTime 0, refetch ทุก 30 นาทีเมื่อผู้ใช้ active (`lib/use-polling-activity.ts`), ไม่ refetch ตอนกลับมาที่แท็บ |
 | Offline | `lib/offline-db.ts` (IndexedDB) | คิวรายงานภาคสนาม ใช้การเชื่อมต่อเดียวร่วมกัน; ซิงก์ผ่าน `OfflineSyncStatus` |
@@ -55,7 +55,7 @@
 | ส่วนประกอบฟอร์มกลาง | `components/admin/ui.tsx` | `FormSection`, `ToolGroup`, `ActionButton`, `StickyActionBar` |
 | ตัวแก้ไขเส้นอิสระ | `lib/line-edit.ts` + `GisDataImportTab` + `LongdoGisMap` | เหตุการณ์ vertex ไหลแผนที่ → `app/admin/page.tsx` (`vertexEvent`) → AdminConsole → แท็บ; undo/redo เป็น snapshot; บันทึกทั้งเลเยอร์ผ่าน `updateHighwayLayerAction` |
 | แผนที่ | `components/map/LongdoGisMap.tsx` | ดูกฎ §5 |
-| คำนวณเชิงพื้นที่/OSRM | `lib/gis-utils.ts` | เรียก OSRM สาธารณะ (`router.project-osrm.org`) + failover, สร้างคำแนะนำทางเลี่ยง |
+| คำนวณเชิงพื้นที่/เส้นทาง | `lib/gis-utils.ts` + `lib/area-lookup.ts` + `lib/gis-data.ts` + `lib/detour-navigation.ts` | Hybrid lookup (Google Geocoding v4 proxy → Longdo → Nominatim → local) และ Hybrid routing (Google Routes v2 proxy `computeRoutes` → OSRM `router.project-osrm.org` + failover) พร้อม `sampleWaypointsForGoogleMaps` แบบคัดจุดหักเลี้ยว Douglas-Peucker ≤ 8 จุด |
 
 ## 5. กฎของแผนที่ (เรียนรู้จากปัญหาเครื่องค้าง)
 1. **canvas renderer ตัวเดียว** สร้างตอนเริ่มแผนที่ ห้ามสร้างใหม่ตอนวาดซ้ำ (เดิมสร้าง `<canvas>` ใหม่ทุกครั้ง จน RAM พุ่ง) และห้ามใช้หลาย canvas renderer ซ้อนกัน เพราะ canvas บนสุดกลืน event ของตัวล่าง
@@ -67,7 +67,7 @@
 7. งานแผนที่ทุกครั้ง: นับ `document.querySelectorAll('.leaflet-overlay-pane canvas').length` ก่อน-หลังซูม/คลิก 20 ครั้ง ต้องคงที่
 
 ## 6. ความปลอดภัย (ตามโค้ดจริง) — อ่านก่อนแตะ Edge Function
-- `supabase/config.toml`: `verify_jwt = false`; `index.ts`: ทุก action ที่ไม่ใช่ `getSystemDataAction`/`getPublicSystemDataAction` ใช้ **service role** และ **ไม่มีการตรวจ token หรือบทบาท** (คอมเมนต์ในโค้ดระบุว่า "ตั้งใจให้เข้า /admin ได้โดยไม่ต้อง login")
+- `supabase/config.toml`: `verify_jwt = false`; `index.ts`: ทุก action ที่ไม่อยู่ใน `READ_ONLY_EDGE_ACTIONS` (เช่น `getSystemDataAction`, `getPublicSystemDataAction`, `getExternalJobsAction`, `reverseGeocodeGoogleAction`, `computeGoogleDetourRouteAction`) ใช้ **service role** และ **ไม่มีการตรวจ token หรือบทบาท** (คอมเมนต์ในโค้ดระบุว่า "ตั้งใจให้เข้า /admin ได้โดยไม่ต้อง login")
 - ผลคือใครก็ตามที่รู้ URL ของฟังก์ชัน (อยู่ในไฟล์ JS สาธารณะ) ส่ง POST แก้สถานะจราจร/ลบเส้นทางหลวงได้ CORS ไม่ใช่การควบคุมสิทธิ์ ที่ validate คือรูปแบบข้อมูล (เช่น สถานะจราจร 5 ค่า) ไม่ใช่ตัวผู้เรียก
 - `PRODUCTION.md` เขียนว่ามีการตรวจ JWT/บทบาท ซึ่ง **ไม่ตรงกับโค้ดในรีโป** **(ต้องยืนยันกับฟังก์ชันที่ deploy จริงใน Supabase Dashboard)** — ดู BACKLOG B-001
 - `.mcp.json` ชี้ Supabase production พร้อมความสามารถ `database` — ขัดกับ ADR-001 (production อ่านอย่างเดียว) ดู B-002

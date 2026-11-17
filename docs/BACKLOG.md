@@ -12,12 +12,12 @@
 | B-005 | กลาง | ไฟล์ใหญ่เกิน: `GisDataImportTab.tsx` (~2.4k บรรทัด), `MapManagementTab.tsx` (~2.8k) | ปิดบางส่วน (2026-11-13, ดู UPDATE-090: แยกโมดูล + Code Splitting + Memoization) |
 | B-006 | กลาง | `SUPPLEMENTAL_RULES.md` ~120 KB ถูกบังคับให้อ่านทุกเซสชัน | ปิดบางส่วน (ยกเลิกบังคับใน AGENTS.md, GEMINI.md, .cursorrules, .windsurfrules และหัวไฟล์แล้วใน UPDATE-103; เหลือย้ายไฟล์เก่า) |
 | B-007 | ต่ำ | โค้ดค้างที่ไม่อยู่ใน path จริง (better-auth, supabase-server, routing-service, Docker Postgres) | ปิด (ลบไฟล์ค้างแล้วใน UPDATE-065) |
-| B-008 | กลาง | พึ่ง OSRM สาธารณะ (`router.project-osrm.org`) ไม่มี SLA | เปิด |
+| B-008 | กลาง | พึ่ง OSRM สาธารณะ (`router.project-osrm.org`) ไม่มี SLA | กำลังทำ (เพิ่ม Google Routes API proxy เป็น Tier 1 ก่อน OSRM; รอ deploy Edge + ตั้ง secret `GOOGLE_MAPS_API_KEY`) |
 | B-009 | ต่ำ | `npm run check` ไม่ได้ build แบบ Pages (ที่ใช้ deploy จริง) | ปิด (2026-11-16, UPDATE-095) |
 | B-010 | กลาง | อ่านข้อมูลสาธารณะทุกครั้งโดน DB (ไม่มีแคช) ช่วงคนเข้าเยอะ | ปิด (เพิ่ม GET & Cache-Control ใน UPDATE-065) |
 | B-011 | กลาง | e2e ยังไม่ครอบคลุมฟีเจอร์ใหม่ (ตัวแก้ไขเส้นอิสระ, แถบสรุป, bottom sheet) | ปิดบางส่วน (เพิ่ม detour-navigation.spec.ts 12 ข้อใน UPDATE-066) |
 | B-012 | ต่ำ | `reactStrictMode: false` ซ่อนบั๊ก cleanup ของ effect | ปิด (2026-11-16, UPDATE-096) |
-| B-013 | ต่ำ | ข้อจำกัด Google Maps Universal URL Waypoints ไม่เกิน 8-9 จุด | เปิด (ใช้ sampleWaypointsForGoogleMaps บรรเทาแล้ว) |
+| B-013 | ต่ำ | ข้อจำกัด Google Maps Universal URL Waypoints ไม่เกิน 8-9 จุด | ปิดบางส่วน (อัปเกรด `sampleWaypointsForGoogleMaps` เป็นคัดจุดหักเลี้ยว Douglas-Peucker ≤ 8 จุดตามลำดับเส้นทางจริง) |
 | B-014 | **วิกฤต** | Edge Function Production v9 ไม่ส่งค่าฝั่งถนน/ช่องจราจร/ทิศทางไปยัง DB (ตรวจอ่านอย่างเดียว 2026-11-11) | เปิด: แก้ source แล้ว ต้อง Security Review + deploy และทดสอบ staging |
 | B-015 | สูง | Phase 6 ยังไม่ผ่าน Build/E2E/CRUD integration บน staging เพราะ dependencies ในสภาพแวดล้อมทดสอบไม่ครบ | ปิด (2026-11-11, ดู UPDATE-070: Playwright E2E 46 passed, lint 0 warnings, typecheck 0 errors, build:pages 6/6 ผ่านสมบูรณ์) |
 | B-016 | กลาง | ตราครุฑทางการสำหรับป้ายทางหลวงยังไม่มี Asset ที่ผ่านอนุมัติ | เปิด |
@@ -139,10 +139,11 @@
 - **คงไว้:** `server/routing-service.mjs` **ไม่ใช่โค้ดค้าง** เป็นบริการ OSRM ในเครื่อง/LAN ที่เป็น Tier 1 ของ `fetchOsrmWithFailover` (ผ่าน `NEXT_PUBLIC_OSRM_LOCAL_URL`) จึงคงไว้และห้ามลบ
 - **ยังเหลือ:** บริการ Postgres ใน `docker-compose.yml` ที่ตัวแอปไม่ใช้ · ข้อความ Server Actions/Docker ที่เก่าใน `DESIGN.md`/`MANUAL.md`
 
-## B-008 [กลาง] OSRM สาธารณะ — ลดความเสี่ยงแล้ว
-- ตัวสร้างเส้นเกาะถนนของหน้าจัดการแผนที่มีสำรอง 3 ชั้นอยู่แล้ว (`calculateRoadSnappedDualSource`: เส้นในระบบ → OSRM → เส้นตรง)
-- **แก้แล้ว** ใน `lib/osrm-client.ts`: แคช 30 นาที, รวมคำขอซ้ำ, retry 1 ครั้งเฉพาะความล้มเหลวชั่วคราว, เว้น ≥ 1 วินาทีต่อ public server, ตัดวงจร Tier 1 60 วินาที, `getOsrmFailureHint()` ทำให้ข้อความ error บอกให้สลับเป็นโหมด "วาด/แก้ไขอิสระ"
-- **ยังไม่ทำ:** self-host OSRM ข้อมูลประเทศไทย (ทางออกถาวร) — `server/routing-service.mjs` เป็นจุดเริ่มต้นที่มีอยู่แล้ว ตัดสินใจเมื่อมีโฮสต์ให้ใช้
+## B-008 [กลาง] OSRM สาธารณะ — ลดความเสี่ยงแล้ว + เพิ่ม Hybrid Google Routes Tier 1
+- ตัวสร้างเส้นเกาะถนนของหน้าจัดการแผนที่มีสำรองหลายชั้น (`computeGoogleRouteHybrid` via `hdms-api` → `fetchOsrmWithFailover` / `snapRouteAction` → เส้นตรง)
+- **แก้แล้วใน `lib/osrm-client.ts`:** แคช 30 นาที, รวมคำขอซ้ำ, retry 1 ครั้งเฉพาะความล้มเหลวชั่วคราว, เว้น ≥ 1 วินาทีต่อ public server, ตัดวงจร Tier 1 60 วินาที, `getOsrmFailureHint()` ทำให้ข้อความ error บอกให้สลับเป็นโหมด "วาด/แก้ไขอิสระ"
+- **แก้เพิ่มในรอบ Hybrid Google Maps (`UPDATE-108`):** เพิ่ม Edge proxy `computeGoogleDetourRouteAction` + `reverseGeocodeGoogleAction` เป็น Tier 1 (ทำงานเมื่อตั้ง secret `GOOGLE_MAPS_API_KEY` ใน Supabase Edge Secrets; เมื่อยังไม่ตั้งจะตัดวงจร 5 นาทีและสลับใช้ Longdo/Nominatim/Hardened OSRM โดยอัตโนมัติ)
+- **ยังไม่ทำ:** deploy Edge `hdms-api` + ตั้งค่า `GOOGLE_MAPS_API_KEY` บน Production และ self-host OSRM ข้อมูลประเทศไทย (`server/routing-service.mjs` เป็นจุดเริ่มต้นที่มีอยู่แล้ว)
 
 ## B-009 [ต่ำ] สคริปต์ตรวจไม่ตรง deploy
 - เพิ่ม `"check:deploy": "npm run lint && npm run typecheck && npm run build:pages"` ใน `package.json` แล้ว. คำสั่งนี้ตรงกับ validation ก่อน deploy ของ GitHub Pages.
