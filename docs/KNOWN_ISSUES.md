@@ -2,7 +2,7 @@
 
 **ระบบ:** ศูนย์ข้อมูลน้ำท่วมและโครงข่ายทางหลวง แขวงทางหลวงปัตตานี (HDMS_PN)  
 **Production URLs:** [https://feekuy96-a11y.github.io/hdms_pn/](https://feekuy96-a11y.github.io/hdms_pn/) (หน้าประชาชน) \| [https://feekuy96-a11y.github.io/hdms_pn/admin](https://feekuy96-a11y.github.io/hdms_pn/admin) (หน้าแอดมิน)  
-**อัปเดตล่าสุด:** 2026-11-18 (เพิ่ม Admin Relationship Editor `EventDetourLinkModal` [UPDATE-107] พร้อม E2E ผ่านครบ; Production มี `trg_doh_sync_flood_event_segment` และ Edge `hdms-api` v19 แล้ว เหลือ deploy เว็บและทดสอบกับ Production จริงก่อน public cutover)
+**อัปเดตล่าสุด:** 2026-11-18 (อัปเกรด Hybrid Google Maps Geocoding/Routes + Hardened OSRM/local lookup `[UPDATE-108]`; Admin Relationship Editor `EventDetourLinkModal` `[UPDATE-107]` พร้อม E2E ผ่านครบ และ Production มี `trg_doh_sync_flood_event_segment`)
 
 > UPDATE-073: ปิดช่องว่างการแสดง Stroke/Casing ของแผนที่แล้ว โดย `LongdoGisMap` วาดเส้นฐานแบบ Canvas สำหรับน้ำท่วม ทางเลี่ยง และโครงข่ายสายทางเมื่อเปิดค่า Stroke/Casing; ผล lint, typecheck และ build:pages ผ่าน. ยังต้องตรวจภาพจริงหลังนำเว็บขึ้น GitHub Pages เพราะการทดสอบอัตโนมัติยืนยันการโหลดแผนที่และพฤติกรรม ไม่สามารถอ่านสีพิกเซลของ Canvas ได้อย่างน่าเชื่อถือ.
 
@@ -45,17 +45,17 @@
 - รวมเข้า `main` ผ่าน PR #32 และ PR #33 (commit `866eb93`) Deploy GitHub Pages สำเร็จ (Run `44104409962`); fallback ฝั่ง browser ถูกจำกัดเฉพาะ public RPC หรือแสดง Error/Retry พร้อม regression test ผ่านครบ (ดู B-019).
 
 ### KI-001: ข้อจำกัดจำนวน Waypoints ของ Google Maps Direction URLs
-- **รายละเอียด:** การสร้าง Universal URL สำหรับเปิด Google Maps นำทาง (`https://www.google.com/maps/dir/?api=1...`) มีข้อจำกัดความยาวของ URL query string หากใส่พิกัดจุดเลี้ยว (Waypoints) เกิน 8–9 จุด อาจทำให้เบราว์เซอร์หรือแอปพลิเคชัน Google Maps บนมือถือตัดทอน URL หรือไม่สามารถประมวลผลเส้นทางได้
-- **การจัดการใน Phase 5:** ฟังก์ชัน [`sampleWaypointsForGoogleMaps`](file:///f:/DOH_Pattani_Flood/hdms_pn/lib/detour-navigation.ts) จะทำการ Downsample พิกัดจุดหักเลี้ยวตามระยะทาง (Chord distance) ให้เหลือไม่เกิน 8 จุดสำคัญ เพื่อรับประกันว่า Google Maps จะเปิดและนำทางตามแนวทางเลี่ยงได้อย่างแม่นยำและไม่เกิดข้อผิดพลาด URL ล้น
-- **ข้อควรระวัง:** Google Maps คำนวณเส้นทางบนโครงข่ายถนนของ Google เอง จึงอาจมีความแตกต่างจาก Geometry ในระบบ HDMS ในช่วงถนนท้องถิ่นขนาดเล็ก
+- **รายละเอียด:** การสร้าง Universal URL สำหรับเปิด Google Maps นำทาง (`https://www.google.com/maps/dir/?api=1...`) มีข้อจำกัดความยาวของ URL query string หากใส่พิกัดจุดหักเลี้ยว (Waypoints) เกิน 8–9 จุด อาจทำให้เบราว์เซอร์หรือแอปพลิเคชัน Google Maps บนมือถือตัดทอน URL หรือไม่สามารถประมวลผลเส้นทางได้
+- **การจัดการใน Phase 5 และ UPDATE-108:** ฟังก์ชัน [`sampleWaypointsForGoogleMaps`](file:///f:/DOH_Pattani_Flood/hdms_pn/lib/detour-navigation.ts) (ใช้ `selectRouteCornerWaypoints` ใน `lib/gis-utils.ts`) คัดเลือกจุดหักเลี้ยวสำคัญตามค่า Douglas-Peucker importance โดยคงลำดับเส้นทางไม่เกิน 8 จุด เพื่อไม่ให้ URL ตัดโค้งสำคัญระหว่างทาง
+- **ข้อควรระวัง:** Google Maps คำนวณเส้นทางบนโครงข่ายถนนของ Google เอง จึงอาจมีความแตกต่างจาก Geometry ในระบบ HDMS ในช่วงถนนท้องถิ่นขนาดเล็กหากยังไม่เปิดใช้ Google Routes API proxy (`GOOGLE_MAPS_API_KEY`)
 
 ### KI-002: สถาปัตยกรรมเว็บแบบ Static Export (`NEXT_OUTPUT=export`)
 - **รายละเอียด:** ระบบทำงานบน GitHub Pages เป็นเว็บ Static ทั้งหมด ห้ามมี Server Actions, dynamic SSR, หรือการอ่าน environment variables ฝั่ง Server ตอนรัน
-- **ผลกระทบ:** ลิงก์นำทาง Google Maps และการคำนวณทิศทาง A → B / B → A ต้องถูกสร้างและตรวจสอบผ่าน Client Library ([`lib/detour-navigation.ts`](file:///f:/DOH_Pattani_Flood/hdms_pn/lib/detour-navigation.ts)) หรือประมวลผลล่วงหน้าแล้วเก็บใน JSONB `detour_meta` (ผ่าน `google_maps_url_forward` และ `google_maps_url_reverse`)
+- **ผลกระทบ:** ลิงก์นำทาง Google Maps และการคำนวณทิศทาง A → B / B → A ต้องถูกสร้างและตรวจสอบผ่าน Client Library ([`lib/detour-navigation.ts`](file:///f:/DOH_Pattani_Flood/hdms_pn/lib/detour-navigation.ts)) หรือประมวลผลล่วงหน้าแล้วเก็บใน JSONB `detour_meta` (ผ่าน `google_maps_url_forward` และ `google_maps_url_reverse`) ส่วนการเรียก Google Maps Geocoding/Routes Web Services ทำผ่าน Edge Function proxy `hdms-api` เท่านั้น
 
 ### KI-003: การพึ่งพา Public OSRM API โดยไม่มี SLA
-- **รายละเอียด:** ฟังก์ชันคำนวณเส้นเกาะถนนในหน้าแอดมินใช้ `router.project-osrm.org` ซึ่งเป็นบริการสาธารณะ
-- **สถานะ:** บันทึกใน [`docs/BACKLOG.md`](file:///f:/DOH_Pattani_Flood/hdms_pn/docs/BACKLOG.md) รายการ B-008 มีการลดความถี่การเรียกและข้ามเมื่อแท็บซ่อน
+- **รายละเอียด:** เมื่อยังไม่ตั้งค่า `GOOGLE_MAPS_API_KEY` บน Edge Function ระบบจะสลับมาใช้ `router.project-osrm.org` ซึ่งเป็นบริการสาธารณะ (และรองรับ `end of road` / `off ramp` / `continue` เพิ่มเติมแล้วใน `UPDATE-108`)
+- **สถานะ:** บันทึกใน [`docs/BACKLOG.md`](file:///f:/DOH_Pattani_Flood/hdms_pn/docs/BACKLOG.md) รายการ B-008 มีการลดความถี่การเรียก, single-flight Google config probe และตัดวงจรเมื่อคีย์ยังไม่ถูกตั้งค่า
 
 ### KI-004: ข้อกำหนด Chromium Executable สำหรับการรัน Playwright E2E บน Windows
 - **รายละเอียด:** บนระบบปฏิบัติการ Windows ที่ไม่มี `chrome-headless-shell.exe` ติดตั้งในแคชของผู้ใช้ Playwright จะแจ้งข้อผิดพลาดเมื่อเริ่มทำงาน

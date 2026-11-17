@@ -1,8 +1,194 @@
+import { computeGoogleDetourRouteAction, type GoogleRouteStep } from "@/app/actions/doh-actions";
 import { UTM_47N_PARAMS } from "./constants";
 import { parseKmPostMeters } from "./highway-schema";
 import { cleanThaiAdminPrefix, findPattaniDistrictName, isPointInPolygon, resolveArea } from "./area-lookup";
 import { fetchOsrmWithFailover, getOsrmFailureHint } from "./osrm-client";
 export { cleanThaiAdminPrefix, findPattaniDistrictName, isPointInPolygon } from "./area-lookup";
+
+const GOOGLE_ROUTE_UNCONFIGURED_COOLDOWN_MS = 5 * 60 * 1000;
+const GOOGLE_ROUTE_BREAKER_MS = 60 * 1000;
+const GOOGLE_ROUTE_RATE_LIMIT_MS = 120 * 1000;
+let googleRouteDownUntil = 0;
+let googleRouteConfirmed = false;
+let googleRouteProbePromise: Promise<void> | null = null;
+
+export function resetGoogleRouteBreaker() {
+  googleRouteDownUntil = 0;
+  googleRouteConfirmed = false;
+  googleRouteProbePromise = null;
+}
+
+/**
+ * ถอดรหัส Google Encoded Polyline (1e5) เป็นพิกัด GeoJSON [lon, lat][]
+ */
+export function decodeGooglePolyline(encoded: string): [number, number][] {
+  if (!encoded) return [];
+  const points: [number, number][] = [];
+  let index = 0;
+  let lat = 0;
+  let lon = 0;
+
+  while (index < encoded.length) {
+    let result = 0;
+    let shift = 0;
+    let b: number;
+    do {
+      if (index >= encoded.length) return points;
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    lat += (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+
+    result = 0;
+    shift = 0;
+    do {
+      if (index >= encoded.length) return points;
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    lon += (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+
+    points.push([Number((lon / 1e5).toFixed(6)), Number((lat / 1e5).toFixed(6))]);
+  }
+  return points;
+}
+
+export interface HybridGoogleRoute {
+  coords: [number, number][];
+  distanceMeters: number;
+  durationSeconds: number;
+  steps: GoogleRouteStep[];
+}
+
+export async function computeGoogleRouteHybrid(
+  points: [number, number][],
+  routingPreference: "TRAFFIC_UNAWARE" | "TRAFFIC_AWARE" = "TRAFFIC_UNAWARE"
+): Promise<HybridGoogleRoute | null> {
+  if (!points || points.length < 2) return null;
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)) {
+    return null;
+  }
+  if (Date.now() < googleRouteDownUntil) return null;
+
+  // Coalesce concurrent initial calls while Google configuration status is still unknown
+  if (!googleRouteConfirmed && googleRouteProbePromise) {
+    await googleRouteProbePromise;
+    if (!googleRouteConfirmed || Date.now() < googleRouteDownUntil) return null;
+  }
+
+  let resolveProbe: (() => void) | null = null;
+  if (!googleRouteConfirmed && !googleRouteProbePromise) {
+    googleRouteProbePromise = new Promise<void>((resolve) => {
+      resolveProbe = resolve;
+    });
+  }
+
+  try {
+    const intermediates = points.slice(1, -1).slice(0, 25);
+    const res = await computeGoogleDetourRouteAction({
+      origin: points[0],
+      destination: points[points.length - 1],
+      intermediates,
+      routingPreference,
+    });
+    if (!res || !res.configured) {
+      googleRouteConfirmed = false;
+      googleRouteDownUntil = Date.now() + GOOGLE_ROUTE_UNCONFIGURED_COOLDOWN_MS;
+      return null;
+    }
+    googleRouteConfirmed = true;
+    if (!res.available) {
+      googleRouteDownUntil = Date.now() + (res.status === 429 ? GOOGLE_ROUTE_RATE_LIMIT_MS : GOOGLE_ROUTE_BREAKER_MS);
+      return null;
+    }
+    if (!res.found) return null;
+    const coords = res.encodedPolyline ? decodeGooglePolyline(res.encodedPolyline) : [];
+    return {
+      coords,
+      distanceMeters: res.distanceMeters || 0,
+      durationSeconds: res.durationSeconds || 0,
+      steps: Array.isArray(res.steps) ? res.steps : [],
+    };
+  } catch {
+    googleRouteDownUntil = Date.now() + GOOGLE_ROUTE_BREAKER_MS;
+    return null;
+  } finally {
+    if (resolveProbe) {
+      googleRouteProbePromise = null;
+      resolveProbe();
+    }
+  }
+}
+
+/**
+ * คัดเลือกจุดหักเลี้ยวสำคัญตามแนวเส้น (Douglas-Peucker importance) โดยคงลำดับต้นทาง → ปลายทางไว้
+ */
+export function selectRouteCornerWaypoints(
+  coords: [number, number][],
+  maxCount: number = 8
+): [number, number][] {
+  if (!coords || coords.length <= 2 || maxCount <= 0) return [];
+  const clean: [number, number][] = [];
+  for (const pt of coords) {
+    if (!Array.isArray(pt) || pt.length < 2 || !Number.isFinite(pt[0]) || !Number.isFinite(pt[1])) continue;
+    const prev = clean[clean.length - 1];
+    if (!prev || Math.abs(prev[0] - pt[0]) > 1e-7 || Math.abs(prev[1] - pt[1]) > 1e-7) {
+      clean.push([pt[0], pt[1]]);
+    }
+  }
+  if (clean.length <= 2) return [];
+  const innerCount = clean.length - 2;
+  if (innerCount <= maxCount) {
+    return clean.slice(1, -1);
+  }
+
+  const importance = new Array<number>(clean.length).fill(0);
+  const scoreRange = (startIdx: number, endIdx: number) => {
+    if (endIdx - startIdx <= 1) return;
+    let maxDist = -1;
+    let maxIdx = -1;
+    for (let i = startIdx + 1; i < endIdx; i++) {
+      const dist = perpendicularDistance(clean[i], clean[startIdx], clean[endIdx]);
+      if (dist > maxDist) {
+        maxDist = dist;
+        maxIdx = i;
+      }
+    }
+    if (maxIdx !== -1) {
+      importance[maxIdx] = maxDist;
+      if (maxDist > 1e-7) {
+        scoreRange(startIdx, maxIdx);
+        scoreRange(maxIdx, endIdx);
+      }
+    }
+  };
+  scoreRange(0, clean.length - 1);
+
+  const significant = [];
+  for (let i = 1; i < clean.length - 1; i++) {
+    if (importance[i] >= 1e-6) {
+      significant.push({ idx: i, score: importance[i] });
+    }
+  }
+
+  let chosenIndices: number[];
+  if (significant.length === 0) {
+    // กรณีจุดเรียงตัวเป็นเส้นตรงทั้งหมด เลือกกระจายตัวสม่ำเสมอไม่เกิน maxCount จุด
+    chosenIndices = [];
+    const step = innerCount / (maxCount + 1);
+    for (let i = 1; i <= maxCount; i++) {
+      const idx = Math.min(1 + Math.floor(i * step), clean.length - 2);
+      if (!chosenIndices.includes(idx)) chosenIndices.push(idx);
+    }
+  } else {
+    significant.sort((a, b) => b.score - a.score);
+    chosenIndices = significant.slice(0, maxCount).map((entry) => entry.idx).sort((a, b) => a - b);
+  }
+
+  return chosenIndices.map((idx) => clean[idx]);
+}
 
 /**
  * แปลงพิกัดภูมิศาสตร์ (WGS84 Lat/Lon) เป็น UTM Zone 47N (EPSG:32647)
@@ -153,31 +339,62 @@ export async function checkOsrmStatus(): Promise<{ localOnline: boolean; publicO
 }
 // isPointInPolygon, findPattaniDistrictName and cleanThaiAdminPrefix now live in ./area-lookup (re-exported below).
 
+function formatHighwayLayerLabel(layerName: string, featureProps?: Record<string, any>): { code: string; label: string; name: string } {
+  const propRouteNo = String(
+    featureProps?.route_no || featureProps?.road_code || featureProps?.route_code || ""
+  ).trim();
+  const propName = String(
+    featureProps?.route_name || featureProps?.section_na || featureProps?.section_name || ""
+  ).trim();
+  const layerFallback = (layerName || "").trim() || "โครงข่ายกรมทางหลวง";
+  const displayName = propName || layerFallback;
+  const candidateCodeSource = propRouteNo || layerFallback;
+
+  const ruralMatch = candidateCodeSource.match(/(?:ทางหลวงชนบท\s*)?(ปน|ยล|นธ|สข)\.?\s*(\d{3,5})/i);
+  if (ruralMatch) {
+    const code = `${ruralMatch[1]}.${ruralMatch[2]}`;
+    return { code, label: `ทางหลวงชนบท ${code} (${displayName})`, name: displayName };
+  }
+  const nationalMatch = candidateCodeSource.match(/(?:ทล\.?|ทางหลวง(?:แผ่นดิน)?(?:หมายเลข)?\s*)?(\d{1,4})/);
+  if (nationalMatch) {
+    const code = nationalMatch[1];
+    return { code, label: `ทล.${code} (${displayName})`, name: displayName };
+  }
+  return { code: "", label: displayName, name: displayName };
+}
+
 /**
- * ค้นหาถนนหรือทางหลวงที่ใกล้พิกัดที่สุดจาก Highway Layers
+ * ค้นหาถนนหรือทางหลวงที่ใกล้พิกัดที่สุดจาก Highway Layers โดยวัดระยะตั้งฉากกับแนวเส้นจริงและอ่านรหัสสายทางจาก feature properties
  */
 export function findNearestHighwayFromLayers(
   coord: [number, number],
   highwayLayers: any[] = [],
-  maxDistKm: number = 1.0
-): { code: string; name: string } | null {
+  maxDistKm: number = 0.035
+): { code: string; name: string; label?: string } | null {
   if (!highwayLayers || highwayLayers.length === 0) return null;
 
-  let closestDist = maxDistKm;
-  let closest: { code: string; name: string } | null = null;
+  let closestDistKm = maxDistKm;
+  let closest: { code: string; name: string; label?: string } | null = null;
 
   for (const layer of highwayLayers) {
     if (!layer.geojson_data) continue;
-    const lines = extractLinesFromGeoJson(layer.geojson_data);
-    for (const line of lines) {
-      for (const pt of line) {
-        const d = haversineDistanceKm(coord, pt);
-        if (d < closestDist) {
-          closestDist = d;
-          closest = {
-            code: layer.layer_name?.match(/(\d+)/)?.[1] || "",
-            name: layer.layer_name || "โครงข่ายกรมทางหลวง",
-          };
+    const features = extractFeaturesFromGeoJson(layer.geojson_data);
+    for (const feat of features) {
+      const line = feat.coords;
+      if (!line || line.length === 0) continue;
+      if (line.length === 1) {
+        const dKm = haversineDistanceKm(coord, line[0]);
+        if (dKm < closestDistKm) {
+          closestDistKm = dKm;
+          closest = formatHighwayLayerLabel(layer.layer_name, feat.properties);
+        }
+        continue;
+      }
+      for (let i = 0; i < line.length - 1; i++) {
+        const dKm = pointToSegmentDistanceMeters(coord, line[i], line[i + 1]) / 1000;
+        if (dKm < closestDistKm) {
+          closestDistKm = dKm;
+          closest = formatHighwayLayerLabel(layer.layer_name, feat.properties);
         }
       }
     }
@@ -267,8 +484,18 @@ export function extractDirectionalAdvice(text: string): {
   };
 }
 
+function formatRefRoadPrefix(rawRef: string | undefined, fallbackStr: string): string {
+  const ref = (rawRef || "").trim();
+  if (!ref) return fallbackStr;
+  if (/^(ปน|ยล|นธ|สข)\.?\s*\d+/i.test(ref)) {
+    return `ทางหลวงชนบท ${ref.replace(/\s+/g, "")}`;
+  }
+  if (/^\d+$/.test(ref)) return `ทล.${ref}`;
+  return ref;
+}
+
 /**
- * สกัดฟังก์ชันสร้างคำแนะนำเส้นทางเลี่ยงสำหรับ ๑ ทิศทาง
+ * สกัดฟังก์ชันสร้างคำแนะนำเส้นทางเลี่ยงสำหรับ ๑ ทิศทาง (Google Routes API ก่อน แล้ว Fallback ไป OSRM / เส้นตรง)
  */
 async function buildSingleDirectionAdvice(
   queryPoints: [number, number][],
@@ -278,11 +505,40 @@ async function buildSingleDirectionAdvice(
 ): Promise<string> {
   const startPt = queryPoints[0];
   const endPt = queryPoints[queryPoints.length - 1];
-  const startAddr = await getDetailedPattaniAddress(startPt[0], startPt[1]);
-  const endAddr = await getDetailedPattaniAddress(endPt[0], endPt[1]);
-  const startHwyStr = relatedHighwayNo ? `ทล.${relatedHighwayNo}` : "จุดตัดทางหลวง";
-  const endHwyStr = relatedHighwayNo ? `ทล.${relatedHighwayNo} ` : "";
+  const startAddr = await getDetailedPattaniAddress(startPt[0], startPt[1], { needRoad: true });
+  const endAddr = await getDetailedPattaniAddress(endPt[0], endPt[1], { needRoad: true });
+  const startHwyStr = relatedHighwayNo ? `ทล.${relatedHighwayNo}` : (startAddr.road || "จุดตัดทางหลวง");
+  const endHwyStr = relatedHighwayNo ? `ทล.${relatedHighwayNo} ` : (endAddr.road ? `${endAddr.road} ` : "");
+  const dirHeader = formatDirectionHeader(label, startAddr, endAddr);
 
+  // Tier 1: Google Maps Routes API (through secure Edge proxy)
+  const googleRoute = await computeGoogleRouteHybrid(queryPoints, "TRAFFIC_UNAWARE");
+  if (googleRoute && googleRoute.steps.length > 0) {
+    const lines: string[] = [dirHeader];
+    let stepCounter = 1;
+    lines.push(`${stepCounter++}. จุดเริ่มต้น: บริเวณ ${startAddr.road || startHwyStr} ${startAddr.tag}`);
+
+    for (let idx = 0; idx < googleRoute.steps.length; idx++) {
+      const step = googleRoute.steps[idx];
+      const cleanInstr = (step.instructions || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      if (!cleanInstr) continue;
+      if (idx === 0 && step.distanceMeters < 15) continue;
+      const distStr = step.distanceMeters >= 1000
+        ? `${(step.distanceMeters / 1000).toFixed(1)} กม.`
+        : `${Math.round(step.distanceMeters)} ม.`;
+      lines.push(`${stepCounter++}. ${cleanInstr}${step.distanceMeters > 0 ? ` (ระยะทาง ${distStr})` : ""}`);
+    }
+
+    lines.push(`${stepCounter++}. จุดสิ้นสุด: ถึงจุดบรรจบทางหลวงสายหลัก ${endHwyStr}${endAddr.tag} สัญจรต่อได้ตามปกติ`);
+    const totalKm = ((googleRoute.distanceMeters || calculatePolylineLengthKm(queryPoints) * 1000) / 1000).toFixed(1);
+    const estMinutes = Math.max(1, Math.round((googleRoute.durationSeconds || Number(totalKm) * 90) / 60));
+    lines.push(`- รวมระยะทางเลี่ยง: ${totalKm} กม.`);
+    lines.push(`- ระยะเวลาเดินทาง: ประมาณ ${estMinutes} นาที`);
+    lines.push(`- สภาพเส้นทาง: ผิวทางลาดยาง รถยนต์ทุกชนิดสามารถสัญจรได้ตามปกติ`);
+    return lines.join("\n");
+  }
+
+  // Tier 2: Hardened OSRM Fallback
   let osrmSteps: any[] = [];
   let totalDistanceM = 0;
   let totalDurationS = 0;
@@ -309,23 +565,25 @@ async function buildSingleDirectionAdvice(
       const s = osrmSteps[idx];
       const isFirst = idx === 0;
       const isLast = idx === osrmSteps.length - 1;
+      const mType = s.maneuver?.type || "";
+      const mMod = s.maneuver?.modifier || "";
 
-      if (!isFirst && s.maneuver.type === "depart") continue;
-      if (!isLast && s.maneuver.type === "arrive") continue;
-      if (!isFirst && !isLast && s.distance < 30 && s.maneuver.type !== "turn" && s.maneuver.type !== "roundabout" && s.maneuver.type !== "rotary") {
+      if (!isFirst && mType === "depart" && s.distance < 35) continue;
+      if (!isLast && mType === "arrive") continue;
+      if (!isFirst && !isLast && s.distance < 20 && (mType === "new name" || mType === "notification")) {
         continue;
       }
 
       let action = "ตรงไปตาม";
-      const mType = s.maneuver.type;
-      const mMod = s.maneuver.modifier || "";
 
-      if (isFirst || mType === "depart") {
+      if (isFirst) {
         action = "จุดเริ่มต้น:";
+      } else if (mType === "depart") {
+        // ขั้นตอน depart ของ leg ถัดไป (จาก waypoint กลางเส้นทาง) คือการขับตรงต่อเนื่องบนช่วงถนนนั้น
+        action = "ตรงไปตาม";
       } else if (isLast || mType === "arrive") {
         action = "ถึงจุดบรรจบทางหลวงสายหลัก:";
       } else if (mType === "roundabout" || mType === "rotary") {
-        // วงเวียน: ถ้ามีเลขทางออกจาก OSRM ให้บอกเป็น "ทางออกที่ N" เหมือนตัวอย่างข้อความมาตรฐาน
         const exitNumber = Number(s.maneuver.exit);
         if (Number.isInteger(exitNumber) && exitNumber > 0) {
           action = `เมื่อถึงวงเวียน ให้ใช้ทางออกที่ ${exitNumber} มุ่งหน้าสู่`;
@@ -338,6 +596,11 @@ async function buildSingleDirectionAdvice(
         } else {
           action = "เข้าสู่วงเวียน (เลี้ยวซ้าย) มุ่งหน้าสู่";
         }
+      } else if (mType === "end of road") {
+        if (mMod.includes("left")) action = "สุดทาง เลี้ยวซ้ายเข้าสู่";
+        else if (mMod.includes("right")) action = "สุดทาง เลี้ยวขวาเข้าสู่";
+        else if (mMod.includes("uturn")) action = "สุดทาง กลับรถเข้าสู่";
+        else action = "สุดทาง มุ่งหน้าเข้าสู่";
       } else if (mType === "turn") {
         if (mMod.includes("slight left")) action = "เบี่ยงซ้ายเข้าสู่";
         else if (mMod.includes("sharp left")) action = "เลี้ยวซ้ายหักศอกเข้าสู่";
@@ -347,15 +610,26 @@ async function buildSingleDirectionAdvice(
         else if (mMod.includes("right")) action = "เลี้ยวขวาเข้าสู่";
         else if (mMod.includes("uturn")) action = "กลับรถเข้าสู่";
         else action = "เลี้ยวเข้าสู่";
+      } else if (mType === "continue") {
+        if (mMod.includes("slight left")) action = "เบี่ยงซ้ายตาม";
+        else if (mMod.includes("left")) action = "เลี้ยวซ้ายไปตาม";
+        else if (mMod.includes("slight right")) action = "เบี่ยงขวาตาม";
+        else if (mMod.includes("right")) action = "เลี้ยวขวาไปตาม";
+        else if (mMod.includes("uturn")) action = "กลับรถไปตาม";
+        else action = "ตรงไปต่อเนื่องตาม";
+      } else if (mType === "off ramp") {
+        action = mMod.includes("left") ? "ใช้ทางออกซ้ายเข้าสู่" : "ใช้ทางออกขวาเข้าสู่";
       } else if (mType === "merge" || mType === "on ramp" || mType === "fork") {
         action = mMod.includes("right") ? "เบี่ยงขวาเข้าสู่" : "เบี่ยงซ้ายเข้าสู่";
+      } else if (mType === "new name") {
+        action = "ตรงไปตาม";
       }
 
       const roadName = (s.name || "").trim();
       let refStr = (s.ref || "").trim();
 
       if (refStr) {
-        if (/^ปน\.?\s*\d+/i.test(refStr) || /^ยล\.?\s*\d+/i.test(refStr)) {
+        if (/^(ปน|ยล|นธ|สข)\.?\s*\d+/i.test(refStr)) {
           refStr = `ทางหลวงชนบท ${refStr.toUpperCase()}`;
         } else if (/^\d+$/.test(refStr)) {
           refStr = `ทล.${refStr}`;
@@ -364,7 +638,6 @@ async function buildSingleDirectionAdvice(
 
       let fullRoad = "";
       if (roadName && refStr) {
-        // ปน./ยล. เขียนต่อท้ายชื่อถนน (ถนนโยธาธิการ ปน.2003) ส่วนทางหลวงใช้วงเล็บ (ถนน... (ทล.4356))
         fullRoad = /^ทางหลวงชนบท\s/.test(refStr)
           ? `${roadName} ${refStr.replace(/^ทางหลวงชนบท\s+/, "")}`
           : `${roadName} (${refStr})`;
@@ -373,11 +646,10 @@ async function buildSingleDirectionAdvice(
       } else if (roadName) {
         fullRoad = roadName;
       } else {
-        // ค้นหาชื่อทางหลวงจาก highwayLayers
-        if (s.maneuver.location && highwayLayers.length > 0) {
-          const nearest = findNearestHighwayFromLayers(s.maneuver.location, highwayLayers, 0.5);
-          if (nearest && nearest.code) {
-            fullRoad = `ทล.${nearest.code} (${nearest.name})`;
+        if (s.maneuver?.location && highwayLayers.length > 0) {
+          const nearest = findNearestHighwayFromLayers(s.maneuver.location, highwayLayers, 0.035);
+          if (nearest) {
+            fullRoad = nearest.label || nearest.name;
           }
         }
         if (!fullRoad) {
@@ -389,7 +661,7 @@ async function buildSingleDirectionAdvice(
         action,
         road: fullRoad,
         distanceM: s.distance,
-        loc: s.maneuver.location || startPt,
+        loc: s.maneuver?.location || startPt,
       });
     }
 
@@ -415,26 +687,22 @@ async function buildSingleDirectionAdvice(
       }
     });
 
-    const lines: string[] = [];
-    const dirHeader = formatDirectionHeader(label, startAddr, endAddr);
-    lines.push(dirHeader);
+    const lines: string[] = [dirHeader];
 
     const totalKm = (totalDistanceM / 1000).toFixed(1);
     const estMinutes = Math.max(2, Math.ceil(totalDurationS / 60));
 
     let stepCounter = 1;
     // Step 1: จุดเริ่มต้น
-    const initHwy = osrmSteps[0]?.ref ? `ทล.${osrmSteps[0].ref}` : startHwyStr;
+    const initHwy = formatRefRoadPrefix(osrmSteps[0]?.ref, startHwyStr);
     lines.push(`${stepCounter++}. จุดเริ่มต้น: บริเวณ ${initHwy} ${startAddr.tag}`);
 
     // Steps กลาง: จุดเลี้ยวและถนนจริง
     for (const step of consolidated) {
       if (step.action.includes("จุดเริ่มต้น") || step.action.includes("จุดบรรจบ")) continue;
-      if (step.distanceM < 35 && !step.action.includes("เลี้ยว") && !step.action.includes("วงเวียน")) continue;
+      if (step.distanceM < 35 && !/(เลี้ยว|เบี่ยง|กลับรถ|วงเวียน|สุดทาง|ทางออก)/.test(step.action)) continue;
 
       const distStr = step.distanceM >= 1000 ? `${(step.distanceM / 1000).toFixed(1)} กม.` : `${Math.round(step.distanceM)} ม.`;
-      // Only a road without a name needs a lookup of exactly this point; otherwise a nearby answer is enough
-      // (so a long route no longer makes one request per step).
       const stepAddr = await getDetailedPattaniAddress(step.loc[0], step.loc[1], {
         needRoad: step.road === "เส้นทางเชื่อมต่อท้องถิ่น",
       });
@@ -454,9 +722,8 @@ async function buildSingleDirectionAdvice(
     return lines.join("\n");
   }
 
-  // Fallback กรณี OSRM ไม่ตอบสนอง
+  // Tier 3 Fallback กรณี Google และ OSRM ไม่ตอบสนอง
   const lengthKm = calculatePolylineLengthKm(queryPoints);
-  const dirHeader = formatDirectionHeader(label, startAddr, endAddr);
   const lines: string[] = [
     dirHeader,
     `1. จุดเริ่มต้น: บริเวณ ${startHwyStr} ${startAddr.tag}`,
@@ -469,10 +736,15 @@ async function buildSingleDirectionAdvice(
   return lines.join("\n");
 }
 
+export interface AutoDetourAdviceOptions {
+  forwardWaypoints?: [number, number][];
+  reverseWaypoints?: [number, number][];
+}
+
 /**
  * วิเคราะห์ทิศทางและสร้างคำแนะนำทางเลี่ยงอัตโนมัติสำหรับประชาชนแบบ ๒ ทิศทาง (ขาไป A -> B และ ขากลับ B -> A)
  * ดึงชื่อหมู่บ้าน (บ.) ตำบล (ต.) อำเภอ (อ.) ชื่อถนน และจุดเลี้ยวจริง
- * รองรับทั้งทางเลี่ยงแบบไป-กลับคนละเส้นทาง (reverseCoords แยก) และทางเลี่ยงทิศทางเดียว
+ * รองรับทั้งทางเลี่ยงแบบไป-กลับคนละเส้นทาง (reverseCoords แยก) และจุดดัดเส้นที่เจ้าหน้าที่วางไว้
  */
 export async function generateAutoDetourAdvice(
   startCoord: [number, number],
@@ -481,30 +753,34 @@ export async function generateAutoDetourAdvice(
   relatedHighwayNo?: string,
   highwayLayers: any[] = [],
   reverseDetourCoords?: [number, number][],
-  directionMode: "TWO_WAY" | "FORWARD_ONLY" | "REVERSE_ONLY" = "TWO_WAY"
+  directionMode: "TWO_WAY" | "FORWARD_ONLY" | "REVERSE_ONLY" = "TWO_WAY",
+  options: AutoDetourAdviceOptions = {}
 ): Promise<string> {
-  const sampleRoutePoints = (pts: [number, number][], fallbackStart: [number, number], fallbackEnd: [number, number]): [number, number][] => {
+  const buildQueryPoints = (
+    pts: [number, number][],
+    explicitWaypoints: [number, number][] | undefined,
+    fallbackStart: [number, number],
+    fallbackEnd: [number, number]
+  ): [number, number][] => {
+    if (Array.isArray(explicitWaypoints) && explicitWaypoints.length > 0) {
+      return [fallbackStart, ...explicitWaypoints.slice(0, 20), fallbackEnd];
+    }
     if (pts.length < 2) return [fallbackStart, fallbackEnd];
-    const simplified = simplifyCoordinates(pts, 0.001);
-    const step = Math.max(1, Math.floor(simplified.length / 8));
-    const sampled: [number, number][] = [];
-    for (let i = 0; i < simplified.length; i += step) {
-      sampled.push(simplified[i]);
-    }
-    if (sampled[sampled.length - 1] !== simplified[simplified.length - 1]) {
-      sampled.push(simplified[simplified.length - 1]);
-    }
-    return sampled;
+    const corners = selectRouteCornerWaypoints(pts, 12);
+    return [pts[0], ...corners, pts[pts.length - 1]];
   };
 
   // สกัดลำดับพิกัดสำหรับทิศทางขาไป (Forward: A -> B)
-  const forwardPoints = sampleRoutePoints(detourCoords, startCoord, endCoord);
+  const forwardPoints = buildQueryPoints(detourCoords, options.forwardWaypoints, startCoord, endCoord);
 
   // สกัดลำดับพิกัดสำหรับทิศทางขากลับ (Reverse: B -> A)
+  // ใช้แนว/จุดดัดขากลับจริงก่อน หากไม่มีให้ใช้จุดหักเลี้ยวย้อนลำดับเพื่อให้เครื่องมือนำทางเลือกช่องจราจรฝั่ง B -> A ที่ถูกต้อง
   const reversePoints =
     reverseDetourCoords && reverseDetourCoords.length >= 2
-      ? sampleRoutePoints(reverseDetourCoords, endCoord, startCoord)
-      : [...forwardPoints].reverse();
+      ? buildQueryPoints(reverseDetourCoords, options.reverseWaypoints, endCoord, startCoord)
+      : Array.isArray(options.forwardWaypoints) && options.forwardWaypoints.length > 0
+        ? [endCoord, ...[...options.forwardWaypoints].reverse().slice(0, 20), startCoord]
+        : buildQueryPoints([...detourCoords].reverse(), undefined, endCoord, startCoord);
 
   if (directionMode === "FORWARD_ONLY") {
     const forwardText = await buildSingleDirectionAdvice(forwardPoints, "ทิศทางขาไป: จุด A → จุด B", relatedHighwayNo, highwayLayers);
@@ -1173,7 +1449,7 @@ export async function reverseGeocodeTambonAmphoe(
   district: string;
   province: string;
   confidence: "high" | "medium" | "low";
-  source: "longdo" | "nominatim" | "local" | "district";
+  source: "google" | "longdo" | "nominatim" | "local" | "district";
 } | null> {
   if (isNaN(lon) || isNaN(lat)) return null;
   const area = await resolveArea(lon, lat);

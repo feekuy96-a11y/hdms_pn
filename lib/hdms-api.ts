@@ -222,7 +222,14 @@ const DEFAULT_ACTION_TIMEOUT_MS = 20_000;
 const MEDIA_ACTION_TIMEOUT_MS = 35_000;
 // Actions that only read. Every other action is a write: for those the app reloads the data itself
 // afterwards, so it asks the server not to send the whole system payload back a second time.
-const READ_ONLY_ACTIONS = new Set(["getSystemDataAction", "getPublicSystemDataAction", "getDeletedRoutesAction", "snapRouteAction"]);
+const READ_ONLY_ACTIONS = new Set([
+  "getSystemDataAction",
+  "getPublicSystemDataAction",
+  "getDeletedRoutesAction",
+  "snapRouteAction",
+  "reverseGeocodeGoogleAction",
+  "computeGoogleDetourRouteAction",
+]);
 
 /** An HTTP error answered by the Edge Function (so callers can tell it apart from a network failure). */
 export class HdmsHttpError extends Error {

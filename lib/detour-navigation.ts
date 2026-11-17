@@ -1,5 +1,5 @@
 import { DetourRoute, FloodRoute } from "@/db/default-data";
-import { detectClosedRoadConflicts } from "./gis-utils";
+import { detectClosedRoadConflicts, selectRouteCornerWaypoints } from "./gis-utils";
 
 export interface DetourNavResult {
   url: string | null;
@@ -13,27 +13,13 @@ export interface DetourNavResult {
 }
 
 /**
- * สุ่มเลือกจุดผ่านทาง (Waypoints) จากพิกัด เพื่อส่งให้ Google Maps URL (ไม่เกิน maxCount จุด)
+ * คัดเลือกจุดหักเลี้ยวสำคัญ (Waypoints) จากพิกัด เพื่อส่งให้ Google Maps URL (ไม่เกิน maxCount จุด)
  */
 export function sampleWaypointsForGoogleMaps(
   coords: [number, number][],
   maxCount: number = 8
 ): [number, number][] {
-  if (!coords || coords.length <= 2) return [];
-
-  // ไม่รวมจุดแรกและจุดสุดท้าย
-  const inner = coords.slice(1, -1);
-  if (inner.length <= maxCount) {
-    return inner;
-  }
-
-  const step = inner.length / (maxCount + 1);
-  const result: [number, number][] = [];
-  for (let i = 1; i <= maxCount; i++) {
-    const idx = Math.min(Math.floor(i * step), inner.length - 1);
-    result.push(inner[idx]);
-  }
-  return result;
+  return selectRouteCornerWaypoints(coords, maxCount);
 }
 
 /**

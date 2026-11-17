@@ -21,6 +21,194 @@ const detourDir = (value: unknown) => {
 };
 const typeTable = (type: unknown) => type === "FLOOD" ? "doh_flood_routes" : type === "DETOUR" ? "doh_detour_routes" : fail("Invalid record type");
 
+const googleCoordPair = (value: unknown, label: string): [number, number] => {
+  if (!Array.isArray(value) || value.length !== 2) fail(`Invalid ${label} coordinate`, 422);
+  return [number(value[0], -180, 180), number(value[1], -90, 90)];
+};
+
+const parseGoogleDurationSeconds = (value: unknown): number => {
+  if (typeof value !== "string") return 0;
+  const match = value.trim().match(/^(\d+(?:\.\d+)?)s$/);
+  return match ? Math.round(Number(match[1])) : 0;
+};
+
+const stripThaiPrefix = (value: string, prefixes: RegExp): string =>
+  value.trim().replace(prefixes, "").trim();
+
+async function reverseGeocodeGoogle(args: unknown[]) {
+  if (args.length < 2) fail("Coordinates required", 422);
+  const [rawLon, rawLat] = args;
+  const lon = number(rawLon, -180, 180);
+  const lat = number(rawLat, -90, 90);
+  const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY")?.trim() || "";
+  if (!apiKey) return { configured: false, available: false };
+  const gUrl = new URL("https://geocode.googleapis.com/v4/geocode/location");
+  gUrl.searchParams.set("location.latitude", String(lat));
+  gUrl.searchParams.set("location.longitude", String(lon));
+  gUrl.searchParams.set("languageCode", "th");
+  gUrl.searchParams.set("regionCode", "TH");
+
+  let res: Response;
+  try {
+    res = await fetch(gUrl.toString(), {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "results.placeId,results.formattedAddress,results.addressComponents,results.types",
+        "X-Goog-Maps-Solution-ID": "gmp_git_agentskills_v1",
+      },
+      signal: AbortSignal.timeout(8_000),
+    });
+  } catch {
+    console.error("Google Geocoding upstream timeout or network error");
+    return { configured: true, available: false, status: 504 };
+  }
+  if (!res.ok) {
+    console.error("Google Geocoding upstream status:", res.status);
+    return { configured: true, available: false, status: res.status };
+  }
+  const data = await res.json().catch(() => null);
+  const results = Array.isArray(data?.results) ? data.results : [];
+  if (results.length === 0) {
+    return { configured: true, available: true, found: false };
+  }
+
+  let road = "";
+  let village = "";
+  let subdistrict = "";
+  let district = "";
+  let province = "";
+  let formattedAddress = "";
+  let placeId = "";
+
+  for (const item of results) {
+    if (!formattedAddress && typeof item?.formattedAddress === "string") formattedAddress = item.formattedAddress;
+    if (!placeId && typeof item?.placeId === "string") placeId = item.placeId;
+    const comps = Array.isArray(item?.addressComponents) ? item.addressComponents : [];
+    for (const comp of comps) {
+      const types: string[] = Array.isArray(comp?.types) ? comp.types : [];
+      const textVal = String(comp?.longText ?? comp?.long_name ?? comp?.shortText ?? comp?.short_name ?? "").trim();
+      if (!textVal) continue;
+      if (!road && types.includes("route")) {
+        road = textVal;
+      } else if (!village && (types.includes("sublocality_level_2") || types.includes("sublocality_level_3") || types.includes("neighborhood"))) {
+        village = textVal;
+      } else if (!subdistrict && (types.includes("sublocality_level_1") || types.includes("administrative_area_level_3"))) {
+        subdistrict = stripThaiPrefix(textVal, /^(?:ตำบล|ต\.|แขวง)\s*/);
+      } else if (!district && (types.includes("administrative_area_level_2") || types.includes("locality"))) {
+        district = stripThaiPrefix(textVal, /^(?:อำเภอ|อ\.|เขต)\s*/);
+      } else if (!province && types.includes("administrative_area_level_1")) {
+        province = stripThaiPrefix(textVal, /^(?:จังหวัด|จ\.)\s*/);
+      }
+    }
+  }
+
+  return {
+    configured: true,
+    available: true,
+    found: true,
+    road,
+    village,
+    subdistrict,
+    district,
+    province,
+    formattedAddress,
+    placeId,
+  };
+}
+
+async function computeGoogleDetourRoute(raw: unknown) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail("Invalid route request", 422);
+  const reqObj = raw as Record<string, unknown>;
+  const origin = googleCoordPair(reqObj.origin, "origin");
+  const destination = googleCoordPair(reqObj.destination, "destination");
+  const rawIntermediates = reqObj.intermediates;
+  let intermediates: [number, number][] = [];
+  if (rawIntermediates !== undefined) {
+    if (!Array.isArray(rawIntermediates) || rawIntermediates.length > 25) fail("Invalid intermediates", 422);
+    intermediates = rawIntermediates.map((pt, idx) => googleCoordPair(pt, `intermediate[${idx}]`));
+  }
+  const routingPreference = reqObj.routingPreference === "TRAFFIC_AWARE" ? "TRAFFIC_AWARE" : "TRAFFIC_UNAWARE";
+  const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY")?.trim() || "";
+  if (!apiKey) return { configured: false, available: false };
+
+  const body: Record<string, unknown> = {
+    origin: { location: { latLng: { latitude: origin[1], longitude: origin[0] } } },
+    destination: { location: { latLng: { latitude: destination[1], longitude: destination[0] } } },
+    travelMode: "DRIVE",
+    routingPreference,
+    computeAlternativeRoutes: false,
+    languageCode: "th",
+    regionCode: "TH",
+    units: "METRIC",
+  };
+  if (intermediates.length > 0) {
+    body.intermediates = intermediates.map((pt) => ({
+      location: { latLng: { latitude: pt[1], longitude: pt[0] } },
+      via: true,
+    }));
+  }
+
+  let res: Response;
+  try {
+    res = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-Maps-Solution-ID": "gmp_git_agentskills_v1",
+        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps.navigationInstruction,routes.legs.steps.distanceMeters,routes.legs.steps.staticDuration,routes.legs.steps.startLocation",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    console.error("Google Routes upstream timeout or network error");
+    return { configured: true, available: false, status: 504 };
+  }
+  if (!res.ok) {
+    console.error("Google Routes upstream status:", res.status);
+    return { configured: true, available: false, status: res.status };
+  }
+  const data = await res.json().catch(() => null);
+  const route = Array.isArray(data?.routes) ? data.routes[0] : null;
+  if (!route) return { configured: true, available: true, found: false };
+
+  const legs = Array.isArray(route.legs) ? route.legs : [];
+  const steps = legs.flatMap((leg: any) =>
+    (Array.isArray(leg?.steps) ? leg.steps : []).map((step: any) => {
+      const lat = step?.startLocation?.latLng?.latitude;
+      const lon = step?.startLocation?.latLng?.longitude;
+      return {
+        maneuver: typeof step?.navigationInstruction?.maneuver === "string" ? step.navigationInstruction.maneuver : "",
+        instructions: typeof step?.navigationInstruction?.instructions === "string" ? step.navigationInstruction.instructions : "",
+        distanceMeters: Number(step?.distanceMeters) || 0,
+        durationSeconds: parseGoogleDurationSeconds(step?.staticDuration),
+        startLocation: typeof lat === "number" && typeof lon === "number" ? [lon, lat] as [number, number] : null,
+      };
+    })
+  );
+
+  return {
+    configured: true,
+    available: true,
+    found: true,
+    distanceMeters: Number(route.distanceMeters) || 0,
+    durationSeconds: parseGoogleDurationSeconds(route.duration),
+    encodedPolyline: typeof route.polyline?.encodedPolyline === "string" ? route.polyline.encodedPolyline : "",
+    steps,
+  };
+}
+
+const READ_ONLY_EDGE_ACTIONS = new Set([
+  "getSystemDataAction",
+  "getPublicSystemDataAction",
+  "getExternalJobsAction",
+  "reverseGeocodeGoogleAction",
+  "computeGoogleDetourRouteAction",
+]);
+
 type EventDetourRequest = {
   eventId: string;
   expectedVersion: number;
@@ -411,7 +599,7 @@ Deno.serve(async (req) => {
     // server-only service role because this deployment is configured to allow
     // direct /admin access without a login session. Never expose serviceKey to
     // the browser or include it in a response.
-    const mutation = !["getSystemDataAction", "getPublicSystemDataAction", "getExternalJobsAction"].includes(action);
+    const mutation = !READ_ONLY_EDGE_ACTIONS.has(action);
     const db = createClient(url, mutation && serviceKey ? serviceKey : key, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: !mutation && authorization ? { Authorization: authorization } : {} } });
     const check = async (query: PromiseLike<{ data: any; error: any }>) => {
       const { data, error } = await query;
@@ -482,6 +670,12 @@ Deno.serve(async (req) => {
           nextAttemptAt: job.next_attempt_at,
         })),
       });
+    }
+    if (action === "reverseGeocodeGoogleAction") {
+      return reply(await reverseGeocodeGoogle(args));
+    }
+    if (action === "computeGoogleDetourRouteAction") {
+      return reply(await computeGoogleDetourRoute(args[0]));
     }
     if (mutation && !serviceKey) return reply({ error: "Server mutation key is not configured" }, 503);
     const [p, second] = args;

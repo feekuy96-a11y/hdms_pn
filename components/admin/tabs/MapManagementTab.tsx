@@ -29,6 +29,7 @@ import {
 import { deleteExternalMediaAction, upsertRouteAction, snapRouteAction, syncReportingRowAction, uploadExternalMediaAction } from "@/app/actions/doh-actions";
 import {
   fetchOsrmWithFailover,
+  computeGoogleRouteHybrid,
   generateAutoDetourAdvice,
   extractDirectionalAdvice,
   reverseGeocodeTambonAmphoe,
@@ -669,22 +670,6 @@ export function MapManagementTab({
           return;
         }
 
-        const [routingAB, routingBA] = await Promise.all([
-          detourDirectionMode !== "REVERSE_ONLY"
-            ? fetchOsrmWithFailover(
-              pointsAB.map((point) => point.join(",")).join(";"),
-              buildDetourRoutingParams(pointsAB, forceStraightThrough),
-            )
-            : Promise.resolve(null),
-          detourDirectionMode !== "FORWARD_ONLY"
-            ? fetchOsrmWithFailover(
-              pointsBA.map((point) => point.join(",")).join(";"),
-              buildDetourRoutingParams(pointsBA, forceStraightThrough),
-            )
-            : Promise.resolve(null),
-        ]);
-        if (requestId !== routingRequest.current) return;
-
         // Pick a route from alternatives that avoids confirmed CLOSED flood routes
         const pickSafeRoute = (routingRes: any) => {
           const routes = Array.isArray(routingRes?.data?.routes) ? routingRes.data.routes : [];
@@ -707,8 +692,38 @@ export function MapManagementTab({
           };
         };
 
-        const pickedAB = pickSafeRoute(routingAB);
-        const pickedBA = pickSafeRoute(routingBA);
+        const resolveDetourDirection = async (points: [number, number][]) => {
+          const googleRes = await computeGoogleRouteHybrid(points, "TRAFFIC_UNAWARE");
+          if (googleRes && googleRes.coords.length >= 2) {
+            const gConflicts = detectClosedRoadConflicts(googleRes.coords, systemData.floodRoutes || []);
+            if (gConflicts.length === 0 || forceStraightThrough) {
+              return { coords: googleRes.coords, distance: googleRes.distanceMeters, duration: googleRes.durationSeconds, conflicts: gConflicts };
+            }
+            const osrmAlt = pickSafeRoute(
+              await fetchOsrmWithFailover(
+                points.map((point) => point.join(",")).join(";"),
+                buildDetourRoutingParams(points, forceStraightThrough),
+              )
+            );
+            if (osrmAlt.coords.length >= 2 && osrmAlt.conflicts.length === 0) {
+              return osrmAlt;
+            }
+            return { coords: googleRes.coords, distance: googleRes.distanceMeters, duration: googleRes.durationSeconds, conflicts: gConflicts };
+          }
+          return pickSafeRoute(
+            await fetchOsrmWithFailover(
+              points.map((point) => point.join(",")).join(";"),
+              buildDetourRoutingParams(points, forceStraightThrough),
+            )
+          );
+        };
+
+        const emptyPicked = { coords: [] as [number, number][], distance: 0, duration: 0, conflicts: [] as ReturnType<typeof detectClosedRoadConflicts> };
+        const [pickedAB, pickedBA] = await Promise.all([
+          detourDirectionMode !== "REVERSE_ONLY" ? resolveDetourDirection(pointsAB) : Promise.resolve(emptyPicked),
+          detourDirectionMode !== "FORWARD_ONLY" ? resolveDetourDirection(pointsBA) : Promise.resolve(emptyPicked),
+        ]);
+        if (requestId !== routingRequest.current) return;
 
         const forwardCoords = detourDirectionMode === "REVERSE_ONLY" ? pickedBA.coords : pickedAB.coords;
         const reverseCoords = detourDirectionMode === "TWO_WAY" ? pickedBA.coords : [];
@@ -759,24 +774,24 @@ export function MapManagementTab({
         return;
       }
 
-      // FLOOD mode: If divided road / directional side is chosen with carriageway snapping, use OSRM along driving direction
+      // FLOOD mode: If divided road / directional side is chosen with carriageway snapping, prefer Google Routes then OSRM
       if (useCarriagewaySnapping && (roadSide === "LEFT" || roadSide === "RIGHT")) {
         const directedPoints: [number, number][] =
           roadSide === "RIGHT"
             ? [[numELon, numELat], ...[...waypoints].reverse(), [numSLon, numSLat]]
             : [[numSLon, numSLat], ...waypoints, [numELon, numELat]];
-        const routing = await fetchOsrmWithFailover(
-          directedPoints.map((p) => p.join(",")).join(";"),
-          "overview=full&geometries=geojson"
-        );
+        const googleCarriageway = await computeGoogleRouteHybrid(directedPoints, "TRAFFIC_UNAWARE");
         if (requestId !== routingRequest.current) return;
-        const osrmCoords = routing?.data?.routes?.[0]?.geometry?.coordinates;
-        if (Array.isArray(osrmCoords) && osrmCoords.length >= 2) {
-          setDraftCoordinates(osrmCoords);
+        const snappedCoords = googleCarriageway && googleCarriageway.coords.length >= 2
+          ? googleCarriageway.coords
+          : (await fetchOsrmWithFailover(directedPoints.map((p) => p.join(",")).join(";"), "overview=full&geometries=geojson"))?.data?.routes?.[0]?.geometry?.coordinates;
+        if (requestId !== routingRequest.current) return;
+        if (Array.isArray(snappedCoords) && snappedCoords.length >= 2) {
+          setDraftCoordinates(snappedCoords);
           setSnappingStatusText(
-            `✓ คำนวณเส้นน้ำท่วมแยกตามคันทางจริง (${roadSide === "LEFT" ? "ฝั่งซ้าย ขาไป A→B" : "ฝั่งขวา ขากลับ B→A"}, ${osrmCoords.length} จุด)`
+            `✓ คำนวณเส้นน้ำท่วมแยกตามคันทางจริง (${roadSide === "LEFT" ? "ฝั่งซ้าย ขาไป A→B" : "ฝั่งขวา ขากลับ B→A"}, ${snappedCoords.length} จุด)`
           );
-          onToast(`เกาะแนวคันทาง ${roadSide === "LEFT" ? "ฝั่งซ้าย" : "ฝั่งขวา"} สำเร็จ (${osrmCoords.length} จุด)`);
+          onToast(`เกาะแนวคันทาง ${roadSide === "LEFT" ? "ฝั่งซ้าย" : "ฝั่งขวา"} สำเร็จ (${snappedCoords.length} จุด)`);
           return;
         }
       }
@@ -1184,7 +1199,11 @@ export function MapManagementTab({
       routeNo,
       systemData.highwayLayers || [],
       draftReverseCoordinates,
-      detourDirectionMode
+      detourDirectionMode,
+      {
+        forwardWaypoints: draftWaypoints,
+        reverseWaypoints: draftReverseCoordinates.length >= 2 ? draftReverseWaypoints : undefined,
+      }
     );
     setDetourDesc(advice);
     onToast("วิเคราะห์คำแนะนำการเดินทางไป-กลับสำเร็จ");
