@@ -10,7 +10,6 @@ import {
   Trash2,
   Edit,
   CheckCircle2,
-  Waves,
   Layers,
   Split,
   Merge,
@@ -28,6 +27,7 @@ import {
   restoreRouteAction,
   upsertRouteAction,
 } from "@/app/actions/doh-actions";
+import { LAYER_CONFIG } from "@/lib/constants";
 import { exportLineFeatures, GisExportFormat, parseLineCoordinates } from "@/lib/gis-export";
 import { slicePolylineByKmRange } from "@/lib/gis-utils";
 import {
@@ -35,6 +35,9 @@ import {
   parseFloodDirectionMeta,
   resolveEffectiveRoadSide,
   getDetailedTrafficPresentation,
+  getFloodCompletenessIssues,
+  mapTrafficStatusToDetail,
+  normalizeMediaUrl,
   AFFECTED_ROAD_PART_LABELS,
   FloodSegmentDirectionMeta,
   DetailedTrafficStatus,
@@ -42,6 +45,11 @@ import {
   parseKmPostMeters,
   formatKmPostString,
 } from "@/lib/flood-event-schema";
+import {
+  getTrafficPresentation,
+  TRAFFIC_STATUS_OPTIONS,
+  formatRelativeUpdateTime,
+} from "@/lib/traffic-presentation";
 import { useModalAccessibility } from "@/components/ui/use-modal-accessibility";
 
 interface IncidentRegistryTabProps {
@@ -53,14 +61,6 @@ interface IncidentRegistryTabProps {
   onEditFlood: (floodId: string) => void;
   onAddFlood: (context?: { routeNo?: string; sectionName?: string; eventId?: string }) => void;
 }
-
-const trafficLabel = (status: FloodRoute["traffic_status"]) => ({
-  CLOSED: "ผ่านไม่ได้",
-  WARNING: "เฝ้าระวัง / รถเล็กไม่สามารถผ่านได้",
-  PASSABLE: "ผ่านได้ปกติ",
-  LIGHT_VEHICLES_ONLY: "รถเล็กผ่านได้",
-  ONE_LANE: "รถเล็กผ่านได้ ๑ ช่องทาง",
-}[status]);
 
 export function IncidentRegistryTab({
   systemData,
@@ -220,6 +220,8 @@ export function IncidentRegistryTab({
       const newMeta: FloodSegmentDirectionMeta = {
         ...meta,
         roadSide: origSide,
+        trafficStatusDetail: mapTrafficStatusToDetail(splitNewTrafficStatus),
+        status_verified: true,
         startedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         splitFromSegmentId: orig.id,
@@ -414,12 +416,15 @@ export function IncidentRegistryTab({
       const trafficStatus = newTrafficStatus || flood.traffic_status;
 
       const effectiveSide = resolveEffectiveRoadSide(flood);
-      const updatedMeta = flood.direction_meta ? {
-        ...flood.direction_meta,
+      const updatedMeta = {
+        ...(flood.direction_meta && typeof flood.direction_meta === "object" ? flood.direction_meta : {}),
+        trafficStatusDetail: mapTrafficStatusToDetail(trafficStatus),
+        status_verified: true,
         waterLevelKnown: true,
+        water_level_known: true,
         zeroConfirmedAt: newWaterLevel === 0 ? new Date().toISOString() : null,
         updatedAt: new Date().toISOString(),
-      } : undefined;
+      };
 
       const res = await saveTimelineUpdateAction({
         floodId: flood.id,
@@ -429,7 +434,7 @@ export function IncidentRegistryTab({
         longitude: flood.lon_start,
         photoUrl: flood.latest_photo_url || "",
         reporterName: flood.reporter_name || "เจ้าหน้าที่ศูนย์ฯ 24 ชม.",
-        remark: updateNote || `อัปเดตระดับน้ำเป็น ${newWaterLevel} ซม. (${trafficLabel(trafficStatus)})`,
+        remark: updateNote || `อัปเดตระดับน้ำเป็น ${newWaterLevel} ซม. (${getTrafficPresentation(trafficStatus, newWaterLevel).label})`,
         roadSide: effectiveSide,
         affectedLanes: flood.affected_lanes,
         affectedShoulder: flood.affected_shoulder,
@@ -607,7 +612,7 @@ export function IncidentRegistryTab({
       </div>
 
       {/* Incident Table / Grouped Hierarchy List */}
-      <div className="space-y-3">
+      <div className="doh-incident-container space-y-3">
         {parentEvents.length === 0 ? (
           <div className="text-center py-12 bg-slate-950 rounded-2xl border border-slate-800 text-slate-400 text-xs">
             ไม่พบรายการเหตุการณ์ตามเงื่อนไขที่เลือก
@@ -615,7 +620,11 @@ export function IncidentRegistryTab({
         ) : (
           parentEvents.map((ev) => {
             const isCollapsed = collapsedEvents.has(ev.eventId);
-            const statusConfig = getDetailedTrafficPresentation(ev.mostSevereStatus);
+            const statusConfig = getDetailedTrafficPresentation(ev.mostSevereStatus, ev.maxWaterLevelCm);
+            const incompleteCount = ev.segments.filter(
+              (seg) => getFloodCompletenessIssues(seg, seg._meta || parseFloodDirectionMeta(seg.direction_meta, seg)).length > 0
+            ).length;
+            const floodBadgeColor = systemData.mapStyles?.flood?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
 
             return (
               <div
@@ -623,30 +632,32 @@ export function IncidentRegistryTab({
                 className="rounded-2xl border border-slate-800 bg-slate-950 shadow-xl overflow-hidden"
               >
                 {/* Parent Event Header Card */}
-                <div className="p-4 bg-slate-900/80 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs font-black bg-amber-500 text-slate-950 px-2 py-0.5 rounded-lg shadow-sm">
-                      {ev.eventCode}
-                    </span>
-                    <span className="font-heading font-black text-xs text-sky-400 bg-sky-950/80 border border-sky-800 px-2 py-0.5 rounded-lg">
+                <div className="doh-incident-header p-4 bg-slate-900/80 border-b border-slate-800">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <span className="font-heading font-black text-xs text-sky-400 bg-sky-950/80 border border-sky-800 px-2 py-0.5 rounded-lg shrink-0">
                       ทล.{ev.routeNo}
                     </span>
-                    <h3 className="font-heading font-bold text-sm text-white">
+                    <h3 className="font-heading font-bold text-sm text-white break-words min-w-0">
                       {ev.eventTitle || `ตอน${ev.sectionName}`}
                     </h3>
-                    <span className={`text-[11px] font-heading font-bold px-2.5 py-0.5 rounded-full ${statusConfig.badgeClass}`}>
+                    <span className={`text-[11px] font-heading font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap ${statusConfig.badgeClass}`}>
                       {statusConfig.icon} {statusConfig.label}
                     </span>
-                    <span className="text-xs text-slate-400 font-mono">
+                    {incompleteCount > 0 && (
+                      <span className="text-[11px] font-heading font-semibold px-2 py-0.5 rounded-full border border-amber-500/50 bg-amber-500/15 text-amber-300 whitespace-nowrap">
+                        ⚠️ ข้อมูลไม่ครบ ({incompleteCount})
+                      </span>
+                    )}
+                    <span className="text-xs text-slate-400 font-mono whitespace-nowrap">
                       (น้ำสูงสุด {ev.maxWaterLevelCm} ซม. · {ev.segments.length} ช่วงกิโลเมตร)
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                     <button
                       type="button"
                       onClick={() => onAddFlood({ routeNo: ev.routeNo, sectionName: ev.sectionName, eventId: ev.eventId })}
-                      className="bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/50 px-2.5 py-1 rounded-xl text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap"
+                      className="min-h-9 bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/50 px-3 py-1 rounded-xl text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap"
                       title="เพิ่มช่วง กม. ย่อยในเหตุการณ์หลักนี้"
                     >
                       <Plus className="w-3.5 h-3.5" /> เพิ่มช่วง กม.
@@ -661,7 +672,7 @@ export function IncidentRegistryTab({
                           return next;
                         });
                       }}
-                      className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                      className="min-h-9 min-w-9 flex items-center justify-center p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
                       title={isCollapsed ? "กางดูช่วงย่อยทั้งหมด" : "ย่อเก็บช่วงย่อย"}
                     >
                       {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
@@ -674,14 +685,22 @@ export function IncidentRegistryTab({
                   <div className="divide-y divide-slate-850 p-2 sm:p-3 space-y-2">
                     {ev.segments.map((r) => {
                       const meta = r._meta || parseFloodDirectionMeta(r.direction_meta, r);
-                      const segStatusConfig = getDetailedTrafficPresentation(meta.trafficStatusDetail || r.traffic_status);
+                      const segStatusConfig = getTrafficPresentation(
+                        r.traffic_status,
+                        r.water_level_cm ?? 0,
+                        meta.trafficStatusDetail
+                      );
+                      const completenessIssues = getFloodCompletenessIssues(r, meta);
+                      const visibleParts = (meta.affectedParts || []).filter(
+                        (p: any) => p && p !== "UNSPECIFIED" && p !== "PENDING_VERIFICATION"
+                      );
 
                       return (
                         <div
                           key={r.id}
-                          className="p-3 rounded-xl border border-slate-800/80 bg-slate-900/40 hover:bg-slate-900/80 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                          className="doh-incident-segment p-3 rounded-xl border border-slate-800/80 bg-slate-900/40 hover:bg-slate-900/80 transition min-w-0"
                         >
-                          <div className="space-y-1.5 min-w-0">
+                          <div className="space-y-2 min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <input
                                 type="checkbox"
@@ -693,59 +712,80 @@ export function IncidentRegistryTab({
                                   if (event.target.checked) next.add(r.id); else next.delete(r.id);
                                   return next;
                                 })}
-                                className="h-4 w-4 accent-amber-500"
+                                className="h-4 w-4 accent-amber-500 shrink-0"
                               />
-                              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700" title="จุดน้ำท่วม">
-                                <Waves className="h-4 w-4" />
+                              <span
+                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/25 text-white shadow-sm"
+                                style={{ backgroundColor: floodBadgeColor }}
+                                title="จุดน้ำท่วม"
+                              >
+                                <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                                  <path d="M2 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0" />
+                                  <path d="M2 16c2 2 4 2 6 0s4-2 6 0 4 2 6 0" />
+                                </svg>
                               </span>
-                              <span className={`text-[11px] font-heading font-bold px-2 py-0.5 rounded ${segStatusConfig.badgeClass}`}>
+                              <span className={`text-[11px] font-heading font-bold px-2 py-0.5 rounded whitespace-nowrap ${segStatusConfig.badgeClass}`}>
                                 {segStatusConfig.icon} {segStatusConfig.label}
                               </span>
-                              <span className="text-xs font-mono font-bold text-amber-300">
-                                {meta.directionCode === "B_TO_A" ? "🚙 ขากลับ (B → A)" : meta.directionCode === "BOTH" ? "↔️ ไป-กลับ" : meta.directionCode === "A_TO_B" ? "🚗 ขาไป (A → B)" : "รอตรวจสอบทิศทาง"}
+                              {completenessIssues.length > 0 && (
+                                <span
+                                  className="inline-flex items-center gap-1 rounded-md border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[11px] font-heading font-semibold text-amber-300"
+                                  title={completenessIssues.join(" · ")}
+                                >
+                                  ⚠️ ข้อมูลไม่ครบ: {completenessIssues.join(", ")}
+                                </span>
+                              )}
+                              <span className="text-xs font-mono font-bold text-amber-300 whitespace-nowrap">
+                                {meta.directionCode === "B_TO_A" ? "🚙 ขากลับ (B → A)" : meta.directionCode === "BOTH" ? "↔️ ไป-กลับ" : meta.directionCode === "A_TO_B" ? "🚗 ขาไป (A → B)" : "ยังไม่ระบุทิศทาง"}
                               </span>
-                              <span className="text-xs font-bold text-white font-mono">
+                              <span className="text-xs font-bold text-white font-mono whitespace-nowrap">
                                 กม.{r.km_start} ถึง กม.{r.km_end}
                               </span>
                               {meta.villageOrLandmark && (
-                                <span className="text-[11px] text-slate-300 bg-slate-800 px-2 py-0.5 rounded-md">
+                                <span className="text-[11px] text-slate-300 bg-slate-800 px-2 py-0.5 rounded-md break-words">
                                   📍 {meta.villageOrLandmark}
                                 </span>
                               )}
                             </div>
 
-                            {/* Details Row: Level, Affected parts, Photos */}
-                            <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1">
-                              <span>
+                            {/* Details Row: Level, Affected routes/parts, Photos */}
+                            <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
+                              <span className="whitespace-nowrap">
                                 ระดับน้ำ:{" "}
                                 <strong className="text-white font-mono text-sm">
-                                  {meta.waterLevelKnown === false ? "ยังไม่ทราบค่า" : `${r.water_level_cm} ซม.`}
+                                  {meta.waterLevelKnown === false ? "ยังไม่ระบุ" : `${r.water_level_cm} ซม.`}
                                 </strong>
                                 {r.water_level_cm === 0 && meta.waterLevelKnown !== false && (
-                                  <span className="ml-1 text-[10px] text-emerald-400 font-bold">(ซ่อนเส้นบนแผนที่ปัจจุบัน · เก็บประวัติ)</span>
+                                  <span className="ml-1.5 text-[10px] text-emerald-400 font-bold">(ซ่อนเส้นบนแผนที่ปัจจุบัน · เก็บประวัติ)</span>
                                 )}
                               </span>
 
-                              {meta.affectedParts && meta.affectedParts.length > 0 && (
-                                <span className="text-slate-400">
-                                  ส่วนผิวทาง: <strong className="text-sky-300">{meta.affectedParts.map((p: any) => AFFECTED_ROAD_PART_LABELS[p as keyof typeof AFFECTED_ROAD_PART_LABELS] || p).join(", ")}</strong>
-                                </span>
-                              )}
+                              <span className="text-slate-400">
+                                เส้นทางที่ได้รับผลกระทบ:{" "}
+                                <strong className={visibleParts.length > 0 ? "text-sky-300" : "text-amber-300"}>
+                                  {visibleParts.length > 0
+                                    ? visibleParts.map((p: any) => AFFECTED_ROAD_PART_LABELS[p as keyof typeof AFFECTED_ROAD_PART_LABELS] || p).join(", ")
+                                    : "ไม่ระบุ"}
+                                </strong>
+                              </span>
 
                               {meta.photos && meta.photos.length > 0 && (
-                                <span className="text-amber-300/90 inline-flex items-center gap-1 font-mono text-[11px]">
-                                  <Camera className="w-3.5 h-3.5 text-amber-400" /> {meta.photos.length} ภาพ (≤300KB)
+                                <span className="text-amber-300/90 inline-flex items-center gap-1 font-mono text-[11px] whitespace-nowrap">
+                                  <Camera className="w-3.5 h-3.5 text-amber-400" /> {meta.photos.length} ภาพ
                                 </span>
                               )}
                             </div>
+
+                            {/* Meta Footer Row: Updated timestamp & reporter */}
+                            <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                              <span>{formatRelativeUpdateTime(r.updated_at || meta.updatedAt)}</span>
+                              <span>ผู้รายงาน: {meta.subdivisionName || r.reporter_name || "เจ้าหน้าที่แขวงทางหลวงปัตตานี"}</span>
+                            </div>
                           </div>
 
-                          {/* Action Buttons Per Segment: จัดกลุ่มปุ่มหลัก-รอง ป้องกันการซ้อนตกบรรทัด */}
-                          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
-                            <button type="button" onClick={() => setViewingIncident(r)} className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-100 hover:bg-slate-700">
-                              รายละเอียด
-                            </button>
-                            <div className="inline-flex items-center gap-1 bg-slate-900/80 p-0.5 rounded-xl border border-slate-700/60">
+                          {/* Action Buttons Per Segment: รองรับการปรับขยายทุกขนาดโดยไม่ทับข้อความ */}
+                          <div className="doh-incident-actions shrink-0">
+                            <div className="inline-flex flex-wrap items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-700/60">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -753,7 +793,7 @@ export function IncidentRegistryTab({
                                   setNewWaterLevel(r.water_level_cm);
                                   setNewTrafficStatus(r.traffic_status);
                                 }}
-                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1 shadow transition whitespace-nowrap cursor-pointer"
+                                className="min-h-9 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1 shadow transition whitespace-nowrap cursor-pointer"
                                 title="อัปเดตระดับน้ำและสถานะจราจรด่วน"
                               >
                                 ⚡ อัปเดตด่วน
@@ -761,14 +801,21 @@ export function IncidentRegistryTab({
                               <button
                                 type="button"
                                 onClick={() => onEditFlood(r.id)}
-                                className="bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-300 px-2 py-1.5 rounded-lg text-xs font-heading transition whitespace-nowrap cursor-pointer"
+                                className="min-h-9 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-300 px-2.5 py-1.5 rounded-lg text-xs font-heading font-semibold transition whitespace-nowrap cursor-pointer"
                               >
                                 แก้ไข
                               </button>
                               <button
                                 type="button"
+                                onClick={() => setViewingIncident(r)}
+                                className="min-h-9 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-100 hover:bg-slate-700 whitespace-nowrap cursor-pointer"
+                              >
+                                รายละเอียด
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => handleToggleIncidentStatus(r.id, r.is_active)}
-                                className={`px-2 py-1.5 rounded-lg text-xs font-heading font-semibold transition border whitespace-nowrap cursor-pointer ${
+                                className={`min-h-9 px-2.5 py-1.5 rounded-lg text-xs font-heading font-semibold transition border whitespace-nowrap cursor-pointer ${
                                   r.is_active
                                     ? "bg-slate-800 text-slate-300 hover:bg-emerald-950 hover:text-emerald-300 border-slate-700"
                                     : "bg-emerald-950 text-emerald-300 hover:bg-emerald-900 border-emerald-700"
@@ -778,7 +825,7 @@ export function IncidentRegistryTab({
                               </button>
                             </div>
 
-                            <div className="inline-flex items-center gap-1 bg-slate-900/60 p-0.5 rounded-xl border border-slate-800">
+                            <div className="inline-flex flex-wrap items-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -787,7 +834,7 @@ export function IncidentRegistryTab({
                                   setSplitNewWaterLevel(Math.max(0, Math.round(r.water_level_cm / 2)));
                                   setSplitNewTrafficStatus(r.traffic_status);
                                 }}
-                                className="bg-sky-950/70 hover:bg-sky-900 text-sky-300 border border-sky-800/80 px-2 py-1.5 rounded-lg text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap cursor-pointer"
+                                className="min-h-9 bg-sky-950/70 hover:bg-sky-900 text-sky-300 border border-sky-800/80 px-2.5 py-1.5 rounded-lg text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap cursor-pointer"
                                 title="แบ่งช่วง กม. นี้ออกเป็น ๒ ช่วงย่อย"
                               >
                                 <Split className="w-3.5 h-3.5" /> แบ่งช่วง
@@ -798,7 +845,7 @@ export function IncidentRegistryTab({
                                   setMergeModalIncident(r);
                                   setTargetMergeIncidentId("");
                                 }}
-                                className="bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 border border-indigo-800/80 px-2 py-1.5 rounded-lg text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap cursor-pointer"
+                                className="min-h-9 bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 border border-indigo-800/80 px-2.5 py-1.5 rounded-lg text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap cursor-pointer"
                                 title="รวมช่วง กม. นี้เข้ากับช่วงย่อยอื่นในสายทางเดียวกัน"
                               >
                                 <Merge className="w-3.5 h-3.5" /> รวมช่วง
@@ -806,7 +853,7 @@ export function IncidentRegistryTab({
                               <button
                                 type="button"
                                 onClick={() => handleDeleteRoute(r.id)}
-                                className="bg-red-950/70 hover:bg-red-800 text-red-300 p-1.5 rounded-lg text-xs transition border border-red-900/50 cursor-pointer"
+                                className="min-h-9 min-w-9 flex items-center justify-center bg-red-950/70 hover:bg-red-800 text-red-300 p-1.5 rounded-lg text-xs transition border border-red-900/50 cursor-pointer"
                                 title="ลบช่วงนี้ (กู้คืนได้)"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -835,7 +882,7 @@ export function IncidentRegistryTab({
             {viewingIncident.latest_photo_url && (
               <div className="mt-3 overflow-hidden rounded-xl border border-slate-800 bg-slate-950">
                 <img
-                  src={viewingIncident.latest_photo_url}
+                  src={normalizeMediaUrl(viewingIncident.latest_photo_url)}
                   alt={`ภาพหน้างาน ทล.${viewingIncident.route_no}`}
                   className="w-full h-44 object-cover"
                 />
@@ -844,7 +891,7 @@ export function IncidentRegistryTab({
 
             <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div><dt className="text-slate-400 text-xs">ช่วงสายทาง</dt><dd className="text-white font-mono">กม.{viewingIncident.km_start} - {viewingIncident.km_end}</dd></div>
-              <div><dt className="text-slate-400 text-xs">สถานะการจราจร</dt><dd className="text-white font-semibold">{trafficLabel(viewingIncident.traffic_status)}</dd></div>
+              <div><dt className="text-slate-400 text-xs">สถานะการจราจร</dt><dd className="text-white font-semibold">{getTrafficPresentation(viewingIncident.traffic_status, viewingIncident.water_level_cm ?? 0, viewingIncident.direction_meta?.trafficStatusDetail).label}</dd></div>
               <div><dt className="text-slate-400 text-xs">ระดับน้ำล่าสุด</dt><dd className="text-white font-bold text-amber-300">{viewingIncident.water_level_cm} ซม.</dd></div>
               <div>
                 <dt className="text-slate-400 text-xs">ฝั่งถนนที่รายงาน</dt>
@@ -933,11 +980,9 @@ export function IncidentRegistryTab({
                   onChange={(e) => setNewTrafficStatus(e.target.value as FloodRoute["traffic_status"])}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                 >
-                  <option value="PASSABLE">ผ่านได้ปกติ</option>
-                  <option value="LIGHT_VEHICLES_ONLY">รถเล็กผ่านได้</option>
-                  <option value="ONE_LANE">ผ่านได้ 1 ช่องทาง</option>
-                  <option value="WARNING">เฝ้าระวัง</option>
-                  <option value="CLOSED">ผ่านไม่ได้ (ปิดการจราจร)</option>
+                  {TRAFFIC_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -1018,11 +1063,9 @@ export function IncidentRegistryTab({
                     onChange={(e) => setSplitNewTrafficStatus(e.target.value as FloodRoute["traffic_status"])}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2 py-2 text-white text-xs"
                   >
-                    <option value="PASSABLE">ผ่านได้ปกติ</option>
-                    <option value="LIGHT_VEHICLES_ONLY">รถเล็กผ่านได้</option>
-                    <option value="ONE_LANE">ผ่านได้ 1 ช่องทาง</option>
-                    <option value="WARNING">เฝ้าระวัง</option>
-                    <option value="CLOSED">ผ่านไม่ได้</option>
+                    {TRAFFIC_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>

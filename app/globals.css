@@ -532,3 +532,46 @@
   .doh-auto-table .doh-auto-table-cards { display: none !important; }
   .doh-auto-table .doh-auto-table-desktop { display: block !important; }
 }
+
+/* Incident registry cards adapt to the resizable admin workspace container, not browser viewport. */
+.doh-incident-container { container-type: inline-size; min-width: 0; width: 100%; }
+.doh-incident-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.doh-incident-segment {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.doh-incident-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+  padding-top: 0.625rem;
+  border-top: 1px solid rgba(30, 41, 59, 0.8);
+}
+@container (min-width: 680px) {
+  .doh-incident-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+@container (min-width: 860px) {
+  .doh-incident-segment {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .doh-incident-actions {
+    width: auto;
+    max-width: 54%;
+    justify-content: flex-end;
+    padding-top: 0;
+    border-top: 0;
+  }
+}

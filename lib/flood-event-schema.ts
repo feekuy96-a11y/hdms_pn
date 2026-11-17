@@ -14,6 +14,7 @@
  */
 
 import { parseKmPostMeters, formatKmPostString } from "./highway-schema";
+import { getTrafficPresentation, type TrafficPresentation } from "./traffic-presentation";
 export { parseKmPostMeters, formatKmPostString };
 
 export function normalizeMediaUrl(value: unknown): string {
@@ -59,8 +60,7 @@ export const AFFECTED_ROAD_PARTS: Array<{ value: AffectedRoadPart; label: string
   { value: "RIGHT_SHOULDER", label: "ไหล่ทางขวา", desc: "น้ำท่วมเฉพาะไหล่ทางฝั่งขวา" },
   { value: "LEFT_FRONTAGE", label: "ทางขนานซ้าย", desc: "ทางคู่ขนาน/ทางบริการด้านซ้าย" },
   { value: "RIGHT_FRONTAGE", label: "ทางขนานขวา", desc: "ทางคู่ขนาน/ทางบริการด้านขวา" },
-  { value: "UNSPECIFIED", label: "ไม่ระบุ", desc: "ยังไม่ได้ระบุส่วนผิวทางที่ชัดเจน" },
-  { value: "PENDING_VERIFICATION", label: "รอตรวจสอบ", desc: "เจ้าหน้าที่อยู่ระหว่างเดินทางตรวจสอบ" },
+  { value: "UNSPECIFIED", label: "ไม่ระบุ", desc: "ยังไม่ได้ระบุเส้นทางที่ได้รับผลกระทบ" },
 ];
 
 export const AFFECTED_ROAD_PART_LABELS: Record<AffectedRoadPart, string> = {
@@ -72,21 +72,23 @@ export const AFFECTED_ROAD_PART_LABELS: Record<AffectedRoadPart, string> = {
   LEFT_FRONTAGE: "ทางขนานซ้าย",
   RIGHT_FRONTAGE: "ทางขนานขวา",
   UNSPECIFIED: "ไม่ระบุ",
-  PENDING_VERIFICATION: "รอตรวจสอบ",
+  PENDING_VERIFICATION: "ไม่ระบุ",
 };
 
 export type DetailedTrafficStatus =
-  | "PASSABLE"              // ผ่านได้ (สีเขียว)
-  | "CAUTION"               // ผ่านได้ด้วยความระมัดระวัง (สีเหลือง)
-  | "NO_SMALL_VEHICLES"     // รถเล็กไม่สามารถผ่านได้ (สีส้ม)
-  | "CLOSED"                // ผ่านไม่ได้ (สีแดง)
-  | "PENDING_VERIFICATION"; // รอตรวจสอบสถานะ (สีเทา)
+  | "PASSABLE"              // ผ่านได้ปกติ
+  | "LIGHT_VEHICLES_ONLY"   // รถเล็กผ่านได้
+  | "ONE_LANE"              // รถเล็กผ่านได้ ๑ ช่องทาง
+  | "CAUTION"               // รถเล็กผ่านไม่ได้ (WARNING)
+  | "NO_SMALL_VEHICLES"     // รถเล็กไม่สามารถผ่านได้ (legacy detail)
+  | "CLOSED"                // ผ่านไม่ได้
+  | "PENDING_VERIFICATION"; // รอตรวจสอบสถานะ (ข้อมูลนำเข้าที่ยังไม่ยืนยัน)
 
 export interface DetailedTrafficStatusConfig {
   value: DetailedTrafficStatus;
   label: string;
   detail: string;
-  colorName: "emerald" | "amber" | "orange" | "red" | "slate";
+  colorName: "emerald" | "sky" | "amber" | "orange" | "red" | "slate";
   hex: string;
   badgeClass: string;
   dotClass: string;
@@ -97,21 +99,43 @@ export interface DetailedTrafficStatusConfig {
 export const DETAILED_TRAFFIC_STATUS_CONFIG: Record<DetailedTrafficStatus, DetailedTrafficStatusConfig> = {
   PASSABLE: {
     value: "PASSABLE",
-    label: "ผ่านได้",
+    label: "ผ่านได้ปกติ",
     detail: "การจราจรผ่านได้ตามปกติ",
     colorName: "emerald",
-    hex: "#16a34a",
+    hex: "#10b981",
     badgeClass: "bg-emerald-950/80 text-emerald-300 border border-emerald-500/50",
     dotClass: "bg-emerald-500",
     icon: "✅",
     dbStatus: "PASSABLE",
   },
+  LIGHT_VEHICLES_ONLY: {
+    value: "LIGHT_VEHICLES_ONLY",
+    label: "รถเล็กผ่านได้",
+    detail: "อนุญาตเฉพาะรถขนาดเล็ก",
+    colorName: "sky",
+    hex: "#0ea5e9",
+    badgeClass: "bg-sky-950/80 text-sky-300 border border-sky-500/50",
+    dotClass: "bg-sky-400",
+    icon: "🚗",
+    dbStatus: "LIGHT_VEHICLES_ONLY",
+  },
+  ONE_LANE: {
+    value: "ONE_LANE",
+    label: "รถเล็กผ่านได้ ๑ ช่องทาง",
+    detail: "เปิดการจราจรหนึ่งช่องทาง",
+    colorName: "amber",
+    hex: "#f59e0b",
+    badgeClass: "bg-amber-950/80 text-amber-200 border border-amber-500/50",
+    dotClass: "bg-amber-500",
+    icon: "↔️",
+    dbStatus: "ONE_LANE",
+  },
   CAUTION: {
     value: "CAUTION",
-    label: "ผ่านได้ด้วยความระมัดระวัง",
-    detail: "น้ำท่วมผิวทางบางจุด สัญจรด้วยความระมัดระวัง",
+    label: "รถเล็กผ่านไม่ได้",
+    detail: "น้ำท่วมผิวทาง รถเล็กผ่านไม่ได้",
     colorName: "amber",
-    hex: "#eab308",
+    hex: "#f59e0b",
     badgeClass: "bg-amber-950/80 text-amber-200 border border-amber-500/50",
     dotClass: "bg-amber-500",
     icon: "⚠️",
@@ -126,12 +150,12 @@ export const DETAILED_TRAFFIC_STATUS_CONFIG: Record<DetailedTrafficStatus, Detai
     badgeClass: "bg-orange-950/80 text-orange-200 border border-orange-500/50",
     dotClass: "bg-orange-500",
     icon: "🚗",
-    dbStatus: "LIGHT_VEHICLES_ONLY",
+    dbStatus: "WARNING",
   },
   CLOSED: {
     value: "CLOSED",
     label: "ผ่านไม่ได้",
-    detail: "ระดับน้ำสูงมาก ปิดการจราจรเด็ดขาด รถทุกชนิดผ่านไม่ได้",
+    detail: "รถทุกชนิดผ่านไม่ได้",
     colorName: "red",
     hex: "#dc2626",
     badgeClass: "bg-red-950/80 text-red-300 border border-red-500/50",
@@ -142,7 +166,7 @@ export const DETAILED_TRAFFIC_STATUS_CONFIG: Record<DetailedTrafficStatus, Detai
   PENDING_VERIFICATION: {
     value: "PENDING_VERIFICATION",
     label: "รอตรวจสอบสถานะ",
-    detail: "เจ้าหน้าที่อยู่ระหว่างตรวจสอบสถานการณ์หน้างาน",
+    detail: "ไม่พบสถานะการจราจรที่ยืนยันได้",
     colorName: "slate",
     hex: "#64748b",
     badgeClass: "bg-slate-900/80 text-slate-300 border border-slate-600/50",
@@ -218,24 +242,30 @@ export interface ParentFloodEventGroup {
 }
 
 /**
- * แปลงสถานะใน DB และ direction_meta ให้เป็น DetailedTrafficStatus (5 สถานะ)
+ * แปลงสถานะใน DB และ direction_meta ให้เป็น DetailedTrafficStatus
  */
 export function mapTrafficStatusToDetail(dbStatus?: string, detail?: string): DetailedTrafficStatus {
-  if (detail && detail in DETAILED_TRAFFIC_STATUS_CONFIG) {
-    return detail as DetailedTrafficStatus;
-  }
+  // Prefer explicit legacy detail only when compatible with DB status; prevent old ONE_LANE->CAUTION or PENDING mismatch.
+  if (detail === "NO_SMALL_VEHICLES") return "NO_SMALL_VEHICLES";
   switch (dbStatus) {
     case "CLOSED":
       return "CLOSED";
     case "LIGHT_VEHICLES_ONLY":
-      return "NO_SMALL_VEHICLES";
+      return "LIGHT_VEHICLES_ONLY";
     case "ONE_LANE":
-      return "CAUTION";
+      return "ONE_LANE";
     case "WARNING":
       return "CAUTION";
     case "PASSABLE":
       return "PASSABLE";
+    case "CAUTION":
+    case "NO_SMALL_VEHICLES":
+    case "PENDING_VERIFICATION":
+      return dbStatus;
     default:
+      if (detail && detail in DETAILED_TRAFFIC_STATUS_CONFIG) {
+        return detail as DetailedTrafficStatus;
+      }
       return "PENDING_VERIFICATION";
   }
 }
@@ -249,22 +279,52 @@ export function mapDetailToDbStatus(detail: DetailedTrafficStatus): "PASSABLE" |
 }
 
 /**
- * ดึงการนำเสนอสถานะจราจรที่สมบูรณ์ (ไอคอน, สี, ข้อความ, hex, badgeClass)
+ * ดึงการนำเสนอสถานะจราจรจาก Single Source of Truth (R1)
  */
 export function getDetailedTrafficPresentation(
   statusDetailOrDbStatus?: string,
-  waterLevelCm?: number,
+  waterLevelCm: number = 0,
   fallbackDetail?: string
-): DetailedTrafficStatusConfig {
-  const mapped = mapTrafficStatusToDetail(statusDetailOrDbStatus, fallbackDetail);
-  const base = DETAILED_TRAFFIC_STATUS_CONFIG[mapped];
-  if (waterLevelCm !== undefined && waterLevelCm > 0 && mapped === "CAUTION") {
-    return {
-      ...base,
-      detail: `ระดับน้ำ ${waterLevelCm} ซม. สัญจรด้วยความระมัดระวัง`,
-    };
+): TrafficPresentation {
+  return getTrafficPresentation(statusDetailOrDbStatus, waterLevelCm, fallbackDetail);
+}
+
+/**
+ * ตรวจว่าข้อมูลเหตุการณ์น้ำท่วมช่วงนี้กรอกครบถ้วนหรือมีรายการที่ยังไม่ได้ระบุ
+ */
+export function getFloodCompletenessIssues(route: any, meta: FloodSegmentDirectionMeta): string[] {
+  const issues: string[] = [];
+  if (meta.waterLevelKnown === false || route?.direction_meta?.water_level_known === false) {
+    issues.push("ยังไม่ระบุระดับน้ำ");
   }
-  return base;
+  if (
+    !meta.affectedParts ||
+    meta.affectedParts.length === 0 ||
+    meta.affectedParts.every((p) => p === "UNSPECIFIED" || p === "PENDING_VERIFICATION")
+  ) {
+    issues.push("ยังไม่ระบุเส้นทางที่ได้รับผลกระทบ");
+  }
+  if (!meta.directionCode || meta.directionCode === "UNKNOWN") {
+    issues.push("ยังไม่ระบุทิศทาง");
+  }
+  if (!String(route?.km_start || "").trim() || !String(route?.km_end || "").trim()) {
+    issues.push("ยังไม่ระบุช่วง กม.");
+  }
+  const hasCoords =
+    (Array.isArray(route?.coordinates_json) && route.coordinates_json.length >= 2) ||
+    (Boolean(route?.lat_start) && Boolean(route?.lon_start));
+  if (!hasCoords) {
+    issues.push("ยังไม่วาดแนวเส้น");
+  }
+  const validStatuses = new Set(["PASSABLE", "LIGHT_VEHICLES_ONLY", "ONE_LANE", "WARNING", "CLOSED"]);
+  if (
+    !route?.traffic_status ||
+    !validStatuses.has(String(route.traffic_status)) ||
+    meta.trafficStatusDetail === "PENDING_VERIFICATION"
+  ) {
+    issues.push("ยังไม่ระบุสถานะจราจร");
+  }
+  return issues;
 }
 
 /**
@@ -337,7 +397,10 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
     (route?.road_side && route?.road_side !== "UNKNOWN" ? route.road_side : undefined) ||
     (fallbackDirection === "A_TO_B" ? "LEFT" : fallbackDirection === "B_TO_A" ? "RIGHT" : fallbackDirection === "BOTH" ? "BOTH" : "UNKNOWN");
 
+  const knownFlag = parsed.waterLevelKnown ?? parsed.water_level_known;
+
   return {
+    ...parsed,
     schemaVersion: 2,
     eventId: fallbackEventId,
     eventCode: fallbackEventCode,
@@ -346,11 +409,11 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
     subdivisionName: parsed.subdivisionName || route?.reporter_name || "",
     villageOrLandmark: parsed.villageOrLandmark || "",
     directionCode: fallbackDirection,
-    directionLabel: parsed.directionLabel || (fallbackDirection === "A_TO_B" ? "ตามหลัก กม. (ขาไป A → B)" : fallbackDirection === "B_TO_A" ? "ย้อนหลัก กม. (ขากลับ B → A)" : fallbackDirection === "BOTH" ? "ทั้งสองทิศทาง" : "ไม่ระบุทิศทาง (ต้องตรวจสอบ)"),
+    directionLabel: parsed.directionLabel || (fallbackDirection === "A_TO_B" ? "ตามหลัก กม. (ขาไป A → B)" : fallbackDirection === "B_TO_A" ? "ย้อนหลัก กม. (ขากลับ B → A)" : fallbackDirection === "BOTH" ? "ทั้งสองทิศทาง" : "ไม่ระบุทิศทาง"),
     roadSide: fallbackRoadSide,
     affectedParts,
     trafficStatusDetail: mapTrafficStatusToDetail(route?.traffic_status, parsed.trafficStatusDetail),
-    waterLevelKnown: parsed.waterLevelKnown !== undefined ? Boolean(parsed.waterLevelKnown) : route?.water_level_cm !== null && route?.water_level_cm !== undefined,
+    waterLevelKnown: knownFlag !== undefined ? Boolean(knownFlag) : route?.water_level_cm !== null && route?.water_level_cm !== undefined,
     startedAt: parsed.startedAt || route?.updated_at || new Date().toISOString(),
     updatedAt: parsed.updatedAt || route?.updated_at || new Date().toISOString(),
     zeroConfirmedAt: parsed.zeroConfirmedAt || (route?.water_level_cm === 0 ? route.updated_at : null),
@@ -358,7 +421,6 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
     photos,
     splitFromSegmentId: parsed.splitFromSegmentId || null,
     status_verified: parsed.status_verified !== undefined ? Boolean(parsed.status_verified) : true,
-    ...parsed,
   };
 }
 
@@ -427,13 +489,15 @@ export function groupFloodRoutesIntoEvents(floodRoutes: any[]): ParentFloodEvent
 
     // Most severe status priority
     const severityScore: Record<DetailedTrafficStatus, number> = {
-      CLOSED: 5,
-      NO_SMALL_VEHICLES: 4,
-      CAUTION: 3,
-      PENDING_VERIFICATION: 2,
-      PASSABLE: 1,
+      CLOSED: 6,
+      NO_SMALL_VEHICLES: 5,
+      CAUTION: 4,
+      ONE_LANE: 3,
+      LIGHT_VEHICLES_ONLY: 2,
+      PENDING_VERIFICATION: 1,
+      PASSABLE: 0,
     };
-    let highestScore = 0;
+    let highestScore = -1;
     let mostSevere: DetailedTrafficStatus = firstMeta.trafficStatusDetail;
 
     for (const seg of segments) {
@@ -443,7 +507,7 @@ export function groupFloodRoutesIntoEvents(floodRoutes: any[]): ParentFloodEvent
       if (seg.is_active) hasActive = true;
       if (wl === 0 || segMeta.zeroConfirmedAt) hasZero = true;
 
-      const score = severityScore[segMeta.trafficStatusDetail] || 1;
+      const score = severityScore[segMeta.trafficStatusDetail] ?? 0;
       if (score > highestScore) {
         highestScore = score;
         mostSevere = segMeta.trafficStatusDetail;

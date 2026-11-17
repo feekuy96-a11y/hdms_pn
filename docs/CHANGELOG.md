@@ -1,5 +1,16 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-102] 2026-11-17 ปรับปรุงการ์ดทะเบียนเหตุการณ์แอดมิน รวมศูนย์สถานะจราจร และแก้บั๊กการยืนยันสถานะ
+- **ไฟล์:** `lib/traffic-presentation.ts`, `lib/flood-event-schema.ts`, `app/page.tsx`, `components/map/LongdoGisMap.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `app/globals.css`, `tests/e2e/admin-menus.spec.ts`, `docs/UI_CONTRACT.md`, `docs/CHANGELOG.md`
+- **การแก้ไข:**
+  1. **รวมศูนย์สถานะจราจร (R1):** สร้าง `lib/traffic-presentation.ts` (`getTrafficPresentation`, `TRAFFIC_STATUS_OPTIONS`, `formatRelativeUpdateTime`) ใช้ร่วมกันทั้งหน้าประชาชน แผนที่ (`LongdoGisMap.tsx`) และแอดมิน (`IncidentRegistryTab.tsx`, `MapManagementTab.tsx`)
+  2. **แก้บั๊ก "รอตรวจสอบสถานะ" และเพิ่มตรวจข้อมูลไม่ครบถ้วน:**
+     - แก้ไข `IncidentRegistryTab.tsx` (เรียก `getDetailedTrafficPresentation` ผิดตำแหน่งอาร์กิวเมนต์), `handleSubmitQuickUpdate` (อัปเดต `direction_meta.trafficStatusDetail` และ `status_verified: true`), `handleSplitSegment`, และ `mapTrafficStatusToDetail` (แก้กรณี `LIGHT_VEHICLES_ONLY` เคยถูกแมปเป็น `NO_SMALL_VEHICLES`)
+     - นำตัวเลือก `"รอตรวจสอบสถานะ"` ออกจาก dropdown ของแอดมิน (บันทึกแล้วถือว่าตรวจสอบแล้ว) และเพิ่ม `getFloodCompletenessIssues()` เพื่อแสดงป้ายแจ้งเตือน `"⚠️ ข้อมูลไม่ครบ"` เฉพาะเมื่อมีช่องข้อมูลที่ยังไม่กรอก/ไม่ระบุจริง
+  3. **ซ่อนรหัสเหตุการณ์และขนาดภาพ:** ซ่อน badge `FL-...` และช่องกรอกรหัสเหตุการณ์ออกจาก UI ปกติ (คง `eventId`/`eventCode` เบื้องหลัง), ลบข้อความ `≤300KB` / ขนาดไฟล์ / เปอร์เซ็นต์บีบอัดออก และเปลี่ยนคำ `"ส่วนผิวทาง"` / `"ส่วนของถนนที่ได้รับผลกระทบ"` เป็น `"เส้นทางที่ได้รับผลกระทบ"`
+  4. **ไอคอนและ Responsive Layout (ทางเลือก A):** ปรับไอคอนเหตุการณ์น้ำท่วมใน `IncidentRegistryTab.tsx` ให้ใช้คลื่นสีขาวบนพื้นสีเส้นน้ำท่วมตรงกับแผนที่จริง, เพิ่มเวลาอัปเดตล่าสุดกับผู้รายงาน, และใช้ CSS Container Query (`.doh-incident-container` / `.doh-incident-segment` / `.doh-incident-actions`) ใน `app/globals.css` ให้การ์ดเรียงบน-ล่างและปุ่มห่อบรรทัดได้อัตโนมัติทุกขนาดพาเนลที่ปรับย่อ-ขยายโดยไม่ทับข้อความหรือล้นขอบ
+- **ย้อนกลับ:** revert commit นี้ได้ทันที (ไม่แก้ SQL, Edge Function หรือข้อมูลจริงในฐานข้อมูล)
+
 ### [UPDATE-101] 2026-11-17 แก้ Escape ของหน้าต่างสถานะ Admin
 - **ไฟล์:** `components/ui/use-modal-accessibility.ts`.
 - **สาเหตุ:** Escape รับเฉพาะเมื่อเหตุการณ์ bubble ถึง dialog จึงปิดหน้าต่างสถานะไม่สม่ำเสมอในการทดสอบและบางตำแหน่ง focus.

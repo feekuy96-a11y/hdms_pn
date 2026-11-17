@@ -68,6 +68,7 @@ import {
   detectOverlappingFloodSegments,
   parseKmPostMeters,
 } from "@/lib/flood-event-schema";
+import { TRAFFIC_STATUS_OPTIONS } from "@/lib/traffic-presentation";
 import { groupHighwayFeatures, HighwaySectionGroup, HighwayBranchItem } from "@/lib/highway-schema";
 import { insertVertex, moveVertex, removeVertex, nearestInsertIndex } from "@/lib/line-edit";
 import type { VertexEditEvent } from "@/lib/line-edit";
@@ -1126,7 +1127,7 @@ export function MapManagementTab({
     }
 
     const filesToProcess = Array.from(files).slice(0, remainingSlots);
-    onToast(`กำลังประมวลผลและบีบอัดภาพถ่าย ${filesToProcess.length} ภาพ (≤ 300 KB)...`);
+    onToast(`กำลังประมวลผลและบีบอัดภาพถ่าย ${filesToProcess.length} ภาพ...`);
 
     const newPhotos: FloodPhotoItem[] = [];
     for (let i = 0; i < filesToProcess.length; i++) {
@@ -1375,7 +1376,8 @@ export function MapManagementTab({
         directionLabel: directionCode === "A_TO_B" ? "ตามหลัก กม. (ขาไป A → B)" : directionCode === "B_TO_A" ? "ย้อนหลัก กม. (ขากลับ B → A)" : directionCode === "BOTH" ? "ทั้งสองทิศทาง" : "ไม่ระบุทิศทาง",
         roadSide: effectiveRoadSide,
         affectedParts,
-        trafficStatusDetail: (routeStatus as string) === "PENDING_VERIFICATION" ? "PENDING_VERIFICATION" : mapTrafficStatusToDetail(routeStatus),
+        trafficStatusDetail: mapTrafficStatusToDetail(dbTrafficStatus),
+        status_verified: true,
         waterLevelKnown,
         startedAt: startedAt ? new Date(startedAt).toISOString() : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -1469,7 +1471,8 @@ export function MapManagementTab({
           directionCode: "B_TO_A",
           directionLabel: "ย้อนหลัก กม. (ขากลับ B → A)",
           affectedParts: reverseAffectedParts,
-          trafficStatusDetail: (reverseRouteStatus as string) === "PENDING_VERIFICATION" ? "PENDING_VERIFICATION" : mapTrafficStatusToDetail(reverseRouteStatus),
+          trafficStatusDetail: mapTrafficStatusToDetail(revTrafficStatus),
+          status_verified: true,
           waterLevelKnown: reverseWaterLevelKnown,
           arrow_direction: "REVERSE",
           roadSide: "RIGHT",
@@ -1727,61 +1730,34 @@ export function MapManagementTab({
                     <option value="">-- เลือกเหตุการณ์หลัก --</option>
                     {existingParentEvents.map((ev) => (
                       <option key={ev.eventId} value={ev.eventId}>
-                        [{ev.eventCode}] ทล.{ev.routeNo} ตอน{ev.sectionName} ({ev.segments.length} ช่วงย่อย)
+                        ทล.{ev.routeNo} ตอน{ev.sectionName} ({ev.segments.length} ช่วงย่อย)
                       </option>
                     ))}
                   </select>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-slate-300">รหัสเหตุการณ์ (Event Code)</label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const code = generateNextEventCode(routeNo || "42", existingParentEvents);
-                        setEventCode(code);
-                        onToast(`สร้างรหัสอัตโนมัติ: ${code}`);
-                      }}
-                      className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 font-heading cursor-pointer"
-                      title="สร้างรหัสเหตุการณ์อัตโนมัติตามสายทาง"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      <span>⚡ สร้างอัตโนมัติ</span>
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    value={eventCode}
-                    onChange={(e) => setEventCode(e.target.value)}
-                    placeholder="เช่น FL-42-01"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
-                  />
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-slate-300">หมู่บ้าน / จุดสังเกตหน้างาน</label>
+                  <button
+                    type="button"
+                    onClick={handleFetchLocationFromCoords}
+                    disabled={isFetchingAddress}
+                    className="text-[10px] text-sky-400 hover:text-sky-300 flex items-center gap-1 font-heading cursor-pointer disabled:opacity-50"
+                    title="ดึงชื่อหมู่บ้านและตำบลจากพิกัด"
+                  >
+                    {isFetchingAddress ? <RotateCw className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3" />}
+                    <span>{isFetchingAddress ? "กำลังดึง..." : "📍 ดึงจากพิกัด"}</span>
+                  </button>
                 </div>
-                <div className="sm:col-span-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-slate-300">หมู่บ้าน / จุดสังเกตหน้างาน</label>
-                    <button
-                      type="button"
-                      onClick={handleFetchLocationFromCoords}
-                      disabled={isFetchingAddress}
-                      className="text-[10px] text-sky-400 hover:text-sky-300 flex items-center gap-1 font-heading cursor-pointer disabled:opacity-50"
-                      title="ดึงชื่อหมู่บ้านและตำบลจากพิกัด"
-                    >
-                      {isFetchingAddress ? <RotateCw className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3" />}
-                      <span>{isFetchingAddress ? "กำลังดึง..." : "📍 ดึงจากพิกัด"}</span>
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    value={villageOrLandmark}
-                    onChange={(e) => setVillageOrLandmark(e.target.value)}
-                    placeholder="เช่น บ.ดอนยาง ม.2 ต.ดอนยาง อ.หนองจิก"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                  />
-                </div>
+                <input
+                  type="text"
+                  value={villageOrLandmark}
+                  onChange={(e) => setVillageOrLandmark(e.target.value)}
+                  placeholder="เช่น บ.ดอนยาง ม.2 ต.ดอนยาง อ.หนองจิก"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                />
               </div>
             </div>
           )}
@@ -2292,7 +2268,7 @@ export function MapManagementTab({
 
         {/* 4. Water Level, Status & Safety Measures (If Flood) */}
         {routeMode === "FLOOD" && (
-          <FormSection step={3} title="สถานการณ์น้ำและมาตรการ" description="ทิศทาง ส่วนของถนน ระดับน้ำ สถานะจราจร ๕ สถานะ วันเวลา และภาพถ่ายหน้างาน (สูงสุด ๕ ภาพ)">
+          <FormSection step={3} title="สถานการณ์น้ำและมาตรการ" description="ทิศทาง เส้นทางที่ได้รับผลกระทบ ระดับน้ำ สถานะจราจร ๕ สถานะ วันเวลา และภาพถ่ายหน้างาน (สูงสุด ๕ ภาพ)">
             {/* Direction and Affected Road Parts */}
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-3">
               <div>
@@ -2355,7 +2331,7 @@ export function MapManagementTab({
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs text-slate-300 font-heading font-semibold">
-                    ส่วนของถนนที่ได้รับผลกระทบ (เลือกได้หลายส่วนตามสภาพจริง) *
+                    เส้นทางที่ได้รับผลกระทบ (เลือกได้หลายรายการตามสภาพจริง) *
                   </label>
                   <span className="text-[10px] text-amber-300 font-mono">เลือกแล้ว {affectedParts.length} ส่วน</span>
                 </div>
@@ -2455,12 +2431,9 @@ export function MapManagementTab({
                         onChange={(e: any) => setRouteStatus(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white"
                       >
-                        <option value="PASSABLE">ผ่านได้ปกติ</option>
-                        <option value="LIGHT_VEHICLES_ONLY">รถเล็กผ่านได้</option>
-                        <option value="ONE_LANE">รถเล็กผ่านได้ ๑ ช่องทาง</option>
-                        <option value="CLOSED">ผ่านไม่ได้</option>
-                        <option value="WARNING">เฝ้าระวัง / ผ่านได้ด้วยความระมัดระวัง</option>
-                        <option value="PENDING_VERIFICATION">รอตรวจสอบสถานะ</option>
+                        {TRAFFIC_STATUS_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -2509,12 +2482,9 @@ export function MapManagementTab({
                         onChange={(e: any) => setReverseRouteStatus(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white"
                       >
-                        <option value="PASSABLE">ผ่านได้ปกติ</option>
-                        <option value="LIGHT_VEHICLES_ONLY">รถเล็กผ่านได้</option>
-                        <option value="ONE_LANE">รถเล็กผ่านได้ ๑ ช่องทาง</option>
-                        <option value="CLOSED">ผ่านไม่ได้</option>
-                        <option value="WARNING">เฝ้าระวัง / ผ่านได้ด้วยความระมัดระวัง</option>
-                        <option value="PENDING_VERIFICATION">รอตรวจสอบสถานะ</option>
+                        {TRAFFIC_STATUS_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -2561,12 +2531,9 @@ export function MapManagementTab({
                     onChange={(e: any) => setRouteStatus(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                   >
-                    <option value="PASSABLE">ผ่านได้ปกติ</option>
-                    <option value="LIGHT_VEHICLES_ONLY">รถเล็กผ่านได้</option>
-                    <option value="ONE_LANE">รถเล็กผ่านได้ ๑ ช่องทาง</option>
-                    <option value="CLOSED">ผ่านไม่ได้</option>
-                    <option value="WARNING">เฝ้าระวัง / ผ่านได้ด้วยความระมัดระวัง</option>
-                    <option value="PENDING_VERIFICATION">รอตรวจสอบสถานะ</option>
+                    {TRAFFIC_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -2623,7 +2590,7 @@ export function MapManagementTab({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs text-slate-300">
-                  ภาพถ่ายหน้างาน (สูงสุด ๕ ภาพ บีบอัดอัตโนมัติ ≤ 300 KB ต่อภาพ)
+                  ภาพถ่ายหน้างาน (สูงสุด ๕ ภาพ)
                 </label>
                 <span className="text-[11px] text-amber-300 font-mono">
                   {detailedPhotos.length} / 5 ภาพ
@@ -2651,19 +2618,8 @@ export function MapManagementTab({
                       <div className="h-20 w-full overflow-hidden rounded bg-slate-900">
                         <img src={photo.dataUrl} className="w-full h-full object-cover" alt={`field-${i + 1}`} />
                       </div>
-                      <div className="mt-1 flex flex-col gap-0.5 text-[10px] text-slate-400">
-                        <div className="flex items-center justify-between">
-                          <span>{i === 0 ? "ภาพหลัก" : `ภาพที่ ${i + 1}`}</span>
-                          <span className="font-mono text-emerald-400 font-bold">
-                            {(photo.sizeBytes / 1024).toFixed(0)} KB
-                            <span className="text-[9px] text-sky-300 ml-1 uppercase">({photo.format || "img"})</span>
-                          </span>
-                        </div>
-                        {photo.originalSizeBytes && photo.originalSizeBytes > photo.sizeBytes && (
-                          <div className="text-[9px] text-slate-500 font-mono text-right">
-                            ลดจาก {(photo.originalSizeBytes / (1024 * 1024)).toFixed(1)} MB (-{Math.round((1 - photo.sizeBytes / photo.originalSizeBytes) * 100)}%)
-                          </div>
-                        )}
+                      <div className="mt-1 text-[10px] text-slate-400">
+                        <span>{i === 0 ? "ภาพหลัก" : `ภาพที่ ${i + 1}`}</span>
                       </div>
                       <button
                         type="button"
