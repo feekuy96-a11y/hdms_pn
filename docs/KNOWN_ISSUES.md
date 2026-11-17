@@ -38,8 +38,8 @@
 - Lab test 1,200 จุดยืนยัน canvas เดียวและเพดาน 400 handle แต่ไม่สามารถรายงาน JS heap หรือ CPU บนเครื่องเจ้าหน้าที่จริงได้อย่างน่าเชื่อถือใน CI/headless. เก็บ Chrome Performance trace/Task Manager จากเครื่องที่เคยค้างก่อนเปลี่ยนเพดานหรือเพิ่ม Web Worker; ดู B-005.
 
 ### KI-013: ความสัมพันธ์ Event↔Detour หลายต่อหลายยังไม่ผ่านเส้นทางจริง
-- Migration `20261117135032_event_detour_relationships.sql` และ `lib/event-detour-links.ts` ผ่าน PostgreSQL 16 แยกและ typecheck แล้ว แต่ **ยังไม่ apply Production**. Edge Function, data reader, public payload, admin editor, export/import และ report ยังอ้าง `flood_id_ref` / `detour_meta.event_orders` เดิม.
-- จนกว่า B-023 จะปิด ห้ามทำให้หน้าประชาชนอ่าน link table ใหม่เพียงอย่างเดียว เพราะ legacy detour อาจหายจากแผนที่. Geometry revision จะมีผลก็ต่อเมื่อ migration ถูกใช้แล้วเท่านั้น.
+- Migration `20261117135032_event_detour_relationships.sql` ถูก apply Production แล้วและตรวจอ่านกลับได้ (18 events, 18 segments, 13 links; ไม่มี Recommended ที่ยังไม่ได้ review). Edge Function, data reader, public payload, admin editor, export/import และ report ยังอ้าง `flood_id_ref` / `detour_meta.event_orders` เดิม.
+- จนกว่า B-023 จะปิด ห้ามทำให้หน้าประชาชนอ่าน link table ใหม่เพียงอย่างเดียว เพราะ legacy detour อาจหายจากแผนที่. Geometry revision มีผลแล้ว แต่การแก้ geometry ต้องถูกผ่าน trigger/Edge path ที่ deploy อยู่.
 
 ### KI-014: Public fallback patch เผยแพร่แล้ว — ปิดแล้ว
 - รวมเข้า `main` ผ่าน PR #32 และ PR #33 (commit `866eb93`) Deploy GitHub Pages สำเร็จ (Run `44104409962`); fallback ฝั่ง browser ถูกจำกัดเฉพาะ public RPC หรือแสดง Error/Retry พร้อม regression test ผ่านครบ (ดู B-019).

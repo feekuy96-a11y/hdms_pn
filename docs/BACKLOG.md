@@ -42,7 +42,7 @@
 - **ผลกระทบ:** หากสลับ reader หรือ UI ก่อนมี compatibility layer อาจทำให้ detour หายจากประชาชน/แอดมิน หรือสถานะแนะนำชี้ geometry ที่ถูกแก้แล้ว.
 - **ทางเลือก:** A) ทำ Edge read wrapper + atomic write action + compatibility reader แล้วค่อยทำ UI และ public cutover; B) ย้าย UI ตรงไปใช้ schema ใหม่; C) คง legacy model ต่อไป.
 - **คำแนะนำ:** A เพราะคง `flood_id_ref` เดิมไว้จนทดสอบ migration, Edge, public draft filtering, split event และ mobile/desktop regression ครบ.
-- **สถานะ:** กำลังทำ (2026-11-17) — ห้าม apply production migration หรือเปลี่ยน public reader ในงานเดียวกับฐานข้อมูล foundation; ต้องตรวจ RPC Production แบบอ่านอย่างเดียวและเปิด PR แยกสำหรับ Edge/UI.
+- **สถานะ:** กำลังทำ (2026-11-17) — owner อนุมัติและ apply migration บน Production แล้ว: 18 events, 18 segments, 13 links (12 Pending, 1 Withdrawn), ไม่มี Recommended link ที่ยังไม่ได้ review; anon/authenticated เรียก replace RPC ไม่ได้ และ service role เรียกได้. รอบถัดไปคือ Edge read/write compatibility action, Admin editor, แล้วจึง public reader/UI cutover แยก PR.
 
 ## B-024 [กลาง] Event–Detour operation ledger ต้องมี retention/archival policy
 - **หลักฐาน:** `doh_event_detour_operations` เก็บ request/before/result JSONB ทุกครั้งเพื่อ idempotency และ audit แต่ migration ยังไม่มีนโยบายเก็บรักษา/ย้ายออก. หากมีการจัดลำดับบ่อย ตารางและ index `created_at` จะโตไม่จำกัด.

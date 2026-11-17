@@ -1,5 +1,6 @@
 import type { SystemDataPayload, MapLineStyleItem, DohOfficeLocation, SystemSettingsConfig } from "@/db/default-data";
 import { invokeHdms } from "@/lib/hdms-api";
+import type { EventDetourLink, SaveEventDetourLinks } from "@/lib/event-detour-links";
 
 export type ExternalJobStatus = "pending" | "processing" | "done" | "failed";
 export type ExternalJobKind = "MEDIA" | "REPORT";
@@ -41,6 +42,22 @@ export async function snapRouteAction(start: [number, number], end: [number, num
 
 export async function getSystemDataAction(): Promise<SystemDataPayload> {
   return invokeHdms("getSystemDataAction", []);
+}
+
+export interface EventDetourLinksResult {
+  eventId: string;
+  version: number;
+  links: EventDetourLink[];
+}
+
+/** Admin-only read: all link states, including Pending and Withdrawn. */
+export async function getEventDetourLinksAction(eventId: string): Promise<EventDetourLinksResult> {
+  return invokeHdms("getEventDetourLinksAction", [eventId]);
+}
+
+/** Atomic replacement backed by optimistic versioning and an idempotency operation ID. */
+export async function replaceEventDetourLinksAction(payload: SaveEventDetourLinks): Promise<EventDetourLinksResult> {
+  return invokeHdms("replaceEventDetourLinksAction", [payload]);
 }
 
 // Public map data: same payload shape, but highway lines are the light
