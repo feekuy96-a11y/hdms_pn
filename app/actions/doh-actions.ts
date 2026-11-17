@@ -1,5 +1,5 @@
 import type { SystemDataPayload, MapLineStyleItem, DohOfficeLocation, SystemSettingsConfig } from "@/db/default-data";
-import { HdmsHttpError, invokeHdms } from "@/lib/hdms-api";
+import { invokeHdms } from "@/lib/hdms-api";
 
 export type ExternalJobStatus = "pending" | "processing" | "done" | "failed";
 export type ExternalJobKind = "MEDIA" | "REPORT";
@@ -43,20 +43,12 @@ export async function getSystemDataAction(): Promise<SystemDataPayload> {
   return invokeHdms("getSystemDataAction", []);
 }
 
-// Public map data: same payload, but highway lines are the light (simplified) copy.
-// Falls back to the full payload ONLY when the server answers "Unknown operation" (an Edge Function that
-// has not been updated yet). Any other failure (timeout, 5xx, network) is rethrown: retrying through a
-// second action would double the load on a backend that is already struggling, exactly when many
-// citizens are refreshing during a flood.
+// Public map data: same payload shape, but highway lines are the light
+// (simplified) copy and every record is already filtered for public use. Do not
+// retry an old Edge Function with the full Admin action: a recoverable error is
+// safer than sending Draft/inactive records to a citizen browser.
 export async function getPublicSystemDataAction(): Promise<SystemDataPayload> {
-  try {
-    return await invokeHdms("getPublicSystemDataAction", []);
-  } catch (error) {
-    if (error instanceof HdmsHttpError && error.status === 400 && /unknown operation/i.test(error.message)) {
-      return invokeHdms("getSystemDataAction", []);
-    }
-    throw error;
-  }
+  return invokeHdms("getPublicSystemDataAction", []);
 }
 
 export async function saveTimelineUpdateAction(payload: {
