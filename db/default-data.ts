@@ -87,6 +87,7 @@ export interface DetourRoute {
   reverse_coordinates_json?: string | [number, number][];
   reverse_waypoints_json?: string | [number, number][];
   direction_mode?: DetourDirectionMode;
+  geometry_revision?: number;
   detour_meta?: DetourMeta;
   description: string;
   is_active: boolean;

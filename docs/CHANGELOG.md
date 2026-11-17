@@ -1,6 +1,15 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
-### [IN PROGRESS] 2026-11-18 Sync future Flood saves into Event–Detour foundation
+### [UPDATE-107] 2026-11-18 เพิ่มหน้าต่าง Admin จัดการความสัมพันธ์เหตุการณ์ ↔ ทางเลี่ยง (Many-to-Many) ผ่าน Atomic API
+- **ไฟล์:** `components/admin/EventDetourLinkModal.tsx` (ใหม่), `lib/event-detour-links.ts`, `db/default-data.ts`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `tests/e2e/event-detour-links-admin.spec.ts` (ใหม่), `docs/*`
+- **การแก้ไข:**
+  1. สร้าง `EventDetourLinkModal` รองรับ 2 มุมมอง: **จัดการตามเหตุการณ์ (1 เหตุการณ์ → หลายทางเลี่ยง)** และ **ผูกตามทางเลี่ยง (1 ทางเลี่ยง → หลายเหตุการณ์)** พร้อมกำหนดทิศทางเหตุการณ์/ทางเลี่ยง, จัดลำดับ, ตั้งสถานะคำแนะนำ (`PENDING`/`RECOMMENDED`/`UNAVAILABLE`/`WITHDRAWN`), ตรวจเงื่อนไข `RECOMMENDED` ล่วงหน้า และบันทึกผ่าน `replaceEventDetourLinksAction` ด้วย `expectedVersion` + `operationId` แล้วเรียก `getEventDetourLinksAction` โหลดกลับมายืนยันจากฐานข้อมูลจริงทันที
+  2. เพิ่มปุ่ม `"จัดการทางเลี่ยงเชื่อมโยง"` บนการ์ดเหตุการณ์ใน `IncidentRegistryTab.tsx` และปุ่ม `"จัดการความสัมพันธ์ (หลายจุด)"` / `"ผูกหลายเหตุการณ์"` ใน `DetourManagementTab.tsx`
+  3. คงฟอร์มเดิม (`upsertRouteAction` / `flood_id_ref`) แยกต่างหากพร้อมข้อความแจ้งเตือน เพื่อไม่ให้ฟอร์ม legacy เขียนทับความสัมพันธ์หลายเหตุการณ์ และยังไม่เปิด cutover หน้าประชาชน
+- **ตรวจแล้ว:** `npm run lint` (0 warnings), `npm run typecheck` (0 errors), `npm run build:pages` (6/6 static pages), Playwright E2E `event-detour-links-admin.spec.ts` และ `admin-dialog-keyboard.spec.ts` บน `desktop-chromium` + `mobile-chromium` (`PLAYWRIGHT_STATIC=1`) ผ่านครบ; ตรวจ Production DB แบบอ่านอย่างเดียวพบ `trg_doh_sync_flood_event_segment` ทำงานแล้ว
+- **ย้อนกลับ:** revert commit นี้ได้ทันที (ไม่เปลี่ยนฐานข้อมูลหรือ Edge Function; หน้าประชาชนยังคงใช้ legacy `flood_id_ref`)
+
+### [UPDATE-106b] 2026-11-18 Sync future Flood saves into Event–Detour foundation (apply Production แล้ว)
 - **สาเหตุ:** migration แรก backfill เฉพาะข้อมูลเดิม; Edge legacy `upsertRouteAction` สร้าง/แก้ `doh_flood_routes.direction_meta.eventId` ได้ แต่ไม่ได้เพิ่มแถวใน `doh_flood_events` และ `doh_event_segments`. หากทำ Admin editor ก่อนจะแก้ relationship ของ event ที่เพิ่งสร้างไม่ได้ (`EVENT_NOT_FOUND`).
 - **การแก้ไขที่เตรียม:** เพิ่ม migration `20261117192000_sync_flood_event_segments.sql` เป็น `AFTER INSERT OR UPDATE OF direction_meta` trigger. Trigger สร้าง event master เมื่อจำเป็น, คงลำดับเดิมเมื่อแก้ segment เดิม, lock event row ก่อนจัดลำดับ segment ใหม่ และไม่แตะ legacy fields.
 - **ยังไม่ apply/deploy:** ต้องให้ PR ผ่านก่อน apply Production แล้วตรวจว่า insert/update flood route สร้างหรืออัปเดต membership ได้ใน transaction ที่ rollback. ระหว่างนี้ห้ามเปิด Admin editor ใหม่.

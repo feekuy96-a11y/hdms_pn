@@ -123,3 +123,118 @@ export function validateEventDetourLinks(input: unknown): string[] {
   }
   return [...new Set(errors)];
 }
+
+/**
+ * Deduplicate links by (detourId, eventDirection) and resequence positions 1..N per direction.
+ */
+export function resequenceEventDetourLinks(links: EventDetourLink[]): EventDetourLink[] {
+  const seen = new Set<string>();
+  const grouped = new Map<EventTravelDirection, EventDetourLink[]>([
+    ["A_TO_B", []],
+    ["B_TO_A", []],
+    ["UNKNOWN", []],
+  ]);
+
+  for (const link of links) {
+    const key = `${link.eventDirection}::${link.detourId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const bucket = grouped.get(link.eventDirection);
+    if (bucket) {
+      bucket.push(link);
+    }
+  }
+
+  const ordered: EventDetourLink[] = [];
+  for (const dir of EVENT_DIRECTIONS) {
+    const bucket = grouped.get(dir) ?? [];
+    bucket.forEach((link, idx) => {
+      ordered.push({
+        ...link,
+        position: idx + 1,
+      });
+    });
+  }
+  return ordered;
+}
+
+/**
+ * Validate whether a detour travel direction is permitted by the detour's direction_mode.
+ */
+export function isDetourDirectionAllowed(
+  detourDirection: DetourTravelDirection,
+  directionMode?: string
+): boolean {
+  if (detourDirection === "FORWARD" && directionMode === "REVERSE_ONLY") return false;
+  if (detourDirection === "REVERSE" && directionMode === "FORWARD_ONLY") return false;
+  return true;
+}
+
+/**
+ * Determine a safe default detour travel direction from a detour's direction_mode.
+ */
+export function resolveDefaultDetourDirection(directionMode?: string): DetourTravelDirection {
+  if (directionMode === "FORWARD_ONLY") return "FORWARD";
+  if (directionMode === "REVERSE_ONLY") return "REVERSE";
+  if (directionMode === "TWO_WAY") return "FORWARD";
+  return "UNKNOWN";
+}
+
+/**
+ * Derive which event travel directions are supported by the event's segments in doh_event_segments.
+ * Mirrors PostgreSQL trigger doh_sync_flood_event_segment reading raw direction_meta->>'directionCode'.
+ */
+export function getEventSupportedRecommendedDirections(
+  segments: Array<{ direction_meta?: unknown }>
+): Set<EventTravelDirection> {
+  const supported = new Set<EventTravelDirection>();
+  for (const seg of segments) {
+    let metaObj: Record<string, unknown> | null = null;
+    if (typeof seg?.direction_meta === "string") {
+      try {
+        const parsed = JSON.parse(seg.direction_meta);
+        if (isRecord(parsed)) metaObj = parsed;
+      } catch {
+        metaObj = null;
+      }
+    } else if (isRecord(seg?.direction_meta)) {
+      metaObj = seg.direction_meta;
+    }
+    const rawCode = typeof metaObj?.directionCode === "string" ? metaObj.directionCode : "";
+    if (rawCode === "A_TO_B") {
+      supported.add("A_TO_B");
+    } else if (rawCode === "B_TO_A") {
+      supported.add("B_TO_A");
+    } else if (rawCode === "BOTH") {
+      supported.add("A_TO_B");
+      supported.add("B_TO_A");
+    }
+  }
+  return supported;
+}
+
+/**
+ * Mirror all PostgreSQL RECOMMENDATION_REVIEW_REQUIRED checks for user-facing validation.
+ */
+export function getRecommendationReviewBlockers(
+  link: EventDetourLink,
+  detour: { is_active?: boolean; direction_mode?: string; geometry_revision?: number } | undefined,
+  supportedDirections: Set<EventTravelDirection>
+): string[] {
+  const blockers: string[] = [];
+  if (link.eventDirection === "UNKNOWN") {
+    blockers.push("ต้องระบุทิศทางเหตุการณ์ (ขาไป A→B หรือ ขากลับ B→A)");
+  } else if (!supportedDirections.has(link.eventDirection)) {
+    blockers.push("ช่วงน้ำท่วมในฐานข้อมูลยังไม่ระบุทิศทางที่ตรงกัน");
+  }
+  if (link.detourDirection === "UNKNOWN") {
+    blockers.push("ต้องระบุทิศทางทางเลี่ยง (ขาไป หรือ ขากลับ)");
+  }
+  if (!detour || !isDetourDirectionAllowed(link.detourDirection, detour.direction_mode)) {
+    blockers.push("ทิศทางทางเลี่ยงขัดกับโหมดเดินรถของเส้นทางเลี่ยง");
+  }
+  if (!detour?.is_active) {
+    blockers.push("เส้นทางเลี่ยงยังปิดชั่วคราว (ต้องเปิดใช้งานก่อนแนะนำ)");
+  }
+  return blockers;
+}

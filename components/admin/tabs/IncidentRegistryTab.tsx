@@ -18,7 +18,9 @@ import {
   Camera,
   Clock,
   ArrowRight,
+  Link2,
 } from "lucide-react";
+import { EventDetourLinkModal } from "@/components/admin/EventDetourLinkModal";
 import {
   deleteRouteAction,
   setIncidentStatusAction,
@@ -93,6 +95,7 @@ export function IncidentRegistryTab({
   // Phase 4: Merge Segments states
   const [mergeModalIncident, setMergeModalIncident] = useState<FloodRoute | null>(null);
   const [targetMergeIncidentId, setTargetMergeIncidentId] = useState<string>("");
+  const [linkingEventId, setLinkingEventId] = useState<string | null>(null);
   const viewingDialog = useModalAccessibility(Boolean(viewingIncident), () => setViewingIncident(null));
   const updateDialog = useModalAccessibility(Boolean(updateModalIncident), () => setUpdateModalIncident(null));
   const splitDialog = useModalAccessibility(Boolean(splitModalIncident), () => setSplitModalIncident(null));
@@ -653,7 +656,16 @@ export function IncidentRegistryTab({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setLinkingEventId(ev.eventId)}
+                      aria-label={`จัดการทางเลี่ยงเชื่อมโยง ${ev.eventTitle || ev.sectionName}`}
+                      className="min-h-9 bg-sky-500/15 hover:bg-sky-500 text-sky-300 hover:text-slate-950 border border-sky-500/50 px-3 py-1 rounded-xl text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap"
+                      title="จัดการทางเลี่ยงเชื่อมโยงแบบหลายต่อหลาย"
+                    >
+                      <Link2 className="w-3.5 h-3.5" /> จัดการทางเลี่ยงเชื่อมโยง
+                    </button>
                     <button
                       type="button"
                       onClick={() => onAddFlood({ routeNo: ev.routeNo, sectionName: ev.sectionName, eventId: ev.eventId })}
@@ -1176,6 +1188,15 @@ export function IncidentRegistryTab({
           </div>
         </div>
       )}
+
+      <EventDetourLinkModal
+        isOpen={Boolean(linkingEventId)}
+        initialMode="BY_EVENT"
+        initialEventId={linkingEventId || undefined}
+        systemData={systemData}
+        onClose={() => setLinkingEventId(null)}
+        onToast={onToast}
+      />
     </div>
   );
 }
