@@ -339,7 +339,10 @@ test("admin detour console fetches full system data and keeps deactivated detour
   // Deactivate the active detour and verify both rows appear under ปิดชั่วคราว.
   const visibleItems = page.locator(".doh-auto-table-cards > div, tbody tr").filter({ visible: true });
   await visibleItems.filter({ hasText: "ทางเลี่ยงทดสอบเปิดใช้งาน" }).getByRole("button", { name: "เปิดใช้งาน", exact: true }).click();
+  const statusModal = page.locator(".fixed.z-\\[9999\\]");
+  await expect(statusModal).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(statusModal).toHaveCount(0);
 
   const statusSelect = page.locator("select").filter({ hasText: "สถานะทั้งหมด" });
   await expect(statusSelect).toContainText("ปิดชั่วคราว (2)");
@@ -349,7 +352,9 @@ test("admin detour console fetches full system data and keeps deactivated detour
 
   // Re-activate one of the hidden detours directly from the ปิดชั่วคราว filter view.
   await visibleItems.filter({ hasText: "ทางเลี่ยงทดสอบซ่อนชั่วคราว" }).getByRole("button", { name: "ปิดชั่วคราว", exact: true }).click();
+  await expect(statusModal).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(statusModal).toHaveCount(0);
   await expect(statusSelect).toContainText("เปิดใช้งาน (1)");
   await expect(statusSelect).toContainText("ปิดชั่วคราว (1)");
 });
