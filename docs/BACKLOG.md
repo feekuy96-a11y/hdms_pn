@@ -128,8 +128,9 @@
 
 ## B-009 [ต่ำ] สคริปต์ตรวจไม่ตรง deploy
 - เพิ่ม `"check:deploy": "npm run lint && npm run typecheck && npm run build:pages"` ใน `package.json` แล้ว. คำสั่งนี้ตรงกับ validation ก่อน deploy ของ GitHub Pages.
-- **ตรวจ:** `npm run check:deploy` ผ่านบน branch นี้.
-- **สถานะ:** ปิด (2026-11-16, UPDATE-095).
+- ใน `UPDATE-104` ปรับ `build:pages` ให้รันผ่าน `node scripts/build-pages.mjs` ขจัดข้อจำกัด POSIX syntax เพื่อให้รันได้สมบูรณ์ทั้งบน Windows และ Linux.
+- **ตรวจ:** `npm run check:deploy` ผ่านบน Windows และ CI.
+- **สถานะ:** ปิด (2026-11-16, UPDATE-095 / ปรับปรุง UPDATE-104).
 
 ## B-010 [กลาง] การอ่านข้อมูลสาธารณะ — ปรับแนวทาง
 - **สิ่งที่พบและแก้ได้จริง:** ฝั่งเว็บขยายโหลดตอนระบบมีปัญหา — ปรับแล้ว: ห่วงโซ่สำรองไปใช้ action เดิมเฉพาะเมื่อ server ตอบ "Unknown operation" เท่านั้น (`app/actions/doh-actions.ts`, `HdmsHttpError` ใน `lib/hdms-api.ts`) และ retry เหลือ 2 ครั้งพร้อมหน่วงแบบสุ่ม (`QueryProvider.tsx`)
