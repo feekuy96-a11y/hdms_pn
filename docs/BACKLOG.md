@@ -10,7 +10,7 @@
 | B-003 | สูง | Deploy ไม่รอ CI/e2e และเจ้าของ push ตรงเข้า main | เปิด (ต้องตัดสินใจ) |
 | B-004 | กลาง | หน้าแอดมินยังโหลด GeoJSON ทางหลวงเต็มความละเอียดทุกครั้ง | ปิด (2026-11-10, ดู UPDATE-063) |
 | B-005 | กลาง | ไฟล์ใหญ่เกิน: `GisDataImportTab.tsx` (~2.4k บรรทัด), `MapManagementTab.tsx` (~2.8k) | ปิดบางส่วน (2026-11-13, ดู UPDATE-090: แยกโมดูล + Code Splitting + Memoization) |
-| B-006 | กลาง | `SUPPLEMENTAL_RULES.md` ~120 KB ถูกบังคับให้อ่านทุกเซสชัน | ปิดบางส่วน (ยกเลิกบังคับใน AGENTS.md; ยังไม่ได้ย้ายไฟล์) |
+| B-006 | กลาง | `SUPPLEMENTAL_RULES.md` ~120 KB ถูกบังคับให้อ่านทุกเซสชัน | ปิดบางส่วน (ยกเลิกบังคับใน AGENTS.md, GEMINI.md, .cursorrules, .windsurfrules และหัวไฟล์แล้วใน UPDATE-103; เหลือย้ายไฟล์เก่า) |
 | B-007 | ต่ำ | โค้ดค้างที่ไม่อยู่ใน path จริง (better-auth, supabase-server, routing-service, Docker Postgres) | ปิด (ลบไฟล์ค้างแล้วใน UPDATE-065) |
 | B-008 | กลาง | พึ่ง OSRM สาธารณะ (`router.project-osrm.org`) ไม่มี SLA | เปิด |
 | B-009 | ต่ำ | `npm run check` ไม่ได้ build แบบ Pages (ที่ใช้ deploy จริง) | ปิด (2026-11-16, UPDATE-095) |
@@ -113,7 +113,7 @@
 - **สิ่งที่เหลือสำหรับอนาคต (เมื่อต้องการแยกเพิ่ม):** แยกส่วนตารางทางหลวง (`GisHighwaySpecsTable`) และฟอร์มย่อยของโหมดจุดน้ำท่วมใน `MapManagementTab.tsx` ใน PR ถัดไปโดยยึดชุดทดสอบ E2E เดียวกัน
 
 ## B-006 [กลาง] `SUPPLEMENTAL_RULES.md`
-- แก้แล้ว: AGENTS.md ให้ค้นด้วย grep ไม่อ่านทั้งไฟล์ และประวัติใหม่ลง `docs/CHANGELOG.md`
+- แก้แล้ว: `AGENTS.md` ให้ค้นด้วย grep ไม่อ่านทั้งไฟล์ และประวัติใหม่ลง `docs/CHANGELOG.md`; ใน `UPDATE-103` ได้ปรับ `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `CLAUDE.md` และหัวไฟล์ `SUPPLEMENTAL_RULES.md` ให้ชี้ไปที่ `AGENTS.md` และ `docs/AI_HANDOFF.md` ครบทุกตัวแล้ว
 - เหลือ: ย้ายไฟล์ไป `docs/archive/` + ปรับลิงก์ (ต้องแก้ไฟล์ใหญ่ ควรทำแยกครั้ง)
 
 ## B-007 [ต่ำ] โค้ดค้าง — ปิดบางส่วน

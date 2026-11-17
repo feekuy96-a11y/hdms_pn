@@ -1,71 +1,16 @@
-# Antigravity Master Developer Configuration (GEMINI.md)
-**Project:** DOH Pattani Flood Monitoring & GIS System (Enterprise Next.js + PostgreSQL)
-**Role:** You are an Elite Full-Stack Master Developer. You MUST strictly follow the analytical and execution rules defined in this prompt for EVERY interaction.
+# GEMINI.md (Antigravity / Gemini)
 
----
+**อ่าน `AGENTS.md` และ `docs/AI_HANDOFF.md` ก่อนทำงานทุกครั้ง** — `AGENTS.md` เป็นไฟล์กติกาหลักไฟล์เดียวของโปรเจกต์ (ไฟล์นี้เป็นเพียงตัวชี้ เพื่อไม่ให้กติกาซ้ำและเพี้ยนกันหลายฉบับ) ถ้าขัดกัน ให้ยึด `AGENTS.md`
 
-## 0. กฎข้อบังคับเริ่มต้นและอัปเดตระบบ (Mandatory Pre-Flight & Logging Directives)
-- **บังคับอ่านกฎเพิ่มเติมก่อนเริ่มงานทุกครั้ง (Mandatory Pre-Flight Check):** เมื่อเริ่มทำงานในทุกครั้ง AI Assistant ต้องอ่านไฟล์ `SUPPLEMENTAL_RULES.md` (กฎเพิ่มเติม) ก่อนเสมอ เพื่อให้เข้าใจว่าขณะนี้ระบบมีการอัปเดตอะไรบ้าง ฟังก์ชันใดที่มีการเปลี่ยนแปลง และโครงสร้างใดที่ทำงานอยู่แล้ว ห้ามเริ่มลงมือเขียนโค้ดหรือแก้ไขโดยไม่อ่าน `SUPPLEMENTAL_RULES.md`
-- **บังคับบันทึกประวัติทุกครั้งที่มีการอัปเดตใหม่ (Mandatory Post-Update Logging):** ทุกครั้งที่มีการอัปเดตระบบใหม่ หรือเพิ่มฟังก์ชันใหม่ ต้องเขียนบันทึกประวัติการพัฒนาลงใน `SUPPLEMENTAL_RULES.md` เสมอ โดยระบุ วันที่, วัตถุประสงค์, รายการไฟล์ที่แก้ไข, รายละเอียดฟังก์ชัน, และผลการทดสอบ
+สรุปกฎที่ห้ามพลาด (รายละเอียดครบอยู่ใน `AGENTS.md`):
+1. ข้อมูลสถานะถนนต้องถูกต้องและสอดคล้องกันทั้งระบบ ใช้ `getTrafficPresentation` ใน `lib/traffic-presentation.ts` ชุดเดียว
+2. Production เป็นเว็บ static บน GitHub Pages: ห้าม Server Actions/middleware/API routes ทุกการเรียกข้อมูลผ่าน `lib/hdms-api.ts` → Edge Function `hdms-api`
+3. ห้ามมี secret ในโค้ดหรือ build ห้ามเลี่ยง RLS/Auth
+4. DB เปลี่ยนผ่านไฟล์ใหม่ใน `supabase/migrations/` เท่านั้น ห้ามเขียนทับ RPC ที่ deploy แล้วทั้งฟังก์ชัน (ให้ห่อหรือแพตช์) production อ่านอย่างเดียวเป็นค่าเริ่มต้น
+5. ก่อนส่งมอบต้องผ่าน `npm run lint && npm run typecheck && npm run build:pages` ถ้ารันไม่ได้ให้บอกว่ายังไม่ได้ตรวจ
+6. ห้ามเปลี่ยนชื่อปุ่ม/label/role ที่ `tests/e2e` อ้างถึง (ดู `docs/UI_CONTRACT.md`)
+7. แก้เฉพาะที่จำเป็น ส่งมอบเป็นตาราง path เต็ม + ลำดับ deploy (`app/page.tsx` ≠ `app/admin/page.tsx`)
+8. **ทบทวนและโต้แย้งก่อนลงมือ:** ถ้าแนวคิดของผู้สั่งมีปัญหา ให้ชี้พร้อมหลักฐาน เสนอทางเลือก A/B และคำแนะนำ ห้ามเออตาม และปิดท้ายทุกคำตอบด้วย "พบเพิ่ม / ข้อเสนอ"
+9. บันทึกงานที่ `docs/CHANGELOG.md` ข้อค้นพบที่ยังไม่แก้ที่ `docs/BACKLOG.md` (ห้ามอ่าน `SUPPLEMENTAL_RULES.md` ทั้งไฟล์ ใช้ grep)
 
----
-
-## 1. Core Execution Protocol (The Master Developer Rules)
-For EVERY user input (requirement, bug, idea, or refactor), you MUST execute the following sequence before writing any code. Never skip steps.
-
-**Step 0: Mandatory Supplemental Rules Check**
-- Always read `SUPPLEMENTAL_RULES.md` first to synchronize with the latest project updates, active modules, and existing conventions.
-
-**Step 1: Environment Discovery (Inspect & Read)**
-- Analyze the user request. Identify direct impacts, related dependencies, and out-of-scope areas.
-- If necessary, search the repository and existing docs first. Do not guess filenames, schemas, or behaviors.
-- *Zero Assumption:* If the user's requirement is vague, ask clarifying questions before proceeding.
-
-**Step 2: Analysis & Hypothesis (Plan)**
-- State the root cause of the issue (if debugging) or the rationale for the implementation.
-- Identify potential risks (e.g., Data integrity, Compatibility with Longdo Map, UI responsiveness).
-- Always prepare a fallback/rollback plan.
-
-**Step 3: Implementation (Modify)**
-- Solve the root cause, not just the symptom.
-- Make the minimal necessary changes. Do not perform broad refactoring unless explicitly requested.
-- Never hardcode secrets, tokens, or DB URLs. Always use `.env`.
-
-**Step 4: Validation & Changelog (Verify & Record)**
-- Detail how the implementation will be tested (Static checks, UI states, Error handling).
-- Ensure UI handles 4 states: Loading, Empty, Error, Success.
-- **Append Update Entry:** Record the completion details and test results into `SUPPLEMENTAL_RULES.md`.
-
----
-
-## 2. Project Architecture & Tech Stack Rules
-You must strictly implement the DOH_Pattani_Flood system using this stack:
-
-**2.1 Framework & Core:**
-- Next.js (App Router) with React Server Actions for mutations.
-- TanStack Query (React Query) for client-side data fetching and state management.
-- Path Routing: 
-  - `app/` (Public Citizen View)
-  - `app/admin/` (Protected Admin & Executive Dashboard)
-
-**2.2 Database & Storage:**
-- **PostgreSQL / Supabase** (PostGIS extension for spatial operations).
-- Implement PL/pgSQL RPC Functions for complex transactions (`doh_get_system_data_rpc`, `doh_update_timeline_rpc`).
-- **Offline Sync:** Use IndexedDB for offline field reporting, syncing with Real-time DB listeners upon network recovery.
-
-**2.3 UI & Styling (Mobile-First & Flat Design):**
-- shadcn/ui + Tailwind CSS.
-- Leaflet + OpenStreetMap + Longdo HD layers.
-- Responsive container with ResizeObserver for full-canvas map viewport.
-
-**2.4 Routing & Microservice:**
-- Local OSRM microservice (`server/routing-service.mjs`) on port 5000 with multi-tier failover.
-- Bidirectional detour advice generation with subdistrict (`ต.`), village (`บ./ม.`), real road names, and natural Thai maneuvers.
-
----
-
-## 3. Strict Prohibitions
-- **NO Mock Code Left Behind:** Any temporary scripts, mock data files, or test components MUST be deleted immediately after validation.
-- **NO Blind Refactoring:** Do not rewrite untouched components just to "clean them up".
-- **NO Over-Engineering:** Build what is required efficiently.
-
+**เฉพาะ Antigravity / Gemini:** ตรวจ `git fetch origin` และ `origin/main` ก่อนเริ่มงาน; รันคำสั่งตรวจจริงแทนการเดา; ห้ามขยายขอบเขตเกินที่ตกลง

@@ -1,9 +1,9 @@
 # CLAUDE.md (Claude Code)
 
-**อ่าน `AGENTS.md` ก่อนทำงานทุกครั้ง** — เป็นไฟล์กติกาหลักไฟล์เดียวของโปรเจกต์ (ไฟล์นี้เป็นเพียงตัวชี้ เพื่อไม่ให้กติกาซ้ำและเพี้ยนกันหลายฉบับ) ถ้าขัดกัน ให้ยึด `AGENTS.md`
+**อ่าน `AGENTS.md` และ `docs/AI_HANDOFF.md` ก่อนทำงานทุกครั้ง** — `AGENTS.md` เป็นไฟล์กติกาหลักไฟล์เดียวของโปรเจกต์ (ไฟล์นี้เป็นเพียงตัวชี้ เพื่อไม่ให้กติกาซ้ำและเพี้ยนกันหลายฉบับ) ถ้าขัดกัน ให้ยึด `AGENTS.md`
 
 สรุปกฎที่ห้ามพลาด (รายละเอียดครบอยู่ใน `AGENTS.md`):
-1. ข้อมูลสถานะถนนต้องถูกต้องและสอดคล้องกันทั้งระบบ ใช้ `getTrafficPresentation` ชุดเดียว
+1. ข้อมูลสถานะถนนต้องถูกต้องและสอดคล้องกันทั้งระบบ ใช้ `getTrafficPresentation` ใน `lib/traffic-presentation.ts` ชุดเดียว
 2. Production เป็นเว็บ static บน GitHub Pages: ห้าม Server Actions/middleware/API routes ทุกการเรียกข้อมูลผ่าน `lib/hdms-api.ts` → Edge Function `hdms-api`
 3. ห้ามมี secret ในโค้ดหรือ build ห้ามเลี่ยง RLS/Auth
 4. DB เปลี่ยนผ่านไฟล์ใหม่ใน `supabase/migrations/` เท่านั้น ห้ามเขียนทับ RPC ที่ deploy แล้วทั้งฟังก์ชัน (ให้ห่อหรือแพตช์) production อ่านอย่างเดียวเป็นค่าเริ่มต้น
