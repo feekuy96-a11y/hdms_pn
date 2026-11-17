@@ -191,6 +191,8 @@ test("GIS import parses GeoJSON, KML, and GPX into a review-only preview", async
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "GIS import review is desktop-first");
   const kmz = new JSZip();
   kmz.file("doc.kml", '<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>KMZ QA</name><LineString><coordinates>101.18,6.83,0 101.19,6.84,0</coordinates></LineString></Placemark></Document></kml>');
+  const shpwrite = await import("@mapbox/shp-write");
+  const shapefile = await (shpwrite as any).zip({ type: "FeatureCollection", features: [{ type: "Feature", properties: { route_no: "42", section_name: "Shapefile QA" }, geometry: { type: "LineString", coordinates: [[101.18, 6.83], [101.19, 6.84]] } }] }, { folder: "routes", types: { line: "routes" } });
   const fixtures = [
     {
       name: "routes.geojson",
@@ -211,6 +213,12 @@ test("GIS import parses GeoJSON, KML, and GPX into a review-only preview", async
       name: "routes.kmz",
       mimeType: "application/vnd.google-earth.kmz",
       buffer: await kmz.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }),
+    },
+    {
+      name: "routes.zip",
+      mimeType: "application/zip",
+      // @mapbox/shp-write returns a base64 ZIP string in Node test runtime.
+      buffer: Buffer.from(shapefile as string, "base64"),
     },
   ];
 
