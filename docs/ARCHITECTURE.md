@@ -39,7 +39,7 @@
 
 ## 3. ฐานข้อมูล (Supabase / PostGIS)
 - ตาราง: `doh_flood_routes`, `doh_detour_routes`, `doh_timeline_updates`, `doh_mitigation_projects`, `doh_highway_layers`, `doh_offices`, `doh_map_styles`, `doh_system_settings` (+ `deleted_at` soft delete บน flood/detour)
-- ความสัมพันธ์ Event↔Detour หลายต่อหลายยัง **ไม่อยู่ Production**: migration ที่เตรียมไว้คือ `20261117135032_event_detour_relationships.sql` ซึ่งเพิ่ม event/segment/link/operation tables และ `geometry_revision` ของ detour. จนกว่า reader/UI cutover จะผ่าน ให้ถือ `flood_id_ref` และ `detour_meta.event_orders` เป็นแหล่งความจริงที่ใช้งานจริง.
+- ความสัมพันธ์ Event↔Detour หลายต่อหลายอยู่ใน Production แล้วผ่าน migration `20261117135032_event_detour_relationships.sql` (event/segment/link/operation tables และ `geometry_revision` ของ detour). การตรวจหลัง apply พบ 18 events, 18 segments และ 13 links; แต่ reader/UI/public payload/export/import ยังไม่ cut over จึงต้องถือ `flood_id_ref` และ `detour_meta.event_orders` เป็นแหล่งความจริงที่ใช้งานจริง จนกว่า compatibility reader และ Admin editor จะผ่าน regression.
 - RPC: `doh_get_system_data_rpc` (Admin เต็ม), `doh_get_system_data_display_rpc` (display ภายใน), `doh_get_public_system_data_display_rpc` (ประชาชนเฉพาะ active), `doh_import_routes_rpc` (รับ LineString ≥ 2 จุด WGS84), `doh_update_timeline_rpc`, `doh_snap_line_rpc`
 - trigger `trg_doh_highway_layer_geom` สร้างคอลัมน์ `geom`; `trg_doh_highway_layer_display` สร้าง `geojson_display`
 - **ไฟล์ SQL ในรีโปไม่ใช่สถานะจริงของ DB** — มีการแพตช์ฟังก์ชันภายหลังด้วย `pg_get_functiondef` + `replace` (เช่น soft delete) ก่อนแก้ฟังก์ชันใดต้องอ่านนิยามจริงจาก DB ก่อน (R4)

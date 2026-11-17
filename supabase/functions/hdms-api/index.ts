@@ -21,6 +21,59 @@ const detourDir = (value: unknown) => {
 };
 const typeTable = (type: unknown) => type === "FLOOD" ? "doh_flood_routes" : type === "DETOUR" ? "doh_detour_routes" : fail("Invalid record type");
 
+type EventDetourRequest = {
+  eventId: string;
+  expectedVersion: number;
+  operationId: string;
+  links: Array<{
+    eventId: string;
+    detourId: string;
+    eventDirection: "A_TO_B" | "B_TO_A" | "UNKNOWN";
+    detourDirection: "FORWARD" | "REVERSE" | "UNKNOWN";
+    position: number;
+    recommendation: "PENDING" | "RECOMMENDED" | "UNAVAILABLE" | "WITHDRAWN";
+    reviewedGeometryVersion: number | null;
+  }>;
+};
+
+function eventDetourRequest(value: unknown): EventDetourRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) fail("Invalid event-detour request", 422);
+  const raw = value as Record<string, unknown>;
+  const eventId = text(raw.eventId, "Event ID");
+  const operationId = text(raw.operationId, "Operation ID");
+  if (eventId.length > 128 || operationId.length < 8 || operationId.length > 128) fail("Invalid event-detour request", 422);
+  if (!Number.isSafeInteger(raw.expectedVersion) || (raw.expectedVersion as number) < 0 || (raw.expectedVersion as number) > 2_147_483_647) fail("Invalid event-detour version", 422);
+  if (!Array.isArray(raw.links) || raw.links.length > 100) fail("Invalid event-detour links", 422);
+  const links = raw.links.map((candidate) => {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) fail("Invalid event-detour link", 422);
+    const link = candidate as Record<string, unknown>;
+    const linkEventId = text(link.eventId, "Link event ID");
+    const detourId = text(link.detourId, "Detour ID");
+    const eventDirection = link.eventDirection;
+    const detourDirection = link.detourDirection;
+    const recommendation = link.recommendation;
+    if (linkEventId !== eventId ||
+      !["A_TO_B", "B_TO_A", "UNKNOWN"].includes(String(eventDirection)) ||
+      !["FORWARD", "REVERSE", "UNKNOWN"].includes(String(detourDirection)) ||
+      !["PENDING", "RECOMMENDED", "UNAVAILABLE", "WITHDRAWN"].includes(String(recommendation)) ||
+      detourId.length > 50 ||
+      !Number.isSafeInteger(link.position) || (link.position as number) < 1 || (link.position as number) > 999_999_999) fail("Invalid event-detour link", 422);
+    const reviewedGeometryVersion = link.reviewedGeometryVersion;
+    if (reviewedGeometryVersion !== null && reviewedGeometryVersion !== undefined &&
+      (!Number.isSafeInteger(reviewedGeometryVersion) || (reviewedGeometryVersion as number) < 1 || (reviewedGeometryVersion as number) > 2_147_483_647)) fail("Invalid geometry review version", 422);
+    return {
+      eventId: linkEventId,
+      detourId,
+      eventDirection: eventDirection as EventDetourRequest["links"][number]["eventDirection"],
+      detourDirection: detourDirection as EventDetourRequest["links"][number]["detourDirection"],
+      position: link.position as number,
+      recommendation: recommendation as EventDetourRequest["links"][number]["recommendation"],
+      reviewedGeometryVersion: reviewedGeometryVersion == null ? null : reviewedGeometryVersion as number,
+    };
+  });
+  return { eventId, expectedVersion: raw.expectedVersion as number, operationId, links };
+}
+
 const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const externalImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -432,6 +485,48 @@ Deno.serve(async (req) => {
     }
     if (mutation && !serviceKey) return reply({ error: "Server mutation key is not configured" }, 503);
     const [p, second] = args;
+    if (action === "getEventDetourLinksAction") {
+      const eventId = text(p, "Event ID");
+      const [eventResult, linksResult] = await Promise.all([
+        db.from("doh_flood_events").select("id,link_version").eq("id", eventId).maybeSingle(),
+        db.from("doh_event_detour_links")
+          .select("event_id,detour_id,event_direction,detour_direction,position,recommendation,reviewed_geometry_version")
+          .eq("event_id", eventId)
+          .order("event_direction", { ascending: true })
+          .order("position", { ascending: true }),
+      ]);
+      if (eventResult.error || linksResult.error) fail("Event-detour links unavailable", 502);
+      if (!eventResult.data) fail("Event not found", 404);
+      return reply({
+        eventId,
+        version: eventResult.data.link_version,
+        links: (linksResult.data || []).map((link: any) => ({
+          eventId: link.event_id,
+          detourId: link.detour_id,
+          eventDirection: link.event_direction,
+          detourDirection: link.detour_direction,
+          position: link.position,
+          recommendation: link.recommendation,
+          reviewedGeometryVersion: link.reviewed_geometry_version,
+        })),
+      });
+    }
+    if (action === "replaceEventDetourLinksAction") {
+      const request = eventDetourRequest(p);
+      const { data, error } = await db.rpc("doh_replace_event_detour_links", {
+        p_event_id: request.eventId,
+        p_expected_version: request.expectedVersion,
+        p_operation_id: request.operationId,
+        p_links: request.links,
+      });
+      if (error) {
+        const message = error.message || "Event-detour links could not be saved";
+        if (message.includes("EVENT_NOT_FOUND")) fail("Event not found", 404);
+        if (message.includes("LINK_VERSION_CONFLICT") || message.includes("OPERATION_ID_REUSED")) fail("Event-detour links changed; reload before saving", 409);
+        fail(`Invalid event-detour links: ${message}`, 422);
+      }
+      return reply(data);
+    }
     if (action === "uploadExternalMediaAction") return reply(await uploadExternalMedia(p));
     if (action === "deleteExternalMediaAction") {
       const mediaId = text(p?.mediaId, "Media ID");
