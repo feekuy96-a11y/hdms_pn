@@ -24,7 +24,9 @@ import {
   Navigation,
   ChevronUp,
   ChevronDown,
+  Link2,
 } from "lucide-react";
+import { EventDetourLinkModal } from "@/components/admin/EventDetourLinkModal";
 import {
   deleteRouteAction,
   toggleDetourStatusAction,
@@ -84,6 +86,11 @@ export function DetourManagementTab({
   const [reorderingId, setReorderingId] = useState<string | null>(null);
   const [selectedDetourIds, setSelectedDetourIds] = useState<Set<string>>(() => new Set());
   const [exportScope, setExportScope] = useState<"FILTERED" | "ALL" | "SELECTED">("FILTERED");
+  const [linkModalState, setLinkModalState] = useState<{
+    mode: "BY_EVENT" | "BY_DETOUR";
+    detourId?: string;
+    eventId?: string;
+  } | null>(null);
   const viewingDialog = useModalAccessibility(Boolean(viewingDetour), () => setViewingDetour(null));
   const editingDialog = useModalAccessibility(Boolean(editingDetour), () => setEditingDetour(null));
 
@@ -539,7 +546,15 @@ export function DetourManagementTab({
         </div>
 
         {/* Primary Action Buttons */}
-        <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+        <div className="flex flex-wrap items-center gap-2 self-end md:self-auto shrink-0">
+          <button
+            type="button"
+            onClick={() => setLinkModalState({ mode: "BY_DETOUR" })}
+            className="min-h-10 bg-sky-500/15 hover:bg-sky-500 text-sky-300 hover:text-slate-950 border border-sky-500/50 font-heading font-bold text-xs px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition"
+          >
+            <Link2 className="w-3.5 h-3.5" />
+            <span>จัดการความสัมพันธ์ (หลายจุด)</span>
+          </button>
           <label className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-2 text-xs text-slate-200">
             <FileText className="w-3.5 h-3.5 text-sky-400" />
             <select aria-label="ขอบเขตส่งออกทางเลี่ยง" value={exportScope} onChange={(e) => setExportScope(e.target.value as typeof exportScope)} className="min-h-10 max-w-28 bg-transparent font-heading outline-none">
@@ -691,6 +706,15 @@ export function DetourManagementTab({
                         className="min-h-10 px-2.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 font-heading font-bold text-xs hover:bg-slate-700"
                       >
                         รายละเอียด
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`ผูกหลายเหตุการณ์ ${item.route_name}`}
+                        onClick={() => setLinkModalState({ mode: "BY_DETOUR", detourId: item.id })}
+                        className="min-h-10 px-2.5 rounded-lg border border-sky-500/50 bg-sky-950/50 text-sky-300 font-heading font-bold text-xs hover:bg-sky-900 inline-flex items-center gap-1"
+                      >
+                        <Link2 className="w-3.5 h-3.5" />
+                        <span>ผูกหลายเหตุการณ์</span>
                       </button>
                       <button
                         type="button"
@@ -887,6 +911,17 @@ export function DetourManagementTab({
                               <Eye className="w-3.5 h-3.5" />
                             </button>
                           )}
+
+                          {/* Link multiple events */}
+                          <button
+                            type="button"
+                            aria-label={`ผูกหลายเหตุการณ์ ${item.route_name}`}
+                            onClick={() => setLinkModalState({ mode: "BY_DETOUR", detourId: item.id })}
+                            title="ผูกหลายเหตุการณ์ (Many-to-Many)"
+                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-sky-300 border border-sky-700/60 transition cursor-pointer"
+                          >
+                            <Link2 className="w-3.5 h-3.5" />
+                          </button>
 
                           {/* Quick Edit Modal */}
                           <button
@@ -1110,6 +1145,9 @@ export function DetourManagementTab({
                       </option>
                     ))}
                   </select>
+                  <p className="mt-1 text-[11px] text-sky-300/90 leading-snug">
+                    ช่องนี้เป็นจุดน้ำท่วมอ้างอิงเดิม (Legacy) การผูกหลายเหตุการณ์สามารถจัดการได้อย่างปลอดภัยผ่านปุ่ม &quot;จัดการความสัมพันธ์ (หลายจุด)&quot; โดยไม่ถูกหน้านี้เขียนทับ
+                  </p>
                 </div>
               </div>
 
@@ -1307,6 +1345,16 @@ export function DetourManagementTab({
           </div>
         </div>
       )}
+
+      <EventDetourLinkModal
+        isOpen={Boolean(linkModalState)}
+        initialMode={linkModalState?.mode || "BY_DETOUR"}
+        initialEventId={linkModalState?.eventId}
+        initialDetourId={linkModalState?.detourId}
+        systemData={systemData}
+        onClose={() => setLinkModalState(null)}
+        onToast={onToast}
+      />
     </div>
   );
 }
