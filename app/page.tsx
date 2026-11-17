@@ -578,10 +578,6 @@ export default function HomePage() {
     return counts;
   }, [systemData.floodRoutes]);
   const activeFloodCount = situationCounts.red + situationCounts.orange + situationCounts.amber + situationCounts.sky + situationCounts.emerald + situationCounts.slate;
-  const visibleFloodIds = React.useMemo(
-    () => (selectedStatusFilter === "ALL" ? undefined : filteredFloods.map((flood) => flood.id)),
-    [filteredFloods, selectedStatusFilter]
-  );
   const handleStatusFilter = (color: StatusColor) => {
     setSelectedStatusFilter((current) => (current === color ? "ALL" : color));
     setSidebarTab("FLOOD");
@@ -1023,7 +1019,6 @@ export default function HomePage() {
             isSidebarCollapsed={isSidebarCollapsed}
             systemData={systemData}
             selectedFloodId={selectedFloodId}
-            citizenLayerFilter={sidebarTab}
             onSelectFlood={(id) => {
               const flood = systemData.floodRoutes.find((r) => r.id === id);
               if (flood) {
@@ -1042,7 +1037,6 @@ export default function HomePage() {
               setIsMobileDrawerOpen(false);
             }}
             focusCoordinates={focusCoordinates}
-            visibleFloodIds={visibleFloodIds}
             className="h-full w-full"
           />
 

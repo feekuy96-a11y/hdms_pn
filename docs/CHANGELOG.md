@@ -6,6 +6,11 @@
 - **ตรวจแล้ว:** `npx next --version` (`Next.js v16.4.6`), `npm audit` (`found 0 vulnerabilities`), `npm run lint`, `npm run typecheck`, `NEXT_OUTPUT=export BASE_PATH=/hdms_pn npx next build` (6/6 หน้า ไม่มีคำเตือน SecurityFatalError), และ `PLAYWRIGHT_STATIC=1` E2E ผ่าน 66 passed / 0 failed (34 skipped)
 - **ลำดับ deploy:** เว็บไซต์ GitHub Pages เท่านั้น · ย้อนกลับด้วย `git revert` commit นี้
 
+### [UPDATE-097] 2026-11-17 แผนที่ประชาชนแสดงทุกประเภทพร้อมกัน
+- แท็บน้ำท่วม/ทางเลี่ยงและตัวกรองสถานะกรองเฉพาะรายการ ไม่ซ่อนเส้นอีกประเภทหรือเส้นน้ำท่วมบนแผนที่โดยอัตโนมัติ; ผู้ใช้ยังเปิดปิดเลเยอร์เองได้ในคำอธิบายสัญลักษณ์.
+- คำอธิบายสัญลักษณ์เริ่มพับไว้ แต่ปุ่ม "ตำแหน่งของฉัน" และข้อความสถานะตำแหน่งยังคงกดและมองเห็นได้ทันทีโดยไม่ต้องกางคำอธิบายสัญลักษณ์. ไอคอนคลื่นน้ำใช้พื้นหลังสีเดียวกับเส้นน้ำท่วมและคลื่นสีขาว; ไอคอนทางเลี่ยงและตัวอย่างในคำอธิบายใช้สีเส้นทางเลี่ยงจากสไตล์เดียวกัน.
+- ย้อนกลับได้โดย revert commit นี้; ไม่เปลี่ยน SQL, Edge Function หรือข้อมูลจริง.
+
 ### [UPDATE-096] 2026-11-16 เปิด React Strict Mode เฉพาะ development
 - **ไฟล์:** `next.config.mjs`, `docs/BACKLOG.md`.
 - **การแก้ไข:** ตั้ง `reactStrictMode` ตาม `NODE_ENV !== "production"` เพื่อให้ local development ตรวจ effect/listener cleanup สองรอบ แต่ไม่เปลี่ยน production static export.

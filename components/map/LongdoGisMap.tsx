@@ -626,7 +626,6 @@ interface LongdoGisMapProps {
   onSelectFlood: (id: string) => void;
   onOpenFloodDetours?: (id: string) => void;
   onSelectDetour?: (detour: DetourRoute) => void;
-  citizenLayerFilter?: "FLOOD" | "DETOUR";
   adminPickMode?: string | null;
   onCoordinatePicked?: (lat: number, lon: number, mode: string) => void;
   draftCoordinates?: [number, number][];
@@ -652,8 +651,6 @@ interface LongdoGisMapProps {
   className?: string;
   publicMode?: boolean;
   isSidebarCollapsed?: boolean;
-  /** Optional citizen-side status filter: only these flood records are drawn. */
-  visibleFloodIds?: string[];
 }
 
 export function LongdoGisMap({
@@ -662,7 +659,6 @@ export function LongdoGisMap({
   onSelectFlood,
   onOpenFloodDetours,
   onSelectDetour,
-  citizenLayerFilter,
   adminPickMode = null,
   onCoordinatePicked,
   draftCoordinates = EMPTY_COORDS,
@@ -687,7 +683,6 @@ export function LongdoGisMap({
   className = "h-full w-full",
   publicMode = false,
   isSidebarCollapsed = false,
-  visibleFloodIds,
 }: LongdoGisMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
@@ -709,15 +704,15 @@ export function LongdoGisMap({
   const currentBaseKeyRef = useRef<string>("longdo");
 
   const [activeBaseMap, setActiveBaseMap] = useState<"road" | "sat" | "longdo">("longdo");
-  const [isLayerControlCollapsed, setIsLayerControlCollapsed] = useState(false);
+  const [isLayerControlCollapsed, setIsLayerControlCollapsed] = useState(true);
   const [mapReady, setMapReady] = useState(false);
   const [currentZoom, setCurrentZoom] = useState<number>(APP_CONFIG.DEFAULT_ZOOM);
   const [forceShowAllHighways, setForceShowAllHighways] = useState(false);
   const [showFloodLayer, setShowFloodLayer] = useState(true);
   const [floodDisplayMode, setFloodDisplayMode] = useState<"SEGMENTS" | "EVENTS">("SEGMENTS");
   const [showDetourLayer, setShowDetourLayer] = useState(true);
-  const effectiveShowFloodLayer = citizenLayerFilter ? citizenLayerFilter === "FLOOD" : showFloodLayer;
-  const effectiveShowDetourLayer = citizenLayerFilter ? citizenLayerFilter === "DETOUR" : showDetourLayer;
+  const effectiveShowFloodLayer = showFloodLayer;
+  const effectiveShowDetourLayer = showDetourLayer;
   const [showMainHwy, setShowMainHwy] = useState(true);
   const [showSecHwy, setShowSecHwy] = useState(true);
   const [showHighwayShields, setShowHighwayShields] = useState(false);
@@ -1505,6 +1500,8 @@ export function LongdoGisMap({
     const renderer = rendererRef.current;
     const floodStyle = mapStyles.flood;
     const fColor = floodStyle?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
+    const floodWaveIcon = `<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M2 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0 4-2 6 0"/><path d="M2 16c2 2 4 2 6 0s4-2 6 0 4 2 6 0 4-2 6 0"/></svg>`;
+    const floodWaveBadge = `<span style="background:${escapeHtml(fColor)};color:white" class="inline-flex h-5 w-5 items-center justify-center rounded-md border border-white/70 shadow-sm" aria-hidden="true">${floodWaveIcon}</span>`;
     const fBaseWeight = floodStyle?.weight || LAYER_CONFIG.FLOOD_RED_LINE.weight;
     const fOpacity = floodStyle?.opacity ?? LAYER_CONFIG.FLOOD_RED_LINE.opacity;
     const fDash = floodStyle?.pattern === "dash" ? (floodStyle.dashArray || "8, 6") : undefined;
@@ -1520,9 +1517,8 @@ export function LongdoGisMap({
     const floodPopupOpts = { maxWidth: 370, minWidth: 300, className: "doh-flood-leaflet-popup" };
 
     // 4d. Flood routes + capsule markers (with De-overlapping, Priority z-Index & Merged/Segment modes)
-    const visibleFloodIdSet = visibleFloodIds ? new Set(visibleFloodIds) : null;
     const visibleFloods = (systemData.floodRoutes || []).filter(
-      (flood) => isFloodLineVisibleOnCurrentMap(flood) && (!visibleFloodIdSet || visibleFloodIdSet.has(flood.id))
+      (flood) => isFloodLineVisibleOnCurrentMap(flood)
     );
 
     // First draw polylines for all visible flood routes using configured unified line style
@@ -1575,34 +1571,28 @@ export function LongdoGisMap({
 
         let zIndex = 200;
         let capsuleClass = "doh-capsule-tag doh-capsule-amber";
-        let glyphIcon = "⚠️";
 
         if (ev.mostSevereStatus === "CLOSED") {
           capsuleClass = "doh-capsule-tag doh-capsule-red";
-          glyphIcon = "⛔";
           zIndex = 1000;
         } else if (ev.mostSevereStatus === "NO_SMALL_VEHICLES") {
           capsuleClass = "doh-capsule-tag doh-capsule-orange";
-          glyphIcon = "🚗";
           zIndex = 800;
         } else if (ev.mostSevereStatus === "CAUTION") {
           capsuleClass = "doh-capsule-tag doh-capsule-amber";
-          glyphIcon = "⚠️";
           zIndex = 600;
         } else if (ev.mostSevereStatus === "PASSABLE") {
           capsuleClass = "doh-capsule-tag doh-capsule-green";
-          glyphIcon = "✅";
           zIndex = 200;
         } else if (ev.mostSevereStatus === "PENDING_VERIFICATION") {
           capsuleClass = "doh-capsule-tag doh-capsule-slate";
-          glyphIcon = "⏳";
           zIndex = 400;
         }
 
         const pinIcon = L.divIcon({
           html: `
             <div class="${capsuleClass}">
-              <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${glyphIcon}</span>
+              ${floodWaveBadge}
               <span>ทล.${escapeHtml(ev.routeNo)} [${ev.segments.length} ช่วง]</span>
               <span class="opacity-90">(${escapeHtml(ev.maxWaterLevelCm)} ซม.)</span>
             </div>
@@ -1629,7 +1619,6 @@ export function LongdoGisMap({
         dirCode: string;
         zIndex: number;
         capsuleClass: string;
-        glyphIcon: string;
         statusLabel: string;
         sideBadge: string;
         levelText: string;
@@ -1648,42 +1637,34 @@ export function LongdoGisMap({
 
         let zIndex = 200;
         let capsuleClass = "doh-capsule-tag doh-capsule-amber";
-        let glyphIcon = "⚠️";
         let statusLabel = "เฝ้าระวัง / ระมัดระวัง";
 
         if (trafficDetail === "PENDING_VERIFICATION" || (flood.traffic_status as string) === "PENDING_VERIFICATION") {
           capsuleClass = "doh-capsule-tag doh-capsule-slate";
-          glyphIcon = "⏳";
           statusLabel = "รอตรวจสอบสถานะ";
           zIndex = 400;
         } else if (trafficDetail === "NO_SMALL_VEHICLES") {
           capsuleClass = "doh-capsule-tag doh-capsule-orange";
-          glyphIcon = "🚗";
           statusLabel = "รถเล็กไม่สามารถผ่านได้";
           zIndex = 800;
         } else if (flood.traffic_status === "CLOSED" || trafficDetail === "CLOSED") {
           capsuleClass = "doh-capsule-tag doh-capsule-red";
-          glyphIcon = "⛔";
           statusLabel = "ผ่านไม่ได้";
           zIndex = 1000;
         } else if (flood.traffic_status === "LIGHT_VEHICLES_ONLY") {
           capsuleClass = "doh-capsule-tag doh-capsule-sky";
-          glyphIcon = "🚗";
           statusLabel = "รถเล็กผ่านได้";
           zIndex = 600;
         } else if (flood.traffic_status === "ONE_LANE") {
           capsuleClass = "doh-capsule-tag doh-capsule-amber";
-          glyphIcon = "↔️";
           statusLabel = "รถเล็กผ่านได้ ๑ ช่องทาง";
           zIndex = 600;
         } else if (flood.traffic_status === "WARNING" || trafficDetail === "CAUTION") {
           capsuleClass = "doh-capsule-tag doh-capsule-amber";
-          glyphIcon = "⚠️";
           statusLabel = "รถเล็กไม่สามารถผ่านได้";
           zIndex = 800;
         } else if (flood.traffic_status === "PASSABLE" || trafficDetail === "PASSABLE") {
           capsuleClass = "doh-capsule-tag doh-capsule-green";
-          glyphIcon = "✅";
           statusLabel = "ผ่านได้ปกติ";
           zIndex = 200;
         }
@@ -1707,7 +1688,6 @@ export function LongdoGisMap({
           dirCode,
           zIndex,
           capsuleClass,
-          glyphIcon,
           statusLabel,
           sideBadge,
           levelText,
@@ -1771,8 +1751,8 @@ export function LongdoGisMap({
             pinSize = [28, 28];
             pinAnchor = [14, 14];
             pinHtml = `
-              <div class="${item.capsuleClass} doh-capsule-zoom-far" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
-                <span class="text-xs font-bold leading-none" aria-hidden="true">${item.glyphIcon}</span>
+              <div class="${item.capsuleClass} doh-capsule-zoom-far" style="background:${escapeHtml(fColor)}" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
+                ${floodWaveIcon}
               </div>
             `;
           } else if (currentZoom >= 11 && currentZoom <= 13) {
@@ -1781,7 +1761,7 @@ export function LongdoGisMap({
             pinAnchor = [48, 14];
             pinHtml = `
               <div class="${item.capsuleClass} doh-capsule-zoom-mid" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
-                <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${item.glyphIcon}</span>
+                ${floodWaveBadge}
                 <span>ทล.${escapeHtml(item.flood.route_no)}</span>
               </div>
             `;
@@ -1792,7 +1772,7 @@ export function LongdoGisMap({
             pinAnchor = [isPending ? 122 : 84, 14];
             pinHtml = `
               <div class="${item.capsuleClass} doh-capsule-zoom-near" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
-                <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-white/95 text-[11px] font-bold shadow-sm" aria-hidden="true">${item.glyphIcon}</span>
+                ${floodWaveBadge}
                 <span>ทล.${escapeHtml(item.flood.route_no)}</span>
                 <span class="opacity-95 font-mono text-[11px]">· ${escapeHtml(item.levelText)}</span>
                 ${isPending ? '<span class="bg-black/25 px-1.5 py-0.5 rounded text-[10px] font-bold">รอตรวจสอบ</span>' : ""}
@@ -1826,7 +1806,7 @@ export function LongdoGisMap({
       group.clearLayers();
       floodLinesRef.current = {};
     };
-  }, [mapReady, systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, floodDisplayMode, mapStyles, currentZoom, visibleFloodIds]);
+  }, [mapReady, systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, floodDisplayMode, mapStyles, currentZoom]);
 
   // Leaflet's Canvas renderer intentionally ignores CSS class animation. Animate only
   // the already-drawn flood/detour paths at a low fixed rate, so the style editor's
@@ -1872,7 +1852,7 @@ export function LongdoGisMap({
       window.clearInterval(timer);
       entries.forEach((entry) => entry.line.setStyle({ opacity: entry.baseOpacity, weight: entry.baseWeight, dashOffset: "0" }));
     };
-  }, [mapReady, allowLineAnimation, mapStyles, systemData.floodRoutes, systemData.detourRoutes, showFloodLayer, showDetourLayer, visibleFloodIds]);
+  }, [mapReady, allowLineAnimation, mapStyles, systemData.floodRoutes, systemData.detourRoutes, showFloodLayer, showDetourLayer]);
 
   // 4e. Selected flood: restyle one polyline in place instead of redrawing the map.
   useEffect(() => {
@@ -2388,6 +2368,27 @@ export function LongdoGisMap({
         )}
       </div>
 
+      {/* Quick Geolocation Control & Live Status when Legend is collapsed */}
+      {isLayerControlCollapsed && (
+        <div className="absolute top-12 right-3 z-[400] flex flex-col items-end gap-1.5 pointer-events-none">
+          <button
+            type="button"
+            onClick={locateUser}
+            disabled={isLocating}
+            aria-label="ตำแหน่งของฉัน"
+            className="pointer-events-auto inline-flex min-h-11 sm:min-h-9 items-center gap-1.5 rounded-lg border border-slate-700/80 bg-[#0b162c]/95 px-2.5 py-1 text-[11px] sm:text-xs font-semibold text-sky-300 shadow-lg backdrop-blur-md transition hover:bg-[#0f1d3a] hover:text-sky-200 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+          >
+            <LocateFixed className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>{isLocating ? "กำลังหา…" : "ตำแหน่งของฉัน"}</span>
+          </button>
+          {locationStatus && (
+            <p role="status" aria-live="polite" className="pointer-events-auto max-w-[220px] rounded-md border border-slate-700/80 bg-slate-950/90 px-2.5 py-1 text-[11px] leading-snug text-slate-200 shadow-lg backdrop-blur-md">
+              {locationStatus}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Expanded Legend Panel (positioned cleanly at top-3 right-3, drops down smoothly) */}
       {!isLayerControlCollapsed && (
         <div className="absolute top-3 right-3 z-[410] bg-[#0b162c]/95 backdrop-blur border border-slate-700/80 rounded-2xl p-3 sm:p-3.5 shadow-2xl min-w-[215px] sm:min-w-[240px] max-w-[calc(100vw-24px)] text-xs pointer-events-auto animate-fade-in max-h-[85vh] overflow-y-auto">
@@ -2478,13 +2479,12 @@ export function LongdoGisMap({
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-sky-100 text-sky-700"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /></svg></span>
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md text-white" style={{ backgroundColor: mapStyles.flood?.color || LAYER_CONFIG.FLOOD_RED_LINE.color }}><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /></svg></span>
                 <span>เส้นน้ำท่วม <span className="ml-1 rounded-full bg-red-950 px-1.5 py-0.5 text-[10px] text-red-300">{effectiveShowFloodLayer ? (systemData.floodRoutes || []).filter((item) => isFloodLineVisibleOnCurrentMap(item)).length : 0}</span></span>
               </span>
               <input
                 type="checkbox"
                 checked={effectiveShowFloodLayer}
-                disabled={Boolean(citizenLayerFilter)}
                 onChange={(e) => setShowFloodLayer(e.target.checked)}
                 className="accent-red-500 rounded disabled:opacity-50"
               />
@@ -2520,13 +2520,12 @@ export function LongdoGisMap({
 
             <label className="flex items-center justify-between gap-2 cursor-pointer text-slate-200 hover:text-white">
               <span className="flex items-center gap-2">
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-amber-400 text-slate-950"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9" /><path d="m15 2 3 3-3 3" /><path d="M9 19h10" /></svg></span>
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md text-slate-950" style={{ backgroundColor: mapStyles.detour?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color }}><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9" /><path d="m15 2 3 3-3 3" /><path d="M9 19h10" /></svg></span>
                 <span>ทางเลี่ยง <span className="ml-1 rounded-full bg-amber-950 px-1.5 py-0.5 text-[10px] text-amber-300">{effectiveShowDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
               </span>
               <input
                 type="checkbox"
                 checked={effectiveShowDetourLayer}
-                disabled={Boolean(citizenLayerFilter)}
                 onChange={(e) => setShowDetourLayer(e.target.checked)}
                 className="accent-yellow-400 rounded disabled:opacity-50"
               />
