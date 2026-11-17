@@ -257,3 +257,99 @@ test("incident and detour records use consistent symbols and detail controls", a
   await expect(detourSymbol.or(emptyDetour)).toBeVisible();
   await expect(page.getByRole("button", { name: /วาดทางเลี่ยงใหม่/ })).toBeVisible();
 });
+
+test("admin detour console fetches full system data and keeps deactivated detours restorable", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop detour table layout");
+  const updated_at = "2026-11-17T03:00:00.000Z";
+  const actionsSeen: string[] = [];
+  const detours = [
+    {
+      id: "D-ACTIVE",
+      route_name: "ทางเลี่ยงทดสอบเปิดใช้งาน",
+      flood_id_ref: null,
+      lat_start: 6.87,
+      lon_start: 101.25,
+      lat_end: 6.88,
+      lon_end: 101.26,
+      coordinates_json: [[101.25, 6.87], [101.26, 6.88]],
+      description: "เส้นทางเปิดอยู่",
+      direction_mode: "TWO_WAY",
+      is_active: true,
+      updated_at,
+    },
+    {
+      id: "D-INACTIVE",
+      route_name: "ทางเลี่ยงทดสอบซ่อนชั่วคราว",
+      flood_id_ref: null,
+      lat_start: 6.89,
+      lon_start: 101.27,
+      lat_end: 6.9,
+      lon_end: 101.28,
+      coordinates_json: [[101.27, 6.89], [101.28, 6.9]],
+      description: "ซ่อนไว้ก่อนหน้า",
+      direction_mode: "FORWARD_ONLY",
+      is_active: false,
+      updated_at,
+    },
+  ];
+
+  await page.route("**/functions/v1/hdms-api", async (route) => {
+    const payload = route.request().postDataJSON() as { action?: string; args?: unknown[] };
+    const action = payload?.action || "";
+    actionsSeen.push(action);
+
+    if (action === "getSystemDataAction") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          updatedAt: updated_at,
+          floodRoutes: [],
+          detourRoutes: detours,
+          timelineUpdates: [],
+          mitigationProjects: [],
+          highwayLayers: [],
+          offices: [],
+          mapStyles: null,
+          systemSettings: { name: "ระบบทดสอบ", org: "แขวงทางหลวงปัตตานี", phone: "1586" },
+        }),
+      });
+      return;
+    }
+
+    if (action === "toggleDetourStatusAction") {
+      const [id, nextActive] = (payload.args || []) as [string, boolean];
+      const target = detours.find((item) => item.id === id);
+      if (target) target.is_active = nextActive;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) });
+      return;
+    }
+
+    await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: `Unexpected action: ${action}` }) });
+  });
+
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "รายการทางเลี่ยง");
+
+  await expect(page.getByText("ทางเลี่ยงทดสอบเปิดใช้งาน").filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByText("ทางเลี่ยงทดสอบซ่อนชั่วคราว").filter({ visible: true }).first()).toBeVisible();
+  expect(actionsSeen).toContain("getSystemDataAction");
+  expect(actionsSeen).not.toContain("getPublicSystemDataAction");
+
+  // Deactivate the active detour and verify both rows appear under ปิดชั่วคราว.
+  const visibleItems = page.locator(".doh-auto-table-cards > div, tbody tr").filter({ visible: true });
+  await visibleItems.filter({ hasText: "ทางเลี่ยงทดสอบเปิดใช้งาน" }).getByRole("button", { name: "เปิดใช้งาน", exact: true }).click();
+  await page.keyboard.press("Escape");
+
+  const statusSelect = page.locator("select").filter({ hasText: "สถานะทั้งหมด" });
+  await expect(statusSelect).toContainText("ปิดชั่วคราว (2)");
+  await statusSelect.selectOption("INACTIVE");
+  await expect(page.getByText("ทางเลี่ยงทดสอบเปิดใช้งาน").filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByText("ทางเลี่ยงทดสอบซ่อนชั่วคราว").filter({ visible: true }).first()).toBeVisible();
+
+  // Re-activate one of the hidden detours directly from the ปิดชั่วคราว filter view.
+  await visibleItems.filter({ hasText: "ทางเลี่ยงทดสอบซ่อนชั่วคราว" }).getByRole("button", { name: "ปิดชั่วคราว", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(statusSelect).toContainText("เปิดใช้งาน (1)");
+  await expect(statusSelect).toContainText("ปิดชั่วคราว (1)");
+});

@@ -98,9 +98,9 @@
 - **คำแนะนำ:** A + ขั้นต่ำเสมอ: commit ผ่าน "Create a new branch" แล้วดูผล CI ก่อน merge (ไม่ต้องเปลี่ยน workflow) · ผมไม่แก้ pipeline เอง เพราะแก้แล้วทดสอบไม่ได้ในที่นี้และ pipeline ตอนนี้แดงอยู่
 - **ร่างสำหรับ A (ยังไม่ใช้งาน):** ใน `deploy.yml` เปลี่ยน trigger เป็น `workflow_run: { workflows: ["CI"], types: [completed], branches: [main] }` + `workflow_dispatch`; เพิ่ม `if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'` ที่ job `build`; ใส่ `ref: ${{ github.event.workflow_run.head_sha || github.sha }}` ใน `actions/checkout`
 
-## B-004 [กลาง] หน้าแอดมินยังโหลด GeoJSON เต็ม
-- **สถานะ:** ปิดแล้ว (2026-11-10, ดู `UPDATE-063`) — หน้า `/admin` โหลดเริ่มต้นด้วย `getPublicSystemDataAction` (Geometry แบบลดจุด) และดึง `getSystemDataAction` ความละเอียดเต็มอัตโนมัติเฉพาะเมื่อเปิดแท็บ GIS หรือแก้ไขจุด Vertex
-- **หลักฐาน:** `app/admin/page.tsx`, `components/admin/AdminConsole.tsx`
+## B-004 [กลาง] หน้าแอดมินโหลดข้อมูลครบและไม่ซ่อนรายการ `is_active = false`
+- **สถานะ:** แก้แล้ว (2026-11-17, ดู `UPDATE-099`) — `getPublicSystemDataAction` ถูกจำกัดเฉพาะข้อมูล active ของประชาชนตั้งแต่ `20261113091500` จึงปรับหน้า `/admin` (`app/admin/page.tsx`) ให้เรียก `getSystemDataAction()` โดยตรงเพื่อให้เห็นทั้งรายการที่เปิดใช้งานและปิดชั่วคราวครบถ้วน (ขนาด payload จริงบน production วัดได้ 375.6 KB, 356 ms; หากต้องลด geometry บน `/admin` ในอนาคตให้แยก action เฉพาะสำหรับ Admin Display แทนการใช้ `getPublicSystemDataAction`)
+- **หลักฐาน:** `app/admin/page.tsx`, `tests/e2e/admin-menus.spec.ts`
 
 ## B-005 [กลาง] ไฟล์ใหญ่เกินไป — ปิดบางส่วน (2026-11-13, ดู `UPDATE-090`)
 - **หลักฐานก่อนปรับปรุง:** `GisDataImportTab.tsx` 2,445 บรรทัด (คำนวณ `allHighwayFeatures` และ `matchingHighwayFeatures` ซ้ำทุก render, คำนวณ `joinCandidates` ทุกครั้งที่ลากจุดกลางเส้น, และรวม JSX ของ 3 modal/panel ไว้ในไฟล์เดียว), `MapManagementTab.tsx` 2,832 บรรทัด (แปลงพรีวิว `<AdviceText />` สดทุก keystroke), และ `AdminConsole.tsx` นำเข้าทั้ง 7 แท็บแบบ static bundle เดียว

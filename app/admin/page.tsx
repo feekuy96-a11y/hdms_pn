@@ -4,7 +4,7 @@ import React, { useCallback, useRef, useState } from "react";
 import type { LonLat, VertexEditEvent } from "@/lib/line-edit";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
-import { getSystemDataAction, getPublicSystemDataAction, snapRouteAction } from "@/app/actions/doh-actions";
+import { getSystemDataAction, snapRouteAction } from "@/app/actions/doh-actions";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload } from "@/db/default-data";
 import { AdminConsole } from "@/components/admin/AdminConsole";
 
@@ -98,12 +98,11 @@ export default function AdminPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [editableOfficeId, setEditableOfficeId] = useState<string | null>(null);
 
-  const [needsFullGeometry, setNeedsFullGeometry] = useState(false);
+  // Admin must fetch full system data rather than the public citizen payload, which omits
+  // inactive/draft incidents and detours (making deactivated detours vanish from Admin).
   const { data: systemData = INITIAL_SYSTEM_DATA, refetch, isFetching, isError } = useQuery<SystemDataPayload>({
-    queryKey: ["dohAdminSystemData", needsFullGeometry],
-    queryFn: async () => {
-      return needsFullGeometry ? await getSystemDataAction() : await getPublicSystemDataAction();
-    },
+    queryKey: ["dohAdminSystemData"],
+    queryFn: async () => await getSystemDataAction(),
     staleTime: 0,
     refetchOnMount: "always",
     refetchInterval: isPollingActive ? 30 * 60 * 1000 : false,
@@ -305,11 +304,7 @@ export default function AdminPage() {
               setDraftPickMarkers={setDraftPickMarkers}
               vertexEvent={vertexEvent}
               onVertexEditTargetChange={setVertexEditTarget}
-              onVertexEditChange={(active) => {
-                setVertexEditable(active);
-                if (active) setNeedsFullGeometry(true);
-              }}
-              onRequestFullGeometry={() => setNeedsFullGeometry(true)}
+              onVertexEditChange={setVertexEditable}
               onOfficeEditModeChange={setEditableOfficeId}
               isPaneCollapsed={isSidebarCollapsed}
               onTogglePaneCollapse={() => {

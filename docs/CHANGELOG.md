@@ -1,5 +1,11 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-099] 2026-11-17 แก้ปัญหาปิดใช้งานทางเลี่ยงชั่วคราวแล้วรายการหายจากหน้า Admin
+- **ไฟล์:** `app/admin/page.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/BACKLOG.md`, `docs/CHANGELOG.md`
+- **สาเหตุ:** หน้า Admin (`app/admin/page.tsx`) เรียก `getPublicSystemDataAction()` เป็นค่าเริ่มต้นเมื่อ `needsFullGeometry === false` แต่ภายหลัง `getPublicSystemDataAction()` ถูกปรับให้ไปเรียก `doh_get_public_system_data_display_rpc()` ซึ่งตัดรายการ `is_active = false` และ Draft ออกทั้งหมด ทำให้ทางเลี่ยงที่ถูกปิดใช้งานชั่วคราว (`is_active = false`) หายไปจากรายการ Admin และกดเปิดกลับไม่ได้
+- **การแก้ไข:** ปรับ `app/admin/page.tsx` ให้เรียก `getSystemDataAction()` โดยตรงตามสถาปัตยกรรมหน้า Admin และเพิ่ม E2E regression test ใน `tests/e2e/admin-menus.spec.ts` ตรวจการดึง `getSystemDataAction` กับการปิด/เปิดใช้งานทางเลี่ยงในแท็บ `ปิดชั่วคราว`
+- **ย้อนกลับ:** revert commit นี้ได้ทันที (ไม่แก้ SQL, Edge Function หรือข้อมูลจริง; รายการที่ปิดใช้งานไว้ในฐานข้อมูลยังอยู่ครบ)
+
 ### [UPDATE-098] 2026-11-17 อัปเกรด Next.js 16.4.4 → 16.4.6 ปิดช่องโหว่ความปลอดภัย
 - **ไฟล์:** `package.json`, `package-lock.json`, `docs/CHANGELOG.md`
 - **การแก้ไข:** อัปเดต `next` และ `eslint-config-next` จาก `16.4.4` เป็น `16.4.6` แบบ exact version ใน worktree แยก (`chore/nextjs-security-upgrade` จาก `origin/main` `ab8372f`) โดยไม่อัปเกรดเมเจอร์แพ็กเกจอื่นตามขอบเขต R8
