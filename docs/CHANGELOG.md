@@ -1,5 +1,12 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-104] 2026-11-17 ปรับสคริปต์ build:pages ให้เป็น Cross-Platform ผ่าน Node.js
+- **ไฟล์:** `package.json`, `scripts/build-pages.mjs` (ใหม่), `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/CHANGELOG.md`
+- **การแก้ไข:**
+  1. สร้าง `scripts/build-pages.mjs` รัน Next.js static export build (`NEXT_OUTPUT=export`) ผ่าน `process.execPath` โดยตรง พร้อมดึงค่า fallback จาก `.github/hdms-public.json` เมื่อรันในเครื่องที่ไม่ได้ตั้งค่า environment variables
+  2. ปรับ `package.json` สคริปต์ `build:pages` จาก `NEXT_OUTPUT=export next build` เป็น `node scripts/build-pages.mjs` ทำให้คำสั่ง `npm run build:pages` และ `npm run check:deploy` รันได้สมบูรณ์ทั้งบน Windows (CMD/PowerShell) และ Linux/CI โดยไม่ต้องพึ่ง external dependencies
+- **ย้อนกลับ:** revert commit นี้ได้ทันที (ไม่แก้ SQL, Edge Function หรือข้อมูลจริง)
+
 ### [UPDATE-103] 2026-11-17 เอกสารส่งต่องานร่วม (AI Handoff) และปรับไฟล์กติกาตัวชี้ให้ตรงกับ AGENTS.md
 - **ไฟล์:** `docs/AI_HANDOFF.md` (ใหม่), `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `SUPPLEMENTAL_RULES.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/CHANGELOG.md`
 - **การแก้ไข:**
