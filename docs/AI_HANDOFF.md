@@ -41,7 +41,7 @@
 2. Apps Script outbox: ต้องยืนยันว่า Edge secret ชี้ไป URL `/exec` ของ Apps Script รุ่นมี idempotency แล้วจึง deploy Edge v18 ใหม่ (B-022)
 3. OSRM สาธารณะไม่มี SLA (B-008); คง `server/routing-service.mjs` และ Docker/OSRM local ไว้เพราะอาจใช้เป็นทางเลือก LAN ห้ามลบเป็น cleanup
 4. ข้อจำกัด waypoint ของ Google Maps ยังมีอยู่ (B-013); ใช้ `sampleWaypointsForGoogleMaps` เสมอ
-5. ความสัมพันธ์ Flood Event ↔ Detour แบบหลายต่อหลาย: migration `20261117135032_event_detour_relationships.sql` ถูก apply Production แล้วเมื่อ 18 พฤศจิกายน 2026 และตรวจอ่านกลับได้ `18` events, `18` segments, `13` links (`12` PENDING, `1` WITHDRAWN, ไม่มี RECOMMENDED ที่ยังไม่ได้ review). Edge `hdms-api` v19 มี reader และ atomic replacement action แล้ว; read smoke test จริงตอบ HTTP 200 จาก event ที่มี 1 link และ log ยืนยัน. UI, public-payload, export/import และ report ยังต้องใช้ `flood_id_ref` และ `detour_meta.event_orders` เดิมจนกว่าจะผ่าน Admin editor และ PR cutover แยก (B-023).
+5. ความสัมพันธ์ Flood Event ↔ Detour แบบหลายต่อหลาย: migration `20261117135032_event_detour_relationships.sql` ถูก apply Production แล้วเมื่อ 18 พฤศจิกายน 2026 และตรวจอ่านกลับได้ `18` events, `18` segments, `13` links (`12` PENDING, `1` WITHDRAWN, ไม่มี RECOMMENDED ที่ยังไม่ได้ review). Edge `hdms-api` v19 มี reader และ atomic replacement action แล้ว; read smoke test จริงตอบ HTTP 200 จาก event ที่มี 1 link และ log ยืนยัน. ก่อนทำ Admin editor ต้อง deploy migration `20261117192000_sync_flood_event_segments.sql`: อุดช่องว่างที่การบันทึก flood ใหม่ผ่าน legacy path เคยไม่สร้าง event/segment ใหม่. UI, public-payload, export/import และ report ยังต้องใช้ `flood_id_ref` และ `detour_meta.event_orders` เดิมจนกว่าจะผ่าน Admin editor และ PR cutover แยก (B-023).
 
 ## วิธีส่งงานร่วมกัน
 

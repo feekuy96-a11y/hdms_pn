@@ -39,7 +39,7 @@
 
 ### KI-013: ความสัมพันธ์ Event↔Detour หลายต่อหลายยังไม่ผ่านเส้นทางจริงครบวงจร
 - Migration `20261117135032_event_detour_relationships.sql` ถูก apply Production แล้วและตรวจอ่านกลับได้ (18 events, 18 segments, 13 links; ไม่มี Recommended ที่ยังไม่ได้ review). Edge `hdms-api` v19 มี reader และ atomic replacement action แล้ว และ read smoke test จริงตอบ HTTP 200; แต่ Admin editor, public payload, export/import และ report ยังอ้าง `flood_id_ref` / `detour_meta.event_orders` เดิม.
-- ยังไม่ได้ทดสอบ mutation ของ action ใหม่บนข้อมูล Production เพื่อหลีกเลี่ยงการเปลี่ยนความสัมพันธ์จริงก่อนมี Admin editor. จนกว่า B-023 จะปิด ห้ามทำให้หน้าประชาชนอ่าน link table ใหม่เพียงอย่างเดียว เพราะ legacy detour อาจหายจากแผนที่. Geometry revision มีผลแล้ว แต่การแก้ geometry ต้องถูกผ่าน trigger/Edge path ที่ deploy อยู่.
+- พบเพิ่ม: route น้ำท่วมที่สร้างหลัง migration แรกยังไม่เพิ่ม membership เพราะ `upsertRouteAction` เขียน `doh_flood_routes` โดยไม่แตะตารางใหม่; migration `20261117192000_sync_flood_event_segments.sql` เตรียม trigger สำหรับอุดช่องว่างนี้แล้ว แต่ยังไม่ apply. ยังไม่ได้ทดสอบ mutation ของ action ใหม่บนข้อมูล Production เพื่อหลีกเลี่ยงการเปลี่ยนความสัมพันธ์จริงก่อนมี Admin editor. จนกว่า B-023 จะปิด ห้ามทำให้หน้าประชาชนอ่าน link table ใหม่เพียงอย่างเดียว เพราะ legacy detour อาจหายจากแผนที่. Geometry revision มีผลแล้ว แต่การแก้ geometry ต้องถูกผ่าน trigger/Edge path ที่ deploy อยู่.
 
 ### KI-014: Public fallback patch เผยแพร่แล้ว — ปิดแล้ว
 - รวมเข้า `main` ผ่าน PR #32 และ PR #33 (commit `866eb93`) Deploy GitHub Pages สำเร็จ (Run `44104409962`); fallback ฝั่ง browser ถูกจำกัดเฉพาะ public RPC หรือแสดง Error/Retry พร้อม regression test ผ่านครบ (ดู B-019).
