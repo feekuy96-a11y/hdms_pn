@@ -23,6 +23,7 @@ import {
   groupFloodRoutesIntoEvents,
   ParentFloodEventGroup,
   parseFloodDirectionMeta,
+  normalizeMediaUrl,
 } from "@/lib/flood-event-schema";
 import { Layers, Navigation, Building2, Map, ChevronUp, ChevronDown, LocateFixed } from "lucide-react";
 
@@ -509,7 +510,7 @@ function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0): string
   const statusInfo = resolvePopupTrafficStatus(flood);
   const routeBadge = /^(?:ทล|ปน)\.?\s*/i.test(String(flood.route_no || "")) ? String(flood.route_no) : `ทล.${flood.route_no}`;
   const areaLine = formatPopupAreaLine(flood);
-  const photoUrl = meta.photos?.[0]?.dataUrl || flood.latest_photo_url || "";
+  const photoUrl = normalizeMediaUrl(meta.photos?.[0]?.dataUrl || flood.latest_photo_url || "");
   const relativeUpdate = formatPopupRelativeUpdate(flood.updated_at || meta.updatedAt);
   const safeId = escapeHtml(flood.id);
 
@@ -1104,43 +1105,66 @@ export function LongdoGisMap({
       setLocationStatus("อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง");
       return;
     }
-    if (!leafletMapRef.current || !leafletRef.current) {
-      setLocationStatus("แผนที่ยังไม่พร้อม กรุณาลองอีกครั้ง");
-      return;
-    }
+    const executeLocate = () => {
+      const map = leafletMapRef.current;
+      const L = leafletRef.current;
+      if (!map || !L) {
+        setLocationStatus("แผนที่ยังไม่พร้อม กรุณาลองอีกครั้ง");
+        setIsLocating(false);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const m = leafletMapRef.current;
+          const l = leafletRef.current;
+          if (!m || !l) return;
+          const latLng: [number, number] = [position.coords.latitude, position.coords.longitude];
+          if (userLocationMarkerRef.current) userLocationMarkerRef.current.setLatLng(latLng);
+          else {
+            userLocationMarkerRef.current = l.circleMarker(latLng, {
+              radius: 8,
+              color: "#ffffff",
+              weight: 2,
+              fillColor: "#2563eb",
+              fillOpacity: 0.95,
+              interactive: false,
+              pane: "markerPane",
+            }).addTo(m).bindTooltip("ตำแหน่งของคุณ", { direction: "top", offset: [0, -8] });
+          }
+          m.flyTo(latLng, Math.max(m.getZoom(), 14), { duration: 0.7 });
+          setLocationStatus("แสดงตำแหน่งของคุณแล้ว");
+          setIsLocating(false);
+        },
+        (error) => {
+          const message = error.code === error.PERMISSION_DENIED
+            ? "ไม่ได้รับอนุญาตให้ใช้ตำแหน่ง กรุณาเปิดสิทธิ์ในเบราว์เซอร์"
+            : "ไม่พบตำแหน่งของคุณ กรุณาลองอีกครั้ง";
+          setLocationStatus(message);
+          setIsLocating(false);
+        },
+        { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 }
+      );
+    };
+
     setIsLocating(true);
     setLocationStatus("กำลังค้นหาตำแหน่งของคุณ…");
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const map = leafletMapRef.current;
-        const L = leafletRef.current;
-        if (!map || !L) return;
-        const latLng: [number, number] = [position.coords.latitude, position.coords.longitude];
-        if (userLocationMarkerRef.current) userLocationMarkerRef.current.setLatLng(latLng);
-        else {
-          userLocationMarkerRef.current = L.circleMarker(latLng, {
-            radius: 8,
-            color: "#ffffff",
-            weight: 2,
-            fillColor: "#2563eb",
-            fillOpacity: 0.95,
-            interactive: false,
-            pane: "markerPane",
-          }).addTo(map).bindTooltip("ตำแหน่งของคุณ", { direction: "top", offset: [0, -8] });
+
+    if (!leafletMapRef.current || !leafletRef.current) {
+      const start = Date.now();
+      const timer = setInterval(() => {
+        if (leafletMapRef.current && leafletRef.current) {
+          clearInterval(timer);
+          executeLocate();
+        } else if (Date.now() - start > 3000) {
+          clearInterval(timer);
+          setLocationStatus("แผนที่ยังไม่พร้อม กรุณาลองอีกครั้ง");
+          setIsLocating(false);
         }
-        map.flyTo(latLng, Math.max(map.getZoom(), 14), { duration: 0.7 });
-        setLocationStatus("แสดงตำแหน่งของคุณแล้ว");
-        setIsLocating(false);
-      },
-      (error) => {
-        const message = error.code === error.PERMISSION_DENIED
-          ? "ไม่ได้รับอนุญาตให้ใช้ตำแหน่ง กรุณาเปิดสิทธิ์ในเบราว์เซอร์"
-          : "ไม่พบตำแหน่งของคุณ กรุณาลองอีกครั้ง";
-        setLocationStatus(message);
-        setIsLocating(false);
-      },
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 }
-    );
+      }, 100);
+      return;
+    }
+
+    executeLocate();
   };
 
   // 4. Overlay layers
@@ -1635,9 +1659,9 @@ export function LongdoGisMap({
         const waterKnown = meta?.water_level_known !== false;
         const levelText = waterKnown ? `${flood.water_level_cm} ซม.` : "รอวัดระดับน้ำ";
 
-        let zIndex = 200;
-        let capsuleClass = "doh-capsule-tag doh-capsule-amber";
-        let statusLabel = "เฝ้าระวัง / ระมัดระวัง";
+        let zIndex = 400;
+        let capsuleClass = "doh-capsule-tag doh-capsule-slate";
+        let statusLabel = "รอตรวจสอบสถานะ";
 
         if (trafficDetail === "PENDING_VERIFICATION" || (flood.traffic_status as string) === "PENDING_VERIFICATION") {
           capsuleClass = "doh-capsule-tag doh-capsule-slate";
@@ -1661,7 +1685,7 @@ export function LongdoGisMap({
           zIndex = 600;
         } else if (flood.traffic_status === "WARNING" || trafficDetail === "CAUTION") {
           capsuleClass = "doh-capsule-tag doh-capsule-amber";
-          statusLabel = "รถเล็กไม่สามารถผ่านได้";
+          statusLabel = "รถเล็กผ่านไม่ได้";
           zIndex = 800;
         } else if (flood.traffic_status === "PASSABLE" || trafficDetail === "PASSABLE") {
           capsuleClass = "doh-capsule-tag doh-capsule-green";
@@ -2374,7 +2398,7 @@ export function LongdoGisMap({
           <button
             type="button"
             onClick={locateUser}
-            disabled={isLocating}
+            disabled={isLocating || !mapReady}
             aria-label="ตำแหน่งของฉัน"
             className="pointer-events-auto inline-flex min-h-11 sm:min-h-9 items-center gap-1.5 rounded-lg border border-slate-700/80 bg-[#0b162c]/95 px-2.5 py-1 text-[11px] sm:text-xs font-semibold text-sky-300 shadow-lg backdrop-blur-md transition hover:bg-[#0f1d3a] hover:text-sky-200 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
           >
@@ -2403,7 +2427,7 @@ export function LongdoGisMap({
               <button
                 type="button"
                 onClick={locateUser}
-                disabled={isLocating}
+                disabled={isLocating || !mapReady}
                 aria-label="ตำแหน่งของฉัน"
                 className="inline-flex min-h-8 items-center gap-1 rounded-md px-1.5 text-[10px] font-semibold text-sky-300 hover:bg-slate-800 hover:text-sky-200 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
               >

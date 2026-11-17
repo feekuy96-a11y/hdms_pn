@@ -16,6 +16,28 @@
 import { parseKmPostMeters, formatKmPostString } from "./highway-schema";
 export { parseKmPostMeters, formatKmPostString };
 
+export function normalizeMediaUrl(value: unknown): string {
+  if (typeof value !== "string" || !value) return "";
+  try {
+    const url = new URL(value);
+    if ((url.hostname === "drive.google.com" && url.pathname === "/uc") || url.hostname === "drive.usercontent.google.com") {
+      const fileId = url.searchParams.get("id");
+      if (fileId) return `https://lh3.googleusercontent.com/d/${encodeURIComponent(fileId)}`;
+    }
+    if (url.hostname === "drive.google.com") {
+      const idParam = url.searchParams.get("id");
+      if (idParam) return `https://lh3.googleusercontent.com/d/${encodeURIComponent(idParam)}`;
+      const match = url.pathname.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) {
+        return `https://lh3.googleusercontent.com/d/${encodeURIComponent(match[1])}`;
+      }
+    }
+  } catch {
+    // Preserve raw or non-URL string (e.g. data URLs)
+  }
+  return value;
+}
+
 export type FloodDirectionCode = "A_TO_B" | "B_TO_A" | "BOTH" | "UNKNOWN";
 
 export type AffectedRoadPart =
@@ -289,7 +311,7 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
     .filter((p) => p && typeof p.dataUrl === "string")
     .map((p, idx) => ({
       id: p.id || `photo-${idx + 1}-${Date.now()}`,
-      dataUrl: p.dataUrl,
+      dataUrl: normalizeMediaUrl(p.dataUrl),
       sizeBytes: Number(p.sizeBytes) || Math.round((p.dataUrl.length * 3) / 4),
       uploadedAt: p.uploadedAt || new Date().toISOString(),
       caption: p.caption || "",
@@ -303,7 +325,7 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
   if (photos.length === 0 && route?.latest_photo_url) {
     photos.push({
       id: `photo-primary-${Date.now()}`,
-      dataUrl: route.latest_photo_url,
+      dataUrl: normalizeMediaUrl(route.latest_photo_url),
       sizeBytes: Math.round((route.latest_photo_url.length * 3) / 4),
       uploadedAt: route.updated_at || new Date().toISOString(),
       caption: "ภาพถ่ายหน้างานหลัก",
