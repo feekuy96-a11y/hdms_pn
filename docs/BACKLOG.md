@@ -27,7 +27,7 @@
 | B-020 | กลาง | ย้ายรูปหลักฐานและรูปโครงการไป Google Drive พร้อมส่งสำเนารายงานไป Sheets | ปิด (2026-11-16, ดู CHANGELOG: Google Drive media และ Google Sheets reporting) |
 | B-021 | กลาง | ตั้ง schedule อิสระสำหรับคิวส่ง Drive/Sheets และหน้าตรวจงานที่ `failed` | ปิด (2026-11-16) — Cron, Edge v17 และหน้า Admin deploy แล้ว; Production read + live browser ผ่าน |
 | B-022 | สูง | Apps Script Web App ที่ใช้งานจริงอาจยังเป็น source เวอร์ชันก่อน idempotency/stale-write guard | กำลังทำ (Web App ยืนยันแล้ว; เหลือเปลี่ยน Edge secret URL) |
-| B-023 | สูง | Cutover ความสัมพันธ์ Flood Event ↔ Detour หลายต่อหลายจาก legacy field | กำลังทำ (DB foundation ผ่าน local PostgreSQL 16; ยังไม่อยู่ Production) |
+| B-023 | สูง | Cutover ความสัมพันธ์ Flood Event ↔ Detour หลายต่อหลายจาก legacy field | กำลังทำ (Production schema + Edge v19 พร้อม; เหลือ Admin editor และ public cutover) |
 | B-024 | กลาง | Event–Detour operation ledger ไม่มีนโยบาย retention/archival | เปิด |
 
 ## B-022 [สูง] Publish Apps Script source สำหรับ outbox idempotency
@@ -42,7 +42,7 @@
 - **ผลกระทบ:** หากสลับ reader หรือ UI ก่อนมี compatibility layer อาจทำให้ detour หายจากประชาชน/แอดมิน หรือสถานะแนะนำชี้ geometry ที่ถูกแก้แล้ว.
 - **ทางเลือก:** A) ทำ Edge read wrapper + atomic write action + compatibility reader แล้วค่อยทำ UI และ public cutover; B) ย้าย UI ตรงไปใช้ schema ใหม่; C) คง legacy model ต่อไป.
 - **คำแนะนำ:** A เพราะคง `flood_id_ref` เดิมไว้จนทดสอบ migration, Edge, public draft filtering, split event และ mobile/desktop regression ครบ.
-- **สถานะ:** กำลังทำ (2026-11-17) — owner อนุมัติและ apply migration บน Production แล้ว: 18 events, 18 segments, 13 links (12 Pending, 1 Withdrawn), ไม่มี Recommended link ที่ยังไม่ได้ review; anon/authenticated เรียก replace RPC ไม่ได้ และ service role เรียกได้. รอบถัดไปคือ Edge read/write compatibility action, Admin editor, แล้วจึง public reader/UI cutover แยก PR.
+- **สถานะ:** กำลังทำ (2026-11-18) — owner อนุมัติและ apply migration บน Production แล้ว: 18 events, 18 segments, 13 links (12 Pending, 1 Withdrawn), ไม่มี Recommended link ที่ยังไม่ได้ review; anon/authenticated เรียก replace RPC ไม่ได้ และ service role เรียกได้. Edge `hdms-api` v19 deploy แล้วพร้อม reader และ atomic replacement action; smoke test read จริงตอบ HTTP 200 และ Edge log ไม่มี error. รอบถัดไปคือ Admin editor ที่ใช้ version + operation ID, แล้วจึง public reader/UI cutover แยก PR.
 
 ## B-024 [กลาง] Event–Detour operation ledger ต้องมี retention/archival policy
 - **หลักฐาน:** `doh_event_detour_operations` เก็บ request/before/result JSONB ทุกครั้งเพื่อ idempotency และ audit แต่ migration ยังไม่มีนโยบายเก็บรักษา/ย้ายออก. หากมีการจัดลำดับบ่อย ตารางและ index `created_at` จะโตไม่จำกัด.

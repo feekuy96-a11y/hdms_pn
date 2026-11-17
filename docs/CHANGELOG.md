@@ -1,9 +1,15 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-106] 2026-11-18 Deploy Edge compatibility API สำหรับ Event–Detour
+- **ไฟล์/ลำดับเผยแพร่:** Production migration `20261117135032_event_detour_relationships.sql` → Edge `hdms-api` v19 → เว็บจาก commit `2b5ca1c` (PR #34).
+- **การเปลี่ยนแปลง:** deploy action `getEventDetourLinksAction` และ `replaceEventDetourLinksAction`. Edge ตรวจ input ทั้งชนิด, ขนาด, ทิศทาง, ลำดับ และ review version; PostgreSQL RPC ยังคงเป็นจุดเดียวที่รับประกันธุรกรรม, optimistic version และ idempotency.
+- **ตรวจแล้ว:** CI run `44154481908` และ Deploy Pages run `44154482123` สำเร็จ; หน้า Pages ตอบ HTTP 200; Edge v19 เป็น `ACTIVE`; read smoke test ผ่าน HTTP 200 (`eventId`, `version`, `links` ถูกต้อง) และ Supabase function log บันทึก POST 200. ไม่ได้เรียก mutation บนข้อมูล Production.
+- **ขอบเขต/ย้อนกลับ:** หน้าประชาชนและ Admin ยังใช้ legacy fields จึงไม่มีข้อมูลหายจากการ deploy นี้. ย้อน Edge ได้โดย deploy source v18 ก่อนหน้า; ย้อนเว็บด้วย `git revert 2b5ca1c`; ไม่ย้อน schema โดยอัตโนมัติ เพราะต้องประเมินข้อมูลที่สร้างผ่าน action ใหม่ก่อน.
+
 ### [IN PROGRESS] 2026-11-18 Apply Production foundation และเตรียม Edge compatibility API สำหรับ Event–Detour
 - **ไฟล์:** `supabase/migrations/20261117135032_event_detour_relationships.sql` (apply แล้ว), `supabase/functions/hdms-api/index.ts`, `app/actions/doh-actions.ts`, `lib/event-detour-links.ts`, `docs/AI_HANDOFF.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`
 - **ฐานข้อมูล Production:** เจ้าของอนุมัติ migration แล้ว; หลัง apply ตรวจ read-back ได้ 18 events, 18 segments, 13 links (12 `PENDING`, 1 `WITHDRAWN`, 0 `RECOMMENDED`) และไม่มี geometry revision ที่ผิดรูปแบบ. สิทธิ์ RPC ยังจำกัดให้ `service_role` เท่านั้น; `anon` และ `authenticated` เรียกไม่ได้.
-- **ชั้น Edge ที่กำลังเตรียม:** เพิ่มการตรวจ boundary input ที่เทียบกับ contract ฝั่งเว็บ และ action อ่าน/แทนที่รายการแบบ atomic (`getEventDetourLinksAction`, `replaceEventDetourLinksAction`) ซึ่งจะเรียก RPC ที่มี optimistic version และ operation idempotency. ยังไม่ deploy Edge และยังไม่มีหน้า Admin/หน้า Public อ่าน schema ใหม่ จึงไม่เปลี่ยนข้อมูลหรือการแสดงผลที่ใช้งานจริง.
+- **ชั้น Edge:** action อ่าน/แทนที่รายการแบบ atomic (`getEventDetourLinksAction`, `replaceEventDetourLinksAction`) ถูก deploy เป็น v19 แล้ว; ยังไม่มีหน้า Admin/หน้า Public อ่าน schema ใหม่ จึงยังไม่เปลี่ยนข้อมูลหรือการแสดงผลที่ใช้งานจริง.
 - **ย้อนกลับ:** ก่อน UI cutover สามารถ rollback schema ตามหัว migration (drop trigger/function/table/column ใหม่ในลำดับย้อนกลับ) โดยไม่ลบ `flood_id_ref` หรือ `detour_meta`; ส่วน source Edge/web revert commit นี้ได้. ห้าม rollback schema หากมีข้อมูลที่ถูกสร้างผ่าน editor รุ่นใหม่โดยไม่ export/ประเมินก่อน.
 
 ### [UPDATE-105] 2026-11-18 อัปเดตสถานะ Public Fallback (ปิด B-019), ซิงก์ docs/AI_HANDOFF.md และปิด KI-014
