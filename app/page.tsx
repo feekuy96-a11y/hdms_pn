@@ -99,37 +99,14 @@ import {
   sortDetoursByOrder,
 } from "@/lib/detour-presentation";
 import { parseFloodDirectionMeta, resolveEffectiveRoadSide, AFFECTED_ROAD_PART_LABELS, normalizeMediaUrl } from "@/lib/flood-event-schema";
+import {
+  getTrafficPresentation,
+  formatRelativeUpdateTime,
+  type TrafficStatus,
+  type StatusColor,
+} from "@/lib/traffic-presentation";
 import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
-
-type TrafficStatus = "CLOSED" | "WARNING" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE" | "PENDING_VERIFICATION";
-
-function getTrafficPresentation(status: string, waterLevelCm: number, detailStatus?: string) {
-  if (detailStatus === "PENDING_VERIFICATION" || status === "PENDING_VERIFICATION") {
-    return { label: "รอตรวจสอบสถานะ", detail: "อยู่ระหว่างตรวจสอบสถานการณ์หน้างาน", icon: "⏳", color: "slate" as const };
-  }
-  if (detailStatus === "NO_SMALL_VEHICLES") {
-    return { label: "รถเล็กไม่สามารถผ่านได้", detail: `ระดับน้ำ ${waterLevelCm} ซม. รถเล็กผ่านไม่ได้`, icon: "🚗", color: "orange" as const };
-  }
-  switch (status) {
-    case "CLOSED":
-      return { label: "ผ่านไม่ได้", detail: "รถทุกชนิดผ่านไม่ได้", icon: "⛔", color: "red" as const };
-    case "LIGHT_VEHICLES_ONLY":
-      return { label: "รถเล็กผ่านได้", detail: "อนุญาตเฉพาะรถขนาดเล็ก", icon: "🚗", color: "sky" as const };
-    case "ONE_LANE":
-      return { label: "รถเล็กผ่านได้ ๑ ช่องทาง", detail: "เปิดการจราจรหนึ่งช่องทาง", icon: "↔️", color: "amber" as const };
-    case "WARNING":
-      return { label: "รถเล็กผ่านไม่ได้", detail: `ระดับน้ำ ${waterLevelCm} ซม.`, icon: "⚠️", color: "amber" as const };
-    case "PASSABLE":
-      return { label: "ผ่านได้ปกติ", detail: "การจราจรผ่านได้ตามปกติ", icon: "✅", color: "emerald" as const };
-    default:
-      // External imports and older records can contain an unsupported value.
-      // It must never be presented as safe traffic until an officer verifies it.
-      return { label: "รอตรวจสอบสถานะ", detail: "ไม่พบสถานะการจราจรที่ยืนยันได้", icon: "⏳", color: "slate" as const };
-  }
-}
-
-type StatusColor = "red" | "orange" | "amber" | "sky" | "emerald" | "slate";
 
 // Most severe first, so the points citizens must avoid are always at the top of the list.
 const STATUS_ORDER: Record<StatusColor, number> = { red: 0, orange: 1, amber: 2, sky: 3, emerald: 4, slate: 5 };
@@ -241,21 +218,6 @@ function parseRouteCoordinates(raw?: string | [number, number][] | null): [numbe
   } catch {
     return [];
   }
-}
-
-function formatRelativeUpdateTime(iso?: string | null): string {
-  if (!iso) return "อัปเดต ไม่ระบุเวลา";
-  const ts = new Date(iso).getTime();
-  if (!Number.isFinite(ts)) return "อัปเดต ไม่ระบุเวลา";
-  const diffMs = Math.max(0, Date.now() - ts);
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return "อัปเดต เมื่อสักครู่";
-  if (mins < 60) return `อัปเดต ${mins} นาทีที่แล้ว`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `อัปเดต ${hours} ชม.ที่แล้ว`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `อัปเดต ${days} วันที่แล้ว`;
-  return `อัปเดต ${new Date(ts).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}`;
 }
 
 function formatFloodSideShortLabel(side: ReturnType<typeof resolveEffectiveRoadSide>): string | null {

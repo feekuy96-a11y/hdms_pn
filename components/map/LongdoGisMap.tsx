@@ -25,6 +25,7 @@ import {
   parseFloodDirectionMeta,
   normalizeMediaUrl,
 } from "@/lib/flood-event-schema";
+import { getTrafficPresentation } from "@/lib/traffic-presentation";
 import { Layers, Navigation, Building2, Map, ChevronUp, ChevronDown, LocateFixed } from "lucide-react";
 
 const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -478,28 +479,12 @@ function resolveRecordedLanesText(flood: FloodRoute): string | null {
 }
 
 function resolvePopupTrafficStatus(flood: FloodRoute): { label: string; badgeClass: string } {
-  const detail = flood.direction_meta?.trafficStatusDetail;
-  const status = String(flood.traffic_status || "");
-  if (detail === "PENDING_VERIFICATION" || status === "PENDING_VERIFICATION") {
-    return { label: "รอตรวจสอบสถานะ", badgeClass: "bg-slate-600/80 text-white border border-slate-400/50" };
-  }
-  if (detail === "NO_SMALL_VEHICLES") {
-    return { label: "รถเล็กไม่สามารถผ่านได้", badgeClass: "bg-orange-500 text-slate-950 font-black" };
-  }
-  switch (status) {
-    case "CLOSED":
-      return { label: "ผ่านไม่ได้", badgeClass: "bg-red-600 text-white font-black" };
-    case "LIGHT_VEHICLES_ONLY":
-      return { label: "รถเล็กผ่านได้", badgeClass: "bg-sky-500 text-slate-950 font-black" };
-    case "ONE_LANE":
-      return { label: "รถเล็กผ่านได้ ๑ ช่องทาง", badgeClass: "bg-amber-400 text-slate-950 font-black" };
-    case "WARNING":
-      return { label: "รถเล็กผ่านไม่ได้", badgeClass: "bg-amber-400 text-slate-950 font-black" };
-    case "PASSABLE":
-      return { label: "ผ่านได้ปกติ", badgeClass: "bg-emerald-500 text-white font-black" };
-    default:
-      return { label: "รอตรวจสอบสถานะ", badgeClass: "bg-slate-600/80 text-white border border-slate-400/50" };
-  }
+  const presentation = getTrafficPresentation(
+    flood.traffic_status,
+    flood.water_level_cm ?? 0,
+    flood.direction_meta?.trafficStatusDetail
+  );
+  return { label: presentation.label, badgeClass: presentation.popupBadgeClass };
 }
 
 function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0): string {
@@ -1593,25 +1578,10 @@ export function LongdoGisMap({
         const centerLat = count > 0 ? sumLat / count : APP_CONFIG.DEFAULT_CENTER.lat;
         const centerLon = count > 0 ? sumLon / count : APP_CONFIG.DEFAULT_CENTER.lon;
 
-        let zIndex = 200;
-        let capsuleClass = "doh-capsule-tag doh-capsule-amber";
-
-        if (ev.mostSevereStatus === "CLOSED") {
-          capsuleClass = "doh-capsule-tag doh-capsule-red";
-          zIndex = 1000;
-        } else if (ev.mostSevereStatus === "NO_SMALL_VEHICLES") {
-          capsuleClass = "doh-capsule-tag doh-capsule-orange";
-          zIndex = 800;
-        } else if (ev.mostSevereStatus === "CAUTION") {
-          capsuleClass = "doh-capsule-tag doh-capsule-amber";
-          zIndex = 600;
-        } else if (ev.mostSevereStatus === "PASSABLE") {
-          capsuleClass = "doh-capsule-tag doh-capsule-green";
-          zIndex = 200;
-        } else if (ev.mostSevereStatus === "PENDING_VERIFICATION") {
-          capsuleClass = "doh-capsule-tag doh-capsule-slate";
-          zIndex = 400;
-        }
+        const evPresentation = getTrafficPresentation(ev.mostSevereStatus, ev.maxWaterLevelCm);
+        const zIndexMap = { red: 1000, orange: 800, amber: 700, sky: 600, slate: 400, emerald: 200 } as const;
+        const zIndex = zIndexMap[evPresentation.color];
+        const capsuleClass = evPresentation.capsuleClass;
 
         const pinIcon = L.divIcon({
           html: `
@@ -1659,39 +1629,15 @@ export function LongdoGisMap({
         const waterKnown = meta?.water_level_known !== false;
         const levelText = waterKnown ? `${flood.water_level_cm} ซม.` : "รอวัดระดับน้ำ";
 
-        let zIndex = 400;
-        let capsuleClass = "doh-capsule-tag doh-capsule-slate";
-        let statusLabel = "รอตรวจสอบสถานะ";
-
-        if (trafficDetail === "PENDING_VERIFICATION" || (flood.traffic_status as string) === "PENDING_VERIFICATION") {
-          capsuleClass = "doh-capsule-tag doh-capsule-slate";
-          statusLabel = "รอตรวจสอบสถานะ";
-          zIndex = 400;
-        } else if (trafficDetail === "NO_SMALL_VEHICLES") {
-          capsuleClass = "doh-capsule-tag doh-capsule-orange";
-          statusLabel = "รถเล็กไม่สามารถผ่านได้";
-          zIndex = 800;
-        } else if (flood.traffic_status === "CLOSED" || trafficDetail === "CLOSED") {
-          capsuleClass = "doh-capsule-tag doh-capsule-red";
-          statusLabel = "ผ่านไม่ได้";
-          zIndex = 1000;
-        } else if (flood.traffic_status === "LIGHT_VEHICLES_ONLY") {
-          capsuleClass = "doh-capsule-tag doh-capsule-sky";
-          statusLabel = "รถเล็กผ่านได้";
-          zIndex = 600;
-        } else if (flood.traffic_status === "ONE_LANE") {
-          capsuleClass = "doh-capsule-tag doh-capsule-amber";
-          statusLabel = "รถเล็กผ่านได้ ๑ ช่องทาง";
-          zIndex = 600;
-        } else if (flood.traffic_status === "WARNING" || trafficDetail === "CAUTION") {
-          capsuleClass = "doh-capsule-tag doh-capsule-amber";
-          statusLabel = "รถเล็กผ่านไม่ได้";
-          zIndex = 800;
-        } else if (flood.traffic_status === "PASSABLE" || trafficDetail === "PASSABLE") {
-          capsuleClass = "doh-capsule-tag doh-capsule-green";
-          statusLabel = "ผ่านได้ปกติ";
-          zIndex = 200;
-        }
+        const presentation = getTrafficPresentation(
+          flood.traffic_status,
+          flood.water_level_cm ?? 0,
+          trafficDetail
+        );
+        const zIndexMap = { red: 1000, orange: 800, amber: 700, sky: 600, slate: 400, emerald: 200 } as const;
+        const zIndex = zIndexMap[presentation.color];
+        const capsuleClass = presentation.capsuleClass;
+        const statusLabel = presentation.label;
 
         // Never guess a missing direction as two-way: unknown stays UNKNOWN (no side badge, no lateral offset by direction).
         const dirCode = meta?.directionCode || (flood.road_side === "LEFT" ? "A_TO_B" : flood.road_side === "RIGHT" ? "B_TO_A" : flood.road_side === "BOTH" ? "BOTH" : "UNKNOWN");

@@ -358,3 +358,172 @@ test("admin detour console fetches full system data and keeps deactivated detour
   await expect(statusSelect).toContainText("เปิดใช้งาน (1)");
   await expect(statusSelect).toContainText("ปิดชั่วคราว (1)");
 });
+
+test("incident registry hides event codes, verifies complete saves, uses map flood icon, and avoids button overlap on narrow panes", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop admin console layout test");
+  const updated_at = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const savedPayloads: any[] = [];
+
+  const floods = [
+    {
+      id: "F-COMPLETE",
+      route_no: "4061",
+      section_name: "สะกอม - ปานาเระ",
+      km_start: "26+790",
+      km_end: "32+200",
+      lat_start: 6.75,
+      lon_start: 101.45,
+      lat_end: 6.76,
+      lon_end: 101.46,
+      coordinates_json: [[101.45, 6.75], [101.46, 6.76]],
+      water_level_cm: 45,
+      traffic_status: "WARNING",
+      road_side: "BOTH",
+      reporter_name: "หมวดทางหลวงปะนาเระ",
+      is_active: true,
+      updated_at,
+      direction_meta: {
+        schemaVersion: 2,
+        eventId: "EV-4061-COMPLETE",
+        eventCode: "FL-4061-ce5",
+        eventTitle: "ทล.4061 ตอนสะกอม - ปานาเระ",
+        directionCode: "BOTH",
+        roadSide: "BOTH",
+        affectedParts: ["ALL_LANES"],
+        trafficStatusDetail: "CAUTION",
+        waterLevelKnown: true,
+        status_verified: true,
+        villageOrLandmark: "บ้านคลอง ต.พ่อมิ่ง อ.ปะนาเระ",
+        photos: [{ id: "ph-1", dataUrl: "https://lh3.googleusercontent.com/d/mock1", sizeBytes: 120000 }],
+        updatedAt: updated_at,
+      },
+    },
+    {
+      id: "F-INCOMPLETE",
+      route_no: "42",
+      section_name: "ดอนยาง",
+      km_start: "100+000",
+      km_end: "101+000",
+      lat_start: 6.86,
+      lon_start: 101.24,
+      lat_end: 6.87,
+      lon_end: 101.25,
+      coordinates_json: [[101.24, 6.86], [101.25, 6.87]],
+      water_level_cm: 0,
+      traffic_status: "ONE_LANE",
+      road_side: "UNKNOWN",
+      is_active: true,
+      updated_at,
+      direction_meta: {
+        schemaVersion: 2,
+        eventId: "EV-42-INCOMPLETE",
+        eventCode: "FL-42-99",
+        eventTitle: "ทล.42 ตอนดอนยาง",
+        directionCode: "UNKNOWN",
+        roadSide: "UNKNOWN",
+        affectedParts: ["UNSPECIFIED"],
+        trafficStatusDetail: "PENDING_VERIFICATION",
+        waterLevelKnown: false,
+        photos: [],
+        updatedAt: updated_at,
+      },
+    },
+  ];
+
+  await page.route("**/functions/v1/hdms-api", async (route) => {
+    const payload = route.request().postDataJSON() as { action?: string; args?: unknown[] };
+    const action = payload?.action || "";
+
+    if (action === "getSystemDataAction") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          updatedAt: updated_at,
+          floodRoutes: floods,
+          detourRoutes: [],
+          timelineUpdates: [],
+          mitigationProjects: [],
+          highwayLayers: [],
+          offices: [],
+          mapStyles: { flood: { color: "#dc2626", weight: 7, opacity: 0.9 } },
+          systemSettings: { name: "ระบบทดสอบ", org: "แขวงทางหลวงปัตตานี", phone: "1586" },
+        }),
+      });
+      return;
+    }
+
+    if (action === "saveTimelineUpdateAction") {
+      const arg = (payload.args?.[0] || {}) as any;
+      savedPayloads.push(arg);
+      const target = floods.find((f) => f.id === arg.floodId);
+      if (target) {
+        target.water_level_cm = arg.waterLevelCm;
+        target.traffic_status = arg.trafficStatus;
+        target.direction_meta = {
+          ...(target.direction_meta as any),
+          ...(arg.directionMeta || {}),
+        };
+      }
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) });
+      return;
+    }
+
+    await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: `Unexpected action: ${action}` }) });
+  });
+
+  // Desktop width ~1050px keeps split-pane workspace < 860px to verify Option A container stacking
+  await page.setViewportSize({ width: 1050, height: 820 });
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "รายการเหตุการณ์");
+
+  const completeCard = page.locator(".doh-incident-segment").filter({ hasText: "26+790" }).first();
+  await expect(completeCard).toBeVisible();
+
+  // 1. Event codes hidden, no 300KB text, no ส่วนผิวทาง text
+  await expect(page.getByText("FL-4061-ce5")).toHaveCount(0);
+  await expect(completeCard).not.toContainText("300KB");
+  await expect(completeCard).not.toContainText("ส่วนผิวทาง");
+
+  // 2. Complete record displays real unified status, NOT รอตรวจสอบสถานะ, with updated time and เส้นทางที่ได้รับผลกระทบ
+  await expect(completeCard).toContainText("รถเล็กผ่านไม่ได้");
+  await expect(completeCard).not.toContainText("รอตรวจสอบสถานะ");
+  await expect(completeCard).not.toContainText("ข้อมูลไม่ครบ");
+  await expect(completeCard).toContainText("เส้นทางที่ได้รับผลกระทบ:");
+  await expect(completeCard).toContainText("ทุกช่องจราจร");
+  await expect(completeCard).toContainText("1 ภาพ");
+  await expect(completeCard).toContainText(/อัปเดต/);
+
+  // 3. Flood badge matches map flood color (#dc2626 -> rgb(220, 38, 38))
+  const iconBadge = completeCard.locator('[title="จุดน้ำท่วม"]');
+  await expect(iconBadge).toHaveCSS("background-color", "rgb(220, 38, 38)");
+
+  // 4. Incomplete record shows specific incomplete warning instead of stale verified status
+  const incompleteCard = page.locator(".doh-incident-segment").filter({ hasText: "100+000" }).first();
+  await expect(incompleteCard).toContainText("ข้อมูลไม่ครบ");
+  await expect(incompleteCard).toContainText("ยังไม่ระบุระดับน้ำ");
+  await expect(incompleteCard).toContainText("ยังไม่ระบุเส้นทางที่ได้รับผลกระทบ");
+
+  // 5. Action buttons do not overlap info text and do not clip off-screen in narrow container
+  const deleteBtn = completeCard.locator('[title="ลบช่วงนี้ (กู้คืนได้)"]');
+  const cardBox = await completeCard.boundingBox();
+  const infoBox = await completeCard.locator("> div").first().boundingBox();
+  const actionsBox = await completeCard.locator(".doh-incident-actions").boundingBox();
+  const deleteBox = await deleteBtn.boundingBox();
+  expect(cardBox).not.toBeNull();
+  expect(infoBox).not.toBeNull();
+  expect(actionsBox).not.toBeNull();
+  expect(deleteBox).not.toBeNull();
+  expect(actionsBox!.y).toBeGreaterThanOrEqual(infoBox!.y + infoBox!.height - 2);
+  expect(deleteBox!.x + deleteBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width + 1);
+
+  // 6. Quick update updates directionMeta.trafficStatusDetail and verifies status without รอตรวจสอบสถานะ option
+  await completeCard.getByRole("button", { name: /อัปเดตด่วน/ }).click();
+  const quickDialog = page.getByRole("dialog", { name: "อัปเดตระดับน้ำ" });
+  await expect(quickDialog.getByRole("option", { name: "รอตรวจสอบสถานะ" })).toHaveCount(0);
+  await quickDialog.locator("select").selectOption("PASSABLE");
+  await quickDialog.getByRole("button", { name: "บันทึกการอัปเดต" }).click();
+  await page.keyboard.press("Escape");
+  expect(savedPayloads[0]?.directionMeta?.trafficStatusDetail).toBe("PASSABLE");
+  expect(savedPayloads[0]?.directionMeta?.status_verified).toBe(true);
+});

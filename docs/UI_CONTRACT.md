@@ -14,7 +14,7 @@
 ## 2. โทเค็นและส่วนประกอบกลาง
 - `app/globals.css`: `.doh-readable` (ยกขนาด `text-[10px]`/`text-[11px]` เป็น 12px + วงโฟกัส) ใส่ที่ราก; `.doh-form` (ช่องกรอก ≥ 40px, 14px, มุมโค้งเท่ากัน, caption ของ label) ใส่ที่พื้นที่ฟอร์มแอดมิน
 - `components/admin/ui.tsx`: `FormSection` (การ์ดหัวข้อมีเลขขั้น), `ToolGroup` (กลุ่มปุ่มมีป้าย), `ActionButton` (`primary | secondary | pick | danger`, `active`), `StickyActionBar` (แถบบันทึกลอยติดขอบล่าง)
-- สถานะจราจร: ใช้ `getTrafficPresentation` และ `STATUS_*` ใน `app/page.tsx` ชุดเดียว (R1)
+- สถานะจราจร: ใช้ `getTrafficPresentation` และ `TRAFFIC_STATUS_OPTIONS` ใน `lib/traffic-presentation.ts` ชุดเดียวทั้งฝั่งประชาชน แผนที่ และแอดมิน (R1)
 
 ## 3. กติกาจัดวางฟอร์มแอดมิน
 1. หนึ่งฟอร์ม = หลาย `FormSection` ตามลำดับงานจริง (ข้อมูล → ตำแหน่ง/เส้น → สถานการณ์/ข้อความ) แต่ละการ์ดมีหัวข้อ 1 บรรทัดและคำอธิบายสั้น ไม่เกิน ~7 ช่องต่อการ์ด
