@@ -1,5 +1,16 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-100] 2026-11-17 ปรับปรุงการโหลดรูปภาพหน้างาน ตัวกรองทางเลี่ยง และความสอดคล้องสถานะจราจรบนแผนที่
+- **ไฟล์:** `lib/flood-event-schema.ts`, `app/page.tsx`, `components/map/LongdoGisMap.tsx`, `docs/CHANGELOG.md`
+- **การแก้ไข:**
+  1. **Normalize URL รูปภาพหน้างาน:** เพิ่ม `normalizeMediaUrl()` ใน `lib/flood-event-schema.ts` เพื่อแปลง URL Google Drive เดิม (`drive.google.com/uc`, `drive.usercontent.google.com`, `/file/d/`) ไปเป็น `https://lh3.googleusercontent.com/d/{id}` ทำให้รูปภาพหน้างานที่โหลดแบบ On-demand ใน Dossier Modal, ภาพใน Popup แผนที่ และภาพในโมดอลทางเลี่ยงแสดงผลได้อย่างถูกต้องโดยไม่ติดข้อจำกัด Cross-Origin-Resource-Policy
+  2. **ตัวกรองสายทางบนหน้าจอคอมพิวเตอร์และปุ่มกู้คืน:** แสดงชิปตัวกรองสายทาง (`routeChips`) ทั้งในแท็บน้ำท่วมและแท็บทางเลี่ยง และเพิ่มปุ่ม "ล้างตัวกรอง" เมื่อไม่พบเส้นทางเลี่ยงตามเงื่อนไขค้นหา ช่วยให้ผู้ใช้คอมพิวเตอร์สามารถคลิกล้างตัวกรองและเห็นรายการทางเลี่ยงทั้งหมดกลับมาทันที
+  3. **ความสอดคล้องของข้อความ/สีสถานะจราจร (R1):** ปรับค่า fallback เริ่มต้นของหมุดแคปซูลบนแผนที่ `LongdoGisMap.tsx` ให้แสดง "รอตรวจสอบสถานะ" (slate) แทน "เฝ้าระวัง / ระมัดระวัง" และปรับสถานะ `WARNING` เป็น "รถเล็กผ่านไม่ได้" ตรงตาม `getTrafficPresentation` และ `resolvePopupTrafficStatus`
+  4. **ความพร้อมของปุ่มตำแหน่งของฉัน:** ปรับปรุงปุ่มระบุตำแหน่งบนแผนที่ให้ผูกกับสถานะ `mapReady` และรองรับ retry polling (สูงสุด 3 วินาที) ขณะโหลดโมดูล Leaflet ป้องกันปัญหา "แผนที่ยังไม่พร้อม" เมื่อกดปุ่มทันทีขณะโหลดหน้าเว็บ
+- **ตรวจแล้ว:** `npm run lint` (0 warnings), `npm run typecheck`, `npx next build` (static export 6/6 หน้าสำเร็จ), และ Playwright E2E 102 เคส (66 passed, 36 skipped, 0 failed)
+- **ลำดับ deploy:** เว็บไซต์ GitHub Pages เท่านั้น (ไม่กระทบ SQL หรือ Edge Function) · ย้อนกลับด้วย `git revert` ได้ทันที
+
+
 ### [UPDATE-099] 2026-11-17 แก้ปัญหาปิดใช้งานทางเลี่ยงชั่วคราวแล้วรายการหายจากหน้า Admin
 - **ไฟล์:** `app/admin/page.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/BACKLOG.md`, `docs/CHANGELOG.md`
 - **สาเหตุ:** หน้า Admin (`app/admin/page.tsx`) เรียก `getPublicSystemDataAction()` เป็นค่าเริ่มต้นเมื่อ `needsFullGeometry === false` แต่ภายหลัง `getPublicSystemDataAction()` ถูกปรับให้ไปเรียก `doh_get_public_system_data_display_rpc()` ซึ่งตัดรายการ `is_active = false` และ Draft ออกทั้งหมด ทำให้ทางเลี่ยงที่ถูกปิดใช้งานชั่วคราว (`is_active = false`) หายไปจากรายการ Admin และกดเปิดกลับไม่ได้

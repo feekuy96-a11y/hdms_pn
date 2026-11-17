@@ -98,7 +98,7 @@ import {
   parseDetourAdvice,
   sortDetoursByOrder,
 } from "@/lib/detour-presentation";
-import { parseFloodDirectionMeta, resolveEffectiveRoadSide, AFFECTED_ROAD_PART_LABELS } from "@/lib/flood-event-schema";
+import { parseFloodDirectionMeta, resolveEffectiveRoadSide, AFFECTED_ROAD_PART_LABELS, normalizeMediaUrl } from "@/lib/flood-event-schema";
 import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
 
@@ -615,7 +615,11 @@ export default function HomePage() {
             .eq("id", flood.id)
             .maybeSingle();
           if (data?.direction_meta?.photos && Array.isArray(data.direction_meta.photos) && data.direction_meta.photos.length > 0) {
-            setOnDemandPhotos((prev) => ({ ...prev, [flood.id]: data.direction_meta.photos }));
+            const normalizedPhotos = data.direction_meta.photos.map((p: any) => ({
+              ...p,
+              dataUrl: normalizeMediaUrl(p?.dataUrl),
+            }));
+            setOnDemandPhotos((prev) => ({ ...prev, [flood.id]: normalizedPhotos }));
           }
         } catch {
           // Fallback to primary photo already available
@@ -900,8 +904,8 @@ export default function HomePage() {
               />
             </div>
 
-            {/* Route Quick Filter Chips (Shown when viewing floods) */}
-            {sidebarTab !== "DETOUR" && routeChips.length > 1 && (
+            {/* Route Quick Filter Chips (Available for both floods and detours) */}
+            {routeChips.length > 1 && (
               <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px]">
                 {routeChips.map((chip) => {
                   const isActive = selectedRouteFilter === chip.id;
@@ -944,7 +948,23 @@ export default function HomePage() {
             {sidebarTab === "DETOUR" && filteredDetours.length === 0 && (
               <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-6 text-center text-sm space-y-2.5">
                 <h4 className="font-heading font-bold text-white text-xs">ไม่พบเส้นทางเลี่ยงที่ค้นหา</h4>
-                <p className="text-xs text-slate-400 leading-relaxed">ขณะนี้ยังไม่มีเส้นทางเลี่ยงที่ตรงกับคำค้นหาของคุณ</p>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  {systemData.detourRoutes.length === 0
+                    ? "ขณะนี้ยังไม่มีข้อมูลเส้นทางเลี่ยงในระบบ"
+                    : "ขณะนี้ยังไม่มีเส้นทางเลี่ยงที่ตรงกับคำค้นหาหรือตัวกรองของคุณ"}
+                </p>
+                {(searchQuery || selectedRouteFilter !== "ALL") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSelectedRouteFilter("ALL");
+                    }}
+                    className="mt-3 min-h-11 rounded-lg border border-amber-400 px-4 font-bold text-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                  >
+                    ล้างตัวกรอง
+                  </button>
+                )}
               </div>
             )}
             {sidebarTab === "FLOOD" && filteredFloods.length === 0 && (
@@ -1943,7 +1963,7 @@ export default function HomePage() {
                         </summary>
                         <div className="relative overflow-hidden rounded-b-xl bg-slate-950">
                           <img
-                            src={linked.latest_photo_url}
+                            src={normalizeMediaUrl(linked.latest_photo_url)}
                             alt="ภาพจุดน้ำท่วมที่ผูกกับทางเลี่ยง"
                             className="w-full h-40 object-cover"
                           />
