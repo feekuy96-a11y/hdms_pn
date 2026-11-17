@@ -77,7 +77,14 @@ test("public incident details group linked detours and keep standalone detours s
     await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
   }
 
+  await expect(page.getByRole("button", { name: /สัญลักษณ์บนแผนที่|สัญลักษณ์/, exact: true })).toBeVisible();
+  await expect(page.locator(".doh-map-capsule-pin").first()).toBeVisible();
+  await expect(page.locator(".doh-map-capsule-pin svg").first()).toHaveAttribute("stroke", "white");
+  await expect(page.locator(".doh-detour-symbol").first()).toBeVisible();
+
   await page.getByRole("button", { name: /ทางเลี่ยง \(/ }).filter({ visible: true }).first().click();
+  await expect(page.locator(".doh-map-capsule-pin").first()).toBeVisible();
+  await expect(page.locator(".doh-detour-symbol").first()).toBeVisible();
   await expect(page.getByRole("button", { name: /ทางเลี่ยงอิสระสายทดสอบ/ }).filter({ visible: true }).first()).toBeVisible();
   await page.getByRole("button", { name: /น้ำท่วม \(/ }).filter({ visible: true }).first().click();
   await page.getByRole("button").filter({ hasText: "ตอนบ้านดี - ปะลัส", visible: true }).first().click();
