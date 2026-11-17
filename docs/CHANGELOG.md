@@ -12,6 +12,7 @@
 - **สาเหตุ:** direct fallback ใน browser และ compatibility fallback ของ `getPublicSystemDataAction()` เคยย้อนกลับไป RPC/payload ฝั่ง Admin ได้ เมื่อ Edge ล่มหรือเป็นรุ่นเก่า ซึ่งขัดกับ public wrapper ที่ตั้งใจกรอง Draft/inactive ไว้แล้ว.
 - **การแก้ไข:** fallback แบบ network เรียกได้เฉพาะ `doh_get_public_system_data_display_rpc()`; ถ้า RPC สาธารณะใช้ไม่ได้ให้ Query แสดง Error/Retry แทน และตัด fallback จาก public action ไป `getSystemDataAction()` ออก.
 - **ตรวจแล้ว:** Playwright `public-fallback-contract.spec.ts` ผ่าน desktop และ mobile (4/4): เมื่อ abort Edge request มีเฉพาะ request ไป public RPC และไม่มี request ไป RPC ฝั่ง Admin; เมื่อ Edge รุ่นเก่าตอบ `Unknown operation` ระบบ retry เฉพาะ public action และแสดง Error/Retry โดยไม่เรียก full Admin action.
+- **CI stability:** หลัง merge ครั้งแรก CI พบ assertion Error/Retry flaky เพราะ React Query backoff ใช้เวลามากกว่า default 5 วินาทีบน runner; เพิ่ม timeout test เป็น 15 วินาทีตามพฤติกรรม retry จริง และรัน regression ซ้ำผ่าน 4/4 ในเครื่อง.
 - **สถานะ:** source ผ่านการทดสอบแล้ว แต่ยังไม่อยู่ `main`/GitHub Pages; ห้ามอ้างว่า Production แก้แล้วจนกว่า PR, CI และ Pages workflow จะผ่าน.
 
 ### [IN PROGRESS] 2026-11-17 Event–Detour many-to-many
