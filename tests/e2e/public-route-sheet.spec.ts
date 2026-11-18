@@ -102,11 +102,11 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
           section_name: "ตอนดอนยาง - บ้านดี ชื่อตอนยาวสำหรับทดสอบมือถือ",
           km_start: "103+200",
           km_end: "104+850",
-          lat_start: 6.86,
-          lon_start: 101.24,
-          lat_end: 6.87,
-          lon_end: 101.25,
-          coordinates_json: [[101.24, 6.86], [101.25, 6.87]],
+          lat_start: 6.83,
+          lon_start: 101.225,
+          lat_end: 6.84,
+          lon_end: 101.235,
+          coordinates_json: [[101.225, 6.83], [101.235, 6.84]],
           water_level_cm: 35,
           traffic_status: "WARNING",
           road_side: "RIGHT",
@@ -133,11 +133,11 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
           flood_id_ref: "F-MOB-42",
           route_name: "เส้นทางเลี่ยง ทล.42 ชื่อยาวสำหรับทดสอบป๊อปอัพมือถือไม่ให้ล้นจอ",
           direction_mode: "TWO_WAY",
-          lat_start: 6.85,
-          lon_start: 101.23,
-          lat_end: 6.855,
-          lon_end: 101.25,
-          coordinates_json: [[101.23, 6.85], [101.238, 6.842], [101.25, 6.855]],
+          lat_start: 6.79,
+          lon_start: 101.26,
+          lat_end: 6.79,
+          lon_end: 101.29,
+          coordinates_json: [[101.26, 6.79], [101.275, 6.795], [101.29, 6.79]],
           description: "=== ทิศทางขาไป ===\n1. จุดเริ่มต้น: แยกเมาะมาวี\n2. ถึงจุดบรรจบแยกบ้านดี\n\n=== ทิศทางขากลับ ===\n1. จุดเริ่มต้น: แยกบ้านดี\n2. ถึงจุดบรรจบแยกเมาะมาวี",
           detour_meta: {
             order_index: 1,
@@ -191,13 +191,15 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   ).toBe(true);
 
   // 1. Flood summary popup at 360x640
-  await page.locator(".doh-map-capsule-pin").first().click({ force: true });
+  await page.locator(".doh-map-capsule-pin").first().click();
   const floodPopup = page.locator(".doh-flood-leaflet-popup");
   await expect(floodPopup).toBeVisible();
   await expect.poll(async () => {
     const box = await floodPopup.boundingBox();
-    return Boolean(box && box.width <= 344 && box.height <= 370 && box.x >= 0 && box.x + box.width <= 360);
-  }).toBe(true);
+    return box
+      ? { okWidth: box.width <= 344, okHeight: box.height <= 370, okLeft: box.x >= 0, okRight: box.x + box.width <= 360 }
+      : null;
+  }).toEqual({ okWidth: true, okHeight: true, okLeft: true, okRight: true });
   await expect(floodPopup.getByRole("button", { name: "ดูรายละเอียด" })).toBeVisible();
   await expect(floodPopup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -215,13 +217,15 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   await expect(dossier).toHaveCount(0);
 
   // 2. Detour popup at 360x640
-  await page.locator(".doh-detour-symbol").first().click({ force: true });
+  await page.locator(".doh-detour-symbol").first().click();
   const detourPopup = page.locator(".doh-detour-leaflet-popup").filter({ hasText: "เส้นทางเลี่ยง" });
   await expect(detourPopup).toBeVisible();
   await expect.poll(async () => {
     const box = await detourPopup.boundingBox();
-    return Boolean(box && box.width <= 344 && box.height <= 370 && box.x >= 0 && box.x + box.width <= 360);
-  }).toBe(true);
+    return box
+      ? { okWidth: box.width <= 344, okHeight: box.height <= 370, okLeft: box.x >= 0, okRight: box.x + box.width <= 360 }
+      : null;
+  }).toEqual({ okWidth: true, okHeight: true, okLeft: true, okRight: true });
   await expect(detourPopup.getByRole("button", { name: "ขาไป A → B" })).toBeVisible();
   await expect(detourPopup.getByRole("button", { name: "ขากลับ B → A" })).toBeVisible();
   await expect(detourPopup.getByRole("button", { name: /นำทางด้วย Google Maps/ })).toBeVisible();
@@ -232,13 +236,15 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   await expect(detourPopup).toHaveCount(0);
 
   // 3. Point photo popup at 360x640
-  await page.locator(".doh-detour-photo-start").first().click({ force: true });
+  await page.locator(".doh-detour-photo-start").first().click();
   const photoPopup = page.locator(".doh-detour-point-photo-popup");
   await expect(photoPopup).toBeVisible();
   await expect.poll(async () => {
     const box = await photoPopup.boundingBox();
-    return Boolean(box && box.width <= 344 && box.height <= 370 && box.x >= 0 && box.x + box.width <= 360);
-  }).toBe(true);
+    return box
+      ? { okWidth: box.width <= 344, okHeight: box.height <= 370, okLeft: box.x >= 0, okRight: box.x + box.width <= 360 }
+      : null;
+  }).toEqual({ okWidth: true, okHeight: true, okLeft: true, okRight: true });
   await expect(photoPopup.getByRole("button", { name: "ดูคำแนะนำทางเลี่ยง" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.locator(".doh-detour-leaflet-popup .leaflet-popup-close-button").click();

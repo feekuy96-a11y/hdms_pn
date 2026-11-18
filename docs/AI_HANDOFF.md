@@ -1,6 +1,6 @@
 # AI Handoff — สถานะร่วมของโครงการ HDMS_PN
 
-> อัปเดต: 18 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (ล่าสุดผ่าน `UPDATE-120` แถบสรุปแผนที่มือถือ 360px, `UPDATE-119` ป๊อปอัพมือถือ `0e57bb1`, และ `UPDATE-118` แยกโมดูลย่อย `B-005`) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
+> อัปเดต: 19 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (ล่าสุดผ่าน `UPDATE-121` แก้ `popupclose` และเสถียรภาพ E2E 360×640, `UPDATE-120` แถบสรุปแผนที่ 360px `e22796f`, `UPDATE-119` ป๊อปอัพมือถือ `0e57bb1`, และ `UPDATE-118` แยกโมดูลย่อย `B-005`) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
 
 ## ก่อนเริ่มงานทุกครั้ง
 
@@ -53,13 +53,12 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** ปรับแถบสรุปแผนที่บนมือถือ `360px` (`MapLegendOverlay.tsx`) และแก้ overlay/ปุ่มซูมบังปุ่มปิดป๊อปอัพบนมือถือ (`UPDATE-120`)
-- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `f92d84f` — `UPDATE-119`)
-- **ไฟล์ที่แก้ไขแล้ว:** `app/globals.css`, `components/map/{LongdoGisMap.tsx,MapLegendOverlay.tsx,longdo-map-popups.ts}`, `tests/e2e/public-route-sheet.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **งานที่กำลังทำ / เป้าหมาย:** แก้ไขสาเหตุที่ `test:e2e` บน CI (`CI #179`, `Deploy #161`) ตกใน `public-route-sheet.spec.ts` และแก้ `popupclose` ค้าง (`UPDATE-121`)
+- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `e22796f` — `UPDATE-120`)
+- **ไฟล์ที่แก้ไขแล้ว:** `components/map/LongdoGisMap.tsx`, `tests/e2e/public-route-sheet.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
 - **สิ่งที่ทำสำเร็จ:**
-  - เปลี่ยนแถบสรุปสถานการณ์บนแผนที่ใน `MapLegendOverlay.tsx` ให้ใช้ `flex-1 min-w-0 flex-wrap` (ใส่ `pointer-events-auto` เฉพาะป้าย) เพื่อให้ `"น้ำท่วม X จุด"` และ `"ทางเลี่ยง X เส้นทาง"` แสดงครบไม่ถูกตัดหรือชนปุ่ม `"สัญลักษณ์"` ที่ `360px`
-  - เพิ่ม `isMapPopupOpen` (`popupopen`/`popupclose`) ซ่อน overlay ด้านบนและปุ่มซูม `+ / -` บนมือถือ `< 640px` ชั่วคราวระหว่างเปิดป๊อปอัพ เพื่อไม่ให้บังปุ่มปิด `×` หรือข้อความในป๊อปอัพ
-  - เพิ่มการตรวจไม่ซ้อนทับและไม่ถูกตัดใน `tests/e2e/public-route-sheet.spec.ts`
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** รอผล GitHub Actions `CI` และ `Deploy GitHub Pages` หลัง push รอบนี้ (รอบก่อน `f92d84f` ตกที่ `test:e2e` โดยยังไม่ได้ดู raw log จาก GitHub; คาดว่าส่วนหนึ่งเกิดจากปุ่ม `"ตำแหน่งของฉัน"` บังปุ่มปิดป๊อปอัพบน `360×640` ซึ่งแก้ไขแล้วในรอบนี้)
-- **ผลทดสอบล่าสุด:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (`BASE_PATH=/hdms_pn` ผ่าน), และ Playwright Static (`public-route-sheet`, `smoke`, `compact-card-detour-accordion`, `detour-navigation` — `26 passed`, `4 skipped`, `0 failed` ใน 22.2s)
-- **ขั้นตอนถัดไป:** ตรวจผล CI และ `Deploy GitHub Pages` บน `main` หลัง push; หาก `test:e2e` บน CI ยังแดงให้นำบรรทัด error จาก GitHub Actions มาแก้ไขต่อ
+  - แก้ `popupclose` ใน `LongdoGisMap.tsx` ให้ตรวจ `activePopup !== e?.popup` ไม่ให้ `isMapPopupOpen` ค้างเป็น `true` หลังปิดป๊อปอัพ
+  - แยกพิกัดหมุดทดสอบใน `tests/e2e/public-route-sheet.spec.ts` ให้อยู่โซนกลางจอและไม่ซ้อนกับแคปซูล `ทล.42` พร้อมถอด `{ force: true }` และทดสอบซ้ำ 5 รอบผ่าน 100%
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** รอตรวจผล GitHub Actions `CI` และ `Deploy GitHub Pages` หลัง push รอบนี้
+- **ผลทดสอบล่าสุด:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (`BASE_PATH=/hdms_pn` ผ่าน), Playwright `--repeat-each=5` (`10 passed, 10 skipped, 0 failed`), และ Playwright E2E 4 ไฟล์ (`26 passed, 4 skipped, 0 failed` ใน 20.7s)
+- **ขั้นตอนถัดไป:** ยืนยันผล CI (`CI`) และ `Deploy GitHub Pages` บน `main` หลัง push และตรวจ HTTP 200 บน `https://feekuy96-a11y.github.io/hdms_pn/`

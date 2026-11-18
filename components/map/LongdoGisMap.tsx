@@ -432,8 +432,9 @@ export function LongdoGisMap({
             L.DomEvent.disableScrollPropagation(container);
           }
         });
-        map.on("popupclose", () => {
-          setIsMapPopupOpen(Boolean((map as any)._popup && (map as any)._popup.isOpen?.()));
+        map.on("popupclose", (e: any) => {
+          const activePopup = (map as any)._popup;
+          setIsMapPopupOpen(Boolean(activePopup && activePopup !== e?.popup && activePopup.isOpen?.()));
         });
       } catch (err) {
         console.error("[LongdoGisMap] Failed to initialize Leaflet map:", err);

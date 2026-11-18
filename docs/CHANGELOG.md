@@ -1,5 +1,13 @@
 ﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-121] 2026-11-19 แก้ `popupclose` และพิกัดเทส 360×640 ที่ทำให้ E2E บน CI แกว่ง
+- **ไฟล์:** `components/map/LongdoGisMap.tsx`, `tests/e2e/public-route-sheet.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **แก้ `isMapPopupOpen` ค้างเมื่อปิดป๊อปอัพ (`components/map/LongdoGisMap.tsx`):** ปรับ handler `popupclose` ให้ตรวจ `(map as any)._popup !== e?.popup` (เพราะ Leaflet ยิง `popupclose` ก่อนล้าง `map._popup` หมด) เพื่อให้แถบควบคุมบนแผนที่และปุ่มซูมคืนกลับมาทุกครั้งหลังปิดป๊อปอัพ
+  2. **แก้พิกัดหมุดทดสอบใน `tests/e2e/public-route-sheet.spec.ts`:** แยกพิกัดหมุดน้ำท่วม (`101.225–101.235, 6.83–6.84`) กับหมุดทางเลี่ยง/ภาพทางเข้า (`101.26–101.29, 6.79–6.795`) ให้อยู่โซนกลางจอและห่างจากแคปซูล `ทล.42` (~65px) พร้อมถอด `{ force: true }` ออกจาก `.click()` เพื่อตรวจการไม่ถูกบังจริงบน `360×640`
+- **ตรวจแล้ว:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (`BASE_PATH=/hdms_pn` ผ่าน), Playwright `--repeat-each=5` บน `public-route-sheet.spec.ts` (`10 passed, 10 skipped, 0 failed`) และชุด `public-route-sheet`, `smoke`, `compact-card-detour-accordion`, `detour-navigation` (`26 passed, 4 skipped, 0 failed`)
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Push ขึ้น `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
 ### [UPDATE-120] 2026-11-18 ปรับแถบสรุปแผนที่บนมือถือ 360px ไม่ให้ตัดข้อความทางเลี่ยง และซ่อน overlay ชั่วคราวขณะเปิดป๊อปอัพบนมือถือ
 - **ไฟล์:** `app/globals.css`, `components/map/LongdoGisMap.tsx`, `components/map/MapLegendOverlay.tsx`, `components/map/longdo-map-popups.ts`, `tests/e2e/public-route-sheet.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
 - **การแก้ไข:**
