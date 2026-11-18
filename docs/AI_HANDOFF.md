@@ -1,6 +1,6 @@
 # AI Handoff — สถานะร่วมของโครงการ HDMS_PN
 
-> อัปเดต: 18 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (ล่าสุดผ่าน `UPDATE-116` commit `3beabf5` และ `UPDATE-117`) พร้อมการแยกโมดูลย่อยของ `LongdoGisMap.tsx` และ `MapManagementTab.tsx` (`B-005`), มาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
+> อัปเดต: 18 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (ล่าสุดผ่าน `UPDATE-119` ป๊อปอัพมือถือ 360×640 `0e57bb1` และ `UPDATE-118` แยกโมดูลย่อยของ `GisDataImportTab.tsx`, `LongdoGisMap.tsx` และ `MapManagementTab.tsx` (`B-005`)) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
 
 ## ก่อนเริ่มงานทุกครั้ง
 
@@ -53,10 +53,13 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** แยกโมดูลย่อยของ `GisDataImportTab.tsx` (`B-005`) ครบทั้ง 3 ไฟล์ใหญ่หลักของโปรเจกต์ (`UPDATE-118`)
-- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `0e7b4d1` — `UPDATE-117`)
-- **ไฟล์ที่แก้ไขแล้ว:** `components/admin/tabs/{GisDataImportTab.tsx,gis-import-helpers.ts,GisUploadMappingPanel.tsx,HighwaySpecificationsTableSection.tsx}`, `docs/{AI_HANDOFF,CHANGELOG,BACKLOG}.md`
-- **สิ่งที่ทำสำเร็จ:** ลดขนาด `GisDataImportTab.tsx` จาก 2,006 → 1,306 บรรทัด (ควบคู่กับ `LongdoGisMap.tsx` 2,713 → 1,846 บรรทัด และ `MapManagementTab.tsx` 3,297 → 2,118 บรรทัด) โดยไม่เปลี่ยน DOM/accessible name
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี (การแยกโมดูลย่อยตาม `B-005` ครบทั้ง 3 ไฟล์แล้ว)
-- **ผลทดสอบล่าสุด:** `lint` (0 warnings), `typecheck` (0 errors), `build:pages` (6/6)
-- **ขั้นตอนถัดไป:** ตรวจ CI / Deploy GitHub Pages หลัง Push
+- **งานที่กำลังทำ / เป้าหมาย:** ปรับปรุง Responsive CSS/Layout ของป๊อปอัพหน้าประชาชนบนมือถือ `360×640` (`UPDATE-119`, `f1c3453`–`0e57bb1`) และบันทึกเอกสารส่งมอบ
+- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `0e57bb1` — รอตรวจ CI/Deploy ของเอกสารชุดนี้)
+- **ไฟล์ที่แก้ไขแล้ว:** `app/{globals.css,page.tsx}`, `components/map/{LongdoGisMap.tsx,longdo-map-popups.ts}`, `tests/e2e/public-route-sheet.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **สิ่งที่ทำสำเร็จ:**
+  - ปรับขนาด, `max-height`, `autoPanPadding` และ `z-index` (`.leaflet-popup-pane`) ของป๊อปอัพน้ำท่วม/ทางเลี่ยง/ภาพทางเข้า ให้ไม่เกินขอบจอ `360px` และไม่ถูกแถบด้านบน/ปุ่มซูม `+ / -` บัง
+  - ปรับปุ่มปิด Modal รายละเอียดเป็น `>= 44×44px` และให้ชื่อทางเลี่ยงยาวใน Modal ขึ้นบรรทัดใหม่ได้ (`break-words`)
+  - เพิ่ม E2E test เฉพาะ `360×640` ใน `tests/e2e/public-route-sheet.spec.ts`
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี (แถบสรุปด้านบนแผนที่ใน `MapLegendOverlay.tsx` บนจอ `360px` ยังมีข้อความ `"ทางเลี่ยง X เส้นทาง"` ตัดหางเล็กน้อย — แยกเป็นข้อเสนอปรับต่อเนื่องได้)
+- **ผลทดสอบล่าสุด:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (Static export ผ่าน), และ Playwright Static (`public-route-sheet`, `smoke`, `compact-card-detour-accordion`, `detour-navigation` — `26 passed`, `4 skipped`, `0 failed`)
+- **ขั้นตอนถัดไป:** ยืนยันผล CI (`CI`) และ `Deploy GitHub Pages` บน `main` หลัง push และตรวจ HTTP 200 บน `https://feekuy96-a11y.github.io/hdms_pn/`

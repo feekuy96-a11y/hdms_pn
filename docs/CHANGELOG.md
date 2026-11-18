@@ -1,5 +1,15 @@
 ﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-119] 2026-11-18 ปรับปรุงป๊อปอัพหน้าประชาชนให้รองรับหน้าจอมือถือ 360×640 (`f1c3453`, `5f43716`, `0e57bb1`)
+- **ไฟล์:** `app/globals.css`, `app/page.tsx`, `components/map/LongdoGisMap.tsx`, `components/map/longdo-map-popups.ts`, `tests/e2e/public-route-sheet.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **คุมขนาดป๊อปอัพแผนที่แบบ Responsive (`components/map/longdo-map-popups.ts`, `components/map/LongdoGisMap.tsx`):** เพิ่ม `getResponsivePopupOptions` คำนวณ `minWidth`/`maxWidth` ตามขนาดหน้าจอมือถือ พร้อมตั้ง `autoPanPaddingTopLeft` (`[12, 96]`) และ `autoPanPaddingBottomRight` (`[12, 112]`) บน `< 640px` เพื่อเว้นระยะพ้นแถบสถานะด้านบนและแถบสรุปด้านล่าง
+  2. **แก้ปุ่มซูมบังป๊อปอัพและคุมขอบเขตบนมือถือ (`app/globals.css`, `components/map/longdo-map-popups.ts`):** เพิ่ม `.leaflet-popup-pane { z-index: 1050 !important; }` เพื่อไม่ให้ปุ่มซูม `+ / -` ลอยทับเนื้อหาป๊อปอัพ, จำกัดขนาดผ่าน `@media (max-width: 639px)` (`max-width: calc(100vw - 24px)`, ปุ่มปิด `34×34px`), ลด `max-height` ป๊อปอัพน้ำท่วม/ทางเลี่ยง/ภาพทางเข้าบนมือถือเป็น `min(54dvh, 350px)` พร้อม scroll ภายใน, ปรับปุ่มนำทางในป๊อปอัพทางเลี่ยงเรียงแนวตั้งบนมือถือ, และคงข้อความ/accessible names เดิม
+  3. **ปรับปรุง Dialog รายละเอียดฝั่งประชาชน (`app/page.tsx`):** ขยายปุ่มปิด Flood/Detour Modal เป็น `min-h-[44px] min-w-[44px]` บนมือถือ และเปลี่ยนหัวข้อชื่อทางเลี่ยงใน Detour Modal จาก `truncate` เป็น `break-words` เพื่อให้ชื่อยาวขึ้นบรรทัดใหม่ได้ตาม `UI_CONTRACT.md`
+  4. **เพิ่ม E2E ตรวจ Viewport 360×640 (`tests/e2e/public-route-sheet.spec.ts`):** เพิ่มเคส `citizen map popups fit 360x640 mobile viewport without overflow or changing accessible names` ตรวจขนาดป๊อปอัพ (`width <= 344`, `height <= 370`, `x + width <= 360`), `scrollWidth <= innerWidth`, กดปุ่มปิด `.leaflet-popup-close-button` ได้ไม่ถูกบัง, และ Accessible Name คงเดิม
+- **ตรวจแล้ว:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (Static export ผ่าน), และ Playwright Static (`PLAYWRIGHT_STATIC=1`: `public-route-sheet`, `smoke`, `compact-card-detour-accordion`, `detour-navigation` — `26 passed`, `4 skipped`, `0 failed`)
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Push ขึ้น `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
 ### [UPDATE-118] 2026-11-18 แยกโมดูลย่อยของ `GisDataImportTab.tsx` (B-005)
 - **ไฟล์:** `components/admin/tabs/GisDataImportTab.tsx`, `components/admin/tabs/gis-import-helpers.ts` (ใหม่), `components/admin/tabs/GisUploadMappingPanel.tsx` (ใหม่), `components/admin/tabs/HighwaySpecificationsTableSection.tsx` (ใหม่), `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
 - **การแก้ไข:**
