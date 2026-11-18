@@ -456,13 +456,30 @@ export function DetourManagementTab({
     ];
 
     const rows = records.map((d) => {
-      const linkedFlood = floodList.find((f) => f.id === d.flood_id_ref);
+      const linkedEvents = linkedEventsByDetourId.get(d.id) || [];
+      const legacyFlood = d.flood_id_ref ? floodList.find((f) => f.id === d.flood_id_ref) : undefined;
+      const linkedFloodIds = Array.from(
+        new Set(
+          linkedEvents
+            .flatMap((ev) => ev.floodRoutes.map((f) => f.id))
+            .concat(d.flood_id_ref ? [d.flood_id_ref] : [])
+        )
+      ).join("; ");
+      const routeNos =
+        Array.from(new Set(linkedEvents.map((ev) => ev.routeNo).filter(Boolean))).join(", ") ||
+        (legacyFlood ? legacyFlood.route_no : "");
+      const sectionSummary =
+        linkedEvents
+          .map((ev) => `${ev.routeNo} ${ev.sectionName}${ev.kmRangeLabel ? ` ${ev.kmRangeLabel}` : ""}`.trim())
+          .join(" | ") ||
+        (legacyFlood ? legacyFlood.section_name || "" : "");
+
       return [
         `"${d.id}"`,
         `"${(d.route_name || "").replace(/"/g, '""')}"`,
-        `"${d.flood_id_ref || ""}"`,
-        `"${linkedFlood ? linkedFlood.route_no : ""}"`,
-        `"${linkedFlood ? (linkedFlood.section_name || "").replace(/"/g, '""') : ""}"`,
+        `"${linkedFloodIds.replace(/"/g, '""')}"`,
+        `"${routeNos.replace(/"/g, '""')}"`,
+        `"${sectionSummary.replace(/"/g, '""')}"`,
         `"${d.is_active ? "เปิดใช้งาน" : "ปิดใช้งาน"}"`,
         `"${(d.description || "").replace(/"/g, '""').replace(/\n/g, " ")}"`,
         `"${d.lat_start || ""}, ${d.lon_start || ""}"`,

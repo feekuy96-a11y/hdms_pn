@@ -492,6 +492,16 @@ test("admin and citizen detail views render all linked detours and linked flood 
   await expect(detourModal.getByText(/ทล\.43 หนองจิก/)).toBeVisible();
   await page.keyboard.press("Escape");
 
+  const dispatchBtn = page.getByTitle("ออกรายงานเสนอผู้ว่าฯ (ด่วนที่สุด)").filter({ visible: true }).first();
+  if (await dispatchBtn.isVisible().catch(() => false)) {
+    await dispatchBtn.click();
+    const reportDialog = page.getByRole("dialog", { name: "แบบรายงานสถานการณ์อุทกภัย" });
+    await expect(reportDialog).toBeVisible();
+    await expect(reportDialog).toContainText("ทางเลี่ยงสาย 418 / ทางเลี่ยงสาย 4092");
+    await expect(reportDialog).not.toContainText("ทางเลี่ยงสายสำรอง 2003");
+    await page.keyboard.press("Escape");
+  }
+
   // 2. Citizen Public Portal
   await page.goto(`${base}/`);
   if ((page.viewportSize()?.width ?? 1280) < 1024) {

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { SystemDataPayload } from "@/db/default-data";
+import { getLinkedDetoursForFlood } from "@/lib/event-detour-links";
 import { formatThaiBuddhistDate } from "@/lib/gis-utils";
 import { APP_CONFIG } from "@/lib/constants";
 import { Printer, X } from "lucide-react";
@@ -121,7 +122,8 @@ export function OfficialReportDispatchModal({
               </thead>
               <tbody className="divide-y divide-slate-300">
                 {activeFloods.map((r, idx) => {
-                  const detour = systemData.detourRoutes.find((d) => d.flood_id_ref === r.id);
+                  const linkedDetours = getLinkedDetoursForFlood(r, systemData);
+                  const detourNames = linkedDetours.map((item) => item.detour.route_name).filter(Boolean).join(" / ");
                   const isClosed = r.traffic_status === "CLOSED";
                   return (
                     <tr key={r.id} className={isClosed ? "bg-red-50/50" : "bg-white"}>
@@ -140,7 +142,7 @@ export function OfficialReportDispatchModal({
                         </span>
                       </td>
                       <td className="p-2 border-r border-slate-300 text-slate-700 text-[10px]">
-                        {detour ? detour.route_name : "ไม่มีทางเลี่ยง / รอระดับน้ำลด"}
+                        {detourNames || "ไม่มีทางเลี่ยง / รอระดับน้ำลด"}
                       </td>
                       <td className="p-2 text-center text-slate-700 text-[10px]">
                         หมวดทางหลวงปัตตานี

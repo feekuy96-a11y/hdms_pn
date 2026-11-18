@@ -7,6 +7,7 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${appPort}`
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
+  workers: process.env.CI ? undefined : process.platform === "win32" ? 2 : undefined,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {

@@ -24,7 +24,7 @@
 
 ### การรัน E2E ในเครื่องแบบประหยัดเวลา (ตกลงแล้ว 2026-11-18)
 - ใช้ `PLAYWRIGHT_STATIC=1` ต่อ `out/` จาก `npm run build:pages` ให้ตรงกับ Production จริง ไม่ต้องรันรอบ `next start` ซ้ำ
-- รันเฉพาะไฟล์ `tests/e2e/*.spec.ts` ที่ตรงกับส่วนที่แก้ ร่วมกับ `tests/e2e/smoke.spec.ts` (ไม่ต้องรันทั้งชุดในเครื่อง) และไม่บังคับ `--workers=1` เพื่อให้ Playwright รันขนานตาม `fullyParallel: true`
+- รันเฉพาะไฟล์ `tests/e2e/*.spec.ts` ที่ตรงกับส่วนที่แก้ ร่วมกับ `tests/e2e/smoke.spec.ts` (ไม่ต้องรันทั้งชุดในเครื่อง) และจำกัดไม่เกิน 2 workers บน Windows (กำหนดไว้ใน `playwright.config.ts` แล้ว) เพื่อไม่ให้ Chromium แย่ง CPU จน timeout
 - ใช้ GitHub Actions (`ci.yml`) รันชุด E2E ฉบับเต็มบน static export รอบเดียวตอนเปิด PR
 
 ## P3 งานฐานข้อมูล / RPC
