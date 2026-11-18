@@ -53,10 +53,10 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** แยกโมดูลย่อยส่วนที่ 1 (`HighwayIdentificationSection.tsx`) และ `buildDetourMetaPayload` จาก `MapManagementTab.tsx` (`B-005`) พร้อมปรับสถานะเผยแพร่ล่าสุดใน `AI_HANDOFF.md` ให้ตรงกับ `main` (`UPDATE-117`)
-- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `3beabf5` — `UPDATE-116`)
-- **ไฟล์ที่แก้ไขแล้ว:** `components/admin/tabs/{MapManagementTab.tsx,HighwayIdentificationSection.tsx,map-management-helpers.ts}`, `docs/{AI_HANDOFF,CHANGELOG,BACKLOG}.md`
-- **สิ่งที่ทำสำเร็จ:** ลดขนาด `MapManagementTab.tsx` ลงต่อเนื่อง (3,297 → 2,460 → 2,118 บรรทัด) โดยแยกฟอร์มส่วนที่ 1 ข้อมูลสายทางและพื้นที่เป็น `HighwayIdentificationSection.tsx` และย้าย `buildDetourMetaPayload` เข้า `map-management-helpers.ts` พร้อมอัปเดตหลักฐาน CI/Deploy ของ `3beabf5`
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี (เหลือ `GisDataImportTab.tsx` หากต้องการแยกโมดูลย่อยเพิ่มในอนาคต)
-- **ผลทดสอบล่าสุด:** `lint` (0 warnings), `typecheck` (0 errors), `build:pages` (6/6), Playwright `smoke`/`admin-menus`/`flood-form-rules`/`detour-navigation`
-- **ขั้นตอนถัดไป:** ตรวจ CI / Deploy GitHub Pages หลัง Push; พิจารณาแยกโมดูลย่อยของ `GisDataImportTab.tsx` ตามความจำเป็น
+- **งานที่กำลังทำ / เป้าหมาย:** แยกโมดูลย่อยของ `GisDataImportTab.tsx` (`B-005`) ครบทั้ง 3 ไฟล์ใหญ่หลักของโปรเจกต์ (`UPDATE-118`)
+- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `0e7b4d1` — `UPDATE-117`)
+- **ไฟล์ที่แก้ไขแล้ว:** `components/admin/tabs/{GisDataImportTab.tsx,gis-import-helpers.ts,GisUploadMappingPanel.tsx,HighwaySpecificationsTableSection.tsx}`, `docs/{AI_HANDOFF,CHANGELOG,BACKLOG}.md`
+- **สิ่งที่ทำสำเร็จ:** ลดขนาด `GisDataImportTab.tsx` จาก 2,006 → 1,306 บรรทัด (ควบคู่กับ `LongdoGisMap.tsx` 2,713 → 1,846 บรรทัด และ `MapManagementTab.tsx` 3,297 → 2,118 บรรทัด) โดยไม่เปลี่ยน DOM/accessible name
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี (การแยกโมดูลย่อยตาม `B-005` ครบทั้ง 3 ไฟล์แล้ว)
+- **ผลทดสอบล่าสุด:** `lint` (0 warnings), `typecheck` (0 errors), `build:pages` (6/6)
+- **ขั้นตอนถัดไป:** ตรวจ CI / Deploy GitHub Pages หลัง Push

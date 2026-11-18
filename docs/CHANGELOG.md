@@ -1,5 +1,14 @@
 ﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-118] 2026-11-18 แยกโมดูลย่อยของ `GisDataImportTab.tsx` (B-005)
+- **ไฟล์:** `components/admin/tabs/GisDataImportTab.tsx`, `components/admin/tabs/gis-import-helpers.ts` (ใหม่), `components/admin/tabs/GisUploadMappingPanel.tsx` (ใหม่), `components/admin/tabs/HighwaySpecificationsTableSection.tsx` (ใหม่), `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **`gis-import-helpers.ts` (75 บรรทัด):** ย้าย pure functions สำหรับแปลงหลัก กม. (`kilometerPostMeters`, `formatKilometerPost`), ผิวทาง/ช่องจราจร (`normalizeSurface`, `normalizeLanes`), คำนวณระยะทาง (`calculateDistanceKm`), และ Web Worker simplification (`previewLines`, `simplifyInWorker`, `lineCoordinates`)
+  2. **`GisUploadMappingPanel.tsx` (324 บรรทัด):** แยกส่วนอัปโหลดไฟล์ GIS, Dual-Color Preview Inspection, การจับคู่ฟิลด์ข้อมูลโครงข่าย (GIS Attribute Mapping), ตารางตัวอย่าง 5 สายทางแรก, และสไลเดอร์ Douglas-Peucker
+  3. **`HighwaySpecificationsTableSection.tsx` (457 บรรทัด):** แยกตารางรายการทางหลวงและคุณสมบัติทางวิศวกรรม พร้อมตัวกรอง ค้นหา ส่งออก และแถวย่อย Child Branches (ลดขนาด `GisDataImportTab.tsx` จาก 2,006 → 1,306 บรรทัด โดยคง DOM structure และ accessible name เดิมทุกจุด)
+- **ตรวจแล้ว:** `npm run lint` (`0` warnings), `npx tsc --noEmit --incremental false` (`0` errors), และ `npm run build:pages` (`6/6` static pages)
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Push ขึ้น `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
 ### [UPDATE-117] 2026-11-18 แยกโมดูลย่อยส่วนที่ 1 (`HighwayIdentificationSection.tsx`) และ `buildDetourMetaPayload` จาก `MapManagementTab.tsx` พร้อมอัปเดตสถานะเผยแพร่ใน `AI_HANDOFF.md`
 - **ไฟล์:** `components/admin/tabs/HighwayIdentificationSection.tsx` (ใหม่), `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/map-management-helpers.ts`, `docs/{AI_HANDOFF,CHANGELOG,BACKLOG}.md`
 - **การแก้ไข:**

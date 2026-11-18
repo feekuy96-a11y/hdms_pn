@@ -36,6 +36,7 @@ import {
   lineAnimationClasses,
   dashArrayFor,
   raisePathLayers,
+  getResponsivePopupOptions,
   buildHighwayPopupHtml,
   buildDetourPopupHtml,
   buildDetourPointPhotoPopupHtml,
@@ -889,7 +890,7 @@ export function LongdoGisMap({
           baseWeight: detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight,
           baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
         });
-        const detourPopupOpts = { maxWidth: 440, minWidth: 320, className: "doh-detour-leaflet-popup" };
+        const detourPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
         polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), detourPopupOpts);
         polyline.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
@@ -930,7 +931,7 @@ export function LongdoGisMap({
             baseWeight: Math.max(3.5, (detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight) - 0.5),
             baseOpacity: detourStyle?.opacity ?? 0.9,
           });
-          const revPopupOpts = { maxWidth: 440, minWidth: 320, className: "doh-detour-leaflet-popup" };
+          const revPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
           revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), revPopupOpts);
           revPolyline.on("click", (e: any) => {
             L.DomEvent.stopPropagation(e);
@@ -958,7 +959,7 @@ export function LongdoGisMap({
           .bindTooltip(`📷 ภาพทางเข้าจุดเริ่มต้น A (${detour.route_name})`, { direction: "top" })
           .bindPopup(
             () => buildDetourPointPhotoPopupHtml(detour, "START", startPhoto, startLat, startLon),
-            { maxWidth: 380, minWidth: 280, className: "doh-detour-leaflet-popup" }
+            getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
           )
           .addTo(group);
         startMarker.on("click", (e: any) => {
@@ -978,7 +979,7 @@ export function LongdoGisMap({
           .bindTooltip(`📷 ภาพทางเข้าจุดสิ้นสุด B - ฝั่งขากลับ (${detour.route_name})`, { direction: "top" })
           .bindPopup(
             () => buildDetourPointPhotoPopupHtml(detour, "END", endPhoto, endLat, endLon),
-            { maxWidth: 380, minWidth: 280, className: "doh-detour-leaflet-popup" }
+            getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
           )
           .addTo(group);
         endMarker.on("click", (e: any) => {
@@ -1016,7 +1017,7 @@ export function LongdoGisMap({
 
     const countDetoursForFlood = (flood: FloodRoute) =>
       getLinkedDetoursForFlood(flood, systemData).length;
-    const floodPopupOpts = { maxWidth: 370, minWidth: 300, className: "doh-flood-leaflet-popup" };
+    const floodPopupOpts = getResponsivePopupOptions(L, 370, 300, "doh-flood-leaflet-popup");
 
     // 4d. Flood routes + capsule markers (with De-overlapping, Priority z-Index & Merged/Segment modes)
     const visibleFloods = (systemData.floodRoutes || []).filter(
@@ -1788,7 +1789,7 @@ export function LongdoGisMap({
           onOfficeDraggedRef.current?.(office.id, { lat: Number(position.lat.toFixed(6)), lon: Number(position.lng.toFixed(6)) });
         });
       }
-      marker.bindPopup(() => buildOfficePopupHtml(office));
+      marker.bindPopup(() => buildOfficePopupHtml(office), getResponsivePopupOptions(L, 320, 220, ""));
     });
 
     return () => {

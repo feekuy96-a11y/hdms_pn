@@ -1242,7 +1242,7 @@ export default function HomePage() {
                           type="button"
                           onClick={() => setShowDossier(false)}
                           aria-label="ปิดรายละเอียด"
-                          className="grid min-h-10 min-w-10 shrink-0 place-items-center rounded-lg bg-slate-800/90 p-2 text-slate-300 transition hover:bg-slate-700 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer"
+                          className="grid min-h-[44px] min-w-[44px] sm:min-h-10 sm:min-w-10 shrink-0 place-items-center rounded-lg bg-slate-800/90 p-2 text-slate-300 transition hover:bg-slate-700 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer"
                           title="ปิดหน้าต่างรายละเอียด"
                         >
                           <X className="w-5 h-5" />
@@ -1878,7 +1878,7 @@ export default function HomePage() {
                         ref={detourCloseRef}
                         type="button"
                         onClick={closeDetourDetails}
-                        className="grid h-8 w-8 place-items-center rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
+                        className="grid min-h-[44px] min-w-[44px] sm:min-h-9 sm:min-w-9 sm:h-9 sm:w-9 place-items-center rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
                         aria-label="ปิดหน้าต่างคำแนะนำทางเลี่ยง"
                       >
                         <X className="w-5 h-5" />
@@ -1906,7 +1906,7 @@ export default function HomePage() {
                           <Link2 className="w-5 h-5 stroke-[2.5]" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h4 className="font-heading text-sm sm:text-base font-bold text-white leading-tight truncate">
+                          <h4 className="font-heading text-sm sm:text-base font-bold text-white leading-snug break-words [overflow-wrap:anywhere]">
                             {viewingDetourModal.route_name}
                           </h4>
                           <p className="text-xs text-sky-200/90 font-medium leading-normal mt-0.5 break-words">

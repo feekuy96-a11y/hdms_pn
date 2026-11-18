@@ -17,29 +17,21 @@ import {
 type LineStylesMap = Record<string, import("@/db/default-data").MapLineStyleItem>;
 import {
   FileSpreadsheet,
-  Plus,
-  Upload,
-  MapPin,
-  Tag,
-  Building,
   CheckCircle2,
   Trash2,
-  Save,
-  Eye,
-  EyeOff,
-  Sliders,
-  Settings,
-  X,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  GitBranch,
-  ArrowRightLeft,
-  ArrowRight,
-  Compass,
-  RotateCcw,
-  Pin,
 } from "lucide-react";
+import { GisUploadMappingPanel } from "@/components/admin/tabs/GisUploadMappingPanel";
+import { HighwaySpecificationsTableSection } from "@/components/admin/tabs/HighwaySpecificationsTableSection";
+import {
+  kilometerPostMeters,
+  formatKilometerPost,
+  normalizeSurface,
+  normalizeLanes,
+  calculateDistanceKm,
+  previewLines,
+  simplifyInWorker,
+  lineCoordinates,
+} from "@/components/admin/tabs/gis-import-helpers";
 import {
   updateHighwayLayerAction,
   deleteHighwayLayerAction,
@@ -69,77 +61,6 @@ import {
   generateSectionGroupId,
   interpolateKmFromCoordinate,
 } from "@/lib/highway-schema";
-
-function kilometerPostMeters(value: unknown): number | null {
-  const raw = String(value ?? "").replace(/กม\.?/gi, "").replace(/,/g, "").trim();
-  if (!raw) return null;
-  const match = raw.match(/^(\d+)\s*\+\s*(\d{1,3})$/);
-  if (match) return Number(match[1]) * 1000 + Number(match[2]);
-  const numeric = Number(raw);
-  return Number.isFinite(numeric) ? Math.round(Number.isInteger(numeric) && numeric >= 1000 ? numeric : numeric * 1000) : null;
-}
-
-function formatKilometerPost(value: unknown): string {
-  const meters = kilometerPostMeters(value);
-  if (meters === null) return "";
-  return `${Math.floor(meters / 1000)}+${String(meters % 1000).padStart(3, "0")}`;
-}
-
-function normalizeSurface(value: unknown): string {
-  const surface = String(value ?? "").toLowerCase();
-  if (surface.includes("conc") || surface.includes("pcc") || surface.includes("concrete")) return "Conc.";
-  if (surface.includes("dst")) return "DST.";
-  return "AC.";
-}
-
-function normalizeLanes(value: unknown): string {
-  const match = String(value ?? "").match(/[2-8๒-๘]/)?.[0];
-  const digit = match && /[๒-๘]/.test(match) ? String("๒๓๔๕๖๗๘".indexOf(match) + 2) : match;
-  return ["2", "3", "4", "6", "8"].includes(digit || "") ? `${digit} ช่องจราจร` : "4 ช่องจราจร";
-}
-
-function calculateDistanceKm(start: unknown, end: unknown): string {
-  const startMeters = kilometerPostMeters(start);
-  const endMeters = kilometerPostMeters(end);
-  return startMeters === null || endMeters === null
-    ? ""
-    : (Math.abs(endMeters - startMeters) / 1000).toFixed(3);
-}
-
-function previewLines(features: ExtractedGisFeature[]): [number, number][][] {
-  const maxLines = 500;
-  const maxPointsPerLine = 500;
-  return features.slice(0, maxLines).map(({ coords }) => {
-    if (coords.length <= maxPointsPerLine) return coords;
-    const step = (coords.length - 1) / (maxPointsPerLine - 1);
-    return Array.from({ length: maxPointsPerLine }, (_, index) => coords[Math.round(index * step)]);
-  });
-}
-
-function simplifyInWorker(features: ExtractedGisFeature[], tolerance: number): Promise<ExtractedGisFeature[]> {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/route-simplify-worker.js`);
-    worker.onmessage = (event: MessageEvent<{ features?: ExtractedGisFeature[]; error?: string }>) => {
-      worker.terminate();
-      if (event.data.error || !event.data.features) reject(new Error(event.data.error || "ไม่สามารถประมวลผลเส้นทางได้"));
-      else resolve(event.data.features);
-    };
-    worker.onerror = () => { worker.terminate(); reject(new Error("ไม่สามารถประมวลผลไฟล์ในเบื้องหลังได้")); };
-    worker.postMessage({ features, tolerance });
-  });
-}
-
-function lineCoordinates(geometry: any): [number, number][] {
-  const coordinates = geometry?.type === "LineString"
-    ? geometry.coordinates
-    : geometry?.type === "MultiLineString"
-      ? geometry.coordinates.flat(1)
-      : [];
-  return Array.isArray(coordinates)
-    ? coordinates.filter((point: any) => Array.isArray(point) && Number.isFinite(Number(point[0])) && Number.isFinite(Number(point[1])))
-      .map((point: any) => [Number(point[0]), Number(point[1])] as [number, number])
-    : [];
-}
 
 interface GisDataImportTabProps {
   systemData: SystemDataPayload;
@@ -1213,288 +1134,43 @@ export function GisDataImportTab({
         </p>
       </div>
 
-      {/* Upload Dropzone */}
-      <div className="bg-slate-950 p-5 rounded-2xl border-2 border-dashed border-slate-700 hover:border-amber-400 transition space-y-3 text-center">
-        <Upload className="w-10 h-10 text-amber-400 mx-auto animate-bounce" />
-        <div>
-          <h4 className="font-heading font-bold text-sm text-white">เลือกไฟล์โครงข่ายเส้นทางหลวง</h4>
-          <p className="text-xs text-slate-400 mt-1">
-            รองรับ .kml, .kmz, .zip หรือ .shp (Shapefile), .geojson, .json, .gpx (พิกัด EPSG:4326)
-          </p>
-        </div>
-        <label className="inline-block bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-lg transition">
-          เปิดเลือกไฟล์จากคอมพิวเตอร์
-          <input
-            type="file"
-            accept=".kml,.kmz,.zip,.shp,.geojson,.json,.gpx,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,application/geo+json,application/json"
-            onChange={handleGisUpload}
-            className="hidden"
-          />
-        </label>
-      </div>
-
-      {/* Dual-Color Preview Inspection & Attribute Field Mapping Panel */}
-      {importedGisFeatures.length > 0 && (
-        <div className="bg-slate-950 p-5 rounded-2xl border border-sky-500/60 space-y-4 shadow-2xl animate-fade-in">
-          <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-2.5 gap-2">
-            <div>
-              <span className="font-heading font-bold text-sm text-sky-300 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-sky-400" /> พรีวิวตรวจสอบโครงข่าย: พบ {importedGisFeatures.length} เส้นทาง
-              </span>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                ระบบแสดงแนวเส้นทางใหม่ (เส้นประสีน้ำเงิน) บนแผนที่ พร้อมตรวจสอบแนวเส้นเดิม (สีเขียว)
-              </p>
-            </div>
-            <span className="text-[10px] bg-sky-950 text-sky-300 border border-sky-600 px-2.5 py-1 rounded-full font-heading font-bold">
-              Dual-Color Inspection Active
-            </span>
-          </div>
-
-          {/* Layer Name & Description */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-slate-300 block mb-1">ชื่อเลเยอร์โครงข่าย *</label>
-              <input
-                type="text"
-                value={importedLayerName}
-                onChange={(e) => setImportedLayerName(e.target.value)}
-                placeholder="เช่น โครงข่ายทางหลวงสาย 42"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-              />
-            </div>
-          </div>
-
-          {/* Attribute Field Mapping Card */}
-          <div className="p-4 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <h4 className="font-heading font-bold text-xs text-amber-300 flex items-center gap-1.5">
-                <Tag className="w-3.5 h-3.5 text-amber-400" /> การจับคู่ฟิลด์ข้อมูลโครงข่าย (GIS Attribute Mapping)
-              </h4>
-              <span className="text-[10px] text-slate-400">
-                ตรวจพบ {availableGisFields.length} คอลัมน์จากไฟล์
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              {/* Field 1: Route Code */}
-              <div>
-                <label className="text-slate-300 block mb-1">ฟิลด์รหัสสายทาง</label>
-                <select
-                  value={selectedRouteCodeField}
-                  onChange={(e) => setSelectedRouteCodeField(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                >
-                  <option value="">— กรอกรหัสสายทางเอง / กำหนดเอง —</option>
-                  {availableGisFields.map((f) => (
-                    <option key={f} value={f}>
-                      คอลัมน์: {f}
-                    </option>
-                  ))}
-                </select>
-                {!selectedRouteCodeField && (
-                  <input
-                    type="text"
-                    value={manualRouteCode}
-                    onChange={(e) => setManualRouteCode(e.target.value)}
-                    placeholder="ระบุรหัสสายทาง เช่น 42, 409"
-                    className="mt-1.5 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-mono"
-                  />
-                )}
-              </div>
-
-              {/* Field 2: Route Name / Label */}
-              <div>
-                <label className="text-slate-300 block mb-1">ฟิลด์ชื่อสายทาง / ป้ายกำกับ</label>
-                <select
-                  value={selectedRouteNameField}
-                  onChange={(e) => setSelectedRouteNameField(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                >
-                  <option value="">— กรอกชื่อสายทางเอง / ใช้ชื่อเลเยอร์ —</option>
-                  {availableGisFields.map((f) => (
-                    <option key={f} value={f}>
-                      คอลัมน์: {f}
-                    </option>
-                  ))}
-                </select>
-                {!selectedRouteNameField && (
-                  <input
-                    type="text"
-                    value={manualRouteName}
-                    onChange={(e) => setManualRouteName(e.target.value)}
-                    placeholder="ระบุชื่อสายทาง เช่น คลองแงะ - ยะหริ่ง"
-                    className="mt-1.5 w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-sky-300"
-                  />
-                )}
-              </div>
-
-              {/* Field 3: Classification */}
-              <div>
-                <label className="text-slate-300 block mb-1">ประเภททางหลวง</label>
-                <select
-                  value={targetLayerCategory}
-                  onChange={(e: any) => setTargetLayerCategory(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-heading font-medium"
-                >
-                  <option value="MAIN_HIGHWAY">ทางหลวงสายหลัก</option>
-                  <option value="SECOND_HIGHWAY">ทางหลวงสายรอง</option>
-                </select>
-              </div>
-
-              {/* Field 4: Label Display Mode */}
-              <div>
-                <label className="text-slate-300 block mb-1">โหมดการแสดงป้ายชื่อบนแผนที่</label>
-                <select
-                  value={labelDisplayMode}
-                  onChange={(e: any) => setLabelDisplayMode(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-heading font-medium"
-                >
-                  <option value="hover">แสดงเมื่อเลื่อนเมาส์ชี้</option>
-                  <option value="permanent">แสดงตลอดเวลาบนแนวเส้น</option>
-                  <option value="click">แสดงเมื่อคลิกดูรายละเอียด</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Extended Highway Specifications */}
-            <div className="mt-3 p-3 bg-slate-950/80 rounded-xl border border-sky-950/60 space-y-3">
-              <div className="flex items-center gap-2 text-sky-400 font-heading font-semibold text-xs border-b border-sky-950 pb-1.5">
-                <Building className="w-4 h-4 text-sky-400" />
-                <span>กำหนดรายละเอียดและคุณสมบัติทางวิศวกรรมของเส้นทาง</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                {/* Lanes */}
-                <div>
-                  <label className="text-slate-300 block mb-1">จำนวนช่องจราจร</label>
-                  <select
-                    value={layerLanes}
-                    onChange={(e) => setLayerLanes(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                  >
-                    <option value="2 ช่องจราจร">2 ช่องจราจร</option>
-                    <option value="3 ช่องจราจร">3 ช่องจราจร</option>
-                    <option value="4 ช่องจราจร">4 ช่องจราจร</option>
-                    <option value="6 ช่องจราจร">6 ช่องจราจร</option>
-                    <option value="8 ช่องจราจร">8 ช่องจราจร</option>
-                  </select>
-                </div>
-
-                {/* Surface Type */}
-                <div>
-                  <label className="text-slate-300 block mb-1">ชนิดผิวจราจร</label>
-                  <select
-                    value={layerSurface}
-                    onChange={(e) => setLayerSurface(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                  >
-                    <option value="AC.">AC.</option>
-                    <option value="Conc.">Conc.</option>
-                    <option value="DST.">DST.</option>
-                  </select>
-                </div>
-
-                {/* Responsible Subdivision */}
-                <div>
-                  <label className="text-slate-300 block mb-1">หน่วยงานรับผิดชอบ</label>
-                  <select
-                    value={layerResponsibleOffice}
-                    onChange={(e) => setLayerResponsibleOffice(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-amber-300 font-heading font-medium"
-                  >
-                    {offices.map((office) => <option key={office.id} value={office.name}>{office.name}</option>)}
-                  </select>
-                </div>
-
-              </div>
-            </div>
-
-            {/* Sample Mapping Table (First 5 Rows) */}
-            <div className="mt-3 pt-2 border-t border-slate-800">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-slate-300">ตัวอย่างข้อมูลหลังจับคู่ฟิลด์ (๕ สายทางแรก):</span>
-                <span className="text-[10px] text-slate-400 font-mono">ทั้งหมด {importedGisFeatures.length} สายทาง</span>
-              </div>
-              <div className="overflow-x-auto rounded-xl border border-slate-800">
-                <table className="w-full text-[11px] text-left text-slate-300">
-                  <thead className="bg-slate-950 text-slate-400 font-heading">
-                    <tr>
-                      <th className="p-2">#</th>
-                      <th className="p-2">รหัสสายทาง</th>
-                      <th className="p-2">ชื่อสายทาง / ตอนควบคุม</th>
-                      <th className="p-2">ระยะทาง (กม.)</th>
-                      <th className="p-2">จุดพิกัด</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800 bg-slate-900/60 font-body">
-                    {importedGisFeatures.slice(0, 5).map((f, idx) => {
-                      const props = f.properties || {};
-                      const code = selectedRouteCodeField
-                        ? (props[selectedRouteCodeField] || manualRouteCode || `สายทางที่ ${idx + 1}`)
-                        : (manualRouteCode || `สายทางที่ ${idx + 1}`);
-                      const name = selectedRouteNameField
-                        ? (props[selectedRouteNameField] || manualRouteName || importedLayerName)
-                        : (manualRouteName || importedLayerName);
-
-                      return (
-                        <tr key={idx} className="hover:bg-slate-800/40">
-                          <td className="p-2 font-mono text-slate-400">{idx + 1}</td>
-                          <td className="p-2 font-heading font-bold text-amber-300">ทล.{code}</td>
-                          <td className="p-2 text-white">{name}</td>
-                          <td className="p-2 font-mono text-emerald-400">{f.lengthKm} กม.</td>
-                          <td className="p-2 font-mono text-slate-400">{f.coords.length} จุด</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          {/* Douglas-Peucker Slider */}
-          <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-300">ความละเอียดการตัดจุดส่วนเกิน (Douglas-Peucker)</span>
-              <span className="text-amber-400 font-mono font-bold">{simplifyTolerance}</span>
-            </div>
-            <input
-              type="range"
-              min="0.00001"
-              max="0.0005"
-              step="0.00001"
-              value={simplifyTolerance}
-              onChange={(e) => handleResimplifyTolerance(Number(e.target.value))}
-              className="w-full accent-amber-500"
-            />
-            <p className="text-[10px] text-slate-400">
-              ค่ามาตรฐาน 0.00008 เหมาะสมสำหรับการเรนเดอร์ถนนหลวงได้อย่างราบรื่นและไม่กินแรม
-            </p>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setImportedPreviewLines([]);
-                setImportedGisFeatures([]);
-                setIncomingGisLines?.([]);
-                setAvailableGisFields([]);
-              }}
-              className="bg-slate-800 text-slate-300 px-3.5 py-2 rounded-xl text-xs hover:bg-slate-700 transition"
-            >
-              ยกเลิก
-            </button>
-            <button
-              type="button"
-              disabled={isCommitting}
-              onClick={handleCommitGisLayer}
-              className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-heading font-bold px-5 py-2 rounded-xl text-xs shadow-lg transition flex items-center gap-1.5 disabled:opacity-50"
-            >
-              <Save className="w-4 h-4" /> {isCommitting ? "กำลังบันทึก..." : "บันทึกโครงข่ายเข้าสู่ระบบ"}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Upload Dropzone & Attribute Field Mapping Panel */}
+      <GisUploadMappingPanel
+        handleGisUpload={handleGisUpload}
+        importedGisFeatures={importedGisFeatures}
+        importedLayerName={importedLayerName}
+        setImportedLayerName={setImportedLayerName}
+        availableGisFields={availableGisFields}
+        selectedRouteCodeField={selectedRouteCodeField}
+        setSelectedRouteCodeField={setSelectedRouteCodeField}
+        manualRouteCode={manualRouteCode}
+        setManualRouteCode={setManualRouteCode}
+        selectedRouteNameField={selectedRouteNameField}
+        setSelectedRouteNameField={setSelectedRouteNameField}
+        manualRouteName={manualRouteName}
+        setManualRouteName={setManualRouteName}
+        targetLayerCategory={targetLayerCategory}
+        setTargetLayerCategory={setTargetLayerCategory}
+        labelDisplayMode={labelDisplayMode}
+        setLabelDisplayMode={setLabelDisplayMode}
+        layerLanes={layerLanes}
+        setLayerLanes={setLayerLanes}
+        layerSurface={layerSurface}
+        setLayerSurface={setLayerSurface}
+        layerResponsibleOffice={layerResponsibleOffice}
+        setLayerResponsibleOffice={setLayerResponsibleOffice}
+        offices={offices}
+        simplifyTolerance={simplifyTolerance}
+        handleResimplifyTolerance={handleResimplifyTolerance}
+        onCancelImport={() => {
+          setImportedPreviewLines([]);
+          setImportedGisFeatures([]);
+          setIncomingGisLines?.([]);
+          setAvailableGisFields([]);
+        }}
+        isCommitting={isCommitting}
+        handleCommitGisLayer={handleCommitGisLayer}
+      />
 
       {/* Highway Layers in System */}
       <div className="space-y-3">
@@ -1541,407 +1217,31 @@ export function GisDataImportTab({
       </div>
 
       {/* Individual Highway Specifications Table (Issue #13) */}
-      <div
-        className="space-y-3 pt-3 border-t border-slate-800"
-        style={{ contentVisibility: "auto", containIntrinsicSize: "auto 600px" }}
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h3 className="font-heading font-bold text-sm text-white flex items-center gap-2">
-              <Building className="w-4 h-4 text-amber-400" /> ตารางรายการทางหลวงและคุณสมบัติทางวิศวกรรม
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              คลิกไอคอนรูปดวงตาเพื่อ เปิด/ปิด การแสดงผลเส้นทาง หรือคลิก &quot;ตั้งค่า&quot; เพื่อปรับแต่งช่องจราจร (มีผลต่อความหนาเส้นบนแผนที่) ผิวจราจร และข้อมูลเฉพาะสายทาง
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <span className="text-[11px] bg-slate-900 border border-slate-700 px-2.5 py-1.5 rounded-xl text-amber-300 font-mono">
-              {highwaySectionGroups.length} ตอนควบคุม ({allHighwayFeatures.length} เส้นย่อย)
-            </span>
-            <label className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-2 text-xs text-slate-200 shadow-sm">
-              <FileSpreadsheet className="w-3.5 h-3.5 text-sky-400" />
-              <select aria-label="ส่งออกโครงข่ายตามผลการค้นหา" defaultValue="" onChange={(e) => { if (e.target.value) void handleExportHighwayGis(e.target.value as GisExportFormat); e.target.value = ""; }} className="min-h-10 bg-transparent font-heading outline-none">
-                <option value="" disabled>ส่งออกตามผลค้นหา…</option>
-                <option value="csv">CSV</option><option value="geojson">GeoJSON</option><option value="kml">KML</option><option value="kmz">KMZ</option><option value="shapefile">Shapefile ZIP</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={() =>
-                setEditingRouteSpecs({
-                  layerId: "MAIN_HIGHWAY",
-                  featureIdx: -1,
-                  routeNo: "",
-                  sectionName: "",
-                  kmStart: "",
-                  kmEnd: "",
-                  lengthKm: "",
-                  responsibleOffice: offices[0]?.name || "",
-                  highwayType: "MAIN_HIGHWAY",
-                  lanes: "4 ช่องจราจร",
-                  surface: "AC.",
-                  remarks: "",
-                  isVisible: true,
-                })
-              }
-              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ เพิ่มสายทางใหม่</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Search & Filter Bar */}
-        <div className="space-y-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-            <label className="block text-xs text-slate-300">
-              <span className="font-heading font-medium">ค้นหาสายทาง</span>
-              <input
-                type="search"
-                value={routeSearch}
-                onChange={(event) => setRouteSearch(event.target.value)}
-                placeholder="หมายเลข ชื่อตอน ก.ม. หรือหน่วยงาน"
-                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
-              />
-            </label>
-            <label className="block text-xs text-slate-300">
-              <span className="font-heading font-medium">สถานะแสดงผลบนแผนที่</span>
-              <select
-                aria-label="กรองสถานะแสดงผลบนแผนที่"
-                value={highwayFilterVisibility}
-                onChange={(e) => setHighwayFilterVisibility(e.target.value as any)}
-                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:border-amber-400 focus:outline-none"
-              >
-                <option value="ALL">ทั้งหมด (แสดงและซ่อน)</option>
-                <option value="VISIBLE">เฉพาะที่แสดงบนแผนที่ (Eye)</option>
-                <option value="HIDDEN">เฉพาะที่ซ่อนอยู่ (EyeOff)</option>
-              </select>
-            </label>
-            <label className="block text-xs text-slate-300">
-              <span className="font-heading font-medium">ประเภทสายทาง</span>
-              <select
-                aria-label="กรองประเภทสายทาง"
-                value={highwayFilterType}
-                onChange={(e) => setHighwayFilterType(e.target.value as any)}
-                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:border-amber-400 focus:outline-none"
-              >
-                <option value="ALL">ทุกประเภททางหลวง</option>
-                <option value="MAIN">ทางหลวงสายหลัก</option>
-                <option value="SECONDARY">ทางหลวงสายรอง</option>
-              </select>
-            </label>
-            <label className="block text-xs text-slate-300">
-              <span className="font-heading font-medium">หน่วยงานรับผิดชอบ</span>
-              <select
-                aria-label="กรองหน่วยงานรับผิดชอบ"
-                value={highwayFilterOffice}
-                onChange={(e) => setHighwayFilterOffice(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-amber-300 focus:border-amber-400 focus:outline-none font-medium"
-              >
-                <option value="ALL">ทุกหน่วยงาน/หมวดทางหลวง</option>
-                {availableOffices.map((off) => (
-                  <option key={off} value={off}>
-                    {off}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </div>
-        {matchingHighwayGroups.length === 0 ? (
-          <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center text-xs text-slate-400">
-            {highwaySectionGroups.length === 0 ? "ยังไม่มีรายการเส้นทางในระบบ กรุณาอัปโหลดไฟล์ด้านบน" : "ไม่พบสายทางที่ตรงกับคำค้นหาและตัวกรองที่เลือก"}
-          </div>
-        ) : (
-          <div className="w-full min-w-0 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-inner">
-            <table className="w-full min-w-[880px] text-left text-xs text-slate-300">
-              <thead className="bg-[#091122] text-slate-400 font-heading border-b border-slate-800">
-                <tr>
-                  <th className="p-3 w-10 text-center sticky left-0 bg-[#091122] z-10">#</th>
-                  <th className="p-3 w-16 text-center sticky left-10 bg-[#091122] z-10 whitespace-nowrap">แสดงผล</th>
-                  <th className="p-3 whitespace-nowrap min-w-[120px]">หมายเลขทางหลวง</th>
-                  <th className="p-3 whitespace-nowrap min-w-[200px]">ชื่อสายทาง / ตอนควบคุม</th>
-                  <th className="p-3 whitespace-nowrap min-w-[140px]">ช่วง กม. & ระยะทาง</th>
-                  <th className="p-3 whitespace-nowrap min-w-[130px]">ช่องจราจร & ผิวทาง</th>
-                  <th className="p-3 whitespace-nowrap min-w-[140px]">หน่วยงานรับผิดชอบ</th>
-                  <th className="p-3 min-w-[120px]">หมายเหตุ</th>
-                  <th className="p-3 text-right whitespace-nowrap sticky right-0 bg-[#091122] z-10">การจัดการ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/80 font-body">
-                {matchingHighwayGroups.map((group, gIdx) => {
-                  const isExpanded = expandedGroupIds.has(group.groupId);
-                  const isMultiBranch = group.branches.length > 1;
-                  const primaryBranch = group.primaryBranch || group.branches[0];
-
-                  return (
-                    <React.Fragment key={group.groupId}>
-                      {/* แถวหลัก (Parent Control Section) */}
-                      <tr
-                        onClick={(event) => {
-                          if (!(event.target as HTMLElement).closest("button")) {
-                            if (isMultiBranch) {
-                              toggleGroupExpand(group.groupId);
-                            }
-                            if (primaryBranch) {
-                              setSelectedRoute({ layerId: group.layerId, featureIdx: primaryBranch.featureIdx });
-                            }
-                          }
-                        }}
-                        className={`cursor-pointer hover:bg-slate-900/60 transition ${
-                          !group.isVisible ? "opacity-50 bg-slate-950/40" : isExpanded ? "bg-slate-900/30" : ""
-                        }`}
-                      >
-                        <td className="p-3 text-center font-mono text-slate-400 sticky left-0 bg-[#090d16] z-10">{gIdx + 1}</td>
-                        <td className="p-3 text-center sticky left-10 bg-[#090d16] z-10">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleGroupVisibility(group)}
-                            className={`p-1.5 rounded-lg border transition ${
-                              group.isVisible
-                                ? "bg-emerald-950/80 text-emerald-300 border-emerald-600 hover:bg-emerald-900"
-                                : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"
-                            }`}
-                            title={group.isVisible ? "คลิกเพื่อซ่อนสายทางนี้บนแผนที่" : "คลิกเพื่อแสดงสายทางนี้บนแผนที่"}
-                          >
-                            {group.isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                          </button>
-                        </td>
-                        <td className="p-3">
-                          <span className="font-heading font-black text-xs px-2 py-0.5 rounded bg-amber-400 text-slate-950 shadow-sm inline-block whitespace-nowrap">
-                            ทล.{group.routeNo}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium text-white max-w-[240px] truncate" title={group.sectionName}>
-                              {group.sectionName}
-                            </span>
-                            {isMultiBranch ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleGroupExpand(group.groupId);
-                                }}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-sky-950/90 text-sky-300 border border-sky-600/70 hover:bg-sky-900 transition font-medium whitespace-nowrap"
-                                title={isExpanded ? "คลิกเพื่อย่อรายละเอียด ๒ ฝั่ง" : "คลิกเพื่อดูรายละเอียดเส้นทางทั้ง ๒ ฝั่ง"}
-                              >
-                                {isExpanded ? <ChevronDown className="w-3 h-3 text-sky-400" /> : <ChevronRight className="w-3 h-3 text-sky-400" />}
-                                <span>{group.branches.length} ฝั่ง ({group.branches.map((b) => b.directionCode === "A_TO_B" ? "A→B" : b.directionCode === "B_TO_A" ? "B→A" : "A⇄B").join(", ")})</span>
-                              </button>
-                            ) : (
-                              <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-900 text-slate-400 border border-slate-700 whitespace-nowrap">
-                                คันทางเดี่ยว
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-3 font-mono text-[11px] whitespace-nowrap">
-                          <div className="text-amber-300">{group.kmStart} - {group.kmEnd}</div>
-                          <div className="text-emerald-400 text-[10px]">{group.lengthKm ? `${group.lengthKm} กม.` : "-"}</div>
-                        </td>
-                        <td className="p-3 whitespace-nowrap">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-sky-950 text-sky-300 border border-sky-700 font-mono">
-                            {group.lanes}
-                          </span>
-                          <span className="ml-1 text-[11px] text-slate-300 font-mono">{group.surface}</span>
-                        </td>
-                        <td className="p-3 text-[11px] text-slate-300 whitespace-nowrap">
-                          {group.responsibleOffice}
-                        </td>
-                        <td className="p-3 text-[11px] text-slate-400 max-w-[120px] truncate" title={group.remarks}>
-                          {group.remarks || "-"}
-                        </td>
-                        <td className="p-3 text-right whitespace-nowrap sticky right-0 bg-[#090d16] z-10">
-                          <div className="inline-flex items-center gap-1.5">
-                            {isMultiBranch && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleGroupExpand(group.groupId);
-                                }}
-                                className="p-1.5 bg-slate-900 hover:bg-slate-800 text-sky-300 border border-slate-700 hover:border-sky-400 rounded-xl text-xs transition"
-                                title={isExpanded ? "ย่อรายละเอียดเส้น ๒ ฝั่ง" : "เปิดดูรายละเอียดเส้น ๒ ฝั่ง"}
-                              >
-                                {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                              </button>
-                            )}
-                            {primaryBranch && (
-                              <button
-                                type="button"
-                                onClick={() => openGeometryEditor(group.layerId, primaryBranch.featureIdx)}
-                                className="bg-slate-900 hover:bg-slate-800 text-sky-300 border border-slate-700 hover:border-sky-400 px-2.5 py-1.5 rounded-xl font-heading text-xs font-bold transition inline-flex items-center gap-1 shadow-sm"
-                                title="แก้แนวถนน ปักจุดและเกาะแนวถนน"
-                              >
-                                <MapPin className="w-3.5 h-3.5" /> แนวถนน
-                              </button>
-                            )}
-                            {primaryBranch && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setEditingRouteSpecs({
-                                    layerId: group.layerId,
-                                    featureIdx: primaryBranch.featureIdx,
-                                    routeNo: group.routeNo,
-                                    sectionName: group.sectionName,
-                                    kmStart: group.kmStart !== "-" ? group.kmStart : "",
-                                    kmEnd: group.kmEnd !== "-" ? group.kmEnd : "",
-                                    lengthKm: group.lengthKm !== "-" ? group.lengthKm : "",
-                                    responsibleOffice: group.responsibleOffice,
-                                    highwayType: group.highwayType,
-                                    lanes: group.lanes,
-                                    surface: group.surface,
-                                    remarks: group.remarks !== "-" ? group.remarks : "",
-                                    isVisible: group.isVisible,
-                                  })
-                                }
-                                className="bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 hover:border-amber-400 px-2.5 py-1.5 rounded-xl font-heading text-xs font-bold transition inline-flex items-center gap-1 shadow-sm"
-                                title="ตั้งค่าคุณสมบัติทางวิศวกรรม"
-                              >
-                                <Sliders className="w-3.5 h-3.5 text-amber-400" /> ตั้งค่า
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteHighwayGroup(group)}
-                              className="p-1.5 bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 hover:border-rose-600 rounded-xl transition shadow-sm"
-                              title="ลบสายทางนี้"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-
-                      {/* แถวย่อย Child Branches (เมื่อกดขยาย) */}
-                      {isExpanded && isMultiBranch && group.branches.map((branch, bIdx) => {
-                        const isBranchVis = branch.properties?.is_visible !== false;
-                        return (
-                          <tr
-                            key={`${group.groupId}-b-${branch.featureIdx}`}
-                            onClick={(event) => {
-                              if (!(event.target as HTMLElement).closest("button")) {
-                                setSelectedRoute({ layerId: group.layerId, featureIdx: branch.featureIdx });
-                              }
-                            }}
-                            className={`cursor-pointer bg-slate-900/40 hover:bg-slate-900/80 transition text-xs border-l-4 ${
-                              branch.directionCode === "A_TO_B"
-                                ? "border-l-sky-500"
-                                : branch.directionCode === "B_TO_A"
-                                ? "border-l-indigo-500"
-                                : "border-l-amber-500"
-                            } ${!isBranchVis ? "opacity-50" : ""}`}
-                          >
-                            <td className="p-2.5 text-center font-mono text-slate-500 text-[11px] sticky left-0 bg-[#0c1322] z-10">
-                              ↳ {bIdx + 1}
-                            </td>
-                            <td className="p-2.5 text-center sticky left-10 bg-[#0c1322] z-10">
-                              <button
-                                type="button"
-                                onClick={() => handleToggleFeatureVisibility(group.layerId, branch.featureIdx)}
-                                className={`p-1 rounded-md border transition ${
-                                  isBranchVis
-                                    ? "bg-emerald-950/80 text-emerald-300 border-emerald-600 hover:bg-emerald-900"
-                                    : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"
-                                }`}
-                                title={isBranchVis ? "คลิกเพื่อซ่อนเส้นฝั่งนี้บนแผนที่" : "คลิกเพื่อแสดงเส้นฝั่งนี้บนแผนที่"}
-                              >
-                                {isBranchVis ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                              </button>
-                            </td>
-                            <td className="p-2.5 whitespace-nowrap">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap inline-block ${
-                                branch.directionCode === "A_TO_B"
-                                  ? "bg-sky-950 text-sky-300 border border-sky-600"
-                                  : branch.directionCode === "B_TO_A"
-                                  ? "bg-indigo-950 text-indigo-300 border border-indigo-600"
-                                  : "bg-slate-800 text-slate-300 border border-slate-600"
-                              }`}>
-                                {branch.directionCode === "A_TO_B" ? "ขาไป (A → B)" : branch.directionCode === "B_TO_A" ? "ขากลับ (B → A)" : "๒ ทิศทาง"}
-                              </span>
-                            </td>
-                            <td className="p-2.5 whitespace-nowrap">
-                              <span className="text-slate-300 font-medium">{branch.branchLabel}</span>
-                            </td>
-                            <td className="p-2.5 font-mono text-[11px] whitespace-nowrap">
-                              <div className="text-amber-300/90">{formatKilometerPost(branch.properties?.km_start) || group.kmStart} - {formatKilometerPost(branch.properties?.km_end) || group.kmEnd}</div>
-                              <div className="text-emerald-400/90 text-[10px]">{branch.geometricLengthKm ? `${branch.geometricLengthKm} กม.` : `${group.lengthKm} กม.`}</div>
-                            </td>
-                            <td className="p-2.5 text-[11px] whitespace-nowrap">
-                              <span className="font-mono text-slate-300">{group.lanes}</span>
-                              <span className="ml-1 text-[10px] text-slate-500 font-mono">{group.surface}</span>
-                            </td>
-                            <td className="p-2.5 text-[11px] text-slate-400 whitespace-nowrap">
-                              {group.responsibleOffice}
-                            </td>
-                            <td className="p-2.5 text-[11px] text-slate-500 truncate max-w-[120px]" title={branch.properties?.remarks}>
-                              {branch.properties?.remarks || "-"}
-                            </td>
-                            <td className="p-2.5 text-right whitespace-nowrap sticky right-0 bg-[#0c1322] z-10">
-                              <div className="inline-flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => openGeometryEditor(group.layerId, branch.featureIdx)}
-                                  className="bg-slate-900 hover:bg-slate-800 text-sky-300 border border-slate-700 hover:border-sky-400 px-2 py-1 rounded-lg font-heading text-[11px] font-bold transition inline-flex items-center gap-1 shadow-sm"
-                                  title={`แก้ไขแนวถนนฝั่ง ${branch.branchLabel}`}
-                                >
-                                  <MapPin className="w-3 h-3" /> แนวถนน
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setEditingRouteSpecs({
-                                      layerId: group.layerId,
-                                      featureIdx: branch.featureIdx,
-                                      routeNo: group.routeNo,
-                                      sectionName: branch.properties?.section_name || group.sectionName,
-                                      kmStart: branch.properties?.km_start ? formatKilometerPost(branch.properties.km_start) : group.kmStart,
-                                      kmEnd: branch.properties?.km_end ? formatKilometerPost(branch.properties.km_end) : group.kmEnd,
-                                      lengthKm: branch.properties?.length_km ? String(branch.properties.length_km) : group.lengthKm,
-                                      responsibleOffice: group.responsibleOffice,
-                                      highwayType: group.highwayType,
-                                      lanes: group.lanes,
-                                      surface: group.surface,
-                                      remarks: branch.properties?.remarks || group.remarks,
-                                      isVisible: branch.properties?.is_visible !== false,
-                                    })
-                                  }
-                                  className="bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 hover:border-amber-400 px-2 py-1 rounded-lg font-heading text-[11px] font-bold transition inline-flex items-center gap-1 shadow-sm"
-                                  title={`ตั้งค่าคุณสมบัติฝั่ง ${branch.branchLabel}`}
-                                >
-                                  <Sliders className="w-3 h-3 text-amber-400" /> ตั้งค่า
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleDeleteHighwayFeature(
-                                      group.layerId,
-                                      branch.featureIdx,
-                                      `ทล.${group.routeNo} ${branch.branchLabel}`
-                                    )
-                                  }
-                                  className="p-1 bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 hover:border-rose-600 rounded-lg transition shadow-sm"
-                                  title="ลบเส้นทางฝั่งนี้"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <HighwaySpecificationsTableSection
+        highwaySectionGroups={highwaySectionGroups}
+        allHighwayFeatures={allHighwayFeatures}
+        matchingHighwayGroups={matchingHighwayGroups}
+        handleExportHighwayGis={handleExportHighwayGis}
+        setEditingRouteSpecs={setEditingRouteSpecs}
+        offices={offices}
+        routeSearch={routeSearch}
+        setRouteSearch={setRouteSearch}
+        highwayFilterVisibility={highwayFilterVisibility}
+        setHighwayFilterVisibility={setHighwayFilterVisibility}
+        highwayFilterType={highwayFilterType}
+        setHighwayFilterType={setHighwayFilterType}
+        highwayFilterOffice={highwayFilterOffice}
+        setHighwayFilterOffice={setHighwayFilterOffice}
+        availableOffices={availableOffices}
+        expandedGroupIds={expandedGroupIds}
+        toggleGroupExpand={toggleGroupExpand}
+        setSelectedRoute={setSelectedRoute}
+        handleToggleGroupVisibility={handleToggleGroupVisibility}
+        handleToggleFeatureVisibility={handleToggleFeatureVisibility}
+        openGeometryEditor={openGeometryEditor}
+        handleDeleteHighwayGroup={handleDeleteHighwayGroup}
+        handleDeleteHighwayFeature={handleDeleteHighwayFeature}
+      />
 
       {/* Modal: Highway Specifications Editor (Issue #13) */}
       <HighwaySpecsEditModal
