@@ -50,6 +50,7 @@ import {
 import {
   getTrafficPresentation,
   TRAFFIC_STATUS_OPTIONS,
+  deriveTrafficStatusFromWaterLevel,
   formatRelativeUpdateTime,
 } from "@/lib/traffic-presentation";
 import {
@@ -418,8 +419,7 @@ export function IncidentRegistryTab({
     setIsSubmitting(true);
     try {
       const flood = updateModalIncident;
-      // Strict Rule (Item 3): Never auto-change traffic_status to PASSABLE just because waterLevel === 0 cm.
-      // Use the explicit traffic status selected by the officer (initialized to flood.traffic_status).
+      // Use the traffic status confirmed/adjusted by the officer in the dropdown.
       const trafficStatus = newTrafficStatus || flood.traffic_status;
 
       const effectiveSide = resolveEffectiveRoadSide(flood);
@@ -1043,12 +1043,18 @@ export function IncidentRegistryTab({
                   type="number"
                   min={0}
                   value={newWaterLevel}
-                  onChange={(e) => setNewWaterLevel(Number(e.target.value))}
+                  onChange={(e) => {
+                    const nextVal = Number(e.target.value);
+                    setNewWaterLevel(nextVal);
+                    const meta = parseFloodDirectionMeta(updateModalIncident.direction_meta, updateModalIncident);
+                    const suggested = deriveTrafficStatusFromWaterLevel(nextVal, meta.affectedParts);
+                    if (suggested) setNewTrafficStatus(suggested);
+                  }}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-base font-bold"
                 />
                 {newWaterLevel === 0 && (
                   <p className="mt-1 text-[11px] text-emerald-300">
-                    💡 เมื่อระดับน้ำเป็น 0 ซม. ระบบจะซ่อนเส้นน้ำท่วมจากแผนที่ปัจจุบัน แต่<strong>ไม่เปลี่ยนสถานะการจราจรเป็นเปิดอัตโนมัติ</strong> กรุณาเลือกสถานะการจราจรด้านล่างตามความจริง
+                    💡 เมื่อระดับน้ำเป็น 0 ซม. ระบบเลือกสถานะแนะนำเป็น <strong>ผ่านได้ปกติ</strong> และซ่อนเส้นน้ำท่วมจากแผนที่ปัจจุบัน (หากถนนยังชำรุด/ปิดจราจร สามารถแก้ไขสถานะด้านล่างได้ทันที)
                   </p>
                 )}
               </div>
@@ -1131,7 +1137,13 @@ export function IncidentRegistryTab({
                     type="number"
                     min={0}
                     value={splitNewWaterLevel}
-                    onChange={(e) => setSplitNewWaterLevel(Number(e.target.value))}
+                    onChange={(e) => {
+                      const nextVal = Number(e.target.value);
+                      setSplitNewWaterLevel(nextVal);
+                      const meta = splitModalIncident ? parseFloodDirectionMeta(splitModalIncident.direction_meta, splitModalIncident) : undefined;
+                      const suggested = deriveTrafficStatusFromWaterLevel(nextVal, meta?.affectedParts);
+                      if (suggested) setSplitNewTrafficStatus(suggested);
+                    }}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
                   />
                 </div>

@@ -161,7 +161,13 @@ test("map management exposes all approved traffic choices without color labels",
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop sidebar navigation is covered here; mobile smoke is separate");
   await page.goto(`${base}/admin/`);
   await openMenu(page, "จัดการแผนที่");
-  for (const label of ["ผ่านได้ปกติ", "รถเล็กผ่านได้", "รถเล็กผ่านได้ ๑ ช่องทาง", "ผ่านไม่ได้"]) {
+  for (const label of [
+    "ผ่านได้ปกติ",
+    "รถทุกชนิดผ่านได้แต่ไม่สะดวก",
+    "รถเล็กผ่านได้ ๑ ช่องทาง",
+    "รถเล็กผ่านไม่ได้",
+    "ผ่านไม่ได้",
+  ]) {
     await expect(page.getByRole("option", { name: label, exact: true })).toHaveCount(1);
   }
   await expect(page.getByRole("button", { name: "เส้นน้ำท่วม", exact: true })).toBeVisible();
