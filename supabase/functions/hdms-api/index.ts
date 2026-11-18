@@ -532,6 +532,13 @@ async function processStagedMedia(db: any, job: any) {
     const result = await db.from("doh_mitigation_projects").select("project_id,before_image_url,after_image_url,updated_at").eq("project_id", ownerId);
     if (result.error) throw result.error;
     rows = (result.data || []).filter((r: any) => r.before_image_url === tempUrl || r.after_image_url === tempUrl);
+  } else if (ownerType === "DETOUR") {
+    const [startMatch, endMatch] = await Promise.all([
+      db.from("doh_detour_routes").select("id,detour_meta,updated_at").contains("detour_meta", { start_point_photo: { url: tempUrl } }),
+      db.from("doh_detour_routes").select("id,detour_meta,updated_at").contains("detour_meta", { end_point_photo: { url: tempUrl } }),
+    ]);
+    if (startMatch.error || endMatch.error) throw startMatch.error || endMatch.error;
+    rows = [...new Map([...(startMatch.data || []), ...(endMatch.data || [])].map((row: any) => [row.id, row])).values()];
   } else {
     const [primary, gallery] = await Promise.all([
       db.from("doh_flood_routes").select("id,latest_photo_url,direction_meta,updated_at").eq("latest_photo_url", tempUrl),

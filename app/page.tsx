@@ -1507,17 +1507,46 @@ export default function HomePage() {
                                             options={[
                                               {
                                                 value: "FORWARD",
-                                                label: "→ A → B",
+                                                label: "ขาไป (A → B)",
                                                 disabled: !isDetourDirectionAllowed(route.direction_mode, "FORWARD"),
                                               },
                                               {
                                                 value: "REVERSE",
-                                                label: "← B → A",
+                                                label: "ขากลับ (B → A)",
                                                 disabled: !isDetourDirectionAllowed(route.direction_mode, "REVERSE"),
                                               },
                                             ]}
                                           />
                                         </div>
+
+                                        {/* Entrance Photo for Active Direction (Start A or End B) */}
+                                        {(() => {
+                                          const activePointPhoto =
+                                            effectiveDirection === "REVERSE"
+                                              ? route.detour_meta?.end_point_photo
+                                              : route.detour_meta?.start_point_photo;
+                                          if (!activePointPhoto?.url) return null;
+                                          const pointLabel =
+                                            effectiveDirection === "REVERSE"
+                                              ? "จุดสิ้นสุด B — ภาพบริเวณทางเข้าทางเลี่ยง (ฝั่งขากลับ B → A)"
+                                              : "จุดเริ่มต้น A — ภาพบริเวณทางเข้าทางเลี่ยง (ฝั่งขาไป A → B)";
+                                          return (
+                                            <div className="rounded-xl border border-slate-700/80 bg-[#091325] p-2.5 space-y-1.5">
+                                              <div className="flex items-center gap-1.5 text-xs font-heading font-bold text-amber-300">
+                                                <Camera aria-hidden="true" className="h-3.5 w-3.5" />
+                                                <span>{pointLabel}</span>
+                                              </div>
+                                              <img
+                                                src={normalizeMediaUrl(activePointPhoto.url)}
+                                                alt={activePointPhoto.caption || pointLabel}
+                                                className="w-full h-36 rounded-lg object-cover border border-slate-800"
+                                              />
+                                              {activePointPhoto.caption && (
+                                                <p className="text-xs text-slate-300 leading-snug">{activePointPhoto.caption}</p>
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
 
                                         {/* Distance & Duration Metrics Grid (Line Length + Admin Duration) */}
                                         <div className="grid grid-cols-2 gap-2.5">
@@ -1610,8 +1639,8 @@ export default function HomePage() {
                                     value={eventAdviceDirection}
                                     onChange={setEventAdviceDirection}
                                     options={[
-                                      { value: "FORWARD", label: "→ A → B" },
-                                      { value: "REVERSE", label: "← B → A" },
+                                      { value: "FORWARD", label: "ขาไป (A → B)" },
+                                      { value: "REVERSE", label: "ขากลับ (B → A)" },
                                     ]}
                                   />
                                 )}
@@ -1931,13 +1960,13 @@ export default function HomePage() {
                       options={[
                         {
                           value: "FORWARD",
-                          label: "→ ขาไป (A → B)",
+                          label: "ขาไป (A → B)",
                           ariaLabel: "ขาไป A → B",
                           disabled: !isDetourDirectionAllowed(viewingDetourModal.direction_mode, "FORWARD"),
                         },
                         {
                           value: "REVERSE",
-                          label: "← ขากลับ (B → A)",
+                          label: "ขากลับ (B → A)",
                           ariaLabel: "ขากลับ B → A",
                           disabled: !isDetourDirectionAllowed(viewingDetourModal.direction_mode, "REVERSE"),
                         },
@@ -1948,6 +1977,33 @@ export default function HomePage() {
                         <span>⚠️</span>ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง
                       </p>
                     )}
+                    {(() => {
+                      const activePointPhoto =
+                        modalDetourDirection === "REVERSE"
+                          ? viewingDetourModal.detour_meta?.end_point_photo
+                          : viewingDetourModal.detour_meta?.start_point_photo;
+                      if (!activePointPhoto?.url) return null;
+                      const pointLabel =
+                        modalDetourDirection === "REVERSE"
+                          ? "จุดสิ้นสุด B — ภาพทางเข้าทางเลี่ยง (ฝั่งขากลับ B → A)"
+                          : "จุดเริ่มต้น A — ภาพทางเข้าทางเลี่ยง (ฝั่งขาไป A → B)";
+                      return (
+                        <div className="mt-2.5 rounded-xl border border-slate-700/80 bg-[#0d1b36] p-2.5 space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-xs font-heading font-bold text-amber-300">
+                            <Camera aria-hidden="true" className="h-3.5 w-3.5" />
+                            <span>{pointLabel}</span>
+                          </div>
+                          <img
+                            src={normalizeMediaUrl(activePointPhoto.url)}
+                            alt={activePointPhoto.caption || pointLabel}
+                            className="w-full h-36 rounded-lg object-cover border border-slate-800"
+                          />
+                          {activePointPhoto.caption && (
+                            <p className="text-xs text-slate-300 leading-snug">{activePointPhoto.caption}</p>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </section>
 
                   {/* 4. Timeline (คำแนะนำเส้นทาง) + 5. Metrics + 6. Condition */}

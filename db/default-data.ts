@@ -55,6 +55,12 @@ export interface FloodRoute {
   direction_meta?: FloodDirectionMeta;
 }
 
+export interface DetourPointPhoto {
+  url: string;
+  caption?: string;
+  mediaId?: string;
+}
+
 export interface DetourMeta {
   order_index?: number;
   event_orders?: Record<string, number>;
@@ -64,6 +70,8 @@ export interface DetourMeta {
   reverse_duration_min?: number;
   forward_duration_s?: number;
   reverse_duration_s?: number;
+  start_point_photo?: DetourPointPhoto;
+  end_point_photo?: DetourPointPhoto;
   is_asymmetric?: boolean;
   closed_road_verified?: boolean;
   arrow_color_forward?: string;

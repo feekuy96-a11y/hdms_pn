@@ -372,7 +372,7 @@ function buildDetourPopupHtml(
             onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'FORWARD')"
             class="${!isRev && fwdAllowed ? activeBtnClass : inactiveBtnClass} disabled:opacity-35 disabled:cursor-not-allowed"
           >
-            <span>→ ขาไป (A → B)</span>
+            <span>ขาไป (A → B)</span>
           </button>
           <button
             type="button"
@@ -383,7 +383,7 @@ function buildDetourPopupHtml(
             onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'REVERSE')"
             class="${isRev ? activeBtnClass : inactiveBtnClass} disabled:opacity-35 disabled:cursor-not-allowed"
           >
-            <span>← ขากลับ (B → A)</span>
+            <span>ขากลับ (B → A)</span>
           </button>
         </div>
         ${recorded ? "" : `<p class="mt-1.5 text-[11px] text-amber-300" role="status">⚠️ ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>`}
@@ -431,6 +431,72 @@ function buildDetourPopupHtml(
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
           <span>ดูตำแหน่งบนแผนที่</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function buildDetourPointPhotoPopupHtml(
+  detour: DetourRoute,
+  role: "START" | "END",
+  photo: { url: string; caption?: string },
+  lat: number,
+  lon: number
+): string {
+  const isStart = role === "START";
+  const badgeText = isStart
+    ? "จุดเริ่มต้น A — ทางเข้าทางเลี่ยง (ขาไป A → B)"
+    : "จุดสิ้นสุด B — ทางเข้าทางเลี่ยง (ขากลับ B → A)";
+  const defaultCaption = isStart
+    ? "บริเวณทางเข้าเส้นทางเลี่ยง ฝั่งจุดเริ่มต้น A (สำหรับผู้ใช้ทางขาไป A → B)"
+    : "บริเวณทางเข้าเส้นทางเลี่ยง ฝั่งจุดสิ้นสุด B (สำหรับผู้ใช้ทางที่มาจากอีกฝั่ง B → A)";
+  const normalizedUrl = escapeHtml(normalizeMediaUrl(photo.url));
+  const captionText = escapeHtml(photo.caption?.trim() || defaultCaption);
+  const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${Number(lat).toFixed(6)},${Number(lon).toFixed(6)}&travelmode=driving`;
+
+  return `
+    <div class="doh-detour-point-photo-popup text-xs p-3.5 w-[min(340px,calc(100vw-36px))] max-w-full font-body bg-[#070d1e] text-white rounded-2xl select-text space-y-2.5">
+      <div class="flex items-center justify-between gap-2 pb-2 pr-6 border-b border-slate-800/80">
+        <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-heading font-bold ${
+          isStart
+            ? "bg-emerald-950/90 border border-emerald-500/60 text-emerald-300"
+            : "bg-sky-950/90 border border-sky-500/60 text-sky-300"
+        }">
+          <span>📷</span>
+          <span>${escapeHtml(badgeText)}</span>
+        </span>
+      </div>
+      <div>
+        <h5 class="font-bold text-white text-sm font-heading leading-snug break-words">${escapeHtml(detour.route_name)}</h5>
+        <p class="text-xs text-amber-200/95 mt-1 leading-relaxed break-words">${captionText}</p>
+      </div>
+      <div class="relative overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950">
+        <img
+          src="${normalizedUrl}"
+          alt="${escapeHtml(`${badgeText} ${detour.route_name}`)}"
+          onclick="window.__openDetourPointPhoto && window.__openDetourPointPhoto(this.src, this.alt)"
+          class="w-full h-44 object-cover cursor-zoom-in hover:opacity-95 transition"
+        />
+        <span class="pointer-events-none absolute bottom-2 right-2 rounded-lg bg-slate-950/85 border border-slate-700 px-2 py-0.5 text-[10px] text-slate-200">
+          แตะที่ภาพเพื่อขยายเต็มจอ
+        </span>
+      </div>
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <a
+          href="${escapeHtml(navUrl)}"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="min-h-[40px] px-2.5 py-1.5 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-heading font-black text-xs flex items-center justify-center gap-1.5 shadow transition"
+        >
+          <span>🧭 นำทางไปจุดนี้</span>
+        </a>
+        <button
+          type="button"
+          onclick="window.__openDetourModal && window.__openDetourModal('${escapeHtml(detour.id)}')"
+          class="min-h-[40px] px-2.5 py-1.5 rounded-xl border border-slate-700 bg-[#13203c] hover:bg-[#1a2b50] text-white font-heading font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+        >
+          <span>ดูคำแนะนำทางเลี่ยง</span>
         </button>
       </div>
     </div>
@@ -713,6 +779,7 @@ export function LongdoGisMap({
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
   const [isLocating, setIsLocating] = useState(false);
   const [locationStatus, setLocationStatus] = useState<string | null>(null);
+  const [previewPointPhoto, setPreviewPointPhoto] = useState<{ url: string; title: string } | null>(null);
 
   const mapStyles = systemData.mapStyles || DEFAULT_MAP_STYLES;
   const legendRoutes = (type: "MAIN_HIGHWAY" | "SECOND_HIGHWAY") => {
@@ -829,6 +896,11 @@ export function LongdoGisMap({
       }
     };
 
+    (window as any).__openDetourPointPhoto = (url: string, title?: string) => {
+      if (!url) return;
+      setPreviewPointPhoto({ url, title: title || "ภาพทางเข้าเส้นทางเลี่ยง" });
+    };
+
     (window as any).__openDetourGoogleMaps = (safeId: string, dir?: "FORWARD" | "REVERSE") => {
       const routes = systemDataRef.current.detourRoutes || [];
       const detour = routes.find((d) => String(d.id || "").replace(/[^a-zA-Z0-9_-]/g, "_") === safeId);
@@ -885,6 +957,7 @@ export function LongdoGisMap({
       delete (window as any).__focusFloodOnMap;
       delete (window as any).__toggleDetourPopupDir;
       delete (window as any).__openDetourModal;
+      delete (window as any).__openDetourPointPhoto;
       delete (window as any).__openDetourGoogleMaps;
       delete (window as any).__getDetourCurrentDir;
     };
@@ -1497,6 +1570,54 @@ export function LongdoGisMap({
           });
         }
       }
+
+      // Draw Start Point A & End Point B Entrance Photo Markers if photos are attached
+      const startPhoto = detour.detour_meta?.start_point_photo;
+      const endPhoto = detour.detour_meta?.end_point_photo;
+      const startLat = Number.isFinite(detour.lat_start) && detour.lat_start !== 0 ? detour.lat_start : (fwdCoords[0]?.[1] ?? NaN);
+      const startLon = Number.isFinite(detour.lon_start) && detour.lon_start !== 0 ? detour.lon_start : (fwdCoords[0]?.[0] ?? NaN);
+      const endLat = Number.isFinite(detour.lat_end) && detour.lat_end !== 0 ? detour.lat_end : (fwdCoords[fwdCoords.length - 1]?.[1] ?? NaN);
+      const endLon = Number.isFinite(detour.lon_end) && detour.lon_end !== 0 ? detour.lon_end : (fwdCoords[fwdCoords.length - 1]?.[0] ?? NaN);
+
+      if (startPhoto?.url && Number.isFinite(startLat) && Number.isFinite(startLon)) {
+        const startPhotoIcon = L.divIcon({
+          html: `<div class="doh-detour-photo-badge" style="min-width:34px;height:26px;padding:0 6px;border-radius:999px;background:#064e3b;color:#a7f3d0;border:2px solid #10b981;display:flex;align-items:center;justify-content:center;gap:3px;font-weight:900;font-size:11px;box-shadow:0 3px 10px rgba(0,0,0,0.6)"><span>📷</span><span>A</span></div>`,
+          className: "doh-detour-photo-point doh-detour-photo-start",
+          iconSize: [36, 26],
+          iconAnchor: [-6, 26],
+        });
+        const startMarker = L.marker([startLat, startLon], { icon: startPhotoIcon, interactive: true, zIndexOffset: 200 })
+          .bindTooltip(`📷 ภาพทางเข้าจุดเริ่มต้น A (${detour.route_name})`, { direction: "top" })
+          .bindPopup(
+            () => buildDetourPointPhotoPopupHtml(detour, "START", startPhoto, startLat, startLon),
+            { maxWidth: 380, minWidth: 280, className: "doh-detour-leaflet-popup" }
+          )
+          .addTo(group);
+        startMarker.on("click", (e: any) => {
+          L.DomEvent.stopPropagation(e);
+          startMarker.openPopup();
+        });
+      }
+
+      if (endPhoto?.url && Number.isFinite(endLat) && Number.isFinite(endLon)) {
+        const endPhotoIcon = L.divIcon({
+          html: `<div class="doh-detour-photo-badge" style="min-width:34px;height:26px;padding:0 6px;border-radius:999px;background:#0c4a6e;color:#bae6fd;border:2px solid #38bdf8;display:flex;align-items:center;justify-content:center;gap:3px;font-weight:900;font-size:11px;box-shadow:0 3px 10px rgba(0,0,0,0.6)"><span>📷</span><span>B</span></div>`,
+          className: "doh-detour-photo-point doh-detour-photo-end",
+          iconSize: [36, 26],
+          iconAnchor: [-6, 0],
+        });
+        const endMarker = L.marker([endLat, endLon], { icon: endPhotoIcon, interactive: true, zIndexOffset: 200 })
+          .bindTooltip(`📷 ภาพทางเข้าจุดสิ้นสุด B - ฝั่งขากลับ (${detour.route_name})`, { direction: "top" })
+          .bindPopup(
+            () => buildDetourPointPhotoPopupHtml(detour, "END", endPhoto, endLat, endLon),
+            { maxWidth: 380, minWidth: 280, className: "doh-detour-leaflet-popup" }
+          )
+          .addTo(group);
+        endMarker.on("click", (e: any) => {
+          L.DomEvent.stopPropagation(e);
+          endMarker.openPopup();
+        });
+      }
     });
 
     // Keep stacking order: highways (bottom) < detours < floods < drafts.
@@ -1874,10 +1995,11 @@ export function LongdoGisMap({
       }).addTo(group);
       draftLineRef.current = draftLine;
       draftLine.on("click", (event: any) => {
-        if (adminPickModeRef.current !== "ADD_WAYPOINT") return;
+        const mode = adminPickModeRef.current;
+        if (mode !== "ADD_WAYPOINT" && mode !== "ADD_REVERSE_WAYPOINT") return;
         L.DomEvent.stopPropagation(event);
         const point = event.latlng;
-        onCoordinatePickedRef.current?.(Number(point.lat.toFixed(6)), Number(point.lng.toFixed(6)), "ADD_WAYPOINT");
+        onCoordinatePickedRef.current?.(Number(point.lat.toFixed(6)), Number(point.lng.toFixed(6)), mode);
       });
     }
 
@@ -2556,6 +2678,33 @@ export function LongdoGisMap({
             >
               ดาวเทียม
             </button>
+          </div>
+        </div>
+      )}
+
+      {previewPointPhoto && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={previewPointPhoto.title}
+          className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-950/90 p-4"
+          onClick={() => setPreviewPointPhoto(null)}
+        >
+          <button
+            type="button"
+            aria-label="ปิดภาพทางเข้าทางเลี่ยง"
+            onClick={() => setPreviewPointPhoto(null)}
+            className="absolute top-4 right-4 grid h-11 w-11 place-items-center rounded-full bg-slate-800 text-white hover:bg-slate-700 cursor-pointer"
+          >
+            ✕
+          </button>
+          <div className="max-w-[92vw] space-y-2 text-center" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={previewPointPhoto.url}
+              alt={previewPointPhoto.title}
+              className="max-h-[82vh] max-w-[92vw] rounded-2xl object-contain shadow-2xl mx-auto"
+            />
+            <p className="text-xs sm:text-sm font-heading font-bold text-amber-200">{previewPointPhoto.title}</p>
           </div>
         </div>
       )}

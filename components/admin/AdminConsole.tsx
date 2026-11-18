@@ -471,8 +471,8 @@ export function AdminConsole({
           })}
         </div>
 
-        {/* Scrollable Tab Workspace */}
-        <div className="doh-form flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 lg:p-6 [contain:layout_style_paint]">
+        {/* Scrollable Tab Workspace (do not use layout/paint containment so fixed modals stay viewport-centered) */}
+        <div className="doh-form flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 lg:p-6">
           {/* TAB 1: System Settings */}
           {activeTab === "system" && (
             <SystemSettingsTab
