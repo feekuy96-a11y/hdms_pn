@@ -163,7 +163,7 @@ test.describe("Phase 5.1: Unified Traffic Status Presentation (5 Statuses + Pend
     const sLightVehicles = getUnifiedTrafficStatus("LIGHT_VEHICLES_ONLY", 15);
     expect(sLightVehicles.color).toBe("sky");
     expect(sLightVehicles.icon).toBe("🚗");
-    expect(sLightVehicles.label).toBe("รถเล็กผ่านได้");
+    expect(sLightVehicles.label).toBe("รถทุกชนิดผ่านได้แต่ไม่สะดวก");
 
     const sPassable = getUnifiedTrafficStatus("PASSABLE", 0);
     expect(sPassable.color).toBe("emerald");

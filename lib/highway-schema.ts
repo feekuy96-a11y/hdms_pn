@@ -436,6 +436,23 @@ export function interpolateKmFromCoordinate(
   };
 }
 
+export function cleanHighwaySectionName(raw: unknown): string {
+  return String(raw ?? "")
+    .replace(/\s*\((?:ขาไป|ขากลับ|ส่วนที่|ทางขนาน|คันทาง|ฝั่งซ้าย|ฝั่งขวา)[^)]*\)?/gi, "")
+    .replace(/\s+(?:ขาไป|ขากลับ)(?:\s*[AB]\s*(?:→|->)\s*[AB])?\s*$/gi, "")
+    .replace(/^ตอน\s*/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+export function parseHighwayLaneCount(lanes: unknown): number {
+  const normalized = String(lanes ?? "").replace(/[๐-๙]/g, (ch) =>
+    String("๐๑๒๓๔๕๖๗๘๙".indexOf(ch))
+  );
+  const match = normalized.match(/(\d+)/);
+  return match ? Number(match[1]) : 0;
+}
+
 export interface AvailableHighwayOption {
   no: string;
   name: string;
@@ -443,79 +460,146 @@ export interface AvailableHighwayOption {
   kmStart?: string;
   kmEnd?: string;
   responsibleOffice?: string;
+  lanes?: string;
+  laneCount: number;
+  hasDualCarriageway: boolean;
   sortOrder: number;
 }
 
 /**
- * Extract sorted highway route options strictly from database payloads
- * (highwayLayers, floodRoutes, and mitigationProjects) with no hardcoded fallback routes.
+ * Extract deduplicated, sorted highway control-section options strictly from
+ * the GIS highway network (`systemData.highwayLayers`). Directional suffixes
+ * such as (ขาไป A → B) / (ขากลับ B → A) are stripped and forward/reverse
+ * features are merged into one entry per highway section with combined KM bounds.
  */
 export function getAvailableHighwayRoutes(
   systemData?: {
-    highwayLayers?: Array<{ geojson_data?: any }>;
+    highwayLayers?: Array<{ layer_name?: string; metadata?: any; geojson_data?: any }>;
     floodRoutes?: Array<{ route_no?: string; section_name?: string; km_start?: string; km_end?: string }>;
     mitigationProjects?: Array<{ route_no?: string; location_name?: string }>;
   } | null,
   options?: { uniqueRouteNo?: boolean }
 ): AvailableHighwayOption[] {
-  const list: AvailableHighwayOption[] = [];
-  const seen = new Set<string>();
-  const uniqueByRouteNo = Boolean(options?.uniqueRouteNo);
+  interface AggregateEntry {
+    no: string;
+    section: string;
+    minKmStartMeters: number | null;
+    maxKmEndMeters: number | null;
+    rawKmStart: string;
+    rawKmEnd: string;
+    responsibleOffice?: string;
+    lanes?: string;
+    maxLaneCount: number;
+    sawForward: boolean;
+    sawReverse: boolean;
+    sawDualType: boolean;
+    sortOrder: number;
+  }
 
-  const pushRoute = (
-    rawNo: unknown,
-    rawSection?: unknown,
-    rawKmStart?: unknown,
-    rawKmEnd?: unknown,
-    rawOffice?: unknown
-  ) => {
-    if (!rawNo) return;
-    const cleanNo = String(rawNo).replace(/^ทล\.?/i, "").trim();
-    if (!cleanNo) return;
-    const section = rawSection ? String(rawSection).trim() : "";
-    const kmS = rawKmStart ? String(rawKmStart).trim() : "";
-    const kmE = rawKmEnd ? String(rawKmEnd).trim() : "";
-    const key = uniqueByRouteNo ? cleanNo : `${cleanNo}_${section}_${kmS}_${kmE}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    const num = Number(cleanNo.match(/\d+/)?.[0] ?? Infinity);
-    list.push({
-      no: cleanNo,
-      name: section ? `ทล.${cleanNo} - ${section}` : `ทล.${cleanNo}`,
-      sectionName: section,
-      kmStart: kmS,
-      kmEnd: kmE,
-      responsibleOffice: rawOffice ? String(rawOffice).trim() : undefined,
-      sortOrder: num,
-    });
-  };
+  const aggregated = new Map<string, AggregateEntry>();
+  const uniqueByRouteNo = Boolean(options?.uniqueRouteNo);
 
   (systemData?.highwayLayers || []).forEach((layer) => {
     const features = layer?.geojson_data?.features;
     if (!Array.isArray(features)) return;
     features.forEach((f: any) => {
       const props = f?.properties || {};
-      pushRoute(
-        props.route_no || props.route_code || props.ROAD_NO || props.route || props.code,
-        props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name,
-        props.km_start,
-        props.km_end,
-        props.responsible_office
-      );
+      const rawNo = props.route_no || props.route_code || props.ROAD_NO || props.route || props.code;
+      if (!rawNo) return;
+      const cleanNo = String(rawNo).replace(/^ทล\.?/i, "").trim();
+      if (!cleanNo) return;
+
+      const rawSection =
+        props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || layer.layer_name;
+      const cleanSection = cleanHighwaySectionName(rawSection);
+      const kmS = formatKmPostString(props.km_start) || (props.km_start ? String(props.km_start).trim() : "");
+      const kmE = formatKmPostString(props.km_end) || (props.km_end ? String(props.km_end).trim() : "");
+      const sMeters = parseKmPostMeters(props.km_start);
+      const eMeters = parseKmPostMeters(props.km_end);
+      const loMeters = sMeters !== null && eMeters !== null ? Math.min(sMeters, eMeters) : sMeters;
+      const hiMeters = sMeters !== null && eMeters !== null ? Math.max(sMeters, eMeters) : eMeters;
+
+      const rawLanes = props.lanes || layer.metadata?.lanes || "";
+      const parsedLanes = parseHighwayLaneCount(rawLanes);
+      const dirCode = String(props.direction_code || "").toUpperCase();
+      const rawTextLower = String(rawSection || "").toLowerCase();
+      const sawForward = dirCode === "A_TO_B" || rawTextLower.includes("ขาไป") || rawTextLower.includes("a→b") || rawTextLower.includes("a->b");
+      const sawReverse = dirCode === "B_TO_A" || rawTextLower.includes("ขากลับ") || rawTextLower.includes("b→a") || rawTextLower.includes("b->a");
+      const sawDualType = String(props.carriageway_type || "").toUpperCase() === "DUAL_CARRIAGEWAY";
+      const rawOffice = props.responsible_office || layer.metadata?.responsibleOffice;
+
+      const key = uniqueByRouteNo ? cleanNo : `${cleanNo}::${cleanSection.toLowerCase()}`;
+      const existing = aggregated.get(key);
+      if (!existing) {
+        const num = Number(cleanNo.match(/\d+/)?.[0] ?? Infinity);
+        aggregated.set(key, {
+          no: cleanNo,
+          section: cleanSection,
+          minKmStartMeters: loMeters,
+          maxKmEndMeters: hiMeters,
+          rawKmStart: kmS,
+          rawKmEnd: kmE,
+          responsibleOffice: rawOffice ? String(rawOffice).trim() : undefined,
+          lanes: rawLanes ? String(rawLanes).trim() : undefined,
+          maxLaneCount: parsedLanes,
+          sawForward,
+          sawReverse,
+          sawDualType,
+          sortOrder: num,
+        });
+      } else {
+        if (!existing.section && cleanSection) existing.section = cleanSection;
+        if (loMeters !== null && (existing.minKmStartMeters === null || loMeters < existing.minKmStartMeters)) {
+          existing.minKmStartMeters = loMeters;
+          existing.rawKmStart = kmS || formatKmPostString(loMeters);
+        }
+        if (hiMeters !== null && (existing.maxKmEndMeters === null || hiMeters > existing.maxKmEndMeters)) {
+          existing.maxKmEndMeters = hiMeters;
+          existing.rawKmEnd = kmE || formatKmPostString(hiMeters);
+        }
+        if (!existing.rawKmStart && kmS) existing.rawKmStart = kmS;
+        if (!existing.rawKmEnd && kmE) existing.rawKmEnd = kmE;
+        if (!existing.responsibleOffice && rawOffice) existing.responsibleOffice = String(rawOffice).trim();
+        if (parsedLanes > existing.maxLaneCount) {
+          existing.maxLaneCount = parsedLanes;
+          existing.lanes = String(rawLanes).trim();
+        } else if (!existing.lanes && rawLanes) {
+          existing.lanes = String(rawLanes).trim();
+        }
+        if (sawForward) existing.sawForward = true;
+        if (sawReverse) existing.sawReverse = true;
+        if (sawDualType) existing.sawDualType = true;
+      }
     });
   });
 
-  (systemData?.floodRoutes || []).forEach((r) => {
-    pushRoute(r.route_no, r.section_name, r.km_start, r.km_end);
-  });
-
-  (systemData?.mitigationProjects || []).forEach((p) => {
-    pushRoute(p.route_no, p.location_name);
+  const list: AvailableHighwayOption[] = Array.from(aggregated.values()).map((entry) => {
+    const kmStart = entry.minKmStartMeters !== null ? formatKmPostString(entry.minKmStartMeters) : entry.rawKmStart;
+    const kmEnd = entry.maxKmEndMeters !== null ? formatKmPostString(entry.maxKmEndMeters) : entry.rawKmEnd;
+    const hasDualBranches = (entry.sawForward && entry.sawReverse) || entry.sawDualType;
+    const effectiveLaneCount = entry.maxLaneCount > 0 ? entry.maxLaneCount : (hasDualBranches ? 4 : 0);
+    return {
+      no: entry.no,
+      name: entry.section ? `ทล.${entry.no} - ${entry.section}` : `ทล.${entry.no}`,
+      sectionName: entry.section,
+      kmStart,
+      kmEnd,
+      responsibleOffice: entry.responsibleOffice,
+      lanes: entry.lanes || (effectiveLaneCount > 0 ? `${effectiveLaneCount} ช่องจราจร` : undefined),
+      laneCount: effectiveLaneCount,
+      hasDualCarriageway: effectiveLaneCount >= 4 || hasDualBranches,
+      sortOrder: entry.sortOrder,
+    };
   });
 
   return list.sort((a, b) => {
     if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-    return a.no.localeCompare(b.no, "th", { numeric: true }) || a.name.localeCompare(b.name, "th");
+    const byNo = a.no.localeCompare(b.no, "th", { numeric: true });
+    if (byNo !== 0) return byNo;
+    const aKm = parseKmPostMeters(a.kmStart) ?? Infinity;
+    const bKm = parseKmPostMeters(b.kmStart) ?? Infinity;
+    if (aKm !== bKm) return aKm - bKm;
+    return a.name.localeCompare(b.name, "th");
   });
 }
 

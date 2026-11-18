@@ -77,7 +77,7 @@ export const AFFECTED_ROAD_PART_LABELS: Record<AffectedRoadPart, string> = {
 
 export type DetailedTrafficStatus =
   | "PASSABLE"              // ผ่านได้ปกติ
-  | "LIGHT_VEHICLES_ONLY"   // รถเล็กผ่านได้
+  | "LIGHT_VEHICLES_ONLY"   // รถทุกชนิดผ่านได้แต่ไม่สะดวก
   | "ONE_LANE"              // รถเล็กผ่านได้ ๑ ช่องทาง
   | "CAUTION"               // รถเล็กผ่านไม่ได้ (WARNING)
   | "NO_SMALL_VEHICLES"     // รถเล็กไม่สามารถผ่านได้ (legacy detail)
@@ -110,8 +110,8 @@ export const DETAILED_TRAFFIC_STATUS_CONFIG: Record<DetailedTrafficStatus, Detai
   },
   LIGHT_VEHICLES_ONLY: {
     value: "LIGHT_VEHICLES_ONLY",
-    label: "รถเล็กผ่านได้",
-    detail: "อนุญาตเฉพาะรถขนาดเล็ก",
+    label: "รถทุกชนิดผ่านได้แต่ไม่สะดวก",
+    detail: "รถทุกชนิดผ่านได้แต่ไม่สะดวก โปรดสัญจรด้วยความระมัดระวัง",
     colorName: "sky",
     hex: "#0ea5e9",
     badgeClass: "bg-sky-950/80 text-sky-300 border border-sky-500/50",

@@ -25,11 +25,37 @@ export const TRAFFIC_STATUS_OPTIONS: ReadonlyArray<{
   label: string;
 }> = [
   { value: "PASSABLE", label: "ผ่านได้ปกติ" },
-  { value: "LIGHT_VEHICLES_ONLY", label: "รถเล็กผ่านได้" },
+  { value: "LIGHT_VEHICLES_ONLY", label: "รถทุกชนิดผ่านได้แต่ไม่สะดวก" },
   { value: "ONE_LANE", label: "รถเล็กผ่านได้ ๑ ช่องทาง" },
   { value: "WARNING", label: "รถเล็กผ่านไม่ได้" },
   { value: "CLOSED", label: "ผ่านไม่ได้" },
 ];
+
+/**
+ * Derive recommended traffic status from flood water level (cm) and affected road parts.
+ * - 0 cm -> PASSABLE (ผ่านได้ปกติ)
+ * - 1–25 cm -> LIGHT_VEHICLES_ONLY (รถทุกชนิดผ่านได้แต่ไม่สะดวก)
+ * - 26–35 cm -> WARNING (รถเล็กผ่านไม่ได้) for ALL_LANES/unspecified, ONE_LANE (รถเล็กผ่านได้ ๑ ช่องทาง) when only partial lanes/shoulders are flooded
+ * - >= 36 cm -> CLOSED (ผ่านไม่ได้)
+ */
+export function deriveTrafficStatusFromWaterLevel(
+  waterLevelCm: number | string | null | undefined,
+  affectedParts?: readonly string[] | null
+): Exclude<TrafficStatus, "PENDING_VERIFICATION"> | null {
+  if (waterLevelCm === "" || waterLevelCm === null || waterLevelCm === undefined) return null;
+  const cm = Number(waterLevelCm);
+  if (!Number.isFinite(cm) || cm < 0) return null;
+  if (cm <= 0) return "PASSABLE";
+  if (cm <= 25) return "LIGHT_VEHICLES_ONLY";
+  if (cm <= 35) {
+    const specificParts = Array.isArray(affectedParts)
+      ? affectedParts.filter((part) => part && part !== "UNSPECIFIED" && part !== "PENDING_VERIFICATION")
+      : [];
+    const isPartialRoadOnly = specificParts.length > 0 && !specificParts.includes("ALL_LANES");
+    return isPartialRoadOnly ? "ONE_LANE" : "WARNING";
+  }
+  return "CLOSED";
+}
 
 /**
  * Single canonical source of truth for flood traffic status labels, colors, icons,
@@ -83,8 +109,8 @@ export function getTrafficPresentation(
       };
     case "LIGHT_VEHICLES_ONLY":
       return {
-        label: "รถเล็กผ่านได้",
-        detail: "อนุญาตเฉพาะรถขนาดเล็ก",
+        label: "รถทุกชนิดผ่านได้แต่ไม่สะดวก",
+        detail: "รถทุกชนิดผ่านได้แต่ไม่สะดวก โปรดสัญจรด้วยความระมัดระวัง",
         icon: "🚗",
         color: "sky",
         hex: "#0ea5e9",

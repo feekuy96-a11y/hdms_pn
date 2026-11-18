@@ -134,7 +134,7 @@ const SUMMARY_ITEMS: ReadonlyArray<{ color: StatusColor; label: string; dot: str
   { color: "red", label: "ผ่านไม่ได้", dot: "bg-red-500" },
   { color: "orange", label: "รถเล็กไม่สามารถผ่านได้", dot: "bg-orange-500" },
   { color: "amber", label: "เฝ้าระวัง / ระมัดระวัง", dot: "bg-amber-500" },
-  { color: "sky", label: "รถเล็กผ่านได้", dot: "bg-sky-400" },
+  { color: "sky", label: "รถทุกชนิดผ่านได้แต่ไม่สะดวก", dot: "bg-sky-400" },
   { color: "emerald", label: "ผ่านได้ปกติ", dot: "bg-emerald-500" },
   { color: "slate", label: "รอตรวจสอบ", dot: "bg-slate-400" },
 ];
@@ -1431,8 +1431,8 @@ export default function HomePage() {
                                     key={route.id}
                                     data-detour-card={route.id}
                                     className={`rounded-2xl border transition ${isExpanded
-                                        ? "border-[#f59e0b] bg-[#0b162a] shadow-lg"
-                                        : "border-slate-700/80 bg-[#0d1930]/80 hover:border-amber-400/60"
+                                      ? "border-[#f59e0b] bg-[#0b162a] shadow-lg"
+                                      : "border-slate-700/80 bg-[#0d1930]/80 hover:border-amber-400/60"
                                       } text-sm text-slate-100`}
                                   >
                                     <button

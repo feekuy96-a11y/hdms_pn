@@ -306,8 +306,8 @@ export function getUnifiedTrafficStatus(
     case "LIGHT_VEHICLES_ONLY":
       return {
         key: "LIGHT_VEHICLES_ONLY",
-        label: "รถเล็กผ่านได้",
-        detail: "อนุญาตเฉพาะรถขนาดเล็ก / สัญจรด้วยความระมัดระวัง",
+        label: "รถทุกชนิดผ่านได้แต่ไม่สะดวก",
+        detail: "รถทุกชนิดผ่านได้แต่ไม่สะดวก / สัญจรด้วยความระมัดระวัง",
         icon: "🚗",
         color: "sky",
         hex: "#0ea5e9",
