@@ -2,8 +2,13 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { ActionButton, FormSection, StickyActionBar, ToolGroup } from "@/components/admin/ui";
+import { DirectionSwitch } from "@/components/ui/DirectionSwitch";
 import { SystemDataPayload } from "@/db/default-data";
 import { DetourAdviceSection } from "@/components/admin/tabs/DetourAdviceSection";
+import {
+  calculatePolylineRoadDistanceKm,
+  detourDurationSeconds as readDetourDurationSeconds,
+} from "@/lib/detour-presentation";
 import {
   MapPinned,
   ArrowRightLeft,
@@ -224,6 +229,8 @@ export function MapManagementTab({
   const [detourGoogleMapsUrlFwd, setDetourGoogleMapsUrlFwd] = useState("");
   const [detourGoogleMapsUrlRev, setDetourGoogleMapsUrlRev] = useState("");
   const [detourRoadCondition, setDetourRoadCondition] = useState("");
+  const [detourDurationMinFwd, setDetourDurationMinFwd] = useState("");
+  const [detourDurationMinRev, setDetourDurationMinRev] = useState("");
   const [forceStraightThrough, setForceStraightThrough] = useState(false);
   const [detourDirectionMode, setDetourDirectionMode] = useState<DetourDirectionModeType>("TWO_WAY");
   // The highway, flood and detour editors share the same draggable Leaflet vertex handles
@@ -483,10 +490,14 @@ export function MapManagementTab({
         forward: Number(detour.detour_meta?.forward_distance_m) || 0,
         reverse: Number(detour.detour_meta?.reverse_distance_m) || 0,
       });
+      const fwdSec = readDetourDurationSeconds(detour.detour_meta, "FORWARD");
+      const revSec = readDetourDurationSeconds(detour.detour_meta, "REVERSE");
       setDetourDurationSeconds({
-        forward: Number(detour.detour_meta?.forward_duration_s) || 0,
-        reverse: Number(detour.detour_meta?.reverse_duration_s) || 0,
+        forward: fwdSec || 0,
+        reverse: revSec || 0,
       });
+      setDetourDurationMinFwd(fwdSec ? String(Math.max(1, Math.round(fwdSec / 60))) : "");
+      setDetourDurationMinRev(revSec ? String(Math.max(1, Math.round(revSec / 60))) : "");
       setSaveAsDraft(!detour.is_active);
       setStartLat(detour.lat_start || 0);
       setStartLon(detour.lon_start || 0);
@@ -679,10 +690,18 @@ export function MapManagementTab({
           forward: detourDirectionMode === "REVERSE_ONLY" ? 0 : pickedAB.distance,
           reverse: detourDirectionMode === "FORWARD_ONLY" ? 0 : pickedBA.distance,
         });
+        const nextFwdDurS = detourDirectionMode === "REVERSE_ONLY" ? 0 : pickedAB.duration;
+        const nextRevDurS = detourDirectionMode === "FORWARD_ONLY" ? 0 : pickedBA.duration;
         setDetourDurationSeconds({
-          forward: detourDirectionMode === "REVERSE_ONLY" ? 0 : pickedAB.duration,
-          reverse: detourDirectionMode === "FORWARD_ONLY" ? 0 : pickedBA.duration,
+          forward: nextFwdDurS,
+          reverse: nextRevDurS,
         });
+        if (!detourDurationMinFwd.trim() && nextFwdDurS > 0) {
+          setDetourDurationMinFwd(String(Math.max(1, Math.round(nextFwdDurS / 60))));
+        }
+        if (!detourDurationMinRev.trim() && nextRevDurS > 0) {
+          setDetourDurationMinRev(String(Math.max(1, Math.round(nextRevDurS / 60))));
+        }
 
         const allConflicts = [...pickedAB.conflicts, ...pickedBA.conflicts];
         const uniqueConflictMsgs = Array.from(
@@ -894,6 +913,8 @@ export function MapManagementTab({
     setDetourGoogleMapsUrlFwd("");
     setDetourGoogleMapsUrlRev("");
     setDetourRoadCondition("");
+    setDetourDurationMinFwd("");
+    setDetourDurationMinRev("");
     setDetourDistanceMeters({ forward: 0, reverse: 0 });
     setDetourDurationSeconds({ forward: 0, reverse: 0 });
     setFieldImages([]);
@@ -1535,16 +1556,28 @@ export function MapManagementTab({
               ...(existingMeta?.event_orders || {}),
               ...(detourRefId ? { [detourRefId]: orderIndex } : {}),
             };
-            return {
+            const parsedFwdMin = Number(detourDurationMinFwd);
+            const parsedRevMin = Number(detourDurationMinRev);
+            const hasFwdMin = Number.isFinite(parsedFwdMin) && parsedFwdMin > 0;
+            const hasRevMin = Number.isFinite(parsedRevMin) && parsedRevMin > 0;
+            const fwdPolyKm = calculatePolylineRoadDistanceKm(coords);
+            const revPolyKm = calculatePolylineRoadDistanceKm(
+              detourDirectionMode === "TWO_WAY" && draftReverseCoordinates.length >= 2 ? draftReverseCoordinates : coords
+            );
+            const nextMeta: Record<string, any> = {
               ...(existingMeta || {}),
               order_index: typeof existingMeta?.order_index === "number" && (!detourRefId || existingDetour?.flood_id_ref === detourRefId)
                 ? existingMeta.order_index
                 : orderIndex,
               ...(Object.keys(mergedEventOrders).length > 0 ? { event_orders: mergedEventOrders } : {}),
-              forward_distance_m: detourDistanceMeters.forward || existingMeta?.forward_distance_m || undefined,
-              reverse_distance_m: detourDistanceMeters.reverse || existingMeta?.reverse_distance_m || undefined,
-              forward_duration_s: detourDurationSeconds.forward || existingMeta?.forward_duration_s || undefined,
-              reverse_duration_s: detourDurationSeconds.reverse || existingMeta?.reverse_duration_s || undefined,
+              forward_distance_km: fwdPolyKm || undefined,
+              reverse_distance_km: detourDirectionMode === "FORWARD_ONLY" ? undefined : (revPolyKm || undefined),
+              forward_distance_m: fwdPolyKm > 0 ? Math.round(fwdPolyKm * 1000) : (detourDistanceMeters.forward || existingMeta?.forward_distance_m || undefined),
+              reverse_distance_m: detourDirectionMode === "FORWARD_ONLY"
+                ? undefined
+                : revPolyKm > 0
+                  ? Math.round(revPolyKm * 1000)
+                  : (detourDistanceMeters.reverse || existingMeta?.reverse_distance_m || undefined),
               show_arrows: true,
               verified_no_closed_overlap: closedRoadConflicts.length === 0,
               carriageway_type: separation?.isSymmetricSingleLine ? "SINGLE_CENTERLINE" : "ASYMMETRIC_DETOUR",
@@ -1553,6 +1586,21 @@ export function MapManagementTab({
               ...(detourGoogleMapsUrlRev.trim() ? { google_maps_url_reverse: detourGoogleMapsUrlRev.trim() } : {}),
               ...(detourRoadCondition.trim() ? { road_condition: detourRoadCondition.trim() } : {}),
             };
+            if (hasFwdMin) {
+              nextMeta.forward_duration_min = Math.round(parsedFwdMin);
+              nextMeta.forward_duration_s = Math.round(parsedFwdMin * 60);
+            } else {
+              delete nextMeta.forward_duration_min;
+              delete nextMeta.forward_duration_s;
+            }
+            if (hasRevMin) {
+              nextMeta.reverse_duration_min = Math.round(parsedRevMin);
+              nextMeta.reverse_duration_s = Math.round(parsedRevMin * 60);
+            } else {
+              delete nextMeta.reverse_duration_min;
+              delete nextMeta.reverse_duration_s;
+            }
+            return nextMeta;
           })()
           : undefined,
       });
@@ -2030,10 +2078,26 @@ export function MapManagementTab({
             {freeEditEnabled && (
               <>
                 {routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" && (
-                  <div className="flex flex-wrap gap-2" role="group" aria-label="เลือกทิศทางสำหรับดัดเส้น">
-                    <ActionButton variant="secondary" active={freeEditTarget === "FORWARD"} onClick={() => { setFreeEditTarget("FORWARD"); setAdminPickMode(null); freePast.current=[]; freeFuture.current=[]; }}>ขาไป A → B</ActionButton>
-                    <ActionButton variant="secondary" active={freeEditTarget === "REVERSE"} disabled={draftReverseCoordinates.length < 2} onClick={() => { setFreeEditTarget("REVERSE"); setAdminPickMode(null); freePast.current=[]; freeFuture.current=[]; }}>ขากลับ B → A</ActionButton>
-                  </div>
+                  <DirectionSwitch
+                    size="sm"
+                    ariaLabel="เลือกทิศทางสำหรับดัดเส้น"
+                    value={freeEditTarget}
+                    onChange={(nextTarget) => {
+                      setFreeEditTarget(nextTarget);
+                      setAdminPickMode(null);
+                      freePast.current = [];
+                      freeFuture.current = [];
+                    }}
+                    options={[
+                      { value: "FORWARD", label: "→ ขาไป (A → B)", ariaLabel: "ขาไป A → B" },
+                      {
+                        value: "REVERSE",
+                        label: "← ขากลับ (B → A)",
+                        ariaLabel: "ขากลับ B → A",
+                        disabled: draftReverseCoordinates.length < 2,
+                      },
+                    ]}
+                  />
                 )}
                 <ToolGroup label="แก้ไขจุดดัด (ใช้เครื่องมือเดียวกับแนวทางหลวง)">
                   <ActionButton variant="secondary" active={freeVertexTool === "move" && adminPickMode !== "ADD_LINE_VERTEX"} onClick={() => { setFreeVertexTool("move"); setAdminPickMode(null); }}>ลากจุดดัด</ActionButton>
@@ -2214,11 +2278,17 @@ export function MapManagementTab({
             setDetourAdviceView={setDetourAdviceView}
             detourRoadCondition={detourRoadCondition}
             setDetourRoadCondition={setDetourRoadCondition}
+            detourDurationMinFwd={detourDurationMinFwd}
+            setDetourDurationMinFwd={setDetourDurationMinFwd}
+            detourDurationMinRev={detourDurationMinRev}
+            setDetourDurationMinRev={setDetourDurationMinRev}
+            detourDirectionMode={detourDirectionMode}
             detourGoogleMapsUrlFwd={detourGoogleMapsUrlFwd}
             setDetourGoogleMapsUrlFwd={setDetourGoogleMapsUrlFwd}
             detourGoogleMapsUrlRev={detourGoogleMapsUrlRev}
             setDetourGoogleMapsUrlRev={setDetourGoogleMapsUrlRev}
             draftCoordinates={draftCoordinates}
+            draftReverseCoordinates={draftReverseCoordinates}
             onGenerateAdvice={handleGenerateDetourAdviceClick}
           />
         )}

@@ -1,12 +1,18 @@
 "use client";
 
 import React from "react";
-import { ArrowRightLeft, Navigation, Sparkles } from "lucide-react";
+import { ArrowRightLeft, Clock, Navigation, Route, Sparkles } from "lucide-react";
 import { AdviceText } from "@/components/AdviceText";
 import { FormSection } from "@/components/admin/ui";
+import { DirectionSwitch } from "@/components/ui/DirectionSwitch";
 import { buildGoogleMapsDirectionsUrl } from "@/lib/advice-format";
 import { DETOUR_ADVICE_PRESETS } from "@/lib/detour-advice-presets";
-import { extractDirectionalAdvice } from "@/lib/gis-utils";
+import { calculatePolylineRoadDistanceKm } from "@/lib/detour-presentation";
+import {
+  composeDirectionalAdvice,
+  extractDirectionalAdvice,
+  extractDirectionalAdviceForEdit,
+} from "@/lib/gis-utils";
 
 interface DetourAdviceSectionProps {
   detourDesc: string;
@@ -15,11 +21,17 @@ interface DetourAdviceSectionProps {
   setDetourAdviceView: React.Dispatch<React.SetStateAction<"FORWARD" | "REVERSE" | "COMBINED">>;
   detourRoadCondition: string;
   setDetourRoadCondition: (value: string) => void;
+  detourDurationMinFwd: string;
+  setDetourDurationMinFwd: (value: string) => void;
+  detourDurationMinRev: string;
+  setDetourDurationMinRev: (value: string) => void;
+  detourDirectionMode?: "TWO_WAY" | "FORWARD_ONLY" | "REVERSE_ONLY";
   detourGoogleMapsUrlFwd: string;
   setDetourGoogleMapsUrlFwd: (value: string) => void;
   detourGoogleMapsUrlRev: string;
   setDetourGoogleMapsUrlRev: (value: string) => void;
   draftCoordinates: [number, number][];
+  draftReverseCoordinates?: [number, number][];
   onGenerateAdvice: () => void;
 }
 
@@ -30,11 +42,17 @@ export const DetourAdviceSection = React.memo(function DetourAdviceSection({
   setDetourAdviceView,
   detourRoadCondition,
   setDetourRoadCondition,
+  detourDurationMinFwd,
+  setDetourDurationMinFwd,
+  detourDurationMinRev,
+  setDetourDurationMinRev,
+  detourDirectionMode = "TWO_WAY",
   detourGoogleMapsUrlFwd,
   setDetourGoogleMapsUrlFwd,
   detourGoogleMapsUrlRev,
   setDetourGoogleMapsUrlRev,
   draftCoordinates,
+  draftReverseCoordinates = [],
   onGenerateAdvice,
 }: DetourAdviceSectionProps) {
   // Defer parsing of the live citizen preview so typing in the textarea never blocks the main thread.
@@ -51,7 +69,13 @@ export const DetourAdviceSection = React.memo(function DetourAdviceSection({
     };
   }, [draftCoordinates]);
 
-  const currentParts = React.useMemo(() => extractDirectionalAdvice(detourDesc), [detourDesc]);
+  const fwdPolyKm = React.useMemo(() => calculatePolylineRoadDistanceKm(draftCoordinates), [draftCoordinates]);
+  const revPolyKm = React.useMemo(
+    () => calculatePolylineRoadDistanceKm(draftReverseCoordinates.length >= 2 ? draftReverseCoordinates : draftCoordinates),
+    [draftReverseCoordinates, draftCoordinates]
+  );
+
+  const editParts = React.useMemo(() => extractDirectionalAdviceForEdit(detourDesc), [detourDesc]);
   const previewParts = React.useMemo(() => extractDirectionalAdvice(deferredDetourDesc), [deferredDetourDesc]);
   const advicePreviewText =
     detourAdviceView === "FORWARD"
@@ -71,39 +95,21 @@ export const DetourAdviceSection = React.memo(function DetourAdviceSection({
   return (
     <FormSection step={3} tone="amber" title="คำแนะนำสำหรับประชาชน" description="ข้อความที่ประชาชนจะเห็นในหน้าหลัก แยกทิศทางขาไปและขากลับ">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-heading font-bold text-amber-300">
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="detour-advice-textarea" className="text-xs font-heading font-bold text-amber-300">
             คำแนะนำเส้นทางเลี่ยงสำหรับประชาชน
           </label>
-          <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-800 text-[10px] font-heading font-bold">
-            <button
-              type="button"
-              onClick={() => setDetourAdviceView("FORWARD")}
-              className={`px-2 py-0.5 rounded transition ${
-                detourAdviceView === "FORWARD" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              🚗 ขาไป (A → B)
-            </button>
-            <button
-              type="button"
-              onClick={() => setDetourAdviceView("REVERSE")}
-              className={`px-2 py-0.5 rounded transition ${
-                detourAdviceView === "REVERSE" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              🚙 ขากลับ (B → A)
-            </button>
-            <button
-              type="button"
-              onClick={() => setDetourAdviceView("COMBINED")}
-              className={`px-2 py-0.5 rounded transition ${
-                detourAdviceView === "COMBINED" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              📋 ทั้ง ๒ ทิศทาง
-            </button>
-          </div>
+          <DirectionSwitch
+            size="sm"
+            ariaLabel="เลือกมุมมองทิศทางคำแนะนำ"
+            value={detourAdviceView}
+            onChange={setDetourAdviceView}
+            options={[
+              { value: "FORWARD", label: "→ ขาไป (A → B)", ariaLabel: "ขาไป A → B" },
+              { value: "REVERSE", label: "← ขากลับ (B → A)", ariaLabel: "ขากลับ B → A" },
+              { value: "COMBINED", label: "⇄ ทั้ง ๒ ทิศทาง", ariaLabel: "ทั้ง ๒ ทิศทาง" },
+            ]}
+          />
         </div>
 
         <button
@@ -116,22 +122,23 @@ export const DetourAdviceSection = React.memo(function DetourAdviceSection({
       </div>
 
       <textarea
+        id="detour-advice-textarea"
         rows={8}
         value={
           detourAdviceView === "FORWARD"
-            ? currentParts.forward
+            ? editParts.forward
             : detourAdviceView === "REVERSE"
-              ? currentParts.reverse
+              ? editParts.reverse
               : detourDesc
         }
         onChange={(e) => {
           const val = e.target.value;
           if (detourAdviceView === "FORWARD" || detourAdviceView === "REVERSE") {
-            const forwardHeader = currentParts.forwardHeader || "=== ทิศทางขาไป: จุด A → จุด B ===";
-            const reverseHeader = currentParts.reverseHeader || "=== ทิศทางขากลับ: จุด B → จุด A ===";
-            const forwardText = detourAdviceView === "FORWARD" ? val : currentParts.hasBoth ? currentParts.forward : "";
-            const reverseText = detourAdviceView === "REVERSE" ? val : currentParts.hasBoth ? currentParts.reverse : "";
-            setDetourDesc(`${forwardHeader}\n${forwardText}\n\n${reverseHeader}\n${reverseText}`);
+            const forwardText = detourAdviceView === "FORWARD" ? val : editParts.forward;
+            const reverseText = detourAdviceView === "REVERSE" ? val : editParts.reverse;
+            setDetourDesc(
+              composeDirectionalAdvice(editParts.forwardHeader, forwardText, editParts.reverseHeader, reverseText)
+            );
           } else {
             setDetourDesc(val);
           }
@@ -209,9 +216,65 @@ export const DetourAdviceSection = React.memo(function DetourAdviceSection({
       </div>
 
       <div className="pt-2 border-t border-slate-800/80 space-y-3">
+        <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-heading font-bold text-sky-300 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              <span>เวลาเดินทางโดยประมาณสำหรับประชาชน (นาที)</span>
+            </span>
+            {fwdPolyKm > 0 && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-amber-200 font-mono">
+                <Route className="w-3.5 h-3.5" />
+                ความยาวเส้นบนแผนที่: ขาไป {fwdPolyKm.toFixed(1)} กม.
+                {detourDirectionMode === "TWO_WAY" && revPolyKm > 0 ? ` · ขากลับ ${revPolyKm.toFixed(1)} กม.` : ""}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label htmlFor="detour-duration-fwd" className="text-[11px] text-slate-300 block mb-1">
+                เวลาโดยประมาณ ขาไป (A → B) (นาที):
+              </label>
+              <input
+                id="detour-duration-fwd"
+                type="number"
+                min={1}
+                max={1440}
+                step={1}
+                disabled={detourDirectionMode === "REVERSE_ONLY"}
+                value={detourDurationMinFwd}
+                onChange={(e) => setDetourDurationMinFwd(e.target.value)}
+                placeholder="เช่น 25"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 font-mono disabled:opacity-40"
+              />
+            </div>
+            <div>
+              <label htmlFor="detour-duration-rev" className="text-[11px] text-slate-300 block mb-1">
+                เวลาโดยประมาณ ขากลับ (B → A) (นาที):
+              </label>
+              <input
+                id="detour-duration-rev"
+                type="number"
+                min={1}
+                max={1440}
+                step={1}
+                disabled={detourDirectionMode === "FORWARD_ONLY"}
+                value={detourDurationMinRev}
+                onChange={(e) => setDetourDurationMinRev(e.target.value)}
+                placeholder="เช่น 25"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 font-mono disabled:opacity-40"
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            ระยะทางเลี่ยงจะคำนวณจากความยาวแนวเส้นจริงบนแผนที่อัตโนมัติ ส่วนเวลาโดยประมาณจะดึงจากค่าที่เจ้าหน้าที่บันทึกในช่องนี้
+          </p>
+        </div>
+
         <div>
-          <label className="text-xs text-slate-300 block mb-1">สภาพผิวทาง (Road Surface Condition)</label>
+          <label htmlFor="detour-road-condition" className="text-xs text-slate-300 block mb-1">สภาพผิวทาง (Road Surface Condition)</label>
           <input
+            id="detour-road-condition"
             type="text"
             value={detourRoadCondition}
             onChange={(e) => setDetourRoadCondition(e.target.value)}

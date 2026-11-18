@@ -484,6 +484,55 @@ export function extractDirectionalAdvice(text: string): {
   };
 }
 
+/**
+ * Extract directional advice sections for interactive editing WITHOUT stripping trailing spaces or newlines.
+ */
+export function extractDirectionalAdviceForEdit(text: string): {
+  forward: string;
+  reverse: string;
+  hasBoth: boolean;
+  forwardHeader: string;
+  reverseHeader: string;
+} {
+  if (!text) return { forward: "", reverse: "", hasBoth: false, forwardHeader: "", reverseHeader: "" };
+
+  const headers = Array.from(text.matchAll(/===\s*ทิศทาง[^=\n]*===/g));
+  if (headers.length >= 2) {
+    const [first, second] = headers;
+    const third = headers[2];
+    const firstEnd = (first.index ?? 0) + first[0].length;
+    const secondStart = second.index ?? 0;
+    const secondEnd = secondStart + second[0].length;
+    return {
+      forward: text.slice(firstEnd, secondStart).replace(/^\r?\n/, "").replace(/\r?\n\r?\n$/, ""),
+      reverse: text.slice(secondEnd, third ? third.index : undefined).replace(/^\r?\n/, ""),
+      hasBoth: true,
+      forwardHeader: first[0],
+      reverseHeader: second[0],
+    };
+  }
+
+  return {
+    forward: text,
+    reverse: "",
+    hasBoth: false,
+    forwardHeader: "",
+    reverseHeader: "",
+  };
+}
+
+/** Compose directional advice string from forward & reverse sections. */
+export function composeDirectionalAdvice(
+  forwardHeader: string,
+  forwardText: string,
+  reverseHeader: string,
+  reverseText: string
+): string {
+  const fwdH = forwardHeader || "=== ทิศทางขาไป: จุด A → จุด B ===";
+  const revH = reverseHeader || "=== ทิศทางขากลับ: จุด B → จุด A ===";
+  return `${fwdH}\n${forwardText}\n\n${revH}\n${reverseText}`;
+}
+
 function formatRefRoadPrefix(rawRef: string | undefined, fallbackStr: string): string {
   const ref = (rawRef || "").trim();
   if (!ref) return fallbackStr;

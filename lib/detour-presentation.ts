@@ -166,20 +166,20 @@ export function getDetourTimelinePresentation(
 ): DetourTimelinePresentation {
   const { steps: rawSteps } = parseDetourAdvice(rawAdvice);
 
-  // 1. คำนวณระยะทางรวม (กม.) — ใช้ค่าบันทึกจริงก่อน หากไม่มีใช้ระยะตามแนวเส้นทาง GIS
+  // 1. คำนวณระยะทางรวม (กม.) — ดึงจากความยาวของเส้นบนแผนที่จริงเป็นหลัก (fallback เมื่อไม่มีพิกัดเส้นเท่านั้น)
   let totalDistanceKm = 0;
-  if (recordedDistanceMeters && recordedDistanceMeters > 0) {
+  if (fallbackDistanceKm > 0) {
+    totalDistanceKm = fallbackDistanceKm;
+  } else if (recordedDistanceMeters && recordedDistanceMeters > 0) {
     totalDistanceKm = recordedDistanceMeters / 1000;
   } else {
     const distMatch = rawAdvice.match(/รวมระยะทาง(?:เลี่ยง)?:\s*(?:ประมาณ\s*)?([0-9.]+)\s*กม/);
     if (distMatch && !isNaN(parseFloat(distMatch[1]))) {
       totalDistanceKm = parseFloat(distMatch[1]);
-    } else if (fallbackDistanceKm > 0) {
-      totalDistanceKm = fallbackDistanceKm;
     }
   }
 
-  // 2. เวลาเดินทางโดยประมาณ — ใช้ข้อมูลบันทึกจริงเท่านั้น ห้ามสมมติความเร็วเองเด็ดขาด
+  // 2. เวลาเดินทางโดยประมาณ — ใช้ข้อมูลที่แอดมินจัดเก็บจริงใน detour_meta เป็นหลัก ห้ามเดาเวลาเอง
   let estimatedMinutes: number | null = null;
   let estimatedDurationText = "ยังไม่มีข้อมูลเวลาเดินทาง";
   if (recordedDurationSeconds && recordedDurationSeconds > 0) {

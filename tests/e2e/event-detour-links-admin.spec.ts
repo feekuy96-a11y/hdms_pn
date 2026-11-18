@@ -474,6 +474,7 @@ test("admin and citizen detail views render all linked detours and linked flood 
   // 1. Admin Incident & Detour detail modals
   await page.goto(`${base}/admin/`);
   await page.getByRole("button", { name: "รายการเหตุการณ์", exact: true }).filter({ visible: true }).first().click();
+  await page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ }).first().click();
 
   await page.getByRole("button", { name: "รายละเอียด" }).first().click();
   const incidentModal = page.getByRole("dialog", { name: "รายละเอียดเหตุการณ์" });
