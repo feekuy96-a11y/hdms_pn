@@ -171,7 +171,7 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   await expect(floodPopup).toBeVisible();
   await expect.poll(async () => {
     const box = await floodPopup.boundingBox();
-    return Boolean(box && box.width <= 344 && box.height <= 500 && box.x >= 0 && box.x + box.width <= 360);
+    return Boolean(box && box.width <= 344 && box.height <= 370 && box.x >= 0 && box.x + box.width <= 360);
   }).toBe(true);
   await expect(floodPopup.getByRole("button", { name: "ดูรายละเอียด" })).toBeVisible();
   await expect(floodPopup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" })).toBeVisible();
@@ -195,13 +195,16 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   await expect(detourPopup).toBeVisible();
   await expect.poll(async () => {
     const box = await detourPopup.boundingBox();
-    return Boolean(box && box.width <= 344 && box.height <= 500 && box.x >= 0 && box.x + box.width <= 360);
+    return Boolean(box && box.width <= 344 && box.height <= 370 && box.x >= 0 && box.x + box.width <= 360);
   }).toBe(true);
   await expect(detourPopup.getByRole("button", { name: "ขาไป A → B" })).toBeVisible();
   await expect(detourPopup.getByRole("button", { name: "ขากลับ B → A" })).toBeVisible();
   await expect(detourPopup.getByRole("button", { name: /นำทางด้วย Google Maps/ })).toBeVisible();
   await expect(detourPopup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  // Close button must not be obscured by top overlays or Leaflet zoom controls
+  await detourPopup.locator(".leaflet-popup-close-button").click();
+  await expect(detourPopup).toHaveCount(0);
 
   // 3. Point photo popup at 360x640
   await page.locator(".doh-detour-photo-start").first().click({ force: true });
@@ -209,8 +212,10 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   await expect(photoPopup).toBeVisible();
   await expect.poll(async () => {
     const box = await photoPopup.boundingBox();
-    return Boolean(box && box.width <= 344 && box.height <= 500 && box.x >= 0 && box.x + box.width <= 360);
+    return Boolean(box && box.width <= 344 && box.height <= 370 && box.x >= 0 && box.x + box.width <= 360);
   }).toBe(true);
   await expect(photoPopup.getByRole("button", { name: "ดูคำแนะนำทางเลี่ยง" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.locator(".doh-detour-leaflet-popup .leaflet-popup-close-button").click();
+  await expect(photoPopup).toHaveCount(0);
 });

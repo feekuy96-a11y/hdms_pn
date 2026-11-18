@@ -77,6 +77,10 @@
 }
 
 /* Leaflet & Map Popups */
+.leaflet-popup-pane {
+  z-index: 1050 !important;
+}
+
 .leaflet-popup-content-wrapper {
   background: #090d16 !important;
   color: #f8fafc !important;

@@ -189,8 +189,8 @@ export function getResponsivePopupOptions(
     maxWidth,
     minWidth,
     ...(className ? { className } : {}),
-    autoPanPaddingTopLeft: L?.point ? L.point(12, isMobile ? 74 : 24) : [12, isMobile ? 74 : 24],
-    autoPanPaddingBottomRight: L?.point ? L.point(12, isMobile ? 96 : 24) : [12, isMobile ? 96 : 24],
+    autoPanPaddingTopLeft: L?.point ? L.point(12, isMobile ? 96 : 24) : [12, isMobile ? 96 : 24],
+    autoPanPaddingBottomRight: L?.point ? L.point(12, isMobile ? 112 : 24) : [12, isMobile ? 112 : 24],
   };
 }
 
@@ -359,7 +359,7 @@ export function buildDetourPopupHtml(
   const inactiveBtnClass = "min-h-[40px] sm:min-h-[38px] py-1.5 px-2.5 text-xs font-semibold rounded-lg transition cursor-pointer flex items-center justify-center gap-1 text-slate-300 hover:bg-slate-800/70 hover:text-white";
 
   return `
-    <div class="doh-detour-popup text-xs p-2.5 sm:p-3.5 w-[min(324px,calc(100vw-32px))] sm:w-[380px] max-w-full max-h-[min(62dvh,420px)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl select-text">
+    <div class="doh-detour-popup text-xs p-2.5 sm:p-3.5 w-[min(324px,calc(100vw-32px))] sm:w-[380px] max-w-full max-h-[min(54dvh,350px)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl select-text">
       <div class="flex items-center justify-between gap-2 pb-2 sm:pb-2.5 pr-9 border-b border-slate-800/80">
         <div class="flex items-center gap-2 min-w-0">
           <span style="color:${color}" class="text-base sm:text-lg font-black shrink-0 leading-none" aria-hidden="true">↔</span>
@@ -476,7 +476,7 @@ export function buildDetourPointPhotoPopupHtml(
   const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${Number(lat).toFixed(6)},${Number(lon).toFixed(6)}&travelmode=driving`;
 
   return `
-    <div class="doh-detour-point-photo-popup text-xs p-2.5 sm:p-3.5 w-[min(324px,calc(100vw-32px))] sm:w-[340px] max-w-full max-h-[min(62dvh,420px)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl select-text space-y-2 sm:space-y-2.5">
+    <div class="doh-detour-point-photo-popup text-xs p-2.5 sm:p-3.5 w-[min(324px,calc(100vw-32px))] sm:w-[340px] max-w-full max-h-[min(54dvh,350px)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl select-text space-y-2 sm:space-y-2.5">
       <div class="flex items-center justify-between gap-2 pb-2 pr-9 border-b border-slate-800/80">
         <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-heading font-bold ${
           isStart
@@ -591,7 +591,7 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0):
   const safeId = escapeHtml(flood.id);
 
   return `
-    <div class="w-[min(324px,calc(100vw-32px))] sm:w-[340px] max-w-full max-h-[min(62dvh,420px)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain p-2.5 sm:p-3.5 font-body text-slate-100 bg-[#081120]">
+    <div class="w-[min(324px,calc(100vw-32px))] sm:w-[340px] max-w-full max-h-[min(54dvh,350px)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain p-2.5 sm:p-3.5 font-body text-slate-100 bg-[#081120]">
       <div class="flex items-start justify-between gap-2 pr-9">
         <div class="flex min-w-0 items-center gap-1.5 sm:gap-2 flex-wrap">
           <span class="shrink-0 rounded-lg bg-[#f59e0b] px-2 py-0.5 font-heading text-xs font-black text-slate-950 shadow">
