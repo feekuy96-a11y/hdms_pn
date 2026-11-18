@@ -40,6 +40,7 @@ import {
 import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
 import { sortDetoursByOrder } from "@/lib/detour-presentation";
 import { parseFloodDirectionMeta } from "@/lib/flood-event-schema";
+import { getLinkedEventsForDetour, type LinkedFloodEventEntry } from "@/lib/event-detour-links";
 import { exportLineFeatures, GisExportFormat, parseLineCoordinates } from "@/lib/gis-export";
 import { useModalAccessibility } from "@/components/ui/use-modal-accessibility";
 
@@ -101,28 +102,44 @@ export function DetourManagementTab({
   const activeCount = detourList.filter((d) => d.is_active).length;
   const inactiveCount = totalCount - activeCount;
 
+  const linkedEventsByDetourId = React.useMemo(() => {
+    const map = new Map<string, LinkedFloodEventEntry[]>();
+    for (const d of detourList) {
+      map.set(d.id, getLinkedEventsForDetour(d, systemData, { includeInactiveFloods: true }));
+    }
+    return map;
+  }, [detourList, systemData]);
+
   // Filtered Detours sorted by explicit Admin order
   const filteredDetours = React.useMemo(() => {
     const matched = detourList.filter((d) => {
       if (detourFilter === "ACTIVE" && !d.is_active) return false;
       if (detourFilter === "INACTIVE" && d.is_active) return false;
-      if (floodFilter !== "ALL" && d.flood_id_ref !== floodFilter) return false;
+      const linkedEvents = linkedEventsByDetourId.get(d.id) || [];
+      if (floodFilter !== "ALL") {
+        const matchesFlood =
+          d.flood_id_ref === floodFilter ||
+          linkedEvents.some((ev) => ev.floodRoutes.some((f) => f.id === floodFilter));
+        if (!matchesFlood) return false;
+      }
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const linkedFlood = floodList.find((f) => f.id === d.flood_id_ref);
         const matchName = d.route_name.toLowerCase().includes(q);
         const matchDesc = (d.description || "").toLowerCase().includes(q);
-        const matchFlood =
-          linkedFlood &&
-          (linkedFlood.route_no.toLowerCase().includes(q) ||
-            linkedFlood.section_name.toLowerCase().includes(q));
+        const matchFlood = linkedEvents.some(
+          (ev) =>
+            ev.routeNo.toLowerCase().includes(q) ||
+            ev.sectionName.toLowerCase().includes(q) ||
+            ev.kmRangeLabel.toLowerCase().includes(q) ||
+            ev.eventTitle.toLowerCase().includes(q)
+        );
         return matchName || matchDesc || matchFlood;
       }
       return true;
     });
     return sortDetoursByOrder(matched, floodFilter !== "ALL" ? floodFilter : undefined);
-  }, [detourList, floodList, detourFilter, floodFilter, searchQuery]);
+  }, [detourList, linkedEventsByDetourId, detourFilter, floodFilter, searchQuery]);
 
   // Sibling detours within the same flood scope (used for Up/Down reordering)
   const getReorderSiblings = (item: DetourRoute): DetourRoute[] => {
@@ -516,9 +533,9 @@ export function DetourManagementTab({
         <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl">
           <span className="text-[11px] text-slate-400 block font-heading">ผูกกับจุดน้ำท่วม</span>
           <span className="text-xl sm:text-2xl font-bold font-mono text-sky-400 mt-0.5 block">
-            {new Set(detourList.map((d) => d.flood_id_ref).filter(Boolean)).size}
+            {new Set(Array.from(linkedEventsByDetourId.values()).flatMap((evs) => evs.map((e) => e.eventId))).size}
           </span>
-          <span className="text-[10px] text-sky-400/80">จุดวิกฤตที่มีเส้นทางเลี่ยง</span>
+          <span className="text-[10px] text-sky-400/80">เหตุการณ์ที่มีเส้นทางเลี่ยง</span>
         </div>
       </div>
 
@@ -612,7 +629,7 @@ export function DetourManagementTab({
           {/* Mobile Card View (จอแคบ / มือถือ / พื้นที่แสดงจริงแคบ) */}
           <div className="doh-auto-table-cards block md:hidden space-y-3">
             {filteredDetours.map((item, idx) => {
-              const linkedFlood = floodList.find((f) => f.id === item.flood_id_ref);
+              const linkedEvents = linkedEventsByDetourId.get(item.id) || [];
               const ext = extractDirectionalAdvice(item.description || "");
               const siblings = getReorderSiblings(item);
               const groupPos = siblings.findIndex((d) => d.id === item.id);
@@ -671,11 +688,14 @@ export function DetourManagementTab({
                           ? "→ เฉพาะขากลับ (B → A)"
                           : "⇄ เดินรถ ๒ ทิศทาง (A ⇄ B)"}
                     </span>
-                    {linkedFlood && (
-                      <span className="bg-amber-400/20 text-amber-300 border border-amber-500/40 text-[10px] px-1.5 py-0.2 rounded font-bold">
-                        ผูก ทล.{linkedFlood.route_no} ({linkedFlood.section_name})
+                    {linkedEvents.map((ev) => (
+                      <span
+                        key={ev.eventId}
+                        className="bg-amber-400/20 text-amber-300 border border-amber-500/40 text-[10px] px-1.5 py-0.2 rounded font-bold"
+                      >
+                        ผูก ทล.{ev.routeNo} ({ev.sectionName}){ev.kmRangeLabel ? ` ${ev.kmRangeLabel}` : ""}
                       </span>
-                    )}
+                    ))}
                   </div>
 
                   {ext.hasBoth ? (
@@ -772,7 +792,7 @@ export function DetourManagementTab({
               </thead>
               <tbody className="divide-y divide-slate-800/80 font-body">
                 {filteredDetours.map((item, idx) => {
-                  const linkedFlood = floodList.find((f) => f.id === item.flood_id_ref);
+                  const linkedEvents = linkedEventsByDetourId.get(item.id) || [];
                   const ext = extractDirectionalAdvice(item.description || "");
                   const coordsCount = Array.isArray(item.coordinates_json) ? item.coordinates_json.length : 0;
                   const siblings = getReorderSiblings(item);
@@ -844,14 +864,18 @@ export function DetourManagementTab({
 
                       {/* Linked Flood Incident */}
                       <td className="p-3">
-                        {linkedFlood ? (
-                          <div>
-                            <span className="bg-amber-400/20 text-amber-300 border border-amber-500/40 text-[10px] font-heading font-bold px-1.5 py-0.5 rounded">
-                              ทล.{linkedFlood.route_no}
-                            </span>
-                            <span className="block text-[11px] text-slate-200 mt-1 truncate max-w-[160px]" title={linkedFlood.section_name}>
-                              {linkedFlood.section_name}
-                            </span>
+                        {linkedEvents.length > 0 ? (
+                          <div className="space-y-1">
+                            {linkedEvents.map((ev) => (
+                              <div key={ev.eventId}>
+                                <span className="bg-amber-400/20 text-amber-300 border border-amber-500/40 text-[10px] font-heading font-bold px-1.5 py-0.5 rounded">
+                                  ทล.{ev.routeNo}
+                                </span>
+                                <span className="block text-[11px] text-slate-200 mt-0.5 truncate max-w-[180px]" title={`${ev.sectionName}${ev.kmRangeLabel ? ` ${ev.kmRangeLabel}` : ""}`}>
+                                  {ev.sectionName}{ev.kmRangeLabel ? ` (${ev.kmRangeLabel})` : ""}
+                                </span>
+                              </div>
+                            ))}
                           </div>
                         ) : (
                           <span className="text-[11px] text-slate-400 italic">-- ไม่ได้ผูก --</span>
@@ -998,12 +1022,32 @@ export function DetourManagementTab({
                   </span>
                 </dd>
               </div>
-              <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
-                <dt className="text-slate-400">จุดน้ำท่วมที่ผูกไว้</dt>
-                <dd className="font-bold text-amber-300 mt-0.5">
+              <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 sm:col-span-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <dt className="text-slate-400">จุดน้ำท่วมที่ผูกไว้</dt>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const detourId = viewingDetour.id;
+                      setViewingDetour(null);
+                      setLinkModalState({ mode: "BY_DETOUR", detourId });
+                    }}
+                    className="text-[11px] font-heading font-bold text-sky-300 hover:text-sky-200 underline cursor-pointer"
+                  >
+                    จัดการความสัมพันธ์
+                  </button>
+                </div>
+                <dd className="font-bold text-amber-300 mt-1 space-y-1">
                   {(() => {
-                    const flood = floodList.find((item) => item.id === viewingDetour.flood_id_ref);
-                    return flood ? `ทล.${flood.route_no} ${flood.section_name}` : "ทางเลี่ยงอิสระ (ไม่ผูกจุดน้ำท่วม)";
+                    const linkedEvents = linkedEventsByDetourId.get(viewingDetour.id) || [];
+                    if (linkedEvents.length === 0) {
+                      return "ทางเลี่ยงอิสระ (ไม่ผูกจุดน้ำท่วม)";
+                    }
+                    return linkedEvents.map((ev) => (
+                      <div key={ev.eventId} className="text-xs text-amber-300">
+                        • ทล.{ev.routeNo} {ev.sectionName}{ev.kmRangeLabel ? ` (${ev.kmRangeLabel})` : ""}
+                      </div>
+                    ));
                   })()}
                 </dd>
               </div>
@@ -1370,6 +1414,7 @@ export function DetourManagementTab({
         initialEventId={linkModalState?.eventId}
         initialDetourId={linkModalState?.detourId}
         systemData={systemData}
+        onDataRefresh={onDataRefresh}
         onClose={() => setLinkModalState(null)}
         onToast={onToast}
       />

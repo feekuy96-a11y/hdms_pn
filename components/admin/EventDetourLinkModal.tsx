@@ -25,13 +25,16 @@ import {
   getEventSupportedRecommendedDirections,
   getRecommendationReviewBlockers,
   isDetourDirectionAllowed,
+  recommendationToLinkStatus,
   resequenceEventDetourLinks,
   resolveDefaultDetourDirection,
+  resolveDefaultEventDirection,
   validateEventDetourLinks,
   type DetourRecommendation,
   type DetourTravelDirection,
   type EventDetourLink,
   type EventTravelDirection,
+  type LinkStatusMode,
 } from "@/lib/event-detour-links";
 import {
   groupFloodRoutesIntoEvents,
@@ -48,6 +51,7 @@ interface EventDetourLinkModalProps {
   initialEventId?: string;
   initialDetourId?: string;
   systemData: SystemDataPayload;
+  onDataRefresh?: (data?: any) => Promise<any> | void;
   onClose: () => void;
   onToast: (msg: string) => void;
 }
@@ -57,7 +61,7 @@ interface ByDetourRowDraft {
   sourceEventDirection: EventTravelDirection | null;
   eventDirection: EventTravelDirection;
   detourDirection: DetourTravelDirection;
-  recommendation: DetourRecommendation;
+  status: LinkStatusMode;
 }
 
 interface LoadedEventState {
@@ -68,35 +72,53 @@ interface LoadedEventState {
 }
 
 const EVENT_DIRECTION_LABELS: Record<EventTravelDirection, string> = {
+  BOTH: "๒ ทิศทาง (ไป-กลับ A ⇄ B)",
   A_TO_B: "ขาไปตามหลัก กม. (A → B)",
   B_TO_A: "ขากลับย้อนหลัก กม. (B → A)",
   UNKNOWN: "ยังไม่ระบุทิศทางเหตุการณ์",
 };
 
 const DETOUR_DIRECTION_LABELS: Record<DetourTravelDirection, string> = {
+  TWO_WAY: "๒ ทิศทาง (A ⇄ B)",
   FORWARD: "ขาไปของทางเลี่ยง (A → B)",
   REVERSE: "ขากลับของทางเลี่ยง (B → A)",
   UNKNOWN: "ยังไม่ระบุทิศทางทางเลี่ยง",
 };
 
-const RECOMMENDATION_LABELS: Record<DetourRecommendation, string> = {
-  PENDING: "รอตรวจสอบ (PENDING)",
-  RECOMMENDED: "แนะนำให้ใช้ (RECOMMENDED)",
-  UNAVAILABLE: "ใช้งานไม่ได้ชั่วคราว (UNAVAILABLE)",
-  WITHDRAWN: "ยกเลิกคำแนะนำ (WITHDRAWN)",
+const STATUS_MODE_LABELS: Record<LinkStatusMode, string> = {
+  ACTIVE: "ใช้งาน",
+  INACTIVE: "ไม่ใช้งาน",
 };
+
+function resolveSavedRecommendation(
+  status: LinkStatusMode,
+  link: Omit<EventDetourLink, "recommendation" | "reviewedGeometryVersion">,
+  detour: DetourRoute | undefined,
+  supportedDirections: Set<EventTravelDirection>
+): { recommendation: DetourRecommendation; reviewedGeometryVersion: number | null } {
+  if (status === "INACTIVE") {
+    return { recommendation: "WITHDRAWN", reviewedGeometryVersion: null };
+  }
+  const probe: EventDetourLink = {
+    ...link,
+    recommendation: "RECOMMENDED",
+    reviewedGeometryVersion: null,
+  };
+  const blockers = getRecommendationReviewBlockers(probe, detour, supportedDirections);
+  if (blockers.length === 0) {
+    return {
+      recommendation: "RECOMMENDED",
+      reviewedGeometryVersion: Math.max(1, Number(detour?.geometry_revision) || 1),
+    };
+  }
+  return { recommendation: "PENDING", reviewedGeometryVersion: null };
+}
 
 function createOperationId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
   return `op-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function getPreferredEventDirection(supported: Set<EventTravelDirection>): EventTravelDirection {
-  if (supported.has("A_TO_B")) return "A_TO_B";
-  if (supported.has("B_TO_A")) return "B_TO_A";
-  return "UNKNOWN";
 }
 
 function getDetourModeLabel(mode?: string): string {
@@ -112,6 +134,7 @@ export function EventDetourLinkModal({
   initialEventId,
   initialDetourId,
   systemData,
+  onDataRefresh,
   onClose,
   onToast,
 }: EventDetourLinkModalProps) {
@@ -146,7 +169,7 @@ export function EventDetourLinkModal({
   const [eventVersion, setEventVersion] = useState<number>(0);
   const [draftLinks, setDraftLinks] = useState<EventDetourLink[]>([]);
   const [detourSearch, setDetourSearch] = useState("");
-  const [addEventDirection, setAddEventDirection] = useState<EventTravelDirection>("A_TO_B");
+  const [addEventDirection, setAddEventDirection] = useState<EventTravelDirection>("BOTH");
 
   // Mode BY_DETOUR state
   const [byDetourLoading, setByDetourLoading] = useState(false);
@@ -190,8 +213,8 @@ export function EventDetourLinkModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    setAddEventDirection(getPreferredEventDirection(selectedEventSupportedDirs));
-  }, [isOpen, selectedEventId, selectedEventSupportedDirs]);
+    setAddEventDirection(resolveDefaultEventDirection(selectedEvent?.segments || []));
+  }, [isOpen, selectedEventId, selectedEvent]);
 
   const loadSingleEvent = useCallback(async (eventId: string) => {
     if (!eventId) {
@@ -225,23 +248,26 @@ export function EventDetourLinkModal({
 
       for (const ev of parentEvents) {
         const loaded = states[ev.eventId];
-        const supported = getEventSupportedRecommendedDirections(ev.segments || []);
-        const existing = loaded?.links.find((l) => l.detourId === targetDetourId);
+        const matchingLinks = (loaded?.links || []).filter((l) => l.detourId === targetDetourId);
+        const existing = matchingLinks[0];
         if (existing) {
+          const allInactive = matchingLinks.every(
+            (l) => recommendationToLinkStatus(l.recommendation) === "INACTIVE"
+          );
           nextDrafts[ev.eventId] = {
             linked: true,
-            sourceEventDirection: existing.eventDirection,
-            eventDirection: existing.eventDirection,
+            sourceEventDirection: matchingLinks.length > 1 ? "BOTH" : existing.eventDirection,
+            eventDirection: matchingLinks.length > 1 ? "BOTH" : existing.eventDirection,
             detourDirection: existing.detourDirection,
-            recommendation: existing.recommendation,
+            status: allInactive ? "INACTIVE" : "ACTIVE",
           };
         } else {
           nextDrafts[ev.eventId] = {
             linked: false,
             sourceEventDirection: null,
-            eventDirection: getPreferredEventDirection(supported),
+            eventDirection: resolveDefaultEventDirection(ev.segments || []),
             detourDirection: defaultDetourDir,
-            recommendation: "PENDING",
+            status: "ACTIVE",
           };
         }
       }
@@ -323,21 +349,41 @@ export function EventDetourLinkModal({
 
   const handleAddDetourToEvent = (detour: DetourRoute) => {
     if (!selectedEventId) return;
-    const duplicate = draftLinks.some(
-      (l) => l.detourId === detour.id && l.eventDirection === addEventDirection
-    );
-    if (duplicate) {
+    const sameDetourLinks = draftLinks.filter((l) => l.detourId === detour.id);
+    const duplicateExact = sameDetourLinks.some((l) => l.eventDirection === addEventDirection);
+    if (duplicateExact) {
       onToast(`ทางเลี่ยง "${detour.route_name}" ถูกผูกในทิศทางนี้แล้ว`);
       return;
     }
+    if (
+      sameDetourLinks.some((l) => l.eventDirection === "BOTH") ||
+      (addEventDirection === "BOTH" && sameDetourLinks.length > 0)
+    ) {
+      onToast(`ทางเลี่ยง "${detour.route_name}" มีการผูกในเหตุการณ์นี้แล้ว กรุณาปรับทิศทางเดิมแทนการเพิ่มซ้ำ`);
+      return;
+    }
+
+    const defaultDetourDir = resolveDefaultDetourDirection(detour.direction_mode);
+    const resolved = resolveSavedRecommendation(
+      "ACTIVE",
+      {
+        eventId: selectedEventId,
+        detourId: detour.id,
+        eventDirection: addEventDirection,
+        detourDirection: defaultDetourDir,
+        position: draftLinks.length + 1,
+      },
+      detour,
+      selectedEventSupportedDirs
+    );
     const newLink: EventDetourLink = {
       eventId: selectedEventId,
       detourId: detour.id,
       eventDirection: addEventDirection,
-      detourDirection: resolveDefaultDetourDirection(detour.direction_mode),
+      detourDirection: defaultDetourDir,
       position: draftLinks.length + 1,
-      recommendation: "PENDING",
-      reviewedGeometryVersion: null,
+      recommendation: resolved.recommendation,
+      reviewedGeometryVersion: resolved.reviewedGeometryVersion,
     };
     setDraftLinks((prev) => resequenceEventDetourLinks([...prev, newLink]));
     setVerifiedNotice(null);
@@ -379,41 +425,45 @@ export function EventDetourLinkModal({
   const handleUpdateLink = (
     detourId: string,
     currentEventDir: EventTravelDirection,
-    patch: Partial<EventDetourLink>
+    patch: Partial<EventDetourLink> & { statusMode?: LinkStatusMode }
   ) => {
     const detour = detourMap.get(detourId);
-    if (
-      patch.eventDirection &&
-      patch.eventDirection !== currentEventDir &&
-      draftLinks.some(
-        (l) => l.detourId === detourId && l.eventDirection === patch.eventDirection
-      )
-    ) {
-      setSaveError("ทางเลี่ยงนี้ถูกผูกในทิศทางเหตุการณ์ที่เลือกไว้แล้ว กรุณาเลือกทิศทางอื่น");
-      return;
+    if (patch.eventDirection && patch.eventDirection !== currentEventDir) {
+      const otherForDetour = draftLinks.filter(
+        (l) => l.detourId === detourId && l.eventDirection !== currentEventDir
+      );
+      if (
+        otherForDetour.some((l) => l.eventDirection === patch.eventDirection) ||
+        (patch.eventDirection === "BOTH" && otherForDetour.length > 0) ||
+        otherForDetour.some((l) => l.eventDirection === "BOTH")
+      ) {
+        setSaveError("ทางเลี่ยงนี้ถูกผูกในทิศทางเหตุการณ์ที่เลือกไว้แล้ว กรุณาเลือกทิศทางอื่นหรือลบรายการซ้ำก่อน");
+        return;
+      }
     }
 
     setDraftLinks((prev) =>
       resequenceEventDetourLinks(
         prev.map((link) => {
           if (link.detourId !== detourId || link.eventDirection !== currentEventDir) return link;
-          const updated: EventDetourLink = { ...link, ...patch };
-          const blockers = getRecommendationReviewBlockers(
-            updated,
+          const nextStatus =
+            patch.statusMode ?? recommendationToLinkStatus(link.recommendation);
+          const merged = {
+            ...link,
+            eventDirection: patch.eventDirection ?? link.eventDirection,
+            detourDirection: patch.detourDirection ?? link.detourDirection,
+          };
+          const resolved = resolveSavedRecommendation(
+            nextStatus,
+            merged,
             detour,
             selectedEventSupportedDirs
           );
-          if (updated.recommendation === "RECOMMENDED") {
-            if (blockers.length > 0) {
-              updated.recommendation = "PENDING";
-              updated.reviewedGeometryVersion = null;
-            } else {
-              updated.reviewedGeometryVersion = Math.max(1, Number(detour?.geometry_revision) || 1);
-            }
-          } else {
-            updated.reviewedGeometryVersion = null;
-          }
-          return updated;
+          return {
+            ...merged,
+            recommendation: resolved.recommendation,
+            reviewedGeometryVersion: resolved.reviewedGeometryVersion,
+          };
         })
       )
     );
@@ -429,34 +479,19 @@ export function EventDetourLinkModal({
 
     const normalizedLinks = resequenceEventDetourLinks(draftLinks).map((link) => {
       const detour = detourMap.get(link.detourId);
-      if (link.recommendation === "RECOMMENDED") {
-        return {
-          ...link,
-          reviewedGeometryVersion: Math.max(1, Number(detour?.geometry_revision) || 1),
-        };
-      }
+      const statusMode = recommendationToLinkStatus(link.recommendation);
+      const resolved = resolveSavedRecommendation(
+        statusMode,
+        link,
+        detour,
+        selectedEventSupportedDirs
+      );
       return {
         ...link,
-        reviewedGeometryVersion: null,
+        recommendation: resolved.recommendation,
+        reviewedGeometryVersion: resolved.reviewedGeometryVersion,
       };
     });
-
-    for (const link of normalizedLinks) {
-      if (link.recommendation === "RECOMMENDED") {
-        const detour = detourMap.get(link.detourId);
-        const blockers = getRecommendationReviewBlockers(
-          link,
-          detour,
-          selectedEventSupportedDirs
-        );
-        if (blockers.length > 0) {
-          setSaveError(
-            `ทางเลี่ยง "${detour?.route_name || link.detourId}" ยังไม่สามารถตั้งเป็นแนะนำให้ใช้: ${blockers[0]}`
-          );
-          return;
-        }
-      }
-    }
 
     const payload = {
       eventId: selectedEventId,
@@ -480,6 +515,7 @@ export function EventDetourLinkModal({
       const reloadedLinks = resequenceEventDetourLinks(reloaded.links || []);
       setEventVersion(reloaded.version);
       setDraftLinks(reloadedLinks);
+      await onDataRefresh?.();
       setVerifiedNotice(
         `ยืนยันข้อมูลจากฐานข้อมูลแล้ว (เวอร์ชัน v${reloaded.version} · ${reloadedLinks.length} ความสัมพันธ์)`
       );
@@ -497,7 +533,6 @@ export function EventDetourLinkModal({
       return;
     }
     const targetDetour = detourMap.get(selectedDetourId);
-    const rev = Math.max(1, Number(targetDetour?.geometry_revision) || 1);
 
     const modifiedEvents: Array<{
       ev: ParentFloodEventGroup;
@@ -510,57 +545,53 @@ export function EventDetourLinkModal({
       const draft = byDetourDrafts[ev.eventId];
       if (!loaded || loaded.status !== "ok" || !draft) continue;
 
-      const existing = loaded.links.find((l) => l.detourId === selectedDetourId);
+      const existingRows = loaded.links.filter((l) => l.detourId === selectedDetourId);
+      const existing = existingRows[0];
+      const existingDir: EventTravelDirection | null =
+        existingRows.length > 1 ? "BOTH" : existing ? existing.eventDirection : null;
+      const existingStatus: LinkStatusMode | null = existing
+        ? existingRows.every((l) => recommendationToLinkStatus(l.recommendation) === "INACTIVE")
+          ? "INACTIVE"
+          : "ACTIVE"
+        : null;
+
       const isUnchanged =
         (!existing && !draft.linked) ||
         (Boolean(existing) &&
           draft.linked &&
-          existing!.eventDirection === draft.eventDirection &&
+          existingDir === draft.eventDirection &&
           existing!.detourDirection === draft.detourDirection &&
-          existing!.recommendation === draft.recommendation);
+          existingStatus === draft.status);
 
       if (isUnchanged) continue;
 
-      const preservedOtherLinks = loaded.links.filter(
-        (l) =>
-          l.detourId !== selectedDetourId ||
-          (draft.linked &&
-            l.eventDirection !== draft.sourceEventDirection &&
-            l.eventDirection !== draft.eventDirection)
-      );
-
+      const preservedOtherLinks = loaded.links.filter((l) => l.detourId !== selectedDetourId);
       const candidateLinks = [...preservedOtherLinks];
+
       if (draft.linked) {
         const supported = getEventSupportedRecommendedDirections(ev.segments || []);
+        const resolved = resolveSavedRecommendation(
+          draft.status,
+          {
+            eventId: ev.eventId,
+            detourId: selectedDetourId,
+            eventDirection: draft.eventDirection,
+            detourDirection: draft.detourDirection,
+            position: existing?.position ?? candidateLinks.length + 1,
+          },
+          targetDetour,
+          supported
+        );
         const newOrUpdated: EventDetourLink = {
           eventId: ev.eventId,
           detourId: selectedDetourId,
           eventDirection: draft.eventDirection,
           detourDirection: draft.detourDirection,
           position: existing?.position ?? candidateLinks.length + 1,
-          recommendation: draft.recommendation,
-          reviewedGeometryVersion: draft.recommendation === "RECOMMENDED" ? rev : null,
+          recommendation: resolved.recommendation,
+          reviewedGeometryVersion: resolved.reviewedGeometryVersion,
         };
-        if (newOrUpdated.recommendation === "RECOMMENDED") {
-          const blockers = getRecommendationReviewBlockers(newOrUpdated, targetDetour, supported);
-          if (blockers.length > 0) {
-            setSaveError(
-              `เหตุการณ์ "${ev.eventTitle}": ${blockers[0]}`
-            );
-            return;
-          }
-        }
-        if (existing && existing.eventDirection === draft.eventDirection) {
-          const idx = loaded.links.findIndex(
-            (l) => l.detourId === selectedDetourId && l.eventDirection === existing.eventDirection
-          );
-          const inPlace = [...loaded.links];
-          inPlace[idx] = newOrUpdated;
-          candidateLinks.length = 0;
-          candidateLinks.push(...inPlace);
-        } else {
-          candidateLinks.push(newOrUpdated);
-        }
+        candidateLinks.push(newOrUpdated);
       }
 
       const mergedLinks = resequenceEventDetourLinks(candidateLinks);
@@ -611,6 +642,7 @@ export function EventDetourLinkModal({
       }
 
       setByDetourDrafts(buildByDetourDrafts(selectedDetourId, updatedStates));
+      await onDataRefresh?.();
       setVerifiedNotice(
         `ยืนยันข้อมูลจากฐานข้อมูลแล้ว (อัปเดต ${savedCount} เหตุการณ์ · รวม ${totalReloadedLinks} ความสัมพันธ์ในเหตุการณ์ที่ปรับปรุง)`
       );
@@ -770,11 +802,16 @@ export function EventDetourLinkModal({
                     ) : (
                       parentEvents.map((ev) => (
                         <option key={ev.eventId} value={ev.eventId}>
-                          ทล.{ev.routeNo} · {ev.eventTitle || ev.sectionName} ({ev.segments.length} ช่วง)
+                          ทล.{ev.routeNo} · {ev.sectionName || ev.eventTitle}{ev.kmRangeLabel ? ` · ${ev.kmRangeLabel}` : ""} ({ev.segments.length} ช่วง)
                         </option>
                       ))
                     )}
                   </select>
+                  {selectedEvent?.kmRangeLabel && (
+                    <p className="text-[11px] text-amber-300/90 font-mono">
+                      ช่วงหลักกิโลเมตร: {selectedEvent.kmRangeLabel} ({selectedEvent.segments.length} ช่วง)
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="min-h-10 inline-flex items-center px-3 rounded-xl bg-sky-950/80 border border-sky-700/60 text-sky-300 font-mono font-bold">
@@ -825,8 +862,9 @@ export function EventDetourLinkModal({
                         );
                         const canUp = scopeIdx > 0;
                         const canDown = scopeIdx >= 0 && scopeIdx < scopeLinks.length - 1;
+                        const statusMode = recommendationToLinkStatus(link.recommendation);
                         const blockers = getRecommendationReviewBlockers(
-                          link,
+                          { ...link, recommendation: "RECOMMENDED" },
                           detour,
                           selectedEventSupportedDirs
                         );
@@ -910,7 +948,7 @@ export function EventDetourLinkModal({
                                   }
                                   className="w-full min-h-10 bg-slate-900 border border-slate-700 rounded-xl px-2.5 text-xs text-white"
                                 >
-                                  {(["A_TO_B", "B_TO_A", "UNKNOWN"] as const).map((dir) => (
+                                  {(["BOTH", "A_TO_B", "B_TO_A", "UNKNOWN"] as const).map((dir) => (
                                     <option key={dir} value={dir}>
                                       {EVENT_DIRECTION_LABELS[dir]}
                                     </option>
@@ -932,7 +970,7 @@ export function EventDetourLinkModal({
                                   }
                                   className="w-full min-h-10 bg-slate-900 border border-slate-700 rounded-xl px-2.5 text-xs text-white"
                                 >
-                                  {(["FORWARD", "REVERSE", "UNKNOWN"] as const).map((dir) => (
+                                  {(["TWO_WAY", "FORWARD", "REVERSE", "UNKNOWN"] as const).map((dir) => (
                                     <option
                                       key={dir}
                                       value={dir}
@@ -950,36 +988,30 @@ export function EventDetourLinkModal({
 
                               <div>
                                 <label className="block text-slate-400 mb-1">
-                                  สถานะคำแนะนำ
+                                  สถานะ
                                 </label>
                                 <select
-                                  aria-label={`สถานะคำแนะนำของ ${detourName}`}
-                                  value={link.recommendation}
+                                  aria-label={`สถานะของ ${detourName}`}
+                                  value={statusMode}
                                   onChange={(e) =>
                                     handleUpdateLink(link.detourId, link.eventDirection, {
-                                      recommendation: e.target.value as DetourRecommendation,
+                                      statusMode: e.target.value as LinkStatusMode,
                                     })
                                   }
                                   className="w-full min-h-10 bg-slate-900 border border-slate-700 rounded-xl px-2.5 text-xs text-white"
                                 >
-                                  {(
-                                    ["PENDING", "RECOMMENDED", "UNAVAILABLE", "WITHDRAWN"] as const
-                                  ).map((rec) => (
-                                    <option
-                                      key={rec}
-                                      value={rec}
-                                      disabled={rec === "RECOMMENDED" && blockers.length > 0}
-                                    >
-                                      {RECOMMENDATION_LABELS[rec]}
+                                  {(["ACTIVE", "INACTIVE"] as const).map((modeOpt) => (
+                                    <option key={modeOpt} value={modeOpt}>
+                                      {STATUS_MODE_LABELS[modeOpt]}
                                     </option>
                                   ))}
                                 </select>
                               </div>
                             </div>
 
-                            {blockers.length > 0 && (
+                            {statusMode === "ACTIVE" && blockers.length > 0 && (
                               <p className="text-amber-300/90 bg-amber-950/30 border border-amber-500/30 rounded-lg px-2.5 py-1.5">
-                                หมายเหตุก่อนตั้งเป็นแนะนำให้ใช้: {blockers.join(" · ")}
+                                หมายเหตุ: {blockers.join(" · ")}
                               </p>
                             )}
                           </div>
@@ -1013,7 +1045,7 @@ export function EventDetourLinkModal({
                         }
                         className="w-full min-h-10 bg-slate-950 border border-slate-700 rounded-xl px-3 text-xs text-white"
                       >
-                        {(["A_TO_B", "B_TO_A", "UNKNOWN"] as const).map((dir) => (
+                        {(["BOTH", "A_TO_B", "B_TO_A", "UNKNOWN"] as const).map((dir) => (
                           <option key={dir} value={dir}>
                             เพิ่มสำหรับ {EVENT_DIRECTION_LABELS[dir]}
                           </option>
@@ -1136,7 +1168,7 @@ export function EventDetourLinkModal({
                             eventDirection: draft.eventDirection,
                             detourDirection: draft.detourDirection,
                             position: 1,
-                            recommendation: draft.recommendation,
+                            recommendation: "RECOMMENDED",
                             reviewedGeometryVersion: null,
                           }
                         : null;
@@ -1154,7 +1186,7 @@ export function EventDetourLinkModal({
                           }`}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <label className="flex items-center gap-2.5 cursor-pointer min-w-0">
+                            <label className="flex items-start gap-2.5 cursor-pointer min-w-0">
                               <input
                                 type="checkbox"
                                 aria-label={`ผูกกับเหตุการณ์ ${eventTitle}`}
@@ -1167,11 +1199,11 @@ export function EventDetourLinkModal({
                                     [ev.eventId]: {
                                       ...(prev[ev.eventId] || {
                                         sourceEventDirection: null,
-                                        eventDirection: getPreferredEventDirection(supported),
+                                        eventDirection: resolveDefaultEventDirection(ev.segments || []),
                                         detourDirection: resolveDefaultDetourDirection(
                                           selectedDetour?.direction_mode
                                         ),
-                                        recommendation: "PENDING",
+                                        status: "ACTIVE",
                                       }),
                                       linked: checked,
                                     },
@@ -1179,10 +1211,17 @@ export function EventDetourLinkModal({
                                   setVerifiedNotice(null);
                                   setSaveError(null);
                                 }}
-                                className="h-5 w-5 accent-amber-500 rounded shrink-0"
+                                className="mt-0.5 h-5 w-5 accent-amber-500 rounded shrink-0"
                               />
-                              <span className="font-heading font-bold text-sm text-white break-words">
-                                {eventTitle}
+                              <span className="min-w-0">
+                                <span className="font-heading font-bold text-sm text-white break-words block">
+                                  {eventTitle}
+                                </span>
+                                {ev.kmRangeLabel && (
+                                  <span className="text-[11px] font-mono text-amber-300/90 block">
+                                    {ev.kmRangeLabel} ({ev.segments.length} ช่วง)
+                                  </span>
+                                )}
                               </span>
                             </label>
                             <span className="text-slate-400 font-mono">
@@ -1206,30 +1245,13 @@ export function EventDetourLinkModal({
                                     setByDetourDrafts((prev) => {
                                       const cur = prev[ev.eventId];
                                       if (!cur) return prev;
-                                      const nextRow = { ...cur, eventDirection: nextDir };
-                                      const nextBlockers = getRecommendationReviewBlockers(
-                                        {
-                                          eventId: ev.eventId,
-                                          detourId: selectedDetourId,
-                                          eventDirection: nextDir,
-                                          detourDirection: cur.detourDirection,
-                                          position: 1,
-                                          recommendation: cur.recommendation,
-                                          reviewedGeometryVersion: null,
-                                        },
-                                        selectedDetour,
-                                        supported
-                                      );
-                                      if (nextRow.recommendation === "RECOMMENDED" && nextBlockers.length > 0) {
-                                        nextRow.recommendation = "PENDING";
-                                      }
-                                      return { ...prev, [ev.eventId]: nextRow };
+                                      return { ...prev, [ev.eventId]: { ...cur, eventDirection: nextDir } };
                                     });
                                     setVerifiedNotice(null);
                                   }}
                                   className="w-full min-h-10 bg-slate-900 border border-slate-700 rounded-xl px-2.5 text-xs text-white"
                                 >
-                                  {(["A_TO_B", "B_TO_A", "UNKNOWN"] as const).map((dir) => (
+                                  {(["BOTH", "A_TO_B", "B_TO_A", "UNKNOWN"] as const).map((dir) => (
                                     <option key={dir} value={dir}>
                                       {EVENT_DIRECTION_LABELS[dir]}
                                     </option>
@@ -1249,30 +1271,13 @@ export function EventDetourLinkModal({
                                     setByDetourDrafts((prev) => {
                                       const cur = prev[ev.eventId];
                                       if (!cur) return prev;
-                                      const nextRow = { ...cur, detourDirection: nextDir };
-                                      const nextBlockers = getRecommendationReviewBlockers(
-                                        {
-                                          eventId: ev.eventId,
-                                          detourId: selectedDetourId,
-                                          eventDirection: cur.eventDirection,
-                                          detourDirection: nextDir,
-                                          position: 1,
-                                          recommendation: cur.recommendation,
-                                          reviewedGeometryVersion: null,
-                                        },
-                                        selectedDetour,
-                                        supported
-                                      );
-                                      if (nextRow.recommendation === "RECOMMENDED" && nextBlockers.length > 0) {
-                                        nextRow.recommendation = "PENDING";
-                                      }
-                                      return { ...prev, [ev.eventId]: nextRow };
+                                      return { ...prev, [ev.eventId]: { ...cur, detourDirection: nextDir } };
                                     });
                                     setVerifiedNotice(null);
                                   }}
                                   className="w-full min-h-10 bg-slate-900 border border-slate-700 rounded-xl px-2.5 text-xs text-white"
                                 >
-                                  {(["FORWARD", "REVERSE", "UNKNOWN"] as const).map((dir) => (
+                                  {(["TWO_WAY", "FORWARD", "REVERSE", "UNKNOWN"] as const).map((dir) => (
                                     <option
                                       key={dir}
                                       value={dir}
@@ -1293,41 +1298,35 @@ export function EventDetourLinkModal({
 
                               <div>
                                 <label className="block text-slate-400 mb-1">
-                                  สถานะคำแนะนำ
+                                  สถานะ
                                 </label>
                                 <select
-                                  aria-label={`สถานะคำแนะนำสำหรับ ${eventTitle}`}
-                                  value={draft.recommendation}
+                                  aria-label={`สถานะสำหรับ ${eventTitle}`}
+                                  value={draft.status}
                                   onChange={(e) => {
-                                    const nextRec = e.target.value as DetourRecommendation;
+                                    const nextStatus = e.target.value as LinkStatusMode;
                                     setByDetourDrafts((prev) => ({
                                       ...prev,
                                       [ev.eventId]: {
                                         ...prev[ev.eventId],
-                                        recommendation: nextRec,
+                                        status: nextStatus,
                                       },
                                     }));
                                     setVerifiedNotice(null);
                                   }}
                                   className="w-full min-h-10 bg-slate-900 border border-slate-700 rounded-xl px-2.5 text-xs text-white"
                                 >
-                                  {(
-                                    ["PENDING", "RECOMMENDED", "UNAVAILABLE", "WITHDRAWN"] as const
-                                  ).map((rec) => (
-                                    <option
-                                      key={rec}
-                                      value={rec}
-                                      disabled={rec === "RECOMMENDED" && blockers.length > 0}
-                                    >
-                                      {RECOMMENDATION_LABELS[rec]}
+                                  {(["ACTIVE", "INACTIVE"] as const).map((modeOpt) => (
+                                    <option key={modeOpt} value={modeOpt}>
+                                      {STATUS_MODE_LABELS[modeOpt]}
                                     </option>
                                   ))}
                                 </select>
                               </div>
 
-                              {blockers.length > 0 && (
+                              {draft.status === "ACTIVE" && blockers.length > 0 && (
                                 <p className="sm:col-span-3 text-amber-300/90 bg-amber-950/30 border border-amber-500/30 rounded-lg px-2.5 py-1.5">
-                                  หมายเหตุก่อนตั้งเป็นแนะนำให้ใช้: {blockers.join(" · ")}
+                                  หมายเหตุ: {blockers.join(" · ")}
                                 </p>
                               )}
                             </div>

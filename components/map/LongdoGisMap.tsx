@@ -25,6 +25,7 @@ import {
   parseFloodDirectionMeta,
   normalizeMediaUrl,
 } from "@/lib/flood-event-schema";
+import { getLinkedDetoursForFlood, getLinkedEventsForDetour } from "@/lib/event-detour-links";
 import { getTrafficPresentation } from "@/lib/traffic-presentation";
 import { Layers, Navigation, Building2, Map, ChevronUp, ChevronDown, LocateFixed } from "lucide-react";
 
@@ -284,7 +285,7 @@ function buildDetourPopupHtml(
   detour: DetourRoute,
   color: string,
   defaultDir: DetourDirection = "FORWARD",
-  floodRoutes: FloodRoute[] = []
+  systemData?: SystemDataPayload
 ): string {
   const dirMode = detour.direction_mode || "TWO_WAY";
   const { forwardText, reverseText } = splitDetourAdviceByDirection(detour.description || "", dirMode);
@@ -294,9 +295,8 @@ function buildDetourPopupHtml(
   const revAllowed = isDetourDirectionAllowed(dirMode, "REVERSE");
   const isRev = revAllowed && (!fwdAllowed || defaultDir === "REVERSE");
 
-  const linked = detour.flood_id_ref
-    ? floodRoutes.find((f) => f.id === detour.flood_id_ref)
-    : null;
+  const linkedEvents = systemData ? getLinkedEventsForDetour(detour, systemData) : [];
+  const linked = linkedEvents[0]?.primaryFlood ?? null;
   const startHint = linked ? `ทล.${linked.route_no} (${linked.section_name})` : detour.route_name;
   const areaParts = [
     linked?.subdistrict ? `ต.${linked.subdistrict}` : "",
@@ -328,8 +328,10 @@ function buildDetourPopupHtml(
     detourDurationSeconds(detour.detour_meta, "REVERSE")
   );
 
-  const scopeText = linked
-    ? `ทล.${linked.route_no}${areaParts.length ? ` (${areaParts.join(" ")})` : ` (${linked.section_name})`}`
+  const scopeText = linkedEvents.length > 0
+    ? linkedEvents
+        .map((ev) => `ทล.${ev.routeNo}${ev.kmRangeLabel ? ` ${ev.kmRangeLabel}` : ` (${ev.sectionName})`}`)
+        .join(" · ")
     : (detour.flood_id_ref ? "เชื่อมโยงจุดน้ำท่วม" : "ทางเลี่ยงอิสระ (โครงข่ายทางหลวง)");
 
   const activeBtnClass = "flex-1 min-h-[38px] py-2 px-2.5 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 bg-[#f59e0b] text-slate-950 font-black shadow-md";
@@ -1412,12 +1414,12 @@ export function LongdoGisMap({
       const fwdCoords = parseRouteCoordinates(detour.coordinates_json);
       const revCoords = parseRouteCoordinates(detour.reverse_coordinates_json);
 
-      const linkedFlood = detour.flood_id_ref
-        ? (systemData.floodRoutes || []).find((f) => f.id === detour.flood_id_ref)
-        : null;
+      const linkedEvents = getLinkedEventsForDetour(detour, systemData);
+      const linkedFlood = linkedEvents[0]?.primaryFlood ?? null;
       const linkedMeta = linkedFlood ? parseFloodDirectionMeta(linkedFlood.direction_meta, linkedFlood) : null;
+      const linkedDetourDir = linkedEvents[0]?.links[0]?.detourDirection;
       const defaultDir: "FORWARD" | "REVERSE" =
-        linkedMeta?.directionCode === "B_TO_A" || detour.direction_mode === "REVERSE_ONLY"
+        linkedDetourDir === "REVERSE" || linkedMeta?.directionCode === "B_TO_A" || detour.direction_mode === "REVERSE_ONLY"
           ? "REVERSE"
           : "FORWARD";
 
@@ -1440,7 +1442,7 @@ export function LongdoGisMap({
           baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
         });
         const detourPopupOpts = { maxWidth: 440, minWidth: 320, className: "doh-detour-leaflet-popup" };
-        polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData.floodRoutes || []), detourPopupOpts);
+        polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), detourPopupOpts);
         polyline.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           polyline.openPopup(e.latlng);
@@ -1453,7 +1455,7 @@ export function LongdoGisMap({
           iconSize: [30, 30],
           iconAnchor: [15, 15],
         });
-        const detourMarker = L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData.floodRoutes || []), detourPopupOpts).addTo(group);
+        const detourMarker = L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), detourPopupOpts).addTo(group);
         detourMarker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           detourMarker.openPopup();
@@ -1481,7 +1483,7 @@ export function LongdoGisMap({
             baseOpacity: detourStyle?.opacity ?? 0.9,
           });
           const revPopupOpts = { maxWidth: 440, minWidth: 320, className: "doh-detour-leaflet-popup" };
-          revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData.floodRoutes || []), revPopupOpts);
+          revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), revPopupOpts);
           revPolyline.on("click", (e: any) => {
             L.DomEvent.stopPropagation(e);
             revPolyline.openPopup(e.latlng);
@@ -1516,13 +1518,8 @@ export function LongdoGisMap({
     const fDash = floodStyle?.pattern === "dash" ? (floodStyle.dashArray || "8, 6") : undefined;
     const className = lineAnimationClasses(floodStyle, allowLineAnimationRef.current);
 
-    const activeDetours = (systemData.detourRoutes || []).filter((d) => d.is_active);
-    const countDetoursForFlood = (flood: FloodRoute) => {
-      const fMeta = parseFloodDirectionMeta(flood.direction_meta, flood);
-      return activeDetours.filter(
-        (d) => d.flood_id_ref === flood.id || (d.detour_meta?.eventId && fMeta?.eventId && d.detour_meta.eventId === fMeta.eventId)
-      ).length;
-    };
+    const countDetoursForFlood = (flood: FloodRoute) =>
+      getLinkedDetoursForFlood(flood, systemData).length;
     const floodPopupOpts = { maxWidth: 370, minWidth: 300, className: "doh-flood-leaflet-popup" };
 
     // 4d. Flood routes + capsule markers (with De-overlapping, Priority z-Index & Merged/Segment modes)

@@ -10,6 +10,7 @@ import {
   MapLineStyleItem,
   APP_CONFIG,
 } from "@/lib/constants";
+import type { EventDetourLink } from "@/lib/event-detour-links";
 
 export type { DohOfficeLocation, MapLineStyleItem };
 
@@ -150,6 +151,18 @@ export interface SystemSettingsConfig {
   logoUrl?: string;
 }
 
+export interface EventSegmentRecord {
+  flood_id: string;
+  event_id: string;
+  event_direction: string;
+  segment_position: number;
+}
+
+export interface FloodEventVersionRecord {
+  id: string;
+  link_version: number;
+}
+
 export interface SystemDataPayload {
   updatedAt: string;
   floodRoutes: FloodRoute[];
@@ -160,6 +173,9 @@ export interface SystemDataPayload {
   offices?: DohOfficeLocation[];
   mapStyles?: Record<"flood" | "detour" | "primary" | "secondary", MapLineStyleItem>;
   systemSettings?: SystemSettingsConfig;
+  eventDetourLinks?: EventDetourLink[];
+  eventSegments?: EventSegmentRecord[];
+  floodEvents?: FloodEventVersionRecord[];
 }
 
 export const INITIAL_SYSTEM_DATA: SystemDataPayload = {
