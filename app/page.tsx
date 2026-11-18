@@ -96,8 +96,12 @@ import {
   isDetourDirectionAllowed,
   isRecordedDetourDirection,
   parseDetourAdvice,
-  sortDetoursByOrder,
 } from "@/lib/detour-presentation";
+import {
+  getHighwayIdsForDetour,
+  getLinkedDetoursForFlood,
+  getLinkedEventsForDetour,
+} from "@/lib/event-detour-links";
 import { parseFloodDirectionMeta, resolveEffectiveRoadSide, AFFECTED_ROAD_PART_LABELS, normalizeMediaUrl } from "@/lib/flood-event-schema";
 import {
   getTrafficPresentation,
@@ -155,9 +159,8 @@ function SituationSummary({
               type="button"
               aria-pressed={activeFilter === item.color}
               onClick={() => onFilter(item.color)}
-              className={`inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
-                activeFilter === item.color ? "bg-slate-700/90 ring-1 ring-amber-400/70" : "hover:bg-slate-800/80"
-              }`}
+              className={`inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${activeFilter === item.color ? "bg-slate-700/90 ring-1 ring-amber-400/70" : "hover:bg-slate-800/80"
+                }`}
             >
               <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${item.dot}`} />
               <strong className="font-mono text-sm text-white">{counts[item.color]}</strong> {item.label}
@@ -177,13 +180,8 @@ function SituationSummary({
 // Direction badge / advice parsing / distance live in lib/detour-presentation.ts and are shared
 // with the map popup. Unknown legacy direction must never be shown as a confirmed two-way detour.
 
-function highwayIdsInDetour(route: DetourRoute, floods: FloodRoute[]): string[] {
-  const ids = new Set<string>();
-  const matchingFlood = floods.find((flood) => flood.id === route.flood_id_ref);
-  if (matchingFlood?.route_no) ids.add(matchingFlood.route_no.replace(/^(?:ทล|ปน)\.?\s*/i, "").trim());
-  const names = `${route.route_name || ""} ${route.description || ""}`;
-  for (const match of names.matchAll(/(?:ทล|ปน)\.?\s*(\d{1,5})/gi)) ids.add(match[1]);
-  return [...ids];
+function highwayIdsInDetour(route: DetourRoute, systemData: SystemDataPayload): string[] {
+  return getHighwayIdsForDetour(route, systemData);
 }
 
 function formatAreaSegment(prefix: string, value?: string | null): string | null {
@@ -253,9 +251,8 @@ function FloodCard({
 
   return (
     <article
-      className={`relative w-full rounded-2xl border bg-[#101d33] px-3 py-2.5 text-left transition ${
-        selected ? "border-amber-400 ring-1 ring-amber-400/50" : "border-slate-700/90 hover:border-amber-400/70"
-      }`}
+      className={`relative w-full rounded-2xl border bg-[#101d33] px-3 py-2.5 text-left transition ${selected ? "border-amber-400 ring-1 ring-amber-400/50" : "border-slate-700/90 hover:border-amber-400/70"
+        }`}
     >
       <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 rounded-l-2xl" style={{ backgroundColor: STATUS_BAR[status.color] }} />
 
@@ -597,35 +594,30 @@ export default function HomePage() {
     const counts = new Map<string, number>();
     for (const flood of systemData.floodRoutes || []) {
       if (!flood.is_active) continue;
-      const fMeta = parseFloodDirectionMeta(flood.direction_meta, flood);
-      const count = activeDetours.filter(
-        (route) =>
-          route.flood_id_ref === flood.id ||
-          (route.detour_meta?.eventId && fMeta?.eventId && route.detour_meta.eventId === fMeta.eventId)
-      ).length;
-      counts.set(flood.id, count);
+      counts.set(flood.id, getLinkedDetoursForFlood(flood, systemData).length);
     }
     return counts;
-  }, [systemData.floodRoutes, activeDetours]);
+  }, [systemData]);
   const filteredDetours = activeDetours.filter((route) => {
     const query = searchQuery.trim().toLocaleLowerCase();
     const normalizedQuery = query.replace(/^(?:ทล|ปน)\.?\s*/i, "");
-    const matchesText = `${route.route_name} ${route.description || ""}`.toLocaleLowerCase().includes(query) ||
-      highwayIdsInDetour(route, systemData.floodRoutes || []).some((id) => id.includes(normalizedQuery));
-    const matchesHighway = selectedRouteFilter === "ALL" || highwayIdsInDetour(route, systemData.floodRoutes || []).includes(selectedRouteFilter);
+    const detourHighwayIds = highwayIdsInDetour(route, systemData);
+    const linkedEventsText = getLinkedEventsForDetour(route, systemData)
+      .map((ev) => `${ev.routeNo} ${ev.sectionName} ${ev.kmRangeLabel}`)
+      .join(" ");
+    const matchesText = `${route.route_name} ${route.description || ""} ${linkedEventsText}`.toLocaleLowerCase().includes(query) ||
+      detourHighwayIds.some((id) => id.includes(normalizedQuery));
+    const matchesHighway = selectedRouteFilter === "ALL" || detourHighwayIds.includes(selectedRouteFilter);
     return matchesText && matchesHighway;
   });
-  const selectedFloodDetours = React.useMemo(() => {
-    if (!selectedFlood) return [];
-    const matched = activeDetours.filter(
-      (route) =>
-        route.flood_id_ref === selectedFlood.id ||
-        (route.detour_meta?.eventId &&
-          selectedFloodMeta?.eventId &&
-          route.detour_meta.eventId === selectedFloodMeta.eventId)
-    );
-    return sortDetoursByOrder(matched, selectedFlood.id);
-  }, [activeDetours, selectedFlood, selectedFloodMeta]);
+  const selectedFloodDetourEntries = React.useMemo(
+    () => getLinkedDetoursForFlood(selectedFlood, systemData),
+    [selectedFlood, systemData]
+  );
+  const selectedFloodDetours = React.useMemo(
+    () => selectedFloodDetourEntries.map((entry) => entry.detour),
+    [selectedFloodDetourEntries]
+  );
   const closeDetourDetails = () => {
     setViewingDetourModal(null);
     if (returnToDetourList) {
@@ -696,9 +688,8 @@ export default function HomePage() {
     <section className="space-y-2" aria-label="รายการทางเลี่ยง">
       <h3 className="px-1 text-xs font-heading font-bold text-amber-300">ทางเลี่ยง ({filteredDetours.length} เส้นทาง)</h3>
       {filteredDetours.map((route) => {
-        const linkedFlood = route.flood_id_ref
-          ? systemData.floodRoutes.find((f) => f.id === route.flood_id_ref)
-          : null;
+        const linkedEvents = getLinkedEventsForDetour(route, systemData);
+        const primaryLinked = linkedEvents[0]?.primaryFlood ?? null;
         return (
           <button
             key={route.id}
@@ -708,8 +699,13 @@ export default function HomePage() {
               setReturnToDetourList(isMobileDrawerOpen);
               setIsMobileDrawerOpen(false);
               setViewingDetourModal(route);
-              const linkedMeta = linkedFlood ? parseFloodDirectionMeta(linkedFlood.direction_meta, linkedFlood) : null;
-              setModalDetourDirection(linkedMeta?.directionCode === "B_TO_A" || route.direction_mode === "REVERSE_ONLY" ? "REVERSE" : "FORWARD");
+              const linkedMeta = primaryLinked ? parseFloodDirectionMeta(primaryLinked.direction_meta, primaryLinked) : null;
+              const linkedDir = linkedEvents[0]?.links[0]?.detourDirection;
+              setModalDetourDirection(
+                linkedDir === "REVERSE" || linkedMeta?.directionCode === "B_TO_A" || route.direction_mode === "REVERSE_ONLY"
+                  ? "REVERSE"
+                  : "FORWARD"
+              );
             }}
           >
             <span className="flex min-w-0 items-start justify-between gap-2">
@@ -722,7 +718,11 @@ export default function HomePage() {
             </span>
             <span className="mt-2 flex items-center justify-between gap-2 text-xs">
               <span className="min-w-0 text-slate-300 break-words">
-                {linkedFlood ? `เลี่ยงจุดน้ำท่วม ทล.${linkedFlood.route_no}` : "ทางเลี่ยงอิสระ"}
+                {linkedEvents.length > 0
+                  ? linkedEvents.length === 1
+                    ? `เลี่ยงจุดน้ำท่วม ทล.${linkedEvents[0].routeNo}`
+                    : `เลี่ยงจุดน้ำท่วม ${linkedEvents.map((e) => `ทล.${e.routeNo}`).join(", ")}`
+                  : "ทางเลี่ยงอิสระ"}
               </span>
               <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-amber-300">
                 ดูเส้นทาง <ChevronRight aria-hidden="true" className="h-4 w-4" />
@@ -834,8 +834,8 @@ export default function HomePage() {
                 aria-pressed={sidebarTab === "FLOOD"}
                 onClick={() => setSidebarTab("FLOOD")}
                 className={`py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer ${sidebarTab === "FLOOD"
-                    ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                    : "text-slate-300 hover:text-white"
+                  ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                  : "text-slate-300 hover:text-white"
                   }`}
               >
                 <span>🌊 น้ำท่วม ({filteredFloods.length})</span>
@@ -845,8 +845,8 @@ export default function HomePage() {
                 aria-pressed={sidebarTab === "DETOUR"}
                 onClick={() => setSidebarTab("DETOUR")}
                 className={`py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer ${sidebarTab === "DETOUR"
-                    ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                    : "text-slate-300 hover:text-white"
+                  ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                  : "text-slate-300 hover:text-white"
                   }`}
               >
                 <span>🔄 ทางเลี่ยง ({filteredDetours.length})</span>
@@ -878,8 +878,8 @@ export default function HomePage() {
                       onClick={() => setSelectedRouteFilter(chip.id)}
                       aria-pressed={isActive}
                       className={`min-h-11 px-3 py-1 rounded-lg font-heading font-bold whitespace-nowrap transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${isActive
-                          ? "bg-amber-500 text-slate-950 shadow-md"
-                          : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
+                        ? "bg-amber-500 text-slate-950 shadow-md"
+                        : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
                         }`}
                     >
                       {chip.label}
@@ -1343,8 +1343,8 @@ export default function HomePage() {
                                       if (s.lat_start && s.lon_start) setFocusCoordinates([s.lon_start, s.lat_start]);
                                     }}
                                     className={`text-left p-2.5 rounded-xl border transition flex flex-col justify-between gap-1 cursor-pointer ${isCurrent
-                                        ? "bg-sky-900/75 border-sky-400 ring-1 ring-sky-400 text-white"
-                                        : "bg-slate-900/75 border-slate-700/80 hover:bg-slate-800 text-slate-200"
+                                      ? "bg-sky-900/75 border-sky-400 ring-1 ring-sky-400 text-white"
+                                      : "bg-slate-900/75 border-slate-700/80 hover:bg-slate-800 text-slate-200"
                                       }`}
                                   >
                                     <div className="flex items-center justify-between gap-1.5 text-xs">
@@ -1374,13 +1374,21 @@ export default function HomePage() {
                           {selectedFloodDetours.length > 0 && (
                             <div className="space-y-2.5">
                               {selectedFloodDetours.map((route, idx) => {
+                                const linkedEntry = selectedFloodDetourEntries[idx];
                                 const isExpanded = expandedDetourId === route.id;
                                 const isTwoWay =
                                   isDetourDirectionAllowed(route.direction_mode, "FORWARD") &&
                                   isDetourDirectionAllowed(route.direction_mode, "REVERSE");
-                                const fallbackDir: "FORWARD" | "REVERSE" = isTwoWay
-                                  ? eventAdviceDirection
-                                  : defaultDetourDirection(route.direction_mode);
+                                const fallbackDir: "FORWARD" | "REVERSE" =
+                                  linkedEntry?.effectiveDetourDirection === "REVERSE" &&
+                                    isDetourDirectionAllowed(route.direction_mode, "REVERSE")
+                                    ? "REVERSE"
+                                    : linkedEntry?.effectiveDetourDirection === "FORWARD" &&
+                                      isDetourDirectionAllowed(route.direction_mode, "FORWARD")
+                                      ? "FORWARD"
+                                      : isTwoWay
+                                        ? eventAdviceDirection
+                                        : defaultDetourDirection(route.direction_mode);
                                 const storedDir = detourDirectionById[route.id];
                                 const effectiveDirection: "FORWARD" | "REVERSE" =
                                   storedDir && isDetourDirectionAllowed(route.direction_mode, storedDir)
@@ -1428,11 +1436,10 @@ export default function HomePage() {
                                 return (
                                   <div
                                     key={route.id}
-                                    className={`rounded-2xl border transition ${
-                                      isExpanded
+                                    className={`rounded-2xl border transition ${isExpanded
                                         ? "border-[#f59e0b] bg-[#0b162a] shadow-lg"
                                         : "border-slate-700/80 bg-[#0d1930]/80 hover:border-amber-400/60"
-                                    } text-sm text-slate-100`}
+                                      } text-sm text-slate-100`}
                                   >
                                     <button
                                       type="button"
@@ -1442,9 +1449,8 @@ export default function HomePage() {
                                       className="flex w-full min-h-12 cursor-pointer items-start justify-between gap-2.5 rounded-2xl p-3.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                                     >
                                       <span className="flex min-w-0 flex-1 items-start gap-2.5">
-                                        <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-mono text-xs font-black ${
-                                          isExpanded ? "bg-[#f59e0b] text-slate-950" : "bg-sky-200/90 text-slate-950"
-                                        }`}>
+                                        <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-mono text-xs font-black ${isExpanded ? "bg-[#f59e0b] text-slate-950" : "bg-sky-200/90 text-slate-950"
+                                          }`}>
                                           {idx + 1}
                                         </span>
                                         <span className="min-w-0 flex-1 space-y-1">
@@ -1505,11 +1511,10 @@ export default function HomePage() {
                                               disabled={!isDetourDirectionAllowed(route.direction_mode, "FORWARD")}
                                               aria-pressed={effectiveDirection === "FORWARD"}
                                               onClick={() => setDetourDirectionById((prev) => ({ ...prev, [route.id]: "FORWARD" }))}
-                                              className={`flex-1 min-h-9 cursor-pointer rounded-lg px-2.5 py-1.5 font-heading text-xs font-bold transition flex items-center justify-center gap-1 disabled:opacity-35 disabled:cursor-not-allowed ${
-                                                effectiveDirection === "FORWARD"
+                                              className={`flex-1 min-h-9 cursor-pointer rounded-lg px-2.5 py-1.5 font-heading text-xs font-bold transition flex items-center justify-center gap-1 disabled:opacity-35 disabled:cursor-not-allowed ${effectiveDirection === "FORWARD"
                                                   ? "bg-[#f59e0b] text-slate-950 font-black shadow"
                                                   : "border border-slate-700 bg-[#111e36] text-slate-200 hover:bg-slate-800"
-                                              }`}
+                                                }`}
                                             >
                                               <span>→ A → B</span>
                                             </button>
@@ -1518,11 +1523,10 @@ export default function HomePage() {
                                               disabled={!isDetourDirectionAllowed(route.direction_mode, "REVERSE")}
                                               aria-pressed={effectiveDirection === "REVERSE"}
                                               onClick={() => setDetourDirectionById((prev) => ({ ...prev, [route.id]: "REVERSE" }))}
-                                              className={`flex-1 min-h-9 cursor-pointer rounded-lg px-2.5 py-1.5 font-heading text-xs font-bold transition flex items-center justify-center gap-1 disabled:opacity-35 disabled:cursor-not-allowed ${
-                                                effectiveDirection === "REVERSE"
+                                              className={`flex-1 min-h-9 cursor-pointer rounded-lg px-2.5 py-1.5 font-heading text-xs font-bold transition flex items-center justify-center gap-1 disabled:opacity-35 disabled:cursor-not-allowed ${effectiveDirection === "REVERSE"
                                                   ? "bg-[#f59e0b] text-slate-950 font-black shadow"
                                                   : "border border-slate-700 bg-[#111e36] text-slate-200 hover:bg-slate-800"
-                                              }`}
+                                                }`}
                                             >
                                               <span>⇄ B → A</span>
                                             </button>
@@ -1618,22 +1622,20 @@ export default function HomePage() {
                                     <button
                                       type="button"
                                       onClick={() => setEventAdviceDirection("FORWARD")}
-                                      className={`min-h-8 cursor-pointer rounded px-2 py-1 transition ${
-                                        eventAdviceDirection === "FORWARD"
+                                      className={`min-h-8 cursor-pointer rounded px-2 py-1 transition ${eventAdviceDirection === "FORWARD"
                                           ? "bg-amber-500 text-slate-950 shadow"
                                           : "text-amber-300/80 hover:text-white"
-                                      }`}
+                                        }`}
                                     >
                                       → A → B
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => setEventAdviceDirection("REVERSE")}
-                                      className={`min-h-8 cursor-pointer rounded px-2 py-1 transition ${
-                                        eventAdviceDirection === "REVERSE"
+                                      className={`min-h-8 cursor-pointer rounded px-2 py-1 transition ${eventAdviceDirection === "REVERSE"
                                           ? "bg-amber-500 text-slate-950 shadow"
                                           : "text-amber-300/80 hover:text-white"
-                                      }`}
+                                        }`}
                                     >
                                       ⇄ B → A
                                     </button>
@@ -1669,10 +1671,10 @@ export default function HomePage() {
                                 <span>ระดับน้ำปัจจุบัน</span>
                               </span>
                               <span className={`px-2 py-0.5 rounded-md text-[11px] font-heading font-bold ${selectedFlood.trend === "RISING"
-                                  ? "bg-rose-950/90 text-rose-300 border border-rose-700/80"
-                                  : selectedFlood.trend === "FALLING"
-                                    ? "bg-emerald-950/90 text-emerald-300 border border-emerald-700/80"
-                                    : "bg-amber-950/80 text-amber-300 border border-amber-600/60"
+                                ? "bg-rose-950/90 text-rose-300 border border-rose-700/80"
+                                : selectedFlood.trend === "FALLING"
+                                  ? "bg-emerald-950/90 text-emerald-300 border border-emerald-700/80"
+                                  : "bg-amber-950/80 text-amber-300 border border-amber-600/60"
                                 }`}>
                                 แนวโน้ม: {selectedFlood.trend === "RISING" ? "เพิ่มขึ้น" : selectedFlood.trend === "FALLING" ? "ลดลง" : "ทรงตัว"}
                               </span>
@@ -1886,11 +1888,11 @@ export default function HomePage() {
                 <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain p-4">
                   {/* 2. Sub-header Card (Route Info Card) */}
                   {(() => {
-                    const linked = viewingDetourModal.flood_id_ref
-                      ? systemData.floodRoutes.find((f) => f.id === viewingDetourModal.flood_id_ref)
-                      : null;
-                    const scopeText = linked
-                      ? `ทล.${linked.route_no} (${linked.section_name || `กม.${linked.km_start} - ${linked.km_end}`})`
+                    const linkedEvents = getLinkedEventsForDetour(viewingDetourModal, systemData);
+                    const scopeText = linkedEvents.length > 0
+                      ? linkedEvents
+                        .map((ev) => `ทล.${ev.routeNo} (${ev.sectionName || ev.kmRangeLabel})${ev.kmRangeLabel ? ` · ${ev.kmRangeLabel}` : ""}`)
+                        .join(" | ")
                       : viewingDetourModal.description && viewingDetourModal.description.includes("ทล.")
                         ? viewingDetourModal.description.split("\n")[0].replace(/^===?\s*/, "").replace(/\s*===?$/, "")
                         : "โครงข่ายทางหลวงแผ่นดิน แขวงทางหลวงปัตตานี";
@@ -1904,7 +1906,7 @@ export default function HomePage() {
                           <h4 className="font-heading text-sm sm:text-base font-bold text-white leading-tight truncate">
                             {viewingDetourModal.route_name}
                           </h4>
-                          <p className="text-xs text-sky-200/90 font-medium leading-normal mt-0.5 truncate">
+                          <p className="text-xs text-sky-200/90 font-medium leading-normal mt-0.5 break-words">
                             {scopeText}
                           </p>
                         </div>
@@ -1912,26 +1914,31 @@ export default function HomePage() {
                     );
                   })()}
 
-                  {/* Optional: Linked Flood Event Photo */}
+                  {/* Optional: Linked Flood Event Photos */}
                   {(() => {
-                    const linked = viewingDetourModal.flood_id_ref
-                      ? systemData.floodRoutes.find((f) => f.id === viewingDetourModal.flood_id_ref)
-                      : null;
-                    if (!linked?.latest_photo_url) return null;
+                    const linkedEvents = getLinkedEventsForDetour(viewingDetourModal, systemData);
+                    const photoFloods = linkedEvents
+                      .map((ev) => ev.primaryFlood)
+                      .filter((f) => Boolean(f?.latest_photo_url));
+                    if (photoFloods.length === 0) return null;
                     return (
                       <details className="rounded-xl border border-slate-700/80 bg-slate-900/70">
                         <summary className="min-h-10 cursor-pointer px-3 py-2 text-xs font-semibold text-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">
-                          ดูภาพประกอบจุดเกิดเหตุน้ำท่วม
+                          ดูภาพประกอบจุดเกิดเหตุน้ำท่วม{photoFloods.length > 1 ? ` (${photoFloods.length} จุด)` : ""}
                         </summary>
-                        <div className="relative overflow-hidden rounded-b-xl bg-slate-950">
-                          <img
-                            src={normalizeMediaUrl(linked.latest_photo_url)}
-                            alt="ภาพจุดน้ำท่วมที่ผูกกับทางเลี่ยง"
-                            className="w-full h-40 object-cover"
-                          />
-                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/90 via-slate-950/60 to-transparent p-2 text-xs text-white">
-                            <span className="font-bold text-amber-300">จุดเกิดเหตุ:</span> ทล.{linked.route_no} {linked.section_name} (กม.{linked.km_start} - {linked.km_end})
-                          </div>
+                        <div className="space-y-2 p-2 bg-slate-950 rounded-b-xl">
+                          {photoFloods.map((linked) => (
+                            <div key={linked.id} className="relative overflow-hidden rounded-lg bg-slate-950">
+                              <img
+                                src={normalizeMediaUrl(linked.latest_photo_url)}
+                                alt="ภาพจุดน้ำท่วมที่ผูกกับทางเลี่ยง"
+                                className="w-full h-40 object-cover"
+                              />
+                              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/90 via-slate-950/60 to-transparent p-2 text-xs text-white">
+                                <span className="font-bold text-amber-300">จุดเกิดเหตุ:</span> ทล.{linked.route_no} {linked.section_name} (กม.{linked.km_start} - {linked.km_end})
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </details>
                     );
@@ -1950,8 +1957,8 @@ export default function HomePage() {
                         aria-pressed={modalDetourDirection === "FORWARD"}
                         onClick={() => setModalDetourDirection("FORWARD")}
                         className={`min-h-11 rounded-xl px-3 py-2.5 font-heading text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-35 ${modalDetourDirection === "FORWARD"
-                            ? "bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 shadow-md font-black"
-                            : "bg-[#13203c] border border-slate-700/60 hover:bg-[#1a2b50] text-slate-200"
+                          ? "bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 shadow-md font-black"
+                          : "bg-[#13203c] border border-slate-700/60 hover:bg-[#1a2b50] text-slate-200"
                           }`}
                       >
                         <span aria-hidden="true">🚗</span>
@@ -1964,8 +1971,8 @@ export default function HomePage() {
                         aria-pressed={modalDetourDirection === "REVERSE"}
                         onClick={() => setModalDetourDirection("REVERSE")}
                         className={`min-h-11 rounded-xl px-3 py-2.5 font-heading text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-35 ${modalDetourDirection === "REVERSE"
-                            ? "bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 shadow-md font-black"
-                            : "bg-[#13203c] border border-slate-700/60 hover:bg-[#1a2b50] text-slate-200"
+                          ? "bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 shadow-md font-black"
+                          : "bg-[#13203c] border border-slate-700/60 hover:bg-[#1a2b50] text-slate-200"
                           }`}
                       >
                         <span aria-hidden="true">🚙</span>
@@ -1999,9 +2006,7 @@ export default function HomePage() {
                         ? viewingDetourModal.detour_meta?.reverse_distance_km
                         : viewingDetourModal.detour_meta?.forward_distance_km) ||
                       calculatePolylineRoadDistanceKm(polyCoords);
-                    const linked = viewingDetourModal.flood_id_ref
-                      ? systemData.floodRoutes.find((f) => f.id === viewingDetourModal.flood_id_ref)
-                      : null;
+                    const linked = getLinkedEventsForDetour(viewingDetourModal, systemData)[0]?.primaryFlood ?? null;
                     const startHint = linked ? `ทล.${linked.route_no} (${linked.section_name})` : viewingDetourModal.route_name;
                     const areaText = linked ? formatFloodAreaLine(linked) : null;
                     const endHint = areaText ? `(${areaText})` : "";

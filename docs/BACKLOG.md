@@ -27,7 +27,7 @@
 | B-020 | กลาง | ย้ายรูปหลักฐานและรูปโครงการไป Google Drive พร้อมส่งสำเนารายงานไป Sheets | ปิด (2026-11-16, ดู CHANGELOG: Google Drive media และ Google Sheets reporting) |
 | B-021 | กลาง | ตั้ง schedule อิสระสำหรับคิวส่ง Drive/Sheets และหน้าตรวจงานที่ `failed` | ปิด (2026-11-16) — Cron, Edge v17 และหน้า Admin deploy แล้ว; Production read + live browser ผ่าน |
 | B-022 | สูง | Apps Script Web App ที่ใช้งานจริงอาจยังเป็น source เวอร์ชันก่อน idempotency/stale-write guard | กำลังทำ (Web App ยืนยันแล้ว; เหลือเปลี่ยน Edge secret URL) |
-| B-023 | สูง | Cutover ความสัมพันธ์ Flood Event ↔ Detour หลายต่อหลายจาก legacy field | กำลังทำ (Production trigger + Edge v19 + Admin editor source พร้อม; รอ deploy/ทดสอบจริงและ public cutover) |
+| B-023 | สูง | Cutover ความสัมพันธ์ Flood Event ↔ Detour หลายต่อหลายจาก legacy field | กำลังทำ (UI Cutover + Migration 20261118000100 + Edge + E2E ผ่านแล้ว; รอ Apply SQL → Deploy Edge → Deploy เว็บ) |
 | B-024 | กลาง | Event–Detour operation ledger ไม่มีนโยบาย retention/archival | เปิด |
 
 ## B-022 [สูง] Publish Apps Script source สำหรับ outbox idempotency
@@ -42,7 +42,7 @@
 - **ผลกระทบ:** หากสลับ reader หรือ UI ก่อนมี compatibility layer อาจทำให้ detour หายจากประชาชน/แอดมิน หรือสถานะแนะนำชี้ geometry ที่ถูกแก้แล้ว.
 - **ทางเลือก:** A) ทำ Edge read wrapper + atomic write action + compatibility reader แล้วค่อยทำ UI และ public cutover; B) ย้าย UI ตรงไปใช้ schema ใหม่; C) คง legacy model ต่อไป.
 - **คำแนะนำ:** A เพราะคง `flood_id_ref` เดิมไว้จนทดสอบ migration, Edge, public draft filtering, split event และ mobile/desktop regression ครบ.
-- **สถานะ:** กำลังทำ (2026-11-18) — Production migration `20261117135032_event_detour_relationships.sql` และ trigger `trg_doh_sync_flood_event_segment` ถูก apply แล้ว (ตรวจอ่านอย่างเดียว: 18 events, 18 segments, 13 links); Edge `hdms-api` v19 พร้อมแล้ว. เพิ่ม Admin Relationship Editor (`EventDetourLinkModal.tsx`, UPDATE-107) ที่แยกออกจากฟอร์มเดิมและ reload ยืนยันจากฐานข้อมูลหลังบันทึก พร้อม E2E test ผ่านครบ; รอบถัดไปคือ deploy เว็บ, ทดสอบ Admin กับ Production DB จริง แล้วจึง public reader/UI cutover แยก PR.
+- **สถานะ:** กำลังทำ (2026-11-18) — ใน `UPDATE-109` เพิ่ม migration `20261118000100_event_detour_both_directions.sql` (รองรับ `BOTH`/`TWO_WAY` + `UNKNOWN` segment compatibility), ปรับ Edge `hdms-api` ให้ส่ง `eventDetourLinks`/`eventSegments`/`floodEvents` (กรอง Draft/Withdrawn ออกจาก Public), ปรับ `EventDetourLinkModal` ให้มีเฉพาะสถานะ `"ใช้งาน"`/`"ไม่ใช้งาน"`, ทิศทาง `2 ทิศทาง` ตามค่าบันทึกจริง และแสดงช่วง `กม.เริ่มต้น - กม.สิ้นสุด` พร้อมเชื่อมหน้ารายละเอียดฝั่ง Admin (`IncidentRegistryTab`, `DetourManagementTab`), ประชาชน (`app/page.tsx`) และแผนที่ (`LongdoGisMap.tsx`) ครบแล้ว; เหลือ Apply SQL → Deploy Edge Function → Deploy เว็บขึ้น main และตรวจบน Production จริง.
 
 ## B-024 [กลาง] Event–Detour operation ledger ต้องมี retention/archival policy
 - **หลักฐาน:** `doh_event_detour_operations` เก็บ request/before/result JSONB ทุกครั้งเพื่อ idempotency และ audit แต่ migration ยังไม่มีนโยบายเก็บรักษา/ย้ายออก. หากมีการจัดลำดับบ่อย ตารางและ index `created_at` จะโตไม่จำกัด.

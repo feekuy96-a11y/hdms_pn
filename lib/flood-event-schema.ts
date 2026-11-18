@@ -224,6 +224,7 @@ export interface ParentFloodEventGroup {
   eventId: string;
   eventCode: string;
   eventTitle: string;
+  kmRangeLabel: string;
   routeNo: string;
   sectionName: string;
   controlSectionId?: string;
@@ -458,6 +459,43 @@ export function generateNextEventCode(routeNo: string, events: ParentFloodEventG
 }
 
 /**
+ * คำนวณช่วง กม.เริ่มต้น - กม.สิ้นสุด ของเหตุการณ์น้ำท่วมหลัก
+ */
+export function computeEventKmRangeLabel(
+  segments: Array<{ km_start?: string | null; km_end?: string | null }>
+): string {
+  if (!Array.isArray(segments) || segments.length === 0) return "";
+  let minM = Number.POSITIVE_INFINITY;
+  let maxM = Number.NEGATIVE_INFINITY;
+  let hasNumeric = false;
+  for (const s of segments) {
+    const startM = parseKmPostMeters(s.km_start);
+    const endM = parseKmPostMeters(s.km_end);
+    if (startM !== null) {
+      hasNumeric = true;
+      if (startM < minM) minM = startM;
+      if (startM > maxM) maxM = startM;
+    }
+    if (endM !== null) {
+      hasNumeric = true;
+      if (endM < minM) minM = endM;
+      if (endM > maxM) maxM = endM;
+    }
+  }
+  if (hasNumeric && Number.isFinite(minM) && Number.isFinite(maxM)) {
+    const startStr = formatKmPostString(minM);
+    const endStr = formatKmPostString(maxM);
+    return startStr === endStr ? `กม.${startStr}` : `กม.${startStr} - ${endStr}`;
+  }
+  const rawStart = String(segments[0]?.km_start || "").trim();
+  const rawEnd = String(segments[0]?.km_end || "").trim();
+  if (rawStart && rawEnd) {
+    return rawStart === rawEnd ? `กม.${rawStart}` : `กม.${rawStart} - ${rawEnd}`;
+  }
+  return rawStart ? `กม.${rawStart}` : "";
+}
+
+/**
  * จัดกลุ่ม Flood Routes แต่ละช่วงให้เป็น Parent Flood Event Group
  */
 export function groupFloodRoutesIntoEvents(floodRoutes: any[]): ParentFloodEventGroup[] {
@@ -531,6 +569,7 @@ export function groupFloodRoutesIntoEvents(floodRoutes: any[]): ParentFloodEvent
       eventId,
       eventCode: firstMeta.eventCode,
       eventTitle: firstMeta.eventTitle || `ทล.${first.route_no} ตอน${first.section_name}`,
+      kmRangeLabel: computeEventKmRangeLabel(segments),
       routeNo: String(first.route_no || ""),
       sectionName: String(first.section_name || ""),
       controlSectionId: firstMeta.controlSectionId,

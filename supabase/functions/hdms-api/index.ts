@@ -216,8 +216,8 @@ type EventDetourRequest = {
   links: Array<{
     eventId: string;
     detourId: string;
-    eventDirection: "A_TO_B" | "B_TO_A" | "UNKNOWN";
-    detourDirection: "FORWARD" | "REVERSE" | "UNKNOWN";
+    eventDirection: "A_TO_B" | "B_TO_A" | "BOTH" | "UNKNOWN";
+    detourDirection: "FORWARD" | "REVERSE" | "TWO_WAY" | "UNKNOWN";
     position: number;
     recommendation: "PENDING" | "RECOMMENDED" | "UNAVAILABLE" | "WITHDRAWN";
     reviewedGeometryVersion: number | null;
@@ -232,6 +232,7 @@ function eventDetourRequest(value: unknown): EventDetourRequest {
   if (eventId.length > 128 || operationId.length < 8 || operationId.length > 128) fail("Invalid event-detour request", 422);
   if (!Number.isSafeInteger(raw.expectedVersion) || (raw.expectedVersion as number) < 0 || (raw.expectedVersion as number) > 2_147_483_647) fail("Invalid event-detour version", 422);
   if (!Array.isArray(raw.links) || raw.links.length > 100) fail("Invalid event-detour links", 422);
+  const dirsByDetourId = new Map<string, Set<string>>();
   const links = raw.links.map((candidate) => {
     if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) fail("Invalid event-detour link", 422);
     const link = candidate as Record<string, unknown>;
@@ -241,11 +242,14 @@ function eventDetourRequest(value: unknown): EventDetourRequest {
     const detourDirection = link.detourDirection;
     const recommendation = link.recommendation;
     if (linkEventId !== eventId ||
-      !["A_TO_B", "B_TO_A", "UNKNOWN"].includes(String(eventDirection)) ||
-      !["FORWARD", "REVERSE", "UNKNOWN"].includes(String(detourDirection)) ||
+      !["A_TO_B", "B_TO_A", "BOTH", "UNKNOWN"].includes(String(eventDirection)) ||
+      !["FORWARD", "REVERSE", "TWO_WAY", "UNKNOWN"].includes(String(detourDirection)) ||
       !["PENDING", "RECOMMENDED", "UNAVAILABLE", "WITHDRAWN"].includes(String(recommendation)) ||
       detourId.length > 50 ||
       !Number.isSafeInteger(link.position) || (link.position as number) < 1 || (link.position as number) > 999_999_999) fail("Invalid event-detour link", 422);
+    const set = dirsByDetourId.get(detourId) ?? new Set<string>();
+    set.add(String(eventDirection));
+    dirsByDetourId.set(detourId, set);
     const reviewedGeometryVersion = link.reviewedGeometryVersion;
     if (reviewedGeometryVersion !== null && reviewedGeometryVersion !== undefined &&
       (!Number.isSafeInteger(reviewedGeometryVersion) || (reviewedGeometryVersion as number) < 1 || (reviewedGeometryVersion as number) > 2_147_483_647)) fail("Invalid geometry review version", 422);
@@ -259,6 +263,9 @@ function eventDetourRequest(value: unknown): EventDetourRequest {
       reviewedGeometryVersion: reviewedGeometryVersion == null ? null : reviewedGeometryVersion as number,
     };
   });
+  for (const dirSet of dirsByDetourId.values()) {
+    if (dirSet.has("BOTH") && dirSet.size > 1) fail("Duplicate BOTH and single-direction link for detour", 422);
+  }
   return { eventId, expectedVersion: raw.expectedVersion as number, operationId, links };
 }
 
@@ -626,7 +633,56 @@ Deno.serve(async (req) => {
       }
       if (!data || !Array.isArray(data.floodRoutes)) fail("Invalid system data", 502);
       data.systemSettings = data.systemSettings?.main || data.systemSettings;
-      return normalizeSystemMediaUrls(data);
+      const normalized = normalizeSystemMediaUrls(data);
+
+      // Attach Event↔Detour many-to-many links cleanly without mutating underlying system RPCs.
+      // Public responses strictly strip links referencing inactive/Draft floods or detours and
+      // any WITHDRAWN/UNAVAILABLE links.
+      const linkReaderDb = serviceKey
+        ? createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+        : db;
+      try {
+        const [eventsRes, segmentsRes, linksRes] = await Promise.all([
+          linkReaderDb.from("doh_flood_events").select("id,link_version"),
+          linkReaderDb.from("doh_event_segments").select("flood_id,event_id,event_direction,segment_position").order("segment_position", { ascending: true }),
+          linkReaderDb.from("doh_event_detour_links").select("event_id,detour_id,event_direction,detour_direction,position,recommendation,reviewed_geometry_version").order("position", { ascending: true }),
+        ]);
+        if (!eventsRes.error && !segmentsRes.error && !linksRes.error) {
+          const allSegments = segmentsRes.data || [];
+          const allEvents = eventsRes.data || [];
+          const allLinks = (linksRes.data || []).map((link: any) => ({
+            eventId: link.event_id,
+            detourId: link.detour_id,
+            eventDirection: link.event_direction,
+            detourDirection: link.detour_direction,
+            position: link.position,
+            recommendation: link.recommendation,
+            reviewedGeometryVersion: link.reviewed_geometry_version,
+          }));
+
+          if (publicOnly) {
+            const activeFloodIds = new Set((normalized.floodRoutes || []).map((f: any) => f.id));
+            const activeDetourIds = new Set((normalized.detourRoutes || []).map((d: any) => d.id));
+            const publicSegments = allSegments.filter((s: any) => activeFloodIds.has(s.flood_id));
+            const activeEventIds = new Set(publicSegments.map((s: any) => s.event_id));
+            normalized.eventSegments = publicSegments;
+            normalized.floodEvents = allEvents.filter((e: any) => activeEventIds.has(e.id));
+            normalized.eventDetourLinks = allLinks.filter((l: any) =>
+              activeEventIds.has(l.eventId) &&
+              activeDetourIds.has(l.detourId) &&
+              (l.recommendation === "RECOMMENDED" || l.recommendation === "PENDING")
+            );
+          } else {
+            normalized.eventSegments = allSegments;
+            normalized.floodEvents = allEvents;
+            normalized.eventDetourLinks = allLinks;
+          }
+        }
+      } catch {
+        // Non-blocking fallback when relationship tables have not been migrated yet
+      }
+
+      return normalized;
     };
     if (action === "getSystemDataAction") {
       if (serviceKey) scheduleExternalJobs(createClient(url, serviceKey));
@@ -836,6 +892,29 @@ Deno.serve(async (req) => {
           }
         } else if (persisted.direction_mode !== extRow.direction_mode) {
           fail("บันทึกแล้วแต่ทิศทางเดินรถที่อ่านกลับมาไม่ตรง กรุณาตรวจสอบก่อนเผยแพร่", 409);
+        } else if (!p.id && baseRow.flood_id_ref) {
+          try {
+            const segRes = await db.from("doh_event_segments").select("event_id,event_direction").eq("flood_id", baseRow.flood_id_ref).maybeSingle();
+            if (segRes.data?.event_id) {
+              const evId = segRes.data.event_id;
+              const rawEvDir = segRes.data.event_direction;
+              const evDir = rawEvDir === "A_TO_B" || rawEvDir === "B_TO_A" || rawEvDir === "BOTH" ? rawEvDir : "BOTH";
+              const detDir = persisted.direction_mode === "FORWARD_ONLY" ? "FORWARD" : persisted.direction_mode === "REVERSE_ONLY" ? "REVERSE" : "TWO_WAY";
+              const existingLinks = await db.from("doh_event_detour_links").select("position").eq("event_id", evId).eq("event_direction", evDir);
+              const maxPos = (existingLinks.data || []).reduce((max: number, r: any) => Math.max(max, Number(r.position) || 0), 0);
+              await db.from("doh_event_detour_links").upsert({
+                event_id: evId,
+                detour_id: id,
+                event_direction: evDir,
+                detour_direction: detDir,
+                position: maxPos + 1,
+                recommendation: "PENDING",
+                reviewed_geometry_version: null,
+              }, { onConflict: "event_id,detour_id,event_direction", ignoreDuplicates: true });
+            }
+          } catch {
+            // Non-blocking sync when legacy create form creates a new linked detour
+          }
         }
         savedRouteId = id;
         break;

@@ -1,5 +1,16 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-109] 2026-11-18 แสดงผลความสัมพันธ์เหตุการณ์ ↔ ทางเลี่ยงครบทุกหน้ารายละเอียด รองรับ 2 ทิศทาง สถานะใช้งาน/ไม่ใช้งาน และแสดงช่วง กม.
+- **ไฟล์:** `supabase/migrations/20261118000100_event_detour_both_directions.sql` (ใหม่), `supabase/functions/hdms-api/index.ts`, `db/default-data.ts`, `lib/flood-event-schema.ts`, `lib/event-detour-links.ts`, `components/admin/EventDetourLinkModal.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `components/admin/OfficialReportDispatchModal.tsx`, `app/page.tsx`, `components/map/LongdoGisMap.tsx`, `playwright.config.ts`, `tests/e2e/event-detour-links-admin.spec.ts`, `docs/*`
+- **การแก้ไข:**
+  1. **SQL Migration (`20261118000100`):** ขยาย CHECK constraint และฟังก์ชัน `doh_replace_event_detour_links` ให้รองรับ `BOTH` (`event_direction`) และ `TWO_WAY` (`detour_direction`), ป้องกันผูก `BOTH` ซ้ำกับทิศทางเดี่ยวใน `(event_id, detour_id)` เดียวกัน, ป้องกันทางเลี่ยงวันเวย์ถูกเลือกเป็น `TWO_WAY`, และรองรับช่วงน้ำท่วมเดิมที่เป็น `UNKNOWN` ให้บันทึก `RECOMMENDED` ได้
+  2. **Edge Function `hdms-api`:** รองรับ `BOTH`/`TWO_WAY` ใน `replaceEventDetourLinksAction`, แนบ `eventDetourLinks`, `eventSegments` และ `floodEvents` ใน `getSystemDataAction` และ `getPublicSystemDataAction` (โดยกรองเฉพาะรายการ active และตัด `WITHDRAWN`/`UNAVAILABLE`/Draft ออก 100% ในฝั่งประชาชน), และช่วยผูก link เริ่มต้นเมื่อสร้างทางเลี่ยงใหม่จากหน้าจัดการแผนที่
+  3. **Admin Link Modal (`EventDetourLinkModal.tsx`):** ลดตัวเลือกสถานะเหลือ `"ใช้งาน"` (ค่าเริ่มต้น) / `"ไม่ใช้งาน"`, เพิ่มตัวเลือก `๒ ทิศทาง` และดึงค่าเริ่มต้นทิศทางจากข้อมูลน้ำท่วมกับทางเลี่ยงที่บันทึกไว้จริง, แสดงช่วง `กม.เริ่มต้น - กม.สิ้นสุด` ในตัวเลือกเหตุการณ์ทั้ง 2 โหมด, และสั่ง `onDataRefresh()` ทันทีหลังบันทึกสำเร็จ
+  4. **หน้ารายละเอียดทุกจุด + ส่งออก + รายงาน (Admin & Citizen + Map):** รวมศูนย์ตัวช่วย `getLinkedDetoursForFlood` และ `getLinkedEventsForDetour` ใน `lib/event-detour-links.ts` (แสดงผลตามแนวทาง A+B ทั้ง `RECOMMENDED` และ `PENDING` พร้อม fallback กับ `flood_id_ref`) เชื่อมเข้า `IncidentRegistryTab`, `DetourManagementTab` (รวมส่งออก CSV `handleExportCSV`), `OfficialReportDispatchModal` (แบบรายงานเสนอผู้ว่าฯ), `app/page.tsx` และ `LongdoGisMap.tsx`
+  5. **Playwright config (`playwright.config.ts`):** จำกัด `workers: 2` บน Windows local (ไม่จำกัดบน Linux CI) เพื่อป้องกันปัญหาเปิด 6 Chrome พร้อมกันจน timeout 30s
+- **ตรวจแล้ว:** `npm run check:deploy` (`eslint` 0 warnings, `tsc --noEmit` 0 errors, `node scripts/build-pages.mjs` 6/6 static pages), Edge Function TypeScript transpile (0 diagnostics), และ Playwright `event-detour-links-admin.spec.ts` + `smoke.spec.ts` (14/14 Desktop + Mobile) พร้อม regression E2E บน CI
+- **ลำดับ Deploy & ย้อนกลับ:** 1) รัน SQL `20261118000100_event_detour_both_directions.sql` → 2) Deploy Edge Function `hdms-api` → 3) Deploy เว็บ (GitHub Pages); ย้อนกลับเว็บด้วย `git revert`, ย้อน Edge เป็น v19 และย้อน SQL ตามคอมเมนต์หัว migration
+
 ### [UPDATE-110] 2026-11-18 ลดขั้นตอนซ้ำใน GitHub Actions CI/Deploy (`ci.yml`, `deploy.yml`) และกำหนดแนวทาง E2E ในเครื่องเฉพาะส่วนที่แก้
 - **ไฟล์:** `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`, `docs/PLAYBOOKS.md`, `docs/CHANGELOG.md`
 - **การแก้ไข:**

@@ -2,11 +2,11 @@
 
 **ระบบ:** ศูนย์ข้อมูลน้ำท่วมและโครงข่ายทางหลวง แขวงทางหลวงปัตตานี (HDMS_PN)  
 **Production URLs:** [https://feekuy96-a11y.github.io/hdms_pn/](https://feekuy96-a11y.github.io/hdms_pn/) (หน้าประชาชน) \| [https://feekuy96-a11y.github.io/hdms_pn/admin](https://feekuy96-a11y.github.io/hdms_pn/admin) (หน้าแอดมิน)  
-**อัปเดตล่าสุด:** 2026-11-18 (อัปเกรด Hybrid Google Maps Geocoding/Routes + Hardened OSRM/local lookup `[UPDATE-108]`; Admin Relationship Editor `EventDetourLinkModal` `[UPDATE-107]` พร้อม E2E ผ่านครบ และ Production มี `trg_doh_sync_flood_event_segment`)
+**อัปเดตล่าสุด:** 2026-11-18 (`UPDATE-109`: เชื่อมการแสดงผล Event↔Detour ครบทุกหน้ารายละเอียด Admin/Public/Map, รองรับ 2 ทิศทาง `BOTH`/`TWO_WAY`, สถานะ `ใช้งาน/ไม่ใช้งาน` และแสดงช่วง กม. ในตัวเลือกเหตุการณ์)
 
 > UPDATE-073: ปิดช่องว่างการแสดง Stroke/Casing ของแผนที่แล้ว โดย `LongdoGisMap` วาดเส้นฐานแบบ Canvas สำหรับน้ำท่วม ทางเลี่ยง และโครงข่ายสายทางเมื่อเปิดค่า Stroke/Casing; ผล lint, typecheck และ build:pages ผ่าน. ยังต้องตรวจภาพจริงหลังนำเว็บขึ้น GitHub Pages เพราะการทดสอบอัตโนมัติยืนยันการโหลดแผนที่และพฤติกรรม ไม่สามารถอ่านสีพิกเซลของ Canvas ได้อย่างน่าเชื่อถือ.
 
-> UPDATE-090: Public RPC ใหม่กรอง flood/timeline/detour ที่ inactive หรือผูกกับ Draft ขณะที่ Admin ยังเห็น Draft ได้ครบ. พบ regression ใน source วันที่ 2026-11-17: fallback ฝั่ง browser เคยข้าม wrapper ได้เมื่อ Edge ล่ม; แก้ source และมี regression test แล้ว แต่ต้องรอ PR/Pages deploy ก่อนจึงถือว่าปิดอีกครั้ง.
+> UPDATE-090 / KI-014: ปิดการส่ง Draft จาก Public API และ Public fallback ฝั่ง browser แล้ว (PR #32, PR #33, Deploy Pages `44104409962`); `UPDATE-109` ยังคงกรอง `WITHDRAWN`/`UNAVAILABLE`/Draft ออกจาก `eventDetourLinks` ฝั่ง Public อย่างเข้มงวด.
 
 > UPDATE-102/103: รวมศูนย์สถานะจราจร 5 ค่าไว้ที่ `lib/traffic-presentation.ts` (R1) พร้อมปรับการ์ดเหตุการณ์แอดมินด้วย CSS Container Queries; เพิ่ม `docs/AI_HANDOFF.md` และปรับ `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `CLAUDE.md` ให้ชี้สู่ `AGENTS.md` และ `docs/AI_HANDOFF.md` ตรงกันทั้งหมด.
 
@@ -37,9 +37,9 @@
 ### KI-012: ยังไม่มี field telemetry สำหรับ RAM/CPU ของตัวแก้แนวเส้น
 - Lab test 1,200 จุดยืนยัน canvas เดียวและเพดาน 400 handle แต่ไม่สามารถรายงาน JS heap หรือ CPU บนเครื่องเจ้าหน้าที่จริงได้อย่างน่าเชื่อถือใน CI/headless. เก็บ Chrome Performance trace/Task Manager จากเครื่องที่เคยค้างก่อนเปลี่ยนเพดานหรือเพิ่ม Web Worker; ดู B-005.
 
-### KI-013: ความสัมพันธ์ Event↔Detour หลายต่อหลายยังไม่ผ่านเส้นทางจริงครบวงจร
-- Migration `20261117135032_event_detour_relationships.sql` และ trigger `20261117192000_sync_flood_event_segments.sql` (`trg_doh_sync_flood_event_segment`) ถูก apply Production แล้วและตรวจอ่านกลับได้ (18 events, 18 segments, 13 links; ไม่มี Recommended ที่ยังไม่ได้ review). Edge `hdms-api` v19 มี reader และ atomic replacement action แล้ว และ Admin Relationship Editor (`EventDetourLinkModal.tsx`, UPDATE-107) พร้อม E2E test ผ่านครบในเครื่อง; แต่ Admin editor ยังไม่ได้ deploy ขึ้น GitHub Pages และหน้าประชาชน, export/import และ report ยังอ้าง `flood_id_ref` / `detour_meta.event_orders` เดิม.
-- จนกว่า B-023 จะปิด ห้ามทำให้หน้าประชาชนอ่าน link table ใหม่เพียงอย่างเดียว เพราะ legacy detour อาจหายจากแผนที่. ฟอร์มแก้ไขเส้นทางเลี่ยงเดิมยังคงแยกจาก Admin Relationship Editor เพื่อป้องกันการเขียนทับความสัมพันธ์หลายเหตุการณ์. Geometry revision มีผลแล้ว แต่การแก้ geometry ต้องผ่าน trigger/Edge path ที่ deploy อยู่.
+### KI-013: ความสัมพันธ์ Event↔Detour หลายต่อหลาย (รอ Apply SQL 20261118000100 + Deploy Edge + Web)
+- Migration `20261117135032_event_detour_relationships.sql` และ trigger `20261117192000_sync_flood_event_segments.sql` ถูก apply Production แล้ว. ใน `UPDATE-109` เพิ่ม migration `20261118000100_event_detour_both_directions.sql` (รองรับ `BOTH`/`TWO_WAY`), ปรับ Edge `hdms-api` ให้แนบ `eventDetourLinks` (พร้อมกรอง `WITHDRAWN`/Draft ออกจาก Public) และปรับหน้ารายละเอียดทุกจุดใน Admin (`IncidentRegistryTab`, `DetourManagementTab`), ประชาชน (`app/page.tsx`) และแผนที่ (`LongdoGisMap.tsx`) ให้อ่านความสัมพันธ์จาก `eventDetourLinks` ร่วมกับ fallback `flood_id_ref` แล้ว.
+- ฟอร์มแก้ไขเส้นทางเลี่ยงเดิมยังคงแยกจาก `EventDetourLinkModal` และยังไม่ตัดข้อมูล `flood_id_ref` ออกเพื่อให้เข้ากันได้ย้อนหลัง (B-023). รอบต่อไปคือ apply SQL `20261118000100` → deploy Edge `hdms-api` → deploy เว็บขึ้น `main`.
 
 ### KI-014: Public fallback patch เผยแพร่แล้ว — ปิดแล้ว
 - รวมเข้า `main` ผ่าน PR #32 และ PR #33 (commit `866eb93`) Deploy GitHub Pages สำเร็จ (Run `44104409962`); fallback ฝั่ง browser ถูกจำกัดเฉพาะ public RPC หรือแสดง Error/Retry พร้อม regression test ผ่านครบ (ดู B-019).
