@@ -53,10 +53,10 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** 
-- **Git Branch & Commit SHA:** 
-- **ไฟล์ที่แก้ไขแล้ว:** 
-- **สิ่งที่ทำสำเร็จ:** 
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** 
-- **ผลทดสอบล่าสุด:** 
-- **ขั้นตอนถัดไป:** 
+- **งานที่กำลังทำ / เป้าหมาย:** แยกโมดูลย่อยของ `LongdoGisMap.tsx` และ `MapManagementTab.tsx` (`B-005`) + วางแนวทาง AI ทำงานครบวงจร 0 บั๊ก (`UPDATE-116`)
+- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `e1eff9d` — `UPDATE-115`)
+- **ไฟล์ที่แก้ไขแล้ว:** `components/map/{LongdoGisMap.tsx,longdo-map-popups.ts,MapLegendOverlay.tsx}`, `components/admin/tabs/{MapManagementTab.tsx,map-management-helpers.ts,RouteGeometryEditorSection.tsx,FloodSituationSection.tsx}`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
+- **สิ่งที่ทำสำเร็จ:** ลดขนาด `LongdoGisMap.tsx` (2,713 → 1,846 บรรทัด) และ `MapManagementTab.tsx` (3,297 → 2,460 บรรทัด) โดยไม่เปลี่ยน DOM/accessible name
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี (หากต้องลดขนาดเพิ่มเติมสามารถแตก Form Step 1 และ state hooks ของ `MapManagementTab.tsx` / `GisDataImportTab.tsx` ได้อีกในรอบถัดไป)
+- **ผลทดสอบล่าสุด:** `lint` (0 warnings), `typecheck` (0 errors), `build:pages` (6/6), Playwright `smoke`/`admin-menus`/`flood-form-rules`/`detour-navigation` (`38 passed`, `18 skipped`)
+- **ขั้นตอนถัดไป:** ตรวจ CI / Deploy GitHub Pages หลัง Push; พิจารณาผ่าตัดส่วนที่เหลือของ `MapManagementTab.tsx` (Step 1 + Submit hooks) หรือ `GisDataImportTab.tsx` ตามความจำเป็น

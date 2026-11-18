@@ -1,5 +1,13 @@
 ﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-116] 2026-11-18 แยกโมดูลย่อยจาก `LongdoGisMap.tsx` และ `MapManagementTab.tsx` (B-005)
+- **ไฟล์:** `components/map/LongdoGisMap.tsx`, `components/map/longdo-map-popups.ts` (ใหม่), `components/map/MapLegendOverlay.tsx` (ใหม่), `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/map-management-helpers.ts` (ใหม่), `components/admin/tabs/RouteGeometryEditorSection.tsx` (ใหม่), `components/admin/tabs/FloodSituationSection.tsx` (ใหม่), `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **`LongdoGisMap.tsx` (2,713 → 1,846 บรรทัด):** ย้ายตัวช่วย pure functions และ Popup HTML builders ไปไว้ที่ `components/map/longdo-map-popups.ts` (675 บรรทัด, คง re-export `isFloodLineVisibleOnCurrentMap`) และแยก UI แถบสถานะ/Legend/Modal รูปจุดทางเข้าออกไปเป็น `components/map/MapLegendOverlay.tsx` (360 บรรทัด)
+  2. **`MapManagementTab.tsx` (3,297 → 2,460 บรรทัด):** ย้าย pure helpers ไปไว้ที่ `components/admin/tabs/map-management-helpers.ts` (132 บรรทัด, คง re-export `buildDetourRoutingParams`), แยกส่วนที่ ๒ แนวเส้นบนแผนที่และ A-B/B-A Inspector ออกเป็น `RouteGeometryEditorSection.tsx` (535 บรรทัด), และแยกส่วนที่ ๓ สถานการณ์น้ำและมาตรการออกเป็น `FloodSituationSection.tsx` (569 บรรทัด) โดยคง DOM structure, label และ accessible name เดิมครบทุกจุด
+- **ตรวจแล้ว:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (`6/6` static pages), และ Playwright E2E บน `PLAYWRIGHT_STATIC=1` (`smoke`, `admin-menus`, `flood-form-rules`, `detour-navigation` — `38 passed`, `18 skipped` สำหรับเคส desktop-only บน mobile project)
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Push ขึ้น `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
 ### [UPDATE-114] 2026-11-18 ปรับชื่อสถานะจราจร 5 ค่าและคำนวณอัตโนมัติตามระดับน้ำ แยกวาดเส้น/กรอกระดับน้ำ 2 ฝั่งบนถนน ≥ 4 ช่องจราจร และกรองรายการทางหลวงเฉพาะจากโครงข่าย DB
 - **ไฟล์:** `lib/traffic-presentation.ts`, `lib/detour-navigation.ts`, `lib/flood-event-schema.ts`, `lib/highway-schema.ts`, `app/page.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `tests/e2e/flood-form-rules.spec.ts` (ใหม่), `tests/e2e/admin-menus.spec.ts`, `tests/e2e/detour-navigation.spec.ts`, `docs/{CHANGELOG,UI_CONTRACT}.md`
 - **การแก้ไข:**

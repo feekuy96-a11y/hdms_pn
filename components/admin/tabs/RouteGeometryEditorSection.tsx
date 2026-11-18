@@ -1,0 +1,535 @@
+"use client";
+
+import React from "react";
+import { ActionButton, FormSection, ToolGroup } from "@/components/admin/ui";
+import { DirectionSwitch } from "@/components/ui/DirectionSwitch";
+import { analyzeCarriagewaySeparation } from "@/lib/gis-utils";
+import { DetourDirectionModeType } from "@/lib/constants";
+import { parseCoordinatePair } from "./map-management-helpers";
+import {
+  ArrowRightLeft,
+  Camera,
+  Trash2,
+  Sparkles,
+  Wand2,
+  MapPinned,
+  Plus,
+  Undo2,
+} from "lucide-react";
+
+interface RouteGeometryEditorSectionProps {
+  onToast: (msg: string) => void;
+  routeMode: "FLOOD" | "DETOUR";
+  adminPickMode: string | null;
+  setAdminPickMode: (mode: string | null) => void;
+  startLat: number | string;
+  setStartLat: (lat: number | string) => void;
+  startLon: number | string;
+  setStartLon: (lon: number | string) => void;
+  endLat: number | string;
+  setEndLat: (lat: number | string) => void;
+  endLon: number | string;
+  setEndLon: (lon: number | string) => void;
+  startCoordinateText: string;
+  setStartCoordinateText: (text: string) => void;
+  endCoordinateText: string;
+  setEndCoordinateText: (text: string) => void;
+  detourStartPhotoUrl: string;
+  setDetourStartPhotoUrl: (url: string) => void;
+  detourStartPhotoCaption: string;
+  setDetourStartPhotoCaption: (caption: string) => void;
+  detourEndPhotoUrl: string;
+  setDetourEndPhotoUrl: (url: string) => void;
+  detourEndPhotoCaption: string;
+  setDetourEndPhotoCaption: (caption: string) => void;
+  handleDetourPointPhotoUpload: (endpoint: "START" | "END", event: React.ChangeEvent<HTMLInputElement>) => Promise<void> | void;
+  snappingStatusText: string;
+  setSnappingStatusText: (text: string) => void;
+  freeEditEnabled: boolean;
+  setFreeEditEnabled: (enabled: boolean) => void;
+  freeVertexTool: "move" | "delete";
+  setFreeVertexTool: (tool: "move" | "delete") => void;
+  supportsTwoWayLineEdit: boolean;
+  activeEditTarget: "FORWARD" | "REVERSE";
+  handleSelectEditDirection: (nextTarget: "FORWARD" | "REVERSE") => void;
+  draftCoordinates: [number, number][];
+  draftReverseCoordinates: [number, number][];
+  setDraftReverseCoordinates?: (coords: [number, number][]) => void;
+  draftWaypoints: [number, number][];
+  draftReverseWaypoints: [number, number][];
+  setDraftReverseWaypoints?: React.Dispatch<React.SetStateAction<[number, number][]>>;
+  routingRequestRef: React.MutableRefObject<number>;
+  freePastRef: React.MutableRefObject<[number, number][][]>;
+  freeFutureRef: React.MutableRefObject<[number, number][][]>;
+  undoFreeGeometry: (redo?: boolean) => void;
+  forceStraightThrough: boolean;
+  setForceStraightThrough: (force: boolean) => void;
+  triggerDualRoadSnapping: (
+    sLat: number | string,
+    sLon: number | string,
+    eLat: number | string,
+    eLon: number | string,
+    fwdWaypoints?: [number, number][],
+    revWaypoints?: [number, number][]
+  ) => Promise<void> | void;
+  handleSwapEndpoints: () => void;
+  handleAddMidpointWaypoint: () => void;
+  handleUndoWaypoint: () => void;
+  handleRemoveWaypoint: (index: number) => void;
+  originalRouteCoordsRef: React.MutableRefObject<[number, number][]>;
+  originalReverseRouteCoordsRef: React.MutableRefObject<[number, number][]>;
+  handleRestoreOriginalRoute: () => void;
+  requestClearRoute: () => void;
+  closedRoadConflicts: string[];
+  detourDirectionMode: DetourDirectionModeType;
+  detourDistanceMeters: { forward: number; reverse: number };
+}
+
+export function RouteGeometryEditorSection({
+  onToast,
+  routeMode,
+  adminPickMode,
+  setAdminPickMode,
+  startLat,
+  setStartLat,
+  startLon,
+  setStartLon,
+  endLat,
+  setEndLat,
+  endLon,
+  setEndLon,
+  startCoordinateText,
+  setStartCoordinateText,
+  endCoordinateText,
+  setEndCoordinateText,
+  detourStartPhotoUrl,
+  setDetourStartPhotoUrl,
+  detourStartPhotoCaption,
+  setDetourStartPhotoCaption,
+  detourEndPhotoUrl,
+  setDetourEndPhotoUrl,
+  detourEndPhotoCaption,
+  setDetourEndPhotoCaption,
+  handleDetourPointPhotoUpload,
+  snappingStatusText,
+  setSnappingStatusText,
+  freeEditEnabled,
+  setFreeEditEnabled,
+  freeVertexTool,
+  setFreeVertexTool,
+  supportsTwoWayLineEdit,
+  activeEditTarget,
+  handleSelectEditDirection,
+  draftCoordinates,
+  draftReverseCoordinates,
+  setDraftReverseCoordinates,
+  draftWaypoints,
+  draftReverseWaypoints,
+  setDraftReverseWaypoints,
+  routingRequestRef,
+  freePastRef,
+  freeFutureRef,
+  undoFreeGeometry,
+  forceStraightThrough,
+  setForceStraightThrough,
+  triggerDualRoadSnapping,
+  handleSwapEndpoints,
+  handleAddMidpointWaypoint,
+  handleUndoWaypoint,
+  handleRemoveWaypoint,
+  originalRouteCoordsRef,
+  originalReverseRouteCoordsRef,
+  handleRestoreOriginalRoute,
+  requestClearRoute,
+  closedRoadConflicts,
+  detourDirectionMode,
+  detourDistanceMeters,
+}: RouteGeometryEditorSectionProps) {
+  return (
+    <FormSection
+      step={2}
+      title="แนวเส้นบนแผนที่"
+      description="เลือกจุดเริ่มต้น-สิ้นสุด ให้ระบบคำนวณเส้นเกาะถนน แล้วดัดแนวด้วยจุดดัดเส้น"
+      actions={
+        <ActionButton
+          variant="secondary"
+          onClick={handleSwapEndpoints}
+          title="สลับจุดเริ่มต้น (A) ↔ สิ้นสุด (B) และกลับทิศทางเส้นทาง"
+        >
+          <ArrowRightLeft className="h-3.5 w-3.5 text-sky-400" />
+          <span>สลับ A ⇄ B</span>
+        </ActionButton>
+      }
+    >
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2 text-sm font-semibold text-white">
+              <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-xs font-black text-slate-950">A</span>
+              จุดเริ่มต้น
+            </span>
+            <ActionButton variant="pick" active={adminPickMode === "PICK_START"} onClick={() => setAdminPickMode("PICK_START")}>
+              {adminPickMode === "PICK_START" ? "เลือกจุด A..." : "เลือกจุด A"}
+            </ActionButton>
+          </div>
+          <input
+            type="text"
+            aria-label="พิกัดจุด A"
+            value={startCoordinateText}
+            onChange={(e) => setStartCoordinateText(e.target.value)}
+            onBlur={() => { const pair = parseCoordinatePair(startCoordinateText); if (pair) { setStartLat(pair[0]); setStartLon(pair[1]); } else { setStartLat(""); setStartLon(""); } }}
+            placeholder="วางจาก Google Maps เช่น 6.8340, 101.1860"
+            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm text-white placeholder:text-slate-500"
+          />
+          {routeMode === "DETOUR" && (
+            <div className="pt-2 border-t border-slate-800/80 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-heading font-semibold text-emerald-300 flex items-center gap-1">
+                  <Camera className="h-3.5 w-3.5" />
+                  ภาพทางเข้าจุดเริ่มต้น A (ขาไป A → B)
+                </span>
+                <label className="cursor-pointer rounded-lg border border-emerald-700/70 bg-emerald-950/40 hover:bg-emerald-900/60 px-2.5 py-1 text-[11px] font-heading font-bold text-emerald-200 transition">
+                  {detourStartPhotoUrl ? "เปลี่ยนภาพ" : "+ แนบภาพจุดเริ่ม A"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    aria-label="แนบภาพจุดเริ่มต้น A"
+                    className="sr-only"
+                    onChange={(e) => handleDetourPointPhotoUpload("START", e)}
+                  />
+                </label>
+              </div>
+              {detourStartPhotoUrl && (
+                <div className="space-y-1.5 rounded-lg border border-slate-800 bg-slate-950 p-2">
+                  <div className="relative">
+                    <img
+                      src={detourStartPhotoUrl}
+                      alt="ภาพทางเข้าจุดเริ่มต้น A"
+                      className="h-28 w-full rounded-md object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetourStartPhotoUrl("");
+                        setDetourStartPhotoCaption("");
+                      }}
+                      aria-label="ลบภาพจุดเริ่มต้น A"
+                      className="absolute top-1.5 right-1.5 rounded-full bg-slate-950/90 p-1 text-rose-400 hover:bg-rose-950 hover:text-white border border-rose-500/40"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    aria-label="คำอธิบายภาพจุดเริ่มต้น A"
+                    value={detourStartPhotoCaption}
+                    onChange={(e) => setDetourStartPhotoCaption(e.target.value)}
+                    placeholder="คำอธิบาย เช่น ปากทางเข้าซอยฝั่งจุดเริ่มต้น A"
+                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2 text-sm font-semibold text-white">
+              <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-red-500 text-xs font-black text-white">B</span>
+              จุดสิ้นสุด
+            </span>
+            <ActionButton variant="pick" active={adminPickMode === "PICK_END"} onClick={() => setAdminPickMode("PICK_END")}>
+              {adminPickMode === "PICK_END" ? "เลือกจุด B..." : "เลือกจุด B"}
+            </ActionButton>
+          </div>
+          <input
+            type="text"
+            aria-label="พิกัดจุด B"
+            value={endCoordinateText}
+            onChange={(e) => setEndCoordinateText(e.target.value)}
+            onBlur={() => { const pair = parseCoordinatePair(endCoordinateText); if (pair) { setEndLat(pair[0]); setEndLon(pair[1]); } else { setEndLat(""); setEndLon(""); } }}
+            placeholder="วางจาก Google Maps เช่น 6.8390, 101.1920"
+            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm text-white placeholder:text-slate-500"
+          />
+          {routeMode === "DETOUR" && (
+            <div className="pt-2 border-t border-slate-800/80 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-heading font-semibold text-sky-300 flex items-center gap-1">
+                  <Camera className="h-3.5 w-3.5" />
+                  ภาพทางเข้าจุดสิ้นสุด B (ขากลับ B → A)
+                </span>
+                <label className="cursor-pointer rounded-lg border border-sky-700/70 bg-sky-950/40 hover:bg-sky-900/60 px-2.5 py-1 text-[11px] font-heading font-bold text-sky-200 transition">
+                  {detourEndPhotoUrl ? "เปลี่ยนภาพ" : "+ แนบภาพจุดสิ้นสุด B"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    aria-label="แนบภาพจุดสิ้นสุด B"
+                    className="sr-only"
+                    onChange={(e) => handleDetourPointPhotoUpload("END", e)}
+                  />
+                </label>
+              </div>
+              {detourEndPhotoUrl && (
+                <div className="space-y-1.5 rounded-lg border border-slate-800 bg-slate-950 p-2">
+                  <div className="relative">
+                    <img
+                      src={detourEndPhotoUrl}
+                      alt="ภาพทางเข้าจุดสิ้นสุด B"
+                      className="h-28 w-full rounded-md object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetourEndPhotoUrl("");
+                        setDetourEndPhotoCaption("");
+                      }}
+                      aria-label="ลบภาพจุดสิ้นสุด B"
+                      className="absolute top-1.5 right-1.5 rounded-full bg-slate-950/90 p-1 text-rose-400 hover:bg-rose-950 hover:text-white border border-rose-500/40"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    aria-label="คำอธิบายภาพจุดสิ้นสุด B"
+                    value={detourEndPhotoCaption}
+                    onChange={(e) => setDetourEndPhotoCaption(e.target.value)}
+                    placeholder="คำอธิบาย เช่น ปากทางเข้าฝั่งขากลับ (สำหรับผู้มาจากอีกฝั่ง)"
+                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Snapping Status Feedback Banner */}
+      {snappingStatusText && (
+        <div className="p-2.5 rounded-lg bg-sky-950/70 border border-sky-800 text-sky-200 text-xs flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+          <span>{snappingStatusText}</span>
+        </div>
+      )}
+
+      {/* Unified My Maps-style geometry editor (also used by highway geometry). */}
+      <div className="rounded-xl border border-sky-800/70 bg-slate-900/50 p-3 space-y-3" role="group" aria-label="โหมดแก้ไขแนวเส้น">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-bold text-white">แก้ไขแนวเส้นบนแผนที่</p>
+          <span className="text-xs text-slate-400">ตามถนน / ดัดเส้นอิสระ</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <ActionButton variant={freeEditEnabled ? "secondary" : "primary"} active={!freeEditEnabled} onClick={() => { setFreeEditEnabled(false); setAdminPickMode(null); }}>
+            <Wand2 className="h-4 w-4" /> ตามแนวถนน
+          </ActionButton>
+          <ActionButton variant={freeEditEnabled ? "primary" : "secondary"} active={freeEditEnabled} onClick={() => {
+            if (draftCoordinates.length < 2) { onToast("กรุณาปัก A และ B แล้วคำนวณแนวถนนก่อนดัดเส้นอิสระ"); return; }
+            if (activeEditTarget === "REVERSE" && draftReverseCoordinates.length < 2) {
+              setDraftReverseCoordinates?.([...draftCoordinates].reverse().map((p) => [...p] as [number, number]));
+            }
+            routingRequestRef.current += 1;
+            freePastRef.current = []; freeFutureRef.current = [];
+            setFreeEditEnabled(true); setAdminPickMode(null); setFreeVertexTool("move");
+          }}>
+            <MapPinned className="h-4 w-4" /> ดัดเส้นอิสระ
+          </ActionButton>
+        </div>
+        {supportsTwoWayLineEdit && (
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <span className="text-xs font-semibold text-slate-300">เลือกทิศทางเส้นทางที่ต้องการแก้ไข:</span>
+            <DirectionSwitch
+              size="sm"
+              ariaLabel="เลือกทิศทางสำหรับดัดเส้น"
+              value={activeEditTarget}
+              onChange={handleSelectEditDirection}
+              options={[
+                { value: "FORWARD", label: "ขาไป (A → B)", ariaLabel: "ขาไป A → B" },
+                { value: "REVERSE", label: "ขากลับ (B → A)", ariaLabel: "ขากลับ B → A" },
+              ]}
+            />
+          </div>
+        )}
+        {freeEditEnabled && (
+          <>
+            <ToolGroup label="แก้ไขจุดดัด (ใช้เครื่องมือเดียวกับแนวทางหลวง)">
+              <ActionButton variant="secondary" active={freeVertexTool === "move" && adminPickMode !== "ADD_LINE_VERTEX"} onClick={() => { setFreeVertexTool("move"); setAdminPickMode(null); }}>ลากจุดดัด</ActionButton>
+              <ActionButton variant="pick" active={adminPickMode === "ADD_LINE_VERTEX"} onClick={() => { setFreeVertexTool("move"); setAdminPickMode(adminPickMode === "ADD_LINE_VERTEX" ? null : "ADD_LINE_VERTEX"); }}>+ เพิ่มจุดดัดอิสระ</ActionButton>
+              <ActionButton variant="danger" active={freeVertexTool === "delete"} onClick={() => { setFreeVertexTool(freeVertexTool === "delete" ? "move" : "delete"); setAdminPickMode(null); }}>ลบจุดดัด</ActionButton>
+              <ActionButton variant="secondary" disabled={!freePastRef.current.length} onClick={() => undoFreeGeometry(false)}>ย้อนกลับ</ActionButton>
+              <ActionButton variant="secondary" disabled={!freeFutureRef.current.length} onClick={() => undoFreeGeometry(true)}>ทำซ้ำ</ActionButton>
+            </ToolGroup>
+            <p className="text-xs text-sky-200">ลากหมุดเล็กบนเส้นเพื่อย้ายจุด คลิกจุดกึ่งกลางเพื่อแทรก คลิกขวาเพื่อลบ หรือเลือกโหมดลบจุด ข้อมูลจะคงแนวเส้นอิสระตามที่บันทึก</p>
+            {supportsTwoWayLineEdit && (
+              <p className="text-xs text-amber-200">
+                กำลังดัดเส้น: <strong>{activeEditTarget === "REVERSE" ? "ขากลับ (B → A)" : "ขาไป (A → B)"}</strong> (สลับปุ่มทิศทางด้านบนเพื่อแก้แต่ละฝั่งแยกกันได้ทันที)
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Waypoint Operations & Midpoint Insertion */}
+      {!freeEditEnabled && routeMode === "DETOUR" && (
+        <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-amber-700/60 bg-amber-950/30 p-3 text-xs text-amber-100">
+          <input
+            type="checkbox"
+            checked={forceStraightThrough}
+            onChange={(event) => {
+              setForceStraightThrough(event.target.checked);
+              setSnappingStatusText(event.target.checked
+                ? "เปิดโหมดตรงผ่านแยกแล้ว: เพิ่มจุดดัดบนกึ่งกลางสามแยก/สี่แยก แล้วกดคำนวณเส้นเกาะถนน"
+                : "ปิดโหมดตรงผ่านแยกแล้ว");
+            }}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-amber-500"
+          />
+          <span><strong className="block text-amber-300">บังคับตรงผ่านสามแยก/สี่แยก</strong>จุดดัดจะเป็นจุดควบคุมทิศทางตรง ระบบจะป้องกันการยูเทิร์นที่จุดนั้นและยังคงเกาะถนนจริง กรุณาตรวจเส้นพรีวิวก่อนบันทึก</span>
+        </label>
+      )}
+      <div className="space-y-4 border-t border-slate-800 pt-4">
+        <ActionButton
+          variant="primary"
+          className="w-full sm:w-auto"
+          onClick={() => triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints, draftReverseWaypoints)}
+        >
+          <Wand2 className="h-3.5 w-3.5" /> คำนวณเส้นเกาะถนน
+        </ActionButton>
+
+        {!freeEditEnabled && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <ToolGroup label={supportsTwoWayLineEdit ? `ดัดแนวเส้น (${activeEditTarget === "REVERSE" ? "ขากลับ B → A" : "ขาไป A → B"})` : "ดัดแนวเส้น"}>
+              <ActionButton variant="secondary" className="text-amber-300" onClick={handleAddMidpointWaypoint}>
+                <Plus className="h-3.5 w-3.5" /> แตะจุดกลางเส้นเพื่อเพิ่มจุด
+              </ActionButton>
+              {(() => {
+                const pickTargetMode = activeEditTarget === "REVERSE" ? "ADD_REVERSE_WAYPOINT" : "ADD_WAYPOINT";
+                const isPicking = adminPickMode === pickTargetMode;
+                return (
+                  <ActionButton
+                    variant="pick"
+                    active={isPicking}
+                    onClick={() => setAdminPickMode(isPicking ? null : pickTargetMode)}
+                  >
+                    {isPicking
+                      ? (forceStraightThrough && routeMode === "DETOUR" ? "คลิกกึ่งกลางแยก..." : "คลิกถนนเพื่อดัด...")
+                      : (forceStraightThrough && routeMode === "DETOUR" ? "+ เพิ่มจุดผ่านแยกตรง" : "+ เพิ่มจุดดัดเส้น")}
+                  </ActionButton>
+                );
+              })()}
+            </ToolGroup>
+
+            <ToolGroup label="ย้อนกลับหรือล้าง">
+              <ActionButton variant="secondary" onClick={handleUndoWaypoint}>
+                <Undo2 className="h-3.5 w-3.5" /> ย้อนกลับ
+              </ActionButton>
+              {(originalRouteCoordsRef.current.length >= 2 || originalReverseRouteCoordsRef.current.length >= 2) && (
+                <ActionButton variant="secondary" className="text-sky-300" onClick={handleRestoreOriginalRoute}>
+                  คืนค่าแนวเดิม
+                </ActionButton>
+              )}
+              <ActionButton variant="danger" onClick={requestClearRoute}>
+                ล้างข้อมูลทั้งหมด
+              </ActionButton>
+            </ToolGroup>
+          </div>
+        )}
+      </div>
+      {!freeEditEnabled && draftWaypoints.length > 0 && (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3" aria-label="รายการจุดดัดเส้น">
+          <p className="mb-2 text-xs font-semibold text-slate-200">จุดดัดเส้น ({draftWaypoints.length} จุด)</p>
+          <div className="flex flex-wrap gap-2">
+            {draftWaypoints.map(([lon, lat], index) => (
+              <div key={`${lon}-${lat}-${index}`} className="flex min-h-10 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-2 text-xs text-slate-300">
+                <span className="font-mono">#{index + 1} · {lat.toFixed(5)}, {lon.toFixed(5)}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveWaypoint(index)}
+                  aria-label={`ลบจุดดัดที่ ${index + 1}`}
+                  className="grid h-8 w-8 place-items-center rounded-md text-red-400 hover:bg-red-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {!freeEditEnabled && supportsTwoWayLineEdit && draftReverseWaypoints.length > 0 && (
+        <div className="rounded-xl border border-sky-900/60 bg-sky-950/30 p-3" aria-label="รายการจุดดัดเส้นขากลับ">
+          <p className="mb-2 text-xs font-semibold text-sky-200">จุดดัดเส้นขากลับ B → A ({draftReverseWaypoints.length} จุด)</p>
+          <div className="flex flex-wrap gap-2">
+            {draftReverseWaypoints.map(([lon, lat], index) => (
+              <div key={`rev-${lon}-${lat}-${index}`} className="flex min-h-10 items-center gap-2 rounded-lg border border-sky-800 bg-slate-950 px-2 text-xs text-sky-200">
+                <span className="font-mono">#R{index + 1} · {lat.toFixed(5)}, {lon.toFixed(5)}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = draftReverseWaypoints.filter((_, i) => i !== index);
+                    setDraftReverseWaypoints?.(next);
+                    if (startLat && startLon && endLat && endLon) {
+                      void triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints, next);
+                    }
+                  }}
+                  aria-label={`ลบจุดดัดขากลับที่ ${index + 1}`}
+                  className="grid h-8 w-8 place-items-center rounded-md text-red-400 hover:bg-red-950"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {routeMode === "DETOUR" && draftCoordinates.length >= 2 && (
+        <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 space-y-2 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-heading font-bold text-amber-300">🔍 พรีวิวตรวจสอบทางเลี่ยงก่อนบันทึก (A-B / B-A Inspector)</span>
+            {closedRoadConflicts.length === 0 ? (
+              <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700 text-[10px] font-bold">
+                ✓ ผ่านเกณฑ์: ไม่ตัดผ่านจุดปิดการจราจร
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full bg-red-950 text-red-200 border border-red-600 text-[10px] font-bold">
+                ✕ พบตัดผ่านจุดปิดการจราจร ({closedRoadConflicts.length} จุด)
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-300">
+            <div className="rounded-lg bg-slate-900 p-2 border border-slate-800">
+              <span className="text-slate-400 block">ขาไป (A → B)</span>
+              <strong className="text-amber-300 font-mono">
+                {detourDirectionMode === "REVERSE_ONLY"
+                  ? "ไม่ใช้ (เดินรถเฉพาะ B→A)"
+                  : `${draftCoordinates.length} จุด${detourDistanceMeters.forward ? ` · ${(detourDistanceMeters.forward / 1000).toFixed(2)} กม.` : ""}`}
+              </strong>
+            </div>
+            <div className="rounded-lg bg-slate-900 p-2 border border-slate-800">
+              <span className="text-slate-400 block">ขากลับ (B → A)</span>
+              <strong className="text-sky-300 font-mono">
+                {detourDirectionMode === "FORWARD_ONLY"
+                  ? "ไม่ใช้ (เดินรถเฉพาะ A→B)"
+                  : detourDirectionMode === "REVERSE_ONLY"
+                    ? `${draftCoordinates.length} จุด${detourDistanceMeters.reverse ? ` · ${(detourDistanceMeters.reverse / 1000).toFixed(2)} กม.` : ""}`
+                    : `${draftReverseCoordinates.length || draftCoordinates.length} จุด${detourDistanceMeters.reverse ? ` · ${(detourDistanceMeters.reverse / 1000).toFixed(2)} กม.` : ""}`}
+              </strong>
+            </div>
+            <div className="rounded-lg bg-slate-900 p-2 border border-slate-800">
+              <span className="text-slate-400 block">โครงสร้างแนวเส้นและลูกศร</span>
+              <strong className="text-emerald-300">
+                {detourDirectionMode === "TWO_WAY" && draftReverseCoordinates.length >= 2
+                  ? analyzeCarriagewaySeparation(draftCoordinates, draftReverseCoordinates).isSymmetricSingleLine
+                    ? "ใช้ถนนสายเดียวกัน (ลูกศร ⇄)"
+                    : "แยกแนวเส้น A→B และ B→A (ลูกศร →)"
+                  : "เดินรถทิศทางเดียว (ลูกศร →)"}
+              </strong>
+            </div>
+          </div>
+          {closedRoadConflicts.length > 0 && (
+            <p className="rounded-lg bg-red-950/70 border border-red-700 p-2 text-[11px] text-red-200">
+              ⚠️ เส้นทางเลี่ยงทับซ้อนช่วงถนนที่ปิดการจราจร: <strong>{closedRoadConflicts.join(", ")}</strong> — กรุณาเพิ่มจุดดัดเส้นเพื่ออ้อมจุดดังกล่าวก่อนเผยแพร่
+            </p>
+          )}
+        </div>
+      )}
+    </FormSection>
+  );
+}
