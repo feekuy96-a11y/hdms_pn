@@ -22,6 +22,11 @@
 5. ค้น `tests/e2e` ด้วยข้อความที่จะเปลี่ยน: `grep -rn "<ข้อความ>" tests/e2e`
 6. รายงาน: ภาพรวมที่เปลี่ยน, ไฟล์, สิ่งที่ตรวจที่ 2 ขนาดจอ, สิ่งที่ยังไม่ได้ดูบนเบราว์เซอร์จริง
 
+### การรัน E2E ในเครื่องแบบประหยัดเวลา (ตกลงแล้ว 2026-11-18)
+- ใช้ `PLAYWRIGHT_STATIC=1` ต่อ `out/` จาก `npm run build:pages` ให้ตรงกับ Production จริง ไม่ต้องรันรอบ `next start` ซ้ำ
+- รันเฉพาะไฟล์ `tests/e2e/*.spec.ts` ที่ตรงกับส่วนที่แก้ ร่วมกับ `tests/e2e/smoke.spec.ts` (ไม่ต้องรันทั้งชุดในเครื่อง) และไม่บังคับ `--workers=1` เพื่อให้ Playwright รันขนานตาม `fullyParallel: true`
+- ใช้ GitHub Actions (`ci.yml`) รันชุด E2E ฉบับเต็มบน static export รอบเดียวตอนเปิด PR
+
 ## P3 งานฐานข้อมูล / RPC
 1. ตรวจนิยามจริง: `SELECT pg_get_functiondef('public.<fn>()'::regprocedure);` (ขอให้เจ้าของรัน หรืออ่านผ่าน MCP แบบอ่านอย่างเดียว) — ห้ามเชื่อไฟล์ใน `db/*.sql`
 2. เขียน migration ใหม่ idempotent (`IF NOT EXISTS`, `CREATE OR REPLACE`, `DROP TRIGGER IF EXISTS`) พร้อมคอมเมนต์: ทำไม / ผลกระทบ / ย้อนกลับอย่างไร

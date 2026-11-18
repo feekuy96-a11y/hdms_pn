@@ -1,5 +1,13 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-110] 2026-11-18 ลดขั้นตอนซ้ำใน GitHub Actions CI/Deploy (`ci.yml`, `deploy.yml`) และกำหนดแนวทาง E2E ในเครื่องเฉพาะส่วนที่แก้
+- **ไฟล์:** `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`, `docs/PLAYBOOKS.md`, `docs/CHANGELOG.md`
+- **การแก้ไข:**
+  1. ปรับ `.github/workflows/ci.yml` และ `.github/workflows/deploy.yml` ให้ตัดรอบ `npm run build` (server mode) + `npm run test:e2e` รอบแรกออก เหลือเฉพาะ `lint` → `typecheck` → `build:pages` (`BASE_PATH=/hdms_pn`) → `test:e2e` (`PLAYWRIGHT_STATIC=1`) รอบเดียว (เดิมใน run `44228006155` รอบ server ใช้ `14s + 84s = 98s` ซ้ำซ้อนกับรอบ static export `12s + 80s`; หลังปรับใน PR #40 run `44230289840` เหลือเวลารวม `230s` ลดลง `94s`)
+  2. บันทึกแนวทางรัน E2E ในเครื่องแบบประหยัดเวลาใน `docs/PLAYBOOKS.md` (`PLAYWRIGHT_STATIC=1` เฉพาะไฟล์ที่เกี่ยวกับงาน + `smoke.spec.ts` แบบขนาน)
+- **ตรวจแล้ว:** `npm run check:deploy`, `smoke.spec.ts` (`8 passed` ใน `25.9s` แบบขนานบน `PLAYWRIGHT_STATIC=1`) และ GitHub Actions `CI` (`run 44230289840` ผ่าน)
+- **ย้อนกลับ:** revert commit นี้ใน GitHub เพื่อคืนรอบ server-mode E2E
+
 ### [UPDATE-108] 2026-11-18 ยกระดับการดึงพื้นที่และคำนวณทางเลี่ยงแบบ Hybrid (Google Maps Platform Tier 1 + Hardened OSRM/Local)
 - **ไฟล์:** `supabase/functions/hdms-api/index.ts`, `lib/hdms-api.ts`, `app/actions/doh-actions.ts`, `lib/area-lookup.ts`, `lib/gis-data.ts`, `lib/gis-utils.ts`, `lib/detour-navigation.ts`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `tests/e2e/hybrid-google-maps.spec.ts` (ใหม่), `docs/*`
 - **การแก้ไข:**

@@ -29,10 +29,8 @@ jobs:
           else
             echo "BASE_PATH=/$REPO" >> "$GITHUB_ENV"
           fi
-      - run: npm run lint && npm run typecheck && npm run build
+      - run: npm run lint && npm run typecheck && npm run build:pages
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
-      - run: npm run build:pages
       - run: npm run test:e2e
         env:
           PLAYWRIGHT_STATIC: "1"
