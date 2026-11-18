@@ -18,6 +18,7 @@ test("incident and detour edit dialogs keep keyboard focus", async ({ page }) =>
   await page.goto(`${base}/admin/`);
   const sidebar = page.getByRole("complementary");
   await sidebar.getByRole("button", { name: /รายการเหตุการณ์/ }).click();
+  await page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ }).first().click();
   const quickUpdate = page.getByRole("button", { name: /อัปเดตด่วน/ }).first();
   await quickUpdate.focus();
   await page.keyboard.press("Enter");
@@ -36,6 +37,18 @@ test("incident and detour edit dialogs keep keyboard focus", async ({ page }) =>
   await page.keyboard.press("Enter");
   const detour = page.getByRole("dialog", { name: "แก้ไขข้อมูลเส้นทางเลี่ยง" });
   await expect(detour).toBeVisible();
+
+  // Regression: typing in detour advice & duration inputs must not lose focus to close button
+  const adviceTextarea = detour.locator("#edit-detour-advice-textarea");
+  await adviceTextarea.click();
+  await page.keyboard.type(" เส้นทางใหม่\n2. ตรงไป");
+  await expect(adviceTextarea).toBeFocused();
+  await expect(adviceTextarea).toHaveValue(/เส้นทางใหม่\n2\. ตรงไป$/);
+
+  const fwdDurationInput = detour.getByLabel(/เวลาโดยประมาณ ขาไป/);
+  await fwdDurationInput.fill("28");
+  await expect(fwdDurationInput).toHaveValue("28");
+
   await detour.getByRole("button", { name: "บันทึกข้อมูล" }).focus();
   await page.keyboard.press("Tab");
   await expect(detour.getByRole("button", { name: "ปิดหน้าต่างแก้ไขเส้นทางเลี่ยง" })).toBeFocused();
@@ -63,6 +76,7 @@ test("split and merge incident dialogs trap Tab and restore focus", async ({ pag
   });
   await page.goto(`${base}/admin/`);
   await page.getByRole("complementary").getByRole("button", { name: /รายการเหตุการณ์/ }).click();
+  await page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ }).first().click();
 
   const splitButton = page.getByRole("button", { name: "แบ่งช่วง", exact: true }).first();
   await splitButton.focus();
@@ -103,6 +117,7 @@ test("incident and detour details open and close with keyboard on desktop and mo
   await page.goto(`${base}/admin/`);
   const menu = (label: string) => page.getByRole("button", { name: label, exact: true }).filter({ visible: true }).first();
   await menu("รายการเหตุการณ์").click();
+  await page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ }).first().click();
   const detailButton = page.getByRole("button", { name: "รายละเอียด", exact: true }).first();
   await detailButton.focus();
   await page.keyboard.press("Enter");

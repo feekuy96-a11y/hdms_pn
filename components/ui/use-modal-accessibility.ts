@@ -11,6 +11,8 @@ const focusableSelector = [
 export function useModalAccessibility(isOpen: boolean, onClose: () => void) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -19,7 +21,7 @@ export function useModalAccessibility(isOpen: boolean, onClose: () => void) {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      onClose();
+      onCloseRef.current();
     };
     window.addEventListener("keydown", closeOnEscape, true);
     const frame = window.requestAnimationFrame(() => {
@@ -32,12 +34,12 @@ export function useModalAccessibility(isOpen: boolean, onClose: () => void) {
       window.removeEventListener("keydown", closeOnEscape, true);
       returnFocusRef.current?.focus?.();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   const onKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape") {
       event.preventDefault();
-      onClose();
+      onCloseRef.current();
       return;
     }
     if (event.key !== "Tab") return;
@@ -57,7 +59,7 @@ export function useModalAccessibility(isOpen: boolean, onClose: () => void) {
       event.preventDefault();
       first.focus();
     }
-  }, [onClose]);
+  }, []);
 
   return { dialogRef, onKeyDown };
 }

@@ -4,8 +4,26 @@ import { parseAdviceText } from "@/lib/advice-format";
 // Shows detour advice the way the owner's document does: a bold direction heading, numbered steps with a bold
 // "จุดเริ่มต้น:" / "จุดสิ้นสุด:", and indented summary lines with a bold label. Text that does not follow the format
 // is still shown line by line, so older advice keeps working. Used on the public page and in the admin preview.
-export function AdviceText({ text, className = "" }: { text: string; className?: string }) {
-  const blocks = React.useMemo(() => parseAdviceText(text), [text]);
+export function AdviceText({
+  text,
+  className = "",
+  hideDistanceAndDuration = false,
+}: {
+  text: string;
+  className?: string;
+  hideDistanceAndDuration?: boolean;
+}) {
+  const blocks = React.useMemo(() => {
+    const parsed = parseAdviceText(text);
+    if (!hideDistanceAndDuration) return parsed;
+    return parsed.filter(
+      (block) =>
+        !(
+          block.kind === "summary" &&
+          /^(?:รวมระยะทาง|ระยะเวลาเดินทาง|ใช้เวลาเดินทาง)/i.test(block.label)
+        )
+    );
+  }, [text, hideDistanceAndDuration]);
   if (blocks.length === 0) return null;
 
   return (

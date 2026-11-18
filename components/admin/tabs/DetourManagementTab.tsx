@@ -21,6 +21,7 @@ import {
   Save,
   Compass,
   Route,
+  Clock,
   Navigation,
   ChevronUp,
   ChevronDown,
@@ -33,15 +34,23 @@ import {
   upsertRouteAction,
 } from "@/app/actions/doh-actions";
 import {
+  composeDirectionalAdvice,
   extractDirectionalAdvice,
+  extractDirectionalAdviceForEdit,
   generateAutoDetourAdvice,
   splitDetourAdviceByDirection,
 } from "@/lib/gis-utils";
 import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
-import { sortDetoursByOrder } from "@/lib/detour-presentation";
+import {
+  calculatePolylineRoadDistanceKm,
+  detourDurationSeconds as readDetourDurationSeconds,
+  isDetourDirectionAllowed,
+  sortDetoursByOrder,
+} from "@/lib/detour-presentation";
 import { parseFloodDirectionMeta } from "@/lib/flood-event-schema";
 import { getLinkedEventsForDetour, type LinkedFloodEventEntry } from "@/lib/event-detour-links";
 import { exportLineFeatures, GisExportFormat, parseLineCoordinates } from "@/lib/gis-export";
+import { DirectionSwitch } from "@/components/ui/DirectionSwitch";
 import { useModalAccessibility } from "@/components/ui/use-modal-accessibility";
 
 interface DetourManagementTabProps {
@@ -81,6 +90,8 @@ export function DetourManagementTab({
   const [editDetourAdviceView, setEditDetourAdviceView] = useState<"FORWARD" | "REVERSE" | "COMBINED">("COMBINED");
   const [editDetourGoogleMapsUrlFwd, setEditDetourGoogleMapsUrlFwd] = useState("");
   const [editDetourGoogleMapsUrlRev, setEditDetourGoogleMapsUrlRev] = useState("");
+  const [editDetourDurationMinFwd, setEditDetourDurationMinFwd] = useState("");
+  const [editDetourDurationMinRev, setEditDetourDurationMinRev] = useState("");
   const [editDetourRoadCondition, setEditDetourRoadCondition] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -252,6 +263,10 @@ export function DetourManagementTab({
     setEditDetourAdviceView("COMBINED");
     setEditDetourGoogleMapsUrlFwd(d.detour_meta?.google_maps_url_forward || d.detour_meta?.google_maps_url || "");
     setEditDetourGoogleMapsUrlRev(d.detour_meta?.google_maps_url_reverse || "");
+    const fwdSec = readDetourDurationSeconds(d.detour_meta, "FORWARD");
+    const revSec = readDetourDurationSeconds(d.detour_meta, "REVERSE");
+    setEditDetourDurationMinFwd(fwdSec ? String(Math.max(1, Math.round(fwdSec / 60))) : "");
+    setEditDetourDurationMinRev(revSec ? String(Math.max(1, Math.round(revSec / 60))) : "");
     setEditDetourRoadCondition(d.detour_meta?.road_condition || "");
   };
 
@@ -364,6 +379,43 @@ export function DetourManagementTab({
         updatedDetourMeta.road_condition = editDetourRoadCondition.trim();
       } else {
         delete updatedDetourMeta.road_condition;
+      }
+
+      const fwdCoordsParsed = typeof editingDetour.coordinates_json === "string"
+        ? JSON.parse(editingDetour.coordinates_json)
+        : editingDetour.coordinates_json;
+      const revCoordsParsed = typeof editingDetour.reverse_coordinates_json === "string"
+        ? JSON.parse(editingDetour.reverse_coordinates_json)
+        : editingDetour.reverse_coordinates_json;
+      const fwdPolyKm = calculatePolylineRoadDistanceKm(fwdCoordsParsed);
+      const revPolyKm = calculatePolylineRoadDistanceKm(
+        Array.isArray(revCoordsParsed) && revCoordsParsed.length >= 2 ? revCoordsParsed : fwdCoordsParsed
+      );
+      if (fwdPolyKm > 0) {
+        updatedDetourMeta.forward_distance_km = fwdPolyKm;
+        updatedDetourMeta.forward_distance_m = Math.round(fwdPolyKm * 1000);
+      }
+      if (revPolyKm > 0 && editingDetour.direction_mode !== "FORWARD_ONLY") {
+        updatedDetourMeta.reverse_distance_km = revPolyKm;
+        updatedDetourMeta.reverse_distance_m = Math.round(revPolyKm * 1000);
+      }
+
+      const parsedFwdMin = Number(editDetourDurationMinFwd);
+      if (Number.isFinite(parsedFwdMin) && parsedFwdMin > 0) {
+        updatedDetourMeta.forward_duration_min = Math.round(parsedFwdMin);
+        updatedDetourMeta.forward_duration_s = Math.round(parsedFwdMin * 60);
+      } else {
+        delete updatedDetourMeta.forward_duration_min;
+        delete updatedDetourMeta.forward_duration_s;
+      }
+
+      const parsedRevMin = Number(editDetourDurationMinRev);
+      if (Number.isFinite(parsedRevMin) && parsedRevMin > 0) {
+        updatedDetourMeta.reverse_duration_min = Math.round(parsedRevMin);
+        updatedDetourMeta.reverse_duration_s = Math.round(parsedRevMin * 60);
+      } else {
+        delete updatedDetourMeta.reverse_duration_min;
+        delete updatedDetourMeta.reverse_duration_s;
       }
 
       const res = await upsertRouteAction({
@@ -1080,25 +1132,56 @@ export function DetourManagementTab({
 
             {/* Directional Tabs for Turn-by-Turn Advice */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-heading font-bold text-amber-300">คำแนะนำการเดินทางทีละขั้นตอน:</span>
-                <div className="flex bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-[10px] font-heading font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setViewingDetourDir("FORWARD")}
-                    className={`px-2.5 py-1 rounded transition cursor-pointer ${viewingDetourDir === "FORWARD" ? "bg-amber-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"}`}
-                  >
-                    🚗 ขาไป (A → B)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewingDetourDir("REVERSE")}
-                    className={`px-2.5 py-1 rounded transition cursor-pointer ${viewingDetourDir === "REVERSE" ? "bg-amber-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"}`}
-                  >
-                    🚙 ขากลับ (B → A)
-                  </button>
-                </div>
+                <DirectionSwitch
+                  size="sm"
+                  ariaLabel="เลือกทิศทางคำแนะนำการเดินทาง"
+                  value={viewingDetourDir}
+                  onChange={setViewingDetourDir}
+                  options={[
+                    {
+                      value: "FORWARD",
+                      label: "→ ขาไป (A → B)",
+                      ariaLabel: "ขาไป A → B",
+                      disabled: !isDetourDirectionAllowed(viewingDetour.direction_mode, "FORWARD"),
+                    },
+                    {
+                      value: "REVERSE",
+                      label: "← ขากลับ (B → A)",
+                      ariaLabel: "ขากลับ B → A",
+                      disabled: !isDetourDirectionAllowed(viewingDetour.direction_mode, "REVERSE"),
+                    },
+                  ]}
+                />
               </div>
+              {(() => {
+                const fwdKm = calculatePolylineRoadDistanceKm(viewingDetour.coordinates_json);
+                const revKm = calculatePolylineRoadDistanceKm(
+                  viewingDetour.reverse_coordinates_json || viewingDetour.coordinates_json
+                );
+                const polyKm = viewingDetourDir === "REVERSE" ? revKm : fwdKm;
+                const durSec = readDetourDurationSeconds(viewingDetour.detour_meta, viewingDetourDir);
+                const durMin = durSec ? Math.max(1, Math.round(durSec / 60)) : null;
+                return (
+                  <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs text-slate-300">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Route className="w-3.5 h-3.5 text-amber-300" />
+                      <span>ระยะทางตามแนวเส้น:</span>
+                      <strong className="text-white font-mono">
+                        {polyKm > 0 ? `${polyKm.toFixed(1)} กม.` : "ไม่ระบุ"}
+                      </strong>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-sky-300" />
+                      <span>เวลาโดยประมาณ:</span>
+                      <strong className="text-white font-mono">
+                        {durMin ? `ประมาณ ${durMin} นาที` : "ยังไม่มีข้อมูลเวลาเดินทาง"}
+                      </strong>
+                    </span>
+                  </div>
+                );
+              })()}
               {(() => {
                 const ext = extractDirectionalAdvice(viewingDetour.description || "");
                 const parsed = splitDetourAdviceByDirection(viewingDetour.description || "", viewingDetour.direction_mode);
@@ -1233,43 +1316,22 @@ export function DetourManagementTab({
               {/* Row 2: Directional Advice Header & Switch Tabs */}
               <div className="p-3 bg-amber-950/30 border border-amber-600/40 rounded-xl space-y-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-heading font-bold text-amber-300 flex items-center gap-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label htmlFor="edit-detour-advice-textarea" className="text-xs font-heading font-bold text-amber-300 flex items-center gap-1">
                       <Compass className="w-3.5 h-3.5" />
                       <span>คำแนะนำเส้นทางเลี่ยงสำหรับประชาชน</span>
                     </label>
-                    <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-800 text-[10px] font-heading font-bold">
-                      <button
-                        type="button"
-                        onClick={() => setEditDetourAdviceView("FORWARD")}
-                        className={`px-2 py-0.5 rounded transition ${editDetourAdviceView === "FORWARD"
-                            ? "bg-amber-500 text-slate-950"
-                            : "text-slate-400 hover:text-white"
-                          }`}
-                      >
-                        🚗 ขาไป (A → B)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditDetourAdviceView("REVERSE")}
-                        className={`px-2 py-0.5 rounded transition ${editDetourAdviceView === "REVERSE"
-                            ? "bg-amber-500 text-slate-950"
-                            : "text-slate-400 hover:text-white"
-                          }`}
-                      >
-                        🚙 ขากลับ (B → A)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditDetourAdviceView("COMBINED")}
-                        className={`px-2 py-0.5 rounded transition ${editDetourAdviceView === "COMBINED"
-                            ? "bg-amber-500 text-slate-950"
-                            : "text-slate-400 hover:text-white"
-                          }`}
-                      >
-                        📋 ทั้ง ๒ ทิศทาง
-                      </button>
-                    </div>
+                    <DirectionSwitch
+                      size="sm"
+                      ariaLabel="เลือกมุมมองทิศทางคำแนะนำ"
+                      value={editDetourAdviceView}
+                      onChange={setEditDetourAdviceView}
+                      options={[
+                        { value: "FORWARD", label: "→ ขาไป (A → B)", ariaLabel: "ขาไป A → B" },
+                        { value: "REVERSE", label: "← ขากลับ (B → A)", ariaLabel: "ขากลับ B → A" },
+                        { value: "COMBINED", label: "⇄ ทั้ง ๒ ทิศทาง", ariaLabel: "ทั้ง ๒ ทิศทาง" },
+                      ]}
+                    />
                   </div>
 
                   <button
@@ -1281,35 +1343,102 @@ export function DetourManagementTab({
                   </button>
                 </div>
 
-                <textarea
-                  rows={8}
-                  value={
-                    editDetourAdviceView === "FORWARD"
-                      ? extractDirectionalAdvice(editDetourDesc).forward
-                      : editDetourAdviceView === "REVERSE"
-                        ? extractDirectionalAdvice(editDetourDesc).reverse
-                        : editDetourDesc
-                  }
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (editDetourAdviceView === "FORWARD") {
-                      const ext = extractDirectionalAdvice(editDetourDesc);
-                      setEditDetourDesc(
-                        `=== ทิศทางขาไป: จุด A → จุด B ===\n${val}\n\n=== ทิศทางขากลับ: จุด B → จุด A ===\n${ext.reverse}`
-                      );
-                    } else if (editDetourAdviceView === "REVERSE") {
-                      const ext = extractDirectionalAdvice(editDetourDesc);
-                      setEditDetourDesc(
-                        `=== ทิศทางขาไป: จุด A → จุด B ===\n${ext.forward}\n\n=== ทิศทางขากลับ: จุด B → จุด A ===\n${val}`
-                      );
-                    } else {
-                      setEditDetourDesc(val);
-                    }
-                  }}
-                  placeholder="กรอกคำแนะนำการเดินทาง หรือกด 'วิเคราะห์คำแนะนำอัตโนมัติ'..."
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-mono leading-relaxed"
-                />
+                {(() => {
+                  const editParts = extractDirectionalAdviceForEdit(editDetourDesc);
+                  return (
+                    <textarea
+                      id="edit-detour-advice-textarea"
+                      rows={8}
+                      value={
+                        editDetourAdviceView === "FORWARD"
+                          ? editParts.forward
+                          : editDetourAdviceView === "REVERSE"
+                            ? editParts.reverse
+                            : editDetourDesc
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (editDetourAdviceView === "FORWARD" || editDetourAdviceView === "REVERSE") {
+                          const forwardText = editDetourAdviceView === "FORWARD" ? val : editParts.forward;
+                          const reverseText = editDetourAdviceView === "REVERSE" ? val : editParts.reverse;
+                          setEditDetourDesc(
+                            composeDirectionalAdvice(
+                              editParts.forwardHeader,
+                              forwardText,
+                              editParts.reverseHeader,
+                              reverseText
+                            )
+                          );
+                        } else {
+                          setEditDetourDesc(val);
+                        }
+                      }}
+                      placeholder="กรอกคำแนะนำการเดินทาง หรือกด 'วิเคราะห์คำแนะนำอัตโนมัติ'..."
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-mono leading-relaxed"
+                    />
+                  );
+                })()}
               </div>
+
+              {/* Row 2.2: Estimated Duration (Minutes) + Polyline Distance Preview */}
+              {(() => {
+                const fwdKm = calculatePolylineRoadDistanceKm(editingDetour.coordinates_json);
+                const revKm = calculatePolylineRoadDistanceKm(
+                  editingDetour.reverse_coordinates_json || editingDetour.coordinates_json
+                );
+                return (
+                  <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-heading font-bold text-sky-300 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>เวลาเดินทางโดยประมาณสำหรับประชาชน (นาที)</span>
+                      </span>
+                      {fwdKm > 0 && (
+                        <span className="text-[11px] text-amber-200 font-mono">
+                          ระยะทางเส้นจริง: ขาไป {fwdKm.toFixed(1)} กม.
+                          {editingDetour.direction_mode === "TWO_WAY" && revKm > 0 ? ` · ขากลับ ${revKm.toFixed(1)} กม.` : ""}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label htmlFor="edit-detour-duration-fwd" className="text-[11px] text-slate-300 block mb-1">
+                          เวลาโดยประมาณ ขาไป (A → B) (นาที):
+                        </label>
+                        <input
+                          id="edit-detour-duration-fwd"
+                          type="number"
+                          min={1}
+                          max={1440}
+                          step={1}
+                          disabled={editingDetour.direction_mode === "REVERSE_ONLY"}
+                          value={editDetourDurationMinFwd}
+                          onChange={(e) => setEditDetourDurationMinFwd(e.target.value)}
+                          placeholder="เช่น 25"
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 font-mono disabled:opacity-40"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="edit-detour-duration-rev" className="text-[11px] text-slate-300 block mb-1">
+                          เวลาโดยประมาณ ขากลับ (B → A) (นาที):
+                        </label>
+                        <input
+                          id="edit-detour-duration-rev"
+                          type="number"
+                          min={1}
+                          max={1440}
+                          step={1}
+                          disabled={editingDetour.direction_mode === "FORWARD_ONLY"}
+                          value={editDetourDurationMinRev}
+                          onChange={(e) => setEditDetourDurationMinRev(e.target.value)}
+                          placeholder="เช่น 25"
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 font-mono disabled:opacity-40"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Row 2.5: Approved Google Maps Navigation URLs */}
               <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2.5">

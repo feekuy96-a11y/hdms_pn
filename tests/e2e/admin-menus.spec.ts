@@ -247,8 +247,13 @@ test("incident and detour records use consistent symbols and detail controls", a
   await page.goto(`${base}/admin/`);
   await openMenu(page, "รายการเหตุการณ์");
   await expect(page.getByRole("heading", { name: "ทะเบียนเหตุการณ์น้ำท่วม" })).toBeVisible();
-  const floodSymbol = page.locator('[title="จุดน้ำท่วม"]').first();
+  const expandFirst = page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ }).first();
   const emptyIncident = page.getByText("ไม่พบรายการเหตุการณ์", { exact: false });
+  await expect(expandFirst.or(emptyIncident)).toBeVisible();
+  if (await expandFirst.isVisible()) {
+    await expandFirst.click();
+  }
+  const floodSymbol = page.locator('[title="จุดน้ำท่วม"]').first();
   await expect(floodSymbol.or(emptyIncident)).toBeVisible();
 
   await openMenu(page, "รายการทางเลี่ยง");
@@ -476,6 +481,14 @@ test("incident registry hides event codes, verifies complete saves, uses map flo
   await page.setViewportSize({ width: 1050, height: 820 });
   await page.goto(`${base}/admin/`);
   await openMenu(page, "รายการเหตุการณ์");
+
+  // Default collapsed: child segments start hidden until user expands the event
+  await expect(page.locator(".doh-incident-segment")).toHaveCount(0);
+  const expandBtns = page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ });
+  const expandCount = await expandBtns.count();
+  for (let i = 0; i < expandCount; i++) {
+    await expandBtns.first().click();
+  }
 
   const completeCard = page.locator(".doh-incident-segment").filter({ hasText: "26+790" }).first();
   await expect(completeCard).toBeVisible();

@@ -166,12 +166,19 @@ test("compact flood card, detour jump link, ordered exclusive accordion, and rea
   await expect(dialog.getByText("ทางเลี่ยงหลัก สาย ก", { exact: true })).toBeVisible();
   await expect(dialog.getByText("นำทางด้วย Google Maps")).toHaveCount(0);
 
-  // Expand first accordion -> shows full advice, Google Maps button & Map focus button inside this detour panel
+  // Direct action buttons are visible on the collapsed detour card without expanding first
+  const firstCardWrapper = dialog.locator('[data-detour-card="D-FIRST"]');
+  await expect(firstCardWrapper.getByRole("link", { name: /นำทางด้วย Google Maps/ })).toBeVisible();
+  await expect(firstCardWrapper.getByRole("button", { name: /ดูตำแหน่งบนแผนที่/ })).toBeVisible();
+
+  // Expand first accordion -> hides header summary (no duplicate) and shows metrics in 2-col grid below
   await firstTrigger.click();
   await expect(firstTrigger).toHaveAttribute("aria-expanded", "true");
+  await expect(firstTrigger).not.toContainText("เวลาประมาณ 5 นาที");
   const firstPanel = dialog.locator("#dossier-detour-panel-D-FIRST");
-  await expect(firstPanel.getByRole("link", { name: /นำทางด้วย Google Maps/ })).toBeVisible();
-  await expect(firstPanel.getByRole("button", { name: /ดูตำแหน่งบนแผนที่/ })).toBeVisible();
+  await expect(firstPanel).toContainText("เวลาประมาณ 5 นาที");
+  await expect(firstCardWrapper.getByRole("link", { name: /นำทางด้วย Google Maps/ })).toBeVisible();
+  await expect(firstCardWrapper.getByRole("button", { name: /ดูตำแหน่งบนแผนที่/ })).toBeVisible();
 
   // Expand second accordion -> exclusively collapses the first
   await secondTrigger.click();
@@ -425,9 +432,9 @@ test("map flood pin opens summary popup without stacking, per-route detour direc
   const r1Trigger = dialog.getByRole("button", { name: /ทางเลี่ยงที่ 1 – ทางเลี่ยงหลัก สาย 1/ });
   await r1Trigger.click();
   const r1Panel = dialog.locator("#dossier-detour-panel-D-MAP-1");
-  await r1Panel.getByRole("button", { name: "⇄ B → A" }).click();
+  await r1Panel.getByRole("button", { name: "← B → A" }).click();
   await expect(r1Panel.getByText(/จุดเริ่มต้น: แยกบ้านดี/)).toBeVisible();
-  await expect(r1Panel.getByText("14.1 กม.")).toBeVisible();
+  await expect(r1Panel.getByText("1.6 กม.")).toBeVisible();
   await expect(r1Panel.getByText("เวลาประมาณ 16 นาที")).toBeVisible();
 
   const r2Trigger = dialog.getByRole("button", { name: /ทางเลี่ยงที่ 2 – ทางเลี่ยงรอง สาย 2/ });

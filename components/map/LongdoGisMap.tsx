@@ -305,8 +305,9 @@ function buildDetourPopupHtml(
   ].filter(Boolean);
   const endHint = areaParts.length ? `(${areaParts.join(" ")})` : "";
 
-  const fwdRoadKm = detour.detour_meta?.forward_distance_km || calculatePolylineRoadDistanceKm(detour.coordinates_json);
-  const revRoadKm = detour.detour_meta?.reverse_distance_km || calculatePolylineRoadDistanceKm(detour.reverse_coordinates_json || detour.coordinates_json);
+  const fwdRoadKm = calculatePolylineRoadDistanceKm(detour.coordinates_json);
+  const revPolyKmRaw = calculatePolylineRoadDistanceKm(detour.reverse_coordinates_json);
+  const revRoadKm = revPolyKmRaw > 0 ? revPolyKmRaw : fwdRoadKm;
 
   const forwardPresentation = getDetourTimelinePresentation(
     forwardText,
@@ -334,8 +335,8 @@ function buildDetourPopupHtml(
         .join(" · ")
     : (detour.flood_id_ref ? "เชื่อมโยงจุดน้ำท่วม" : "ทางเลี่ยงอิสระ (โครงข่ายทางหลวง)");
 
-  const activeBtnClass = "flex-1 min-h-[38px] py-2 px-2.5 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 bg-[#f59e0b] text-slate-950 font-black shadow-md";
-  const inactiveBtnClass = "flex-1 min-h-[38px] py-2 px-2.5 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 bg-[#13203c] border border-slate-700/80 text-slate-200 hover:text-white";
+  const activeBtnClass = "min-h-[38px] py-1.5 px-2.5 text-xs font-black rounded-lg transition cursor-pointer flex items-center justify-center gap-1 bg-[#f59e0b] text-slate-950 shadow-sm";
+  const inactiveBtnClass = "min-h-[38px] py-1.5 px-2.5 text-xs font-semibold rounded-lg transition cursor-pointer flex items-center justify-center gap-1 text-slate-300 hover:bg-slate-800/70 hover:text-white";
 
   return `
     <div class="doh-detour-popup text-xs p-3.5 w-[min(380px,calc(100vw-36px))] max-w-full font-body bg-[#070d1e] text-white rounded-2xl select-text">
@@ -361,26 +362,28 @@ function buildDetourPopupHtml(
 
       <div class="mt-2.5">
         <div class="text-xs font-bold text-slate-200 mb-1.5">เลือกทิศทางการเดินทาง</div>
-        <div class="flex gap-2">
+        <div role="group" aria-label="เลือกทิศทางการเดินทาง" class="grid grid-cols-2 gap-1 rounded-xl border border-slate-700/80 bg-[#060d1b] p-1">
           <button
             type="button"
             id="detour-btn-fwd-${safeId}"
+            aria-label="ขาไป A → B"
+            aria-pressed="${!isRev && fwdAllowed ? "true" : "false"}"
             ${fwdAllowed ? "" : "disabled aria-disabled=\"true\""}
             onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'FORWARD')"
             class="${!isRev && fwdAllowed ? activeBtnClass : inactiveBtnClass} disabled:opacity-35 disabled:cursor-not-allowed"
           >
-            <span aria-hidden="true">🚗</span>
-            <span>ขาไป (A ➔ B)</span>
+            <span>→ ขาไป (A → B)</span>
           </button>
           <button
             type="button"
             id="detour-btn-rev-${safeId}"
+            aria-label="ขากลับ B → A"
+            aria-pressed="${isRev ? "true" : "false"}"
             ${revAllowed ? "" : "disabled aria-disabled=\"true\""}
             onclick="window.__toggleDetourPopupDir && window.__toggleDetourPopupDir('${safeId}', 'REVERSE')"
             class="${isRev ? activeBtnClass : inactiveBtnClass} disabled:opacity-35 disabled:cursor-not-allowed"
           >
-            <span aria-hidden="true">🚙</span>
-            <span>ขากลับ (B ➔ A)</span>
+            <span>← ขากลับ (B → A)</span>
           </button>
         </div>
         ${recorded ? "" : `<p class="mt-1.5 text-[11px] text-amber-300" role="status">⚠️ ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>`}
@@ -851,12 +854,14 @@ export function LongdoGisMap({
       const navSub = document.getElementById(`detour-nav-subtext-${id}`);
       if (!fwdBtn || !revBtn || !fwdDesc || !revDesc) return;
 
-      const activeClasses = "flex-1 min-h-[38px] py-2 px-2.5 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 bg-[#f59e0b] text-slate-950 font-black shadow-md disabled:opacity-35 disabled:cursor-not-allowed";
-      const inactiveClasses = "flex-1 min-h-[38px] py-2 px-2.5 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 bg-[#13203c] border border-slate-700/80 text-slate-200 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed";
+      const activeClasses = "min-h-[38px] py-1.5 px-2.5 text-xs font-black rounded-lg transition cursor-pointer flex items-center justify-center gap-1 bg-[#f59e0b] text-slate-950 shadow-sm disabled:opacity-35 disabled:cursor-not-allowed";
+      const inactiveClasses = "min-h-[38px] py-1.5 px-2.5 text-xs font-semibold rounded-lg transition cursor-pointer flex items-center justify-center gap-1 text-slate-300 hover:bg-slate-800/70 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed";
 
       if (dir === "FORWARD") {
         fwdBtn.className = activeClasses;
         revBtn.className = inactiveClasses;
+        fwdBtn.setAttribute("aria-pressed", "true");
+        revBtn.setAttribute("aria-pressed", "false");
         fwdDesc.classList.remove("hidden");
         fwdDesc.classList.add("block");
         revDesc.classList.remove("block");
@@ -865,6 +870,8 @@ export function LongdoGisMap({
       } else {
         revBtn.className = activeClasses;
         fwdBtn.className = inactiveClasses;
+        revBtn.setAttribute("aria-pressed", "true");
+        fwdBtn.setAttribute("aria-pressed", "false");
         revDesc.classList.remove("hidden");
         revDesc.classList.add("block");
         fwdDesc.classList.remove("block");

@@ -19,6 +19,7 @@ test("admin report and confirmation dialogs restore keyboard focus", async ({ pa
   await expect(page.getByRole("button", { name: "ออกรายงานเสนอผู้ว่าฯ (ด่วนที่สุด)" })).toHaveCount(0);
 
   await page.getByRole("complementary").getByRole("button", { name: /รายการเหตุการณ์/ }).click();
+  await page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ }).first().click();
   const deleteButton = page.getByRole("button", { name: "ลบช่วงนี้ (กู้คืนได้)" }).first();
   await deleteButton.focus();
   await page.keyboard.press("Enter");

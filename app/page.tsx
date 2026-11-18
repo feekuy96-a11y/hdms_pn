@@ -82,6 +82,7 @@ import {
   Camera,
   TrendingUp,
 } from "lucide-react";
+import { DirectionSwitch } from "@/components/ui/DirectionSwitch";
 import { extractDirectionalAdvice, splitDetourAdviceByDirection } from "@/lib/gis-utils";
 import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
 import {
@@ -95,7 +96,6 @@ import {
   getDetourTimelinePresentation,
   isDetourDirectionAllowed,
   isRecordedDetourDirection,
-  parseDetourAdvice,
 } from "@/lib/detour-presentation";
 import {
   getHighwayIdsForDetour,
@@ -1403,11 +1403,7 @@ export default function HomePage() {
                                   effectiveDirection === "REVERSE" && revCoords.length > 0
                                     ? revCoords
                                     : fwdCoords;
-                                const polyKm =
-                                  (effectiveDirection === "REVERSE"
-                                    ? route.detour_meta?.reverse_distance_km
-                                    : route.detour_meta?.forward_distance_km) ||
-                                  calculatePolylineRoadDistanceKm(polyCoords);
+                                const polyKm = calculatePolylineRoadDistanceKm(polyCoords);
                                 const ext = extractDirectionalAdvice(route.description || "");
                                 const parsed = splitDetourAdviceByDirection(route.description || "", route.direction_mode);
                                 const displayText =
@@ -1428,14 +1424,12 @@ export default function HomePage() {
                                   durationSec
                                 );
                                 const shortSummary = getDetourShortSummary(displayText || route.description || "");
-                                const { notes: warnings } = parseDetourAdvice(displayText || "");
-                                const detourNav = isExpanded
-                                  ? resolveDetourGoogleMapsNavigation(route, effectiveDirection, systemData.floodRoutes)
-                                  : null;
+                                const detourNav = resolveDetourGoogleMapsNavigation(route, effectiveDirection, systemData.floodRoutes);
 
                                 return (
                                   <div
                                     key={route.id}
+                                    data-detour-card={route.id}
                                     className={`rounded-2xl border transition ${isExpanded
                                         ? "border-[#f59e0b] bg-[#0b162a] shadow-lg"
                                         : "border-slate-700/80 bg-[#0d1930]/80 hover:border-amber-400/60"
@@ -1446,7 +1440,7 @@ export default function HomePage() {
                                       aria-expanded={isExpanded}
                                       aria-controls={`dossier-detour-panel-${route.id}`}
                                       onClick={() => setExpandedDetourId((current) => (current === route.id ? null : route.id))}
-                                      className="flex w-full min-h-12 cursor-pointer items-start justify-between gap-2.5 rounded-2xl p-3.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                                      className="flex w-full min-h-12 cursor-pointer items-start justify-between gap-2.5 rounded-t-2xl p-3.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                                     >
                                       <span className="flex min-w-0 flex-1 items-start gap-2.5">
                                         <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-mono text-xs font-black ${isExpanded ? "bg-[#f59e0b] text-slate-950" : "bg-sky-200/90 text-slate-950"
@@ -1463,17 +1457,19 @@ export default function HomePage() {
                                               {shortSummary}
                                             </span>
                                           )}
-                                          <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-slate-300">
-                                            <span className="inline-flex items-center gap-1 font-medium text-amber-200">
-                                              <Route aria-hidden="true" className="h-3 w-3 shrink-0" />
-                                              {timeline.totalDistanceKm > 0 ? `${timeline.totalDistanceFormatted} กม.` : "ไม่ระบุระยะทาง"}
+                                          {!isExpanded && (
+                                            <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-slate-300">
+                                              <span className="inline-flex items-center gap-1 font-medium text-amber-200">
+                                                <Route aria-hidden="true" className="h-3 w-3 shrink-0" />
+                                                {timeline.totalDistanceKm > 0 ? `${timeline.totalDistanceFormatted} กม.` : "ไม่ระบุระยะทาง"}
+                                              </span>
+                                              <span aria-hidden="true" className="text-slate-600">|</span>
+                                              <span className="inline-flex items-center gap-1 text-slate-200">
+                                                <Clock aria-hidden="true" className="h-3 w-3 shrink-0 text-sky-300" />
+                                                {timeline.estimatedDurationText}
+                                              </span>
                                             </span>
-                                            <span aria-hidden="true" className="text-slate-600">|</span>
-                                            <span className="inline-flex items-center gap-1 text-slate-200">
-                                              <Clock aria-hidden="true" className="h-3 w-3 shrink-0 text-sky-300" />
-                                              {timeline.estimatedDurationText}
-                                            </span>
-                                          </span>
+                                          )}
                                         </span>
                                       </span>
                                       <ChevronDown
@@ -1487,53 +1483,43 @@ export default function HomePage() {
                                         id={`dossier-detour-panel-${route.id}`}
                                         className="space-y-3 border-t border-slate-700/70 p-3.5 pt-3"
                                       >
-                                        {/* Advice Steps for this route's direction */}
+                                        {/* Advice Steps for this route's direction (without duplicated distance/duration lines) */}
                                         {displayText ? (
-                                          <AdviceText text={displayText} className="text-xs sm:text-sm text-slate-200 leading-relaxed" />
+                                          <AdviceText
+                                            text={displayText}
+                                            hideDistanceAndDuration
+                                            className="text-xs sm:text-sm text-slate-200 leading-relaxed"
+                                          />
                                         ) : (
                                           <p className="text-xs text-slate-400">ยังไม่มีคำแนะนำการเดินทาง</p>
                                         )}
 
-                                        {warnings.length > 0 && (
-                                          <div className="rounded-xl border border-amber-500/35 bg-amber-950/40 px-3 py-2 text-xs text-amber-200 space-y-1">
-                                            {warnings.map((w, wIdx) => (
-                                              <p key={wIdx}>⚠️ {w}</p>
-                                            ))}
-                                          </div>
-                                        )}
-
-                                        {/* Per-Detour Direction Selector (isolated per route.id) */}
+                                        {/* Per-Detour Direction Switch (isolated per route.id) */}
                                         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-700/80 bg-[#091325] p-2">
                                           <span className="px-1.5 text-xs font-semibold text-slate-300">ทิศทางของเส้นทางนี้</span>
-                                          <div className="flex flex-1 min-w-[200px] items-center gap-1.5">
-                                            <button
-                                              type="button"
-                                              disabled={!isDetourDirectionAllowed(route.direction_mode, "FORWARD")}
-                                              aria-pressed={effectiveDirection === "FORWARD"}
-                                              onClick={() => setDetourDirectionById((prev) => ({ ...prev, [route.id]: "FORWARD" }))}
-                                              className={`flex-1 min-h-9 cursor-pointer rounded-lg px-2.5 py-1.5 font-heading text-xs font-bold transition flex items-center justify-center gap-1 disabled:opacity-35 disabled:cursor-not-allowed ${effectiveDirection === "FORWARD"
-                                                  ? "bg-[#f59e0b] text-slate-950 font-black shadow"
-                                                  : "border border-slate-700 bg-[#111e36] text-slate-200 hover:bg-slate-800"
-                                                }`}
-                                            >
-                                              <span>→ A → B</span>
-                                            </button>
-                                            <button
-                                              type="button"
-                                              disabled={!isDetourDirectionAllowed(route.direction_mode, "REVERSE")}
-                                              aria-pressed={effectiveDirection === "REVERSE"}
-                                              onClick={() => setDetourDirectionById((prev) => ({ ...prev, [route.id]: "REVERSE" }))}
-                                              className={`flex-1 min-h-9 cursor-pointer rounded-lg px-2.5 py-1.5 font-heading text-xs font-bold transition flex items-center justify-center gap-1 disabled:opacity-35 disabled:cursor-not-allowed ${effectiveDirection === "REVERSE"
-                                                  ? "bg-[#f59e0b] text-slate-950 font-black shadow"
-                                                  : "border border-slate-700 bg-[#111e36] text-slate-200 hover:bg-slate-800"
-                                                }`}
-                                            >
-                                              <span>⇄ B → A</span>
-                                            </button>
-                                          </div>
+                                          <DirectionSwitch
+                                            size="sm"
+                                            fullWidth
+                                            className="flex-1 min-w-[200px]"
+                                            ariaLabel={`ทิศทางของเส้นทางนี้ ${route.route_name}`}
+                                            value={effectiveDirection}
+                                            onChange={(nextDir) => setDetourDirectionById((prev) => ({ ...prev, [route.id]: nextDir }))}
+                                            options={[
+                                              {
+                                                value: "FORWARD",
+                                                label: "→ A → B",
+                                                disabled: !isDetourDirectionAllowed(route.direction_mode, "FORWARD"),
+                                              },
+                                              {
+                                                value: "REVERSE",
+                                                label: "← B → A",
+                                                disabled: !isDetourDirectionAllowed(route.direction_mode, "REVERSE"),
+                                              },
+                                            ]}
+                                          />
                                         </div>
 
-                                        {/* Distance & Duration Metrics Grid (Real DB Values Only) */}
+                                        {/* Distance & Duration Metrics Grid (Line Length + Admin Duration) */}
                                         <div className="grid grid-cols-2 gap-2.5">
                                           <div className="rounded-xl border border-slate-700/80 bg-[#0d1930] px-3 py-2 flex items-center gap-2.5">
                                             <Route aria-hidden="true" className="h-5 w-5 shrink-0 text-slate-300" />
@@ -1554,53 +1540,53 @@ export default function HomePage() {
                                             </div>
                                           </div>
                                         </div>
-
-                                        {/* Per-Detour Navigation & Focus Actions */}
-                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                          {detourNav && detourNav.isValid && detourNav.url ? (
-                                            <a
-                                              href={detourNav.url}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              aria-label="นำทางด้วย Google Maps"
-                                              className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] px-3 py-2 font-heading text-xs sm:text-sm font-black text-slate-950 shadow-md transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
-                                            >
-                                              <Navigation aria-hidden="true" className="h-4 w-4 shrink-0" />
-                                              <span>นำทาง</span>
-                                            </a>
-                                          ) : (
-                                            <span
-                                              className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/90 px-3 py-2 font-heading text-xs text-slate-300"
-                                              title={detourNav?.warning || "ยังไม่ยืนยันนำทางอัตโนมัติ"}
-                                            >
-                                              <Navigation aria-hidden="true" className="h-4 w-4 shrink-0 opacity-60" />
-                                              <span>ยังไม่ยืนยันนำทางอัตโนมัติ</span>
-                                            </span>
-                                          )}
-
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              if (Number.isFinite(route.lon_start) && Number.isFinite(route.lat_start)) {
-                                                setFocusCoordinates([route.lon_start, route.lat_start]);
-                                              } else if (Array.isArray(polyCoords) && polyCoords.length > 0 && Array.isArray(polyCoords[0])) {
-                                                const mid = polyCoords[Math.floor(polyCoords.length / 2)];
-                                                const a = Number(mid[0]);
-                                                const b = Number(mid[1]);
-                                                if (Number.isFinite(a) && Number.isFinite(b)) {
-                                                  setFocusCoordinates(Math.abs(a) <= 90 && Math.abs(b) > 90 ? [b, a] : [a, b]);
-                                                }
-                                              }
-                                              setShowDossier(false);
-                                            }}
-                                            className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-600/80 bg-[#13203c] hover:bg-[#1a2b50] px-3 py-2 font-heading text-xs sm:text-sm font-bold text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
-                                          >
-                                            <MapPinned aria-hidden="true" className="h-4 w-4 shrink-0 text-sky-300" />
-                                            <span>ดูตำแหน่งบนแผนที่</span>
-                                          </button>
-                                        </div>
                                       </div>
                                     )}
+
+                                    {/* Per-Detour Navigation & Focus Actions (Always visible directly on list item) */}
+                                    <div className="grid grid-cols-2 gap-2 border-t border-slate-700/60 px-3.5 py-2.5">
+                                      {detourNav && detourNav.isValid && detourNav.url ? (
+                                        <a
+                                          href={detourNav.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          aria-label="นำทางด้วย Google Maps"
+                                          className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] px-2.5 py-2 font-heading text-xs sm:text-sm font-black text-slate-950 shadow-md transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                                        >
+                                          <Navigation aria-hidden="true" className="h-4 w-4 shrink-0" />
+                                          <span>นำทาง</span>
+                                        </a>
+                                      ) : (
+                                        <span
+                                          className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/90 px-2.5 py-2 font-heading text-[11px] sm:text-xs text-slate-300 text-center leading-tight"
+                                          title={detourNav?.warning || "ยังไม่ยืนยันนำทางอัตโนมัติ"}
+                                        >
+                                          <Navigation aria-hidden="true" className="h-4 w-4 shrink-0 opacity-60" />
+                                          <span>ยังไม่ยืนยันนำทางอัตโนมัติ</span>
+                                        </span>
+                                      )}
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (Number.isFinite(route.lon_start) && Number.isFinite(route.lat_start)) {
+                                            setFocusCoordinates([route.lon_start, route.lat_start]);
+                                          } else if (Array.isArray(polyCoords) && polyCoords.length > 0 && Array.isArray(polyCoords[0])) {
+                                            const mid = polyCoords[Math.floor(polyCoords.length / 2)];
+                                            const a = Number(mid[0]);
+                                            const b = Number(mid[1]);
+                                            if (Number.isFinite(a) && Number.isFinite(b)) {
+                                              setFocusCoordinates(Math.abs(a) <= 90 && Math.abs(b) > 90 ? [b, a] : [a, b]);
+                                            }
+                                          }
+                                          setShowDossier(false);
+                                        }}
+                                        className="flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-600/80 bg-[#13203c] hover:bg-[#1a2b50] px-2.5 py-2 font-heading text-xs sm:text-sm font-bold text-white leading-tight text-center transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                                      >
+                                        <MapPinned aria-hidden="true" className="h-4 w-4 shrink-0 text-sky-300" />
+                                        <span>ดูตำแหน่งบนแผนที่</span>
+                                      </button>
+                                    </div>
                                   </div>
                                 );
                               })}
@@ -1618,28 +1604,16 @@ export default function HomePage() {
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <span className="text-xs font-heading font-bold text-amber-300">คำแนะนำเพิ่มเติมจากเหตุการณ์</span>
                                 {directionalAdvice.hasBoth && (
-                                  <div className="flex items-center rounded-lg border border-slate-700 bg-slate-950/80 p-0.5 text-[11px] font-heading font-bold">
-                                    <button
-                                      type="button"
-                                      onClick={() => setEventAdviceDirection("FORWARD")}
-                                      className={`min-h-8 cursor-pointer rounded px-2 py-1 transition ${eventAdviceDirection === "FORWARD"
-                                          ? "bg-amber-500 text-slate-950 shadow"
-                                          : "text-amber-300/80 hover:text-white"
-                                        }`}
-                                    >
-                                      → A → B
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setEventAdviceDirection("REVERSE")}
-                                      className={`min-h-8 cursor-pointer rounded px-2 py-1 transition ${eventAdviceDirection === "REVERSE"
-                                          ? "bg-amber-500 text-slate-950 shadow"
-                                          : "text-amber-300/80 hover:text-white"
-                                        }`}
-                                    >
-                                      ⇄ B → A
-                                    </button>
-                                  </div>
+                                  <DirectionSwitch
+                                    size="sm"
+                                    ariaLabel="ทิศทางคำแนะนำเพิ่มเติมจากเหตุการณ์"
+                                    value={eventAdviceDirection}
+                                    onChange={setEventAdviceDirection}
+                                    options={[
+                                      { value: "FORWARD", label: "→ A → B" },
+                                      { value: "REVERSE", label: "← B → A" },
+                                    ]}
+                                  />
                                 )}
                               </div>
                               {(() => {
@@ -1949,36 +1923,26 @@ export default function HomePage() {
                     <label className="text-sm font-semibold text-slate-200 block mb-2">
                       เลือกทิศทางการเดินทาง
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        aria-label="ขาไป A → B"
-                        disabled={!isDetourDirectionAllowed(viewingDetourModal.direction_mode, "FORWARD")}
-                        aria-pressed={modalDetourDirection === "FORWARD"}
-                        onClick={() => setModalDetourDirection("FORWARD")}
-                        className={`min-h-11 rounded-xl px-3 py-2.5 font-heading text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-35 ${modalDetourDirection === "FORWARD"
-                          ? "bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 shadow-md font-black"
-                          : "bg-[#13203c] border border-slate-700/60 hover:bg-[#1a2b50] text-slate-200"
-                          }`}
-                      >
-                        <span aria-hidden="true">🚗</span>
-                        <span>ขาไป (A ➔ B)</span>
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="ขากลับ B → A"
-                        disabled={!isDetourDirectionAllowed(viewingDetourModal.direction_mode, "REVERSE")}
-                        aria-pressed={modalDetourDirection === "REVERSE"}
-                        onClick={() => setModalDetourDirection("REVERSE")}
-                        className={`min-h-11 rounded-xl px-3 py-2.5 font-heading text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-35 ${modalDetourDirection === "REVERSE"
-                          ? "bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 shadow-md font-black"
-                          : "bg-[#13203c] border border-slate-700/60 hover:bg-[#1a2b50] text-slate-200"
-                          }`}
-                      >
-                        <span aria-hidden="true">🚙</span>
-                        <span>ขากลับ (B ➔ A)</span>
-                      </button>
-                    </div>
+                    <DirectionSwitch
+                      fullWidth
+                      ariaLabel="เลือกทิศทางการเดินทาง"
+                      value={modalDetourDirection}
+                      onChange={setModalDetourDirection}
+                      options={[
+                        {
+                          value: "FORWARD",
+                          label: "→ ขาไป (A → B)",
+                          ariaLabel: "ขาไป A → B",
+                          disabled: !isDetourDirectionAllowed(viewingDetourModal.direction_mode, "FORWARD"),
+                        },
+                        {
+                          value: "REVERSE",
+                          label: "← ขากลับ (B → A)",
+                          ariaLabel: "ขากลับ B → A",
+                          disabled: !isDetourDirectionAllowed(viewingDetourModal.direction_mode, "REVERSE"),
+                        },
+                      ]}
+                    />
                     {!isRecordedDetourDirection(viewingDetourModal.direction_mode) && (
                       <p className="text-xs text-amber-300 mt-1.5 flex items-center gap-1.5" role="status">
                         <span>⚠️</span>ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง
@@ -2001,11 +1965,7 @@ export default function HomePage() {
                       modalDetourDirection === "REVERSE" && revCoords.length > 0
                         ? revCoords
                         : fwdCoords;
-                    const fallbackPolyKm =
-                      (modalDetourDirection === "REVERSE"
-                        ? viewingDetourModal.detour_meta?.reverse_distance_km
-                        : viewingDetourModal.detour_meta?.forward_distance_km) ||
-                      calculatePolylineRoadDistanceKm(polyCoords);
+                    const fallbackPolyKm = calculatePolylineRoadDistanceKm(polyCoords);
                     const linked = getLinkedEventsForDetour(viewingDetourModal, systemData)[0]?.primaryFlood ?? null;
                     const startHint = linked ? `ทล.${linked.route_no} (${linked.section_name})` : viewingDetourModal.route_name;
                     const areaText = linked ? formatFloodAreaLine(linked) : null;

@@ -79,7 +79,7 @@ export function IncidentRegistryTab({
 }: IncidentRegistryTabProps) {
   const [incidentFilter, setIncidentFilter] = useState<"ALL" | "ACTIVE" | "RESOLVED">("ACTIVE");
   const [incidentSearch, setIncidentSearch] = useState("");
-  const [deleted, setDeleted] = useState<{id: string; route_no: string; section_name: string}[] | null>(null);
+  const [deleted, setDeleted] = useState<{ id: string; route_no: string; section_name: string }[] | null>(null);
   const [updateModalIncident, setUpdateModalIncident] = useState<FloodRoute | null>(null);
   const [viewingIncident, setViewingIncident] = useState<FloodRoute | null>(null);
   const [newWaterLevel, setNewWaterLevel] = useState<number>(0);
@@ -89,8 +89,8 @@ export function IncidentRegistryTab({
   const [selectedIncidentIds, setSelectedIncidentIds] = useState<Set<string>>(() => new Set());
   const [exportScope, setExportScope] = useState<"FILTERED" | "ALL" | "SELECTED">("FILTERED");
 
-  // Phase 2 & Phase 4: Hierarchy, Split & Merge states
-  const [collapsedEvents, setCollapsedEvents] = useState<Set<string>>(() => new Set());
+  // Phase 2 & Phase 4: Hierarchy, Split & Merge states (default collapsed to keep parent list clean)
+  const [expandedEvents, setExpandedEvents] = useState<Set<string>>(() => new Set());
   const [splitModalIncident, setSplitModalIncident] = useState<FloodRoute | null>(null);
   const [splitKm, setSplitKm] = useState<string>("");
   const [splitNewWaterLevel, setSplitNewWaterLevel] = useState<number>(0);
@@ -356,34 +356,34 @@ export function IncidentRegistryTab({
           : segB.traffic_status;
 
       // 3. Update segA to be the merged span
-        const mergedSide = resolveEffectiveRoadSide(segA);
-        await upsertRouteAction({
-          id: segA.id,
-          recordType: "FLOOD",
-          routeNo: segA.route_no,
-          kmStart: combinedKmStart,
-          kmEnd: combinedKmEnd,
-          sectionName: segA.section_name,
-          waterLevelCm: combinedWaterLevel,
-          trafficStatus: combinedStatus,
-          isActive: true,
-          latStart: pStart[1],
-          lonStart: pStart[0],
-          latEnd: pEnd[1],
-          lonEnd: pEnd[0],
-          coordinates: combinedCoords,
-          latestPhotoUrl: segA.latest_photo_url || segB.latest_photo_url || undefined,
+      const mergedSide = resolveEffectiveRoadSide(segA);
+      await upsertRouteAction({
+        id: segA.id,
+        recordType: "FLOOD",
+        routeNo: segA.route_no,
+        kmStart: combinedKmStart,
+        kmEnd: combinedKmEnd,
+        sectionName: segA.section_name,
+        waterLevelCm: combinedWaterLevel,
+        trafficStatus: combinedStatus,
+        isActive: true,
+        latStart: pStart[1],
+        lonStart: pStart[0],
+        latEnd: pEnd[1],
+        lonEnd: pEnd[0],
+        coordinates: combinedCoords,
+        latestPhotoUrl: segA.latest_photo_url || segB.latest_photo_url || undefined,
+        roadSide: mergedSide,
+        affectedLanes: segA.affected_lanes || segB.affected_lanes,
+        affectedShoulder: segA.affected_shoulder || segB.affected_shoulder,
+        reporterName: segA.reporter_name || segB.reporter_name,
+        directionMeta: {
+          ...metaA,
           roadSide: mergedSide,
-          affectedLanes: segA.affected_lanes || segB.affected_lanes,
-          affectedShoulder: segA.affected_shoulder || segB.affected_shoulder,
-          reporterName: segA.reporter_name || segB.reporter_name,
-          directionMeta: {
-            ...metaA,
-            roadSide: mergedSide,
-            updatedAt: new Date().toISOString(),
-            causeAndNote: `${metaA.causeAndNote || ""} (รวมช่วงกับ กม.${segB.km_start}–${segB.km_end})`.trim(),
-          },
-        });
+          updatedAt: new Date().toISOString(),
+          causeAndNote: `${metaA.causeAndNote || ""} (รวมช่วงกับ กม.${segB.km_start}–${segB.km_end})`.trim(),
+        },
+      });
 
       // 4. Deactivate segB
       await setIncidentStatusAction(segB.id, false);
@@ -574,33 +574,30 @@ export function IncidentRegistryTab({
           <button
             type="button"
             onClick={() => setIncidentFilter("ACTIVE")}
-            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition ${
-              incidentFilter === "ACTIVE"
+            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition ${incidentFilter === "ACTIVE"
                 ? "bg-red-600 text-white"
                 : "bg-slate-900 text-slate-300 hover:bg-slate-800"
-            }`}
+              }`}
           >
             กำลังเกิดเหตุ ({activeCount})
           </button>
           <button
             type="button"
             onClick={() => setIncidentFilter("RESOLVED")}
-            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition ${
-              incidentFilter === "RESOLVED"
+            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition ${incidentFilter === "RESOLVED"
                 ? "bg-emerald-600 text-white"
                 : "bg-slate-900 text-slate-300 hover:bg-slate-800"
-            }`}
+              }`}
           >
             ปกติแล้ว ({resolvedCount})
           </button>
           <button
             type="button"
             onClick={() => setIncidentFilter("ALL")}
-            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition ${
-              incidentFilter === "ALL"
+            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition ${incidentFilter === "ALL"
                 ? "bg-amber-500 text-slate-950"
                 : "bg-slate-900 text-slate-300 hover:bg-slate-800"
-            }`}
+              }`}
           >
             ทั้งหมด ({totalCount})
           </button>
@@ -626,7 +623,7 @@ export function IncidentRegistryTab({
           </div>
         ) : (
           parentEvents.map((ev) => {
-            const isCollapsed = collapsedEvents.has(ev.eventId);
+            const isCollapsed = !expandedEvents.has(ev.eventId);
             const statusConfig = getDetailedTrafficPresentation(ev.mostSevereStatus, ev.maxWaterLevelCm);
             const incompleteCount = ev.segments.filter(
               (seg) => getFloodCompletenessIssues(seg, seg._meta || parseFloodDirectionMeta(seg.direction_meta, seg)).length > 0
@@ -688,15 +685,17 @@ export function IncidentRegistryTab({
                     </button>
                     <button
                       type="button"
+                      aria-expanded={!isCollapsed}
+                      aria-label={isCollapsed ? `กางดูช่วงย่อยทั้งหมด ${ev.eventTitle || ev.sectionName}` : `ย่อเก็บช่วงย่อย ${ev.eventTitle || ev.sectionName}`}
                       onClick={() => {
-                        setCollapsedEvents((prev) => {
+                        setExpandedEvents((prev) => {
                           const next = new Set(prev);
-                          if (isCollapsed) next.delete(ev.eventId);
+                          if (next.has(ev.eventId)) next.delete(ev.eventId);
                           else next.add(ev.eventId);
                           return next;
                         });
                       }}
-                      className="min-h-9 min-w-9 flex items-center justify-center p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                      className="min-h-9 min-w-9 flex items-center justify-center p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
                       title={isCollapsed ? "กางดูช่วงย่อยทั้งหมด" : "ย่อเก็บช่วงย่อย"}
                     >
                       {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
@@ -839,11 +838,10 @@ export function IncidentRegistryTab({
                               <button
                                 type="button"
                                 onClick={() => handleToggleIncidentStatus(r.id, r.is_active)}
-                                className={`min-h-9 px-2.5 py-1.5 rounded-lg text-xs font-heading font-semibold transition border whitespace-nowrap cursor-pointer ${
-                                  r.is_active
+                                className={`min-h-9 px-2.5 py-1.5 rounded-lg text-xs font-heading font-semibold transition border whitespace-nowrap cursor-pointer ${r.is_active
                                     ? "bg-slate-800 text-slate-300 hover:bg-emerald-950 hover:text-emerald-300 border-slate-700"
                                     : "bg-emerald-950 text-emerald-300 hover:bg-emerald-900 border-emerald-700"
-                                }`}
+                                  }`}
                               >
                                 {r.is_active ? "คืนปกติ" : "เปิดใหม่"}
                               </button>
@@ -923,10 +921,10 @@ export function IncidentRegistryTab({
                   {viewingIncident.road_side === "LEFT"
                     ? "ฝั่งซ้าย (ตามหลัก กม.)"
                     : viewingIncident.road_side === "RIGHT"
-                    ? "ฝั่งขวา (ย้อนหลัก กม.)"
-                    : viewingIncident.road_side === "BOTH"
-                    ? "ทั้ง ๒ ฝั่ง (ไป-กลับ)"
-                    : "รอตรวจสอบฝั่งทาง"}
+                      ? "ฝั่งขวา (ย้อนหลัก กม.)"
+                      : viewingIncident.road_side === "BOTH"
+                        ? "ทั้ง ๒ ฝั่ง (ไป-กลับ)"
+                        : "รอตรวจสอบฝั่งทาง"}
                 </dd>
               </div>
               <div>
@@ -939,10 +937,10 @@ export function IncidentRegistryTab({
                   {viewingIncident.affected_shoulder === "BOTH"
                     ? "ไหล่ทางทั้งสองฝั่ง"
                     : viewingIncident.affected_shoulder === "LEFT"
-                    ? "ไหล่ทางฝั่งซ้าย"
-                    : viewingIncident.affected_shoulder === "RIGHT"
-                    ? "ไหล่ทางฝั่งขวา"
-                    : "ไม่มีผลกระทบ"}
+                      ? "ไหล่ทางฝั่งซ้าย"
+                      : viewingIncident.affected_shoulder === "RIGHT"
+                        ? "ไหล่ทางฝั่งขวา"
+                        : "ไม่มีผลกระทบ"}
                 </dd>
               </div>
               <div>
@@ -1001,8 +999,8 @@ export function IncidentRegistryTab({
                               {entry.effectiveDetourDirection === "FORWARD"
                                 ? "ขาไป (A → B)"
                                 : entry.effectiveDetourDirection === "REVERSE"
-                                ? "ขากลับ (B → A)"
-                                : "๒ ทิศทาง (A ⇄ B)"}
+                                  ? "ขากลับ (B → A)"
+                                  : "๒ ทิศทาง (A ⇄ B)"}
                             </span>
                             {!entry.detour.is_active && (
                               <span className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-300 border border-slate-700">
@@ -1203,11 +1201,10 @@ export function IncidentRegistryTab({
                           key={c.id}
                           type="button"
                           onClick={() => setTargetMergeIncidentId(c.id)}
-                          className={`w-full text-left p-2.5 rounded-xl border transition flex items-center justify-between gap-2 cursor-pointer ${
-                            isSelected
+                          className={`w-full text-left p-2.5 rounded-xl border transition flex items-center justify-between gap-2 cursor-pointer ${isSelected
                               ? "bg-indigo-950/90 border-indigo-400 text-white ring-1 ring-indigo-400"
                               : "bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-300"
-                          }`}
+                            }`}
                         >
                           <div>
                             <div className="font-bold text-amber-300 font-mono">
