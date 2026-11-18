@@ -1,5 +1,13 @@
 ﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-123] 2026-11-19 ปรับสีเส้นทางเลี่ยง 2 ทิศทางให้ตรงสไตล์ที่ตั้งไว้ พร้อมแยกหมุด A→B / B→A และปลดล็อกดัดเส้นอิสระ
+- **ไฟล์:** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/RouteGeometryEditorSection.tsx`, `app/admin/page.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF,UI_CONTRACT}.md`
+- **การแก้ไข:**
+  1. **แก้สี/ลวดลาย/ลูกศรทางเลี่ยง 2 ทิศทางให้ตรงกับสไตล์เส้นทาง (`components/map/LongdoGisMap.tsx`):** ถอดค่าสีฟ้า `#38bdf8` ที่ hardcode ไว้บนเส้นขากลับ B→A, ลูกศรขากลับ และเส้นพรีวิวร่างออก แล้วใช้ `mapStyles.detour` (รวมถึง `dashArrayFor` สำหรับ `dot` / `long-dash-dot` และ `resolveVisibleArrowColor`) ทั้งขาไปและขากลับเช่นเดียวกับเส้นน้ำท่วม พร้อมใช้ `dashArrayFor` บนเส้นน้ำท่วมด้วย
+  2. **แยกหมุดจุดเริ่ม–จุดสิ้นสุดฝั่งขากลับ (B → A) สำหรับโหมด 2 ทิศทาง (`RouteGeometryEditorSection.tsx`, `MapManagementTab.tsx`, `app/admin/page.tsx`, `LongdoGisMap.tsx`):** เพิ่มการ์ด `หมุดเส้นทางขากลับ (B → A)` (`PICK_REV_START` / `PICK_REV_END`, คลาส `.doh-draft-rev-endpoint`, ปุ่ม `แยกหมุด B→A บนแผนที่`) รองรับทั้งทางเลี่ยง 2 ทิศทางและน้ำท่วม 2 ฝั่งแยกกัน พร้อม fallback ไป B→A เดิมเมื่อยังไม่แยกหมุด
+  3. **ปลดล็อกการดัดเส้นอิสระ (`ดัดเส้นอิสระ`) สำหรับทั้งขาไป–ขากลับ (`MapManagementTab.tsx`, `LongdoGisMap.tsx`, `RouteGeometryEditorSection.tsx`):** ซ่อน `draftPickMarkers` ขณะเปิดโหมดดัดจุดดัดอิสระเพื่อไม่ให้แย่งลากหมุดปลายทาง, ปลดบล็อกการย้ายหมุดปลายทางและต่อปลายเส้น (`ADD_LINE_VERTEX`), เพิ่ม `revDraftLineRef` ให้ลากพรีวิวเส้นขากลับลื่นไหล, และปรับ `updateFreeGeometry` ให้ซิงค์พิกัดปลายทางฝั่งขากลับแยกจากขาไป
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Push ขึ้น `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
 ### [UPDATE-122] 2026-11-19 Apply SQL Migration B-023 (`event_detour_both_directions`) บน Supabase Production
 - **ไฟล์:** `supabase/migrations/20261118000100_event_detour_both_directions.sql`, `docs/{CHANGELOG,AI_HANDOFF,BACKLOG,KNOWN_ISSUES}.md`
 - **การดำเนินการ:**

@@ -53,13 +53,13 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** Apply SQL Migration B-023 (`event_detour_both_directions`) บน Supabase Production และอัปเดตเอกสารระบบ (`UPDATE-122`)
-- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `ac3f5da` — `UPDATE-121`)
-- **ไฟล์ที่แก้ไขแล้ว:** `docs/{CHANGELOG,AI_HANDOFF,BACKLOG,KNOWN_ISSUES}.md`
+- **งานที่กำลังทำ / เป้าหมาย:** ปรับสีเส้นทางเลี่ยง 2 ทิศทางให้ตรงสไตล์เส้นทาง แยกหมุด A→B / B→A และปลดล็อกดัดเส้นอิสระ (`UPDATE-123`)
+- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `039f6ea` — ฝั่งโค้ดหลัก commit แล้ว เหลือเทสปรับพิกัด + เอกสารในเครื่อง)
+- **ไฟล์ที่แก้ไขแล้ว:** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/{MapManagementTab,RouteGeometryEditorSection}.tsx`, `app/admin/page.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF,UI_CONTRACT}.md`
 - **สิ่งที่ทำสำเร็จ:**
-  - รัน migration `20261118000100_event_detour_both_directions.sql` เข้า Supabase Production ผ่าน `supabase_apply_migration` สำเร็จ
-  - ปรับ check constraints ตาราง `doh_event_detour_links` ให้รองรับ `BOTH`/`TWO_WAY` และอัปเดตฟังก์ชัน `doh_replace_event_detour_links`
-  - ปิดประเด็นค้าง Backlog B-023 และ Known Issue KI-013 ครบวงจร
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี; รอ commit & push บันทึกเอกสารขึ้น `main`
-- **ผลทดสอบล่าสุด:** การรัน migration สำเร็จ (`{"success": true}`), หน้าเว็บ Production `https://feekuy96-a11y.github.io/hdms_pn/` ตอบ HTTP 200, Edge Function `hdms-api` v23 ทำงานปกติ
-- **ขั้นตอนถัดไป:** Commit และ push การบันทึกสถานะขึ้น `main`
+  - แก้สี/ลวดลาย/ลูกศรทางเลี่ยงฝั่งขากลับและพรีวิวให้ใช้ `mapStyles.detour` (`dashArrayFor` + `resolveVisibleArrowColor`) แทนค่า hardcode `#38bdf8`
+  - เพิ่มหมุดจุดเริ่ม–ปลายขากลับแยกอิสระ (`PICK_REV_START` / `PICK_REV_END`, `.doh-draft-rev-endpoint`) และซิงค์กับ OSRM/Google routing และ freeform edit
+  - ปลดล็อกการลากหมุดปลายทาง/ต่อปลายเส้นในโหมด `ดัดเส้นอิสระ` พร้อมแก้ bug พรีวิวเส้นขากลับขณะลาก (`revDraftLineRef`)
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** รอเจ้าของ commit/push ส่วนเทสที่ปรับปรุงและเอกสารขึ้น `origin/main` เพื่อ deploy Pages
+- **ผลทดสอบล่าสุด:** ดูผล `npm run check:deploy` และ Playwright Static E2E หลังแก้เอกสารรอบล่าสุด
+- **ขั้นตอนถัดไป:** เจ้าของตรวจสอบและ push ขึ้น `origin/main` เพื่อ trigger Deploy GitHub Pages
