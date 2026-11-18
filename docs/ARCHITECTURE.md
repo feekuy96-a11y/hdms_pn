@@ -41,7 +41,7 @@
 - ตาราง: `doh_flood_routes`, `doh_detour_routes`, `doh_timeline_updates`, `doh_mitigation_projects`, `doh_highway_layers`, `doh_offices`, `doh_map_styles`, `doh_system_settings` (+ `deleted_at` soft delete บน flood/detour)
 - ความสัมพันธ์ Event↔Detour หลายต่อหลายอยู่ใน Production แล้วผ่าน migration `20261117135032_event_detour_relationships.sql` และ `20261118000100_event_detour_both_directions.sql` (รองรับทิศทาง `BOTH` และ `TWO_WAY`). Edge `hdms-api` มี `getEventDetourLinksAction`, `replaceEventDetourLinksAction` และแนบ `eventDetourLinks`/`eventSegments`/`floodEvents` มากับ `getSystemDataAction` และ `getPublicSystemDataAction` (ฝั่ง Public กรองเฉพาะรายการ active และตัด `WITHDRAWN`/`UNAVAILABLE`/Draft ออก). UI ทั้ง Admin (`EventDetourLinkModal`, `IncidentRegistryTab`, `DetourManagementTab`), Public (`app/page.tsx`) และแผนที่ (`LongdoGisMap.tsx`) อ่านผ่านตัวช่วยกลางใน `lib/event-detour-links.ts` (แสดง `RECOMMENDED` + `PENDING` พร้อม fallback กับ `flood_id_ref` เดิม).
 - RPC: `doh_get_system_data_rpc` (Admin เต็ม), `doh_get_system_data_display_rpc` (display ภายใน), `doh_get_public_system_data_display_rpc` (ประชาชนเฉพาะ active), `doh_import_routes_rpc` (รับ LineString ≥ 2 จุด WGS84), `doh_update_timeline_rpc`, `doh_snap_line_rpc`
-- trigger `trg_doh_highway_layer_geom` สร้างคอลัมน์ `geom`; `trg_doh_highway_layer_display` สร้าง `geojson_display`
+- trigger `trg_doh_highway_layer_geom` สร้างคอลัมน์ `geom`; `trg_doh_highway_layer_display` สร้าง `geojson_display`; `trg_doh_sync_flood_event_segment` และ `trg_doh_sync_detour_delete` ซิงก์ตาราง `doh_flood_events`/`doh_event_segments`/`doh_event_detour_links` และล้าง `flood_id_ref` อัตโนมัติเมื่อมีการลบ/กู้คืนจุดน้ำท่วมหรือทางเลี่ยง (`20261118000200`); `doh_detour_has_active_event_link` ให้ RLS `doh_detour_deleted_visibility` และ `doh_get_public_system_data_display_rpc` รองรับ M2M links
 - **ไฟล์ SQL ในรีโปไม่ใช่สถานะจริงของ DB** — มีการแพตช์ฟังก์ชันภายหลังด้วย `pg_get_functiondef` + `replace` (เช่น soft delete) ก่อนแก้ฟังก์ชันใดต้องอ่านนิยามจริงจาก DB ก่อน (R4)
 - สถานะจราจรที่ DB รับ: `PASSABLE`, `LIGHT_VEHICLES_ONLY`, `ONE_LANE`, `CLOSED`, `WARNING` (constraint `chk_doh_flood_traffic_status`, `chk_doh_timeline_traffic_status`)
 - การเปลี่ยน schema: ไฟล์ใหม่ใน `supabase/migrations/` ชื่อ `YYYYMMDDHHMMSS_คำอธิบาย.sql`, idempotent, มีคอมเมนต์ "ทำไม/ย้อนกลับอย่างไร", ผู้ใช้รันเองใน SQL Editor หรือ `supabase db push`
@@ -74,8 +74,8 @@
 
 ## 7. ทดสอบและ CI/CD
 - `tests/e2e/*.spec.ts` (Playwright; โปรเจกต์ `desktop-chromium` = Desktop Chrome 1280×720, `mobile-chromium` = Pixel 7) mock ที่ `**/functions/v1/hdms-api` จึงตอบทุก action ด้วยข้อมูลชุดเดียว
-- `.github/workflows/ci.yml` (PR + push main): lint → typecheck → build → e2e (server) → build:pages → e2e (static)
-- `.github/workflows/deploy.yml` (push main + manual): lint → typecheck → build:pages → deploy **ไม่รอ CI และไม่รัน e2e** ดู B-003
+- `.github/workflows/ci.yml` (PR + push main): lint → typecheck → build:pages → e2e (static)
+- `.github/workflows/deploy.yml` (push main + manual): lint → typecheck → build:pages → e2e (static) → deploy (ดูประวัติ B-003)
 - `npm run check` = lint + typecheck + `build` (ไม่ใช่ `build:pages`) จึงอาจผ่านทั้งที่ deploy ไม่ผ่าน
 
 ## 8. โค้ดเก่าที่ไม่อยู่ใน path จริง (ห้ามขยาย ดู B-007)

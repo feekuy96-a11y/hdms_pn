@@ -436,3 +436,86 @@ export function interpolateKmFromCoordinate(
   };
 }
 
+export interface AvailableHighwayOption {
+  no: string;
+  name: string;
+  sectionName?: string;
+  kmStart?: string;
+  kmEnd?: string;
+  responsibleOffice?: string;
+  sortOrder: number;
+}
+
+/**
+ * Extract sorted highway route options strictly from database payloads
+ * (highwayLayers, floodRoutes, and mitigationProjects) with no hardcoded fallback routes.
+ */
+export function getAvailableHighwayRoutes(
+  systemData?: {
+    highwayLayers?: Array<{ geojson_data?: any }>;
+    floodRoutes?: Array<{ route_no?: string; section_name?: string; km_start?: string; km_end?: string }>;
+    mitigationProjects?: Array<{ route_no?: string; location_name?: string }>;
+  } | null,
+  options?: { uniqueRouteNo?: boolean }
+): AvailableHighwayOption[] {
+  const list: AvailableHighwayOption[] = [];
+  const seen = new Set<string>();
+  const uniqueByRouteNo = Boolean(options?.uniqueRouteNo);
+
+  const pushRoute = (
+    rawNo: unknown,
+    rawSection?: unknown,
+    rawKmStart?: unknown,
+    rawKmEnd?: unknown,
+    rawOffice?: unknown
+  ) => {
+    if (!rawNo) return;
+    const cleanNo = String(rawNo).replace(/^ทล\.?/i, "").trim();
+    if (!cleanNo) return;
+    const section = rawSection ? String(rawSection).trim() : "";
+    const kmS = rawKmStart ? String(rawKmStart).trim() : "";
+    const kmE = rawKmEnd ? String(rawKmEnd).trim() : "";
+    const key = uniqueByRouteNo ? cleanNo : `${cleanNo}_${section}_${kmS}_${kmE}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const num = Number(cleanNo.match(/\d+/)?.[0] ?? Infinity);
+    list.push({
+      no: cleanNo,
+      name: section ? `ทล.${cleanNo} - ${section}` : `ทล.${cleanNo}`,
+      sectionName: section,
+      kmStart: kmS,
+      kmEnd: kmE,
+      responsibleOffice: rawOffice ? String(rawOffice).trim() : undefined,
+      sortOrder: num,
+    });
+  };
+
+  (systemData?.highwayLayers || []).forEach((layer) => {
+    const features = layer?.geojson_data?.features;
+    if (!Array.isArray(features)) return;
+    features.forEach((f: any) => {
+      const props = f?.properties || {};
+      pushRoute(
+        props.route_no || props.route_code || props.ROAD_NO || props.route || props.code,
+        props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name,
+        props.km_start,
+        props.km_end,
+        props.responsible_office
+      );
+    });
+  });
+
+  (systemData?.floodRoutes || []).forEach((r) => {
+    pushRoute(r.route_no, r.section_name, r.km_start, r.km_end);
+  });
+
+  (systemData?.mitigationProjects || []).forEach((p) => {
+    pushRoute(p.route_no, p.location_name);
+  });
+
+  return list.sort((a, b) => {
+    if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+    return a.no.localeCompare(b.no, "th", { numeric: true }) || a.name.localeCompare(b.name, "th");
+  });
+}
+

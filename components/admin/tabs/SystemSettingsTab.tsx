@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { SystemDataPayload, DohOfficeLocation } from "@/db/default-data";
-import { APP_CONFIG, DEFAULT_DOH_OFFICES } from "@/lib/constants";
+import { APP_CONFIG } from "@/lib/constants";
 import { Settings, Building, Plus, Edit, Trash2, Phone, ExternalLink, Upload, Image as ImageIcon, MapPin } from "lucide-react";
 import { updateSystemSettingsAction, saveOfficeAction, deleteOfficeAction } from "@/app/actions/doh-actions";
 import { compressImageToBase64 } from "@/lib/gis-utils";
@@ -394,8 +394,13 @@ export function SystemSettingsTab({
         )}
 
         {/* Office Items List */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {(systemData.offices || DEFAULT_DOH_OFFICES).map((off) => (
+        {(systemData.offices || []).length === 0 ? (
+          <div className="bg-slate-950/70 border border-dashed border-slate-700 rounded-2xl p-6 text-center text-xs text-slate-400">
+            ยังไม่มีข้อมูลสำนักงานหรือหมวดทางหลวงในฐานข้อมูล — กด &quot;เพิ่มสำนักงาน / หมวดฯ&quot; ด้านบนเพื่อบันทึกข้อมูลจริง
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(systemData.offices || []).map((off) => (
             <div
               key={off.id}
               className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2 relative"
@@ -459,7 +464,8 @@ export function SystemSettingsTab({
               </div>
             </div>
           ))}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

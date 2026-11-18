@@ -673,9 +673,15 @@ Deno.serve(async (req) => {
               (l.recommendation === "RECOMMENDED" || l.recommendation === "PENDING")
             );
           } else {
-            normalized.eventSegments = allSegments;
-            normalized.floodEvents = allEvents;
-            normalized.eventDetourLinks = allLinks;
+            const nonDeletedFloodIds = new Set((normalized.floodRoutes || []).map((f: any) => f.id));
+            const nonDeletedDetourIds = new Set((normalized.detourRoutes || []).map((d: any) => d.id));
+            const adminSegments = allSegments.filter((s: any) => nonDeletedFloodIds.has(s.flood_id));
+            const adminEventIds = new Set(adminSegments.map((s: any) => s.event_id));
+            normalized.eventSegments = adminSegments;
+            normalized.floodEvents = allEvents.filter((e: any) => adminEventIds.has(e.id));
+            normalized.eventDetourLinks = allLinks.filter((l: any) =>
+              adminEventIds.has(l.eventId) && nonDeletedDetourIds.has(l.detourId)
+            );
           }
         }
       } catch {
