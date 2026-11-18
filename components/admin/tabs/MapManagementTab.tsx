@@ -306,15 +306,24 @@ export function MapManagementTab({
       if (freePast.current.length > 30) freePast.current.shift();
       freeFuture.current = [];
     }
-    if (activeEditTarget === "REVERSE") setDraftReverseCoordinates?.(next);
-    else setDraftCoordinates(next);
-    // Keep the form's A/B coordinates aligned if an endpoint handle is dragged.
-    const reversed = activeEditTarget === "REVERSE" || (routeMode === "DETOUR" ? detourDirectionMode === "REVERSE_ONLY" : directionCode === "B_TO_A");
-    const pointA = reversed ? next[next.length - 1] : next[0];
-    const pointB = reversed ? next[0] : next[next.length - 1];
-    if (pointA && pointB) {
-      setStartLon(pointA[0]); setStartLat(pointA[1]);
-      setEndLon(pointB[0]); setEndLat(pointB[1]);
+    if (activeEditTarget === "REVERSE") {
+      setDraftReverseCoordinates?.(next);
+      const revStart = next[0];
+      const revEnd = next[next.length - 1];
+      if (revStart && revEnd) {
+        setRevStartLon(revStart[0]); setRevStartLat(revStart[1]);
+        setRevEndLon(revEnd[0]); setRevEndLat(revEnd[1]);
+      }
+    } else {
+      setDraftCoordinates(next);
+      // Keep the form's A/B coordinates aligned if an endpoint handle is dragged.
+      const reversed = routeMode === "DETOUR" ? detourDirectionMode === "REVERSE_ONLY" : directionCode === "B_TO_A";
+      const pointA = reversed ? next[next.length - 1] : next[0];
+      const pointB = reversed ? next[0] : next[next.length - 1];
+      if (pointA && pointB) {
+        setStartLon(pointA[0]); setStartLat(pointA[1]);
+        setEndLon(pointB[0]); setEndLat(pointB[1]);
+      }
     }
     setSnappingStatusText("แก้แนวเส้นอิสระแล้ว — ระบบจะบันทึกตามแนวที่เห็น ไม่คำนวณถนนใหม่อัตโนมัติ");
     setFreeHistoryVersion((v) => v + 1);
@@ -337,10 +346,6 @@ export function MapManagementTab({
       if (vertexEvent.type !== "insert" || vertexEvent.index < 0 || vertexEvent.index > coords.length) return;
     }
     if ((vertexEvent.type === "move" || vertexEvent.type === "insert") && vertexEvent.coord) {
-      if (vertexEvent.index === 0 || (vertexEvent.type === "move" && vertexEvent.index === coords.length - 1) || (vertexEvent.type === "insert" && vertexEvent.index >= coords.length)) {
-        onToast("จุด A/B เป็นหมุดอ้างอิง กรุณาปักหมุดใหม่และคำนวณเส้นหากต้องการย้ายจุดต้นหรือปลาย");
-        return;
-      }
       const valid = vertexEvent.coord.every(Number.isFinite) && Math.abs(vertexEvent.coord[0]) <= 180 && Math.abs(vertexEvent.coord[1]) <= 90;
       if (!valid) return;
       const next = vertexEvent.type === "move"
@@ -348,8 +353,8 @@ export function MapManagementTab({
         : insertVertex(coords, vertexEvent.index, vertexEvent.coord);
       updateFreeGeometry(next);
     } else if (vertexEvent.type === "contextmenu" || (vertexEvent.type === "click" && freeVertexTool === "delete")) {
-      if (vertexEvent.index === 0 || vertexEvent.index === coords.length - 1) {
-        onToast("ไม่สามารถลบหมุด A/B ได้ กรุณาย้ายหมุดแทน");
+      if (coords.length <= 2) {
+        onToast("เส้นทางต้องมีจุดอย่างน้อย ๒ จุด");
         return;
       }
       updateFreeGeometry(removeVertex(coords, vertexEvent.index));
@@ -377,12 +382,50 @@ export function MapManagementTab({
   const [endLon, setEndLon] = useState<number | string>("");
   const [startCoordinateText, setStartCoordinateText] = useState("");
   const [endCoordinateText, setEndCoordinateText] = useState("");
+  const [revStartLat, setRevStartLat] = useState<number | string>("");
+  const [revStartLon, setRevStartLon] = useState<number | string>("");
+  const [revEndLat, setRevEndLat] = useState<number | string>("");
+  const [revEndLon, setRevEndLon] = useState<number | string>("");
+  const [revStartCoordinateText, setRevStartCoordinateText] = useState("");
+  const [revEndCoordinateText, setRevEndCoordinateText] = useState("");
   useEffect(() => {
     setStartCoordinateText(startLat !== "" && startLon !== "" ? `${startLat}, ${startLon}` : "");
   }, [startLat, startLon]);
   useEffect(() => {
     setEndCoordinateText(endLat !== "" && endLon !== "" ? `${endLat}, ${endLon}` : "");
   }, [endLat, endLon]);
+  useEffect(() => {
+    setRevStartCoordinateText(revStartLat !== "" && revStartLon !== "" ? `${revStartLat}, ${revStartLon}` : "");
+  }, [revStartLat, revStartLon]);
+  useEffect(() => {
+    setRevEndCoordinateText(revEndLat !== "" && revEndLon !== "" ? `${revEndLat}, ${revEndLon}` : "");
+  }, [revEndLat, revEndLon]);
+
+  const handleSeedReverseEndpoints = () => {
+    if (draftReverseCoordinates.length >= 2) {
+      const first = draftReverseCoordinates[0];
+      const last = draftReverseCoordinates[draftReverseCoordinates.length - 1];
+      setRevStartLat(first[1]); setRevStartLon(first[0]);
+      setRevEndLat(last[1]); setRevEndLon(last[0]);
+      onToast("แยกหมุดขากลับ (B → A) จากแนวเส้นปัจจุบันแล้ว ลากหมุดบนแผนที่เพื่อปรับตำแหน่งได้");
+      return;
+    }
+    const eLat = Number(endLat); const eLon = Number(endLon);
+    const sLat = Number(startLat); const sLon = Number(startLon);
+    if (!eLat || !eLon || !sLat || !sLon) {
+      onToast("กรุณากำหนดจุด A และ B ก่อนแยกหมุดขากลับ (B → A)");
+      return;
+    }
+    setRevStartLat(eLat); setRevStartLon(eLon);
+    setRevEndLat(sLat); setRevEndLon(sLon);
+    onToast("วางหมุดขากลับ B→ และ →A บนแผนที่แล้ว สามารถลากแยกตำแหน่งได้ทันที");
+  };
+
+  const handleClearReverseEndpoints = () => {
+    setRevStartLat(""); setRevStartLon("");
+    setRevEndLat(""); setRevEndLon("");
+    onToast("กลับไปใช้จุด B → A ร่วมกับขาไปเรียบร้อย");
+  };
 
   useEffect(() => {
     const markers: { lat: number; lon: number; label: string; mode: string }[] = [];
@@ -396,8 +439,20 @@ export function MapManagementTab({
     if (Number.isFinite(endLatNumber) && Number.isFinite(endLonNumber) && endLatNumber !== 0 && endLonNumber !== 0) {
       markers.push({ lat: endLatNumber, lon: endLonNumber, label: "B", mode: "PICK_END" });
     }
+    if (supportsTwoWayLineEdit) {
+      const rSLat = Number(revStartLat);
+      const rSLon = Number(revStartLon);
+      const rELat = Number(revEndLat);
+      const rELon = Number(revEndLon);
+      if (Number.isFinite(rSLat) && Number.isFinite(rSLon) && rSLat !== 0 && rSLon !== 0) {
+        markers.push({ lat: rSLat, lon: rSLon, label: "B→", mode: "PICK_REV_START" });
+      }
+      if (Number.isFinite(rELat) && Number.isFinite(rELon) && rELat !== 0 && rELon !== 0) {
+        markers.push({ lat: rELat, lon: rELon, label: "→A", mode: "PICK_REV_END" });
+      }
+    }
     onDraftPickMarkersChange?.(markers);
-  }, [startLat, startLon, endLat, endLon, onDraftPickMarkersChange]);
+  }, [startLat, startLon, endLat, endLon, revStartLat, revStartLon, revEndLat, revEndLon, supportsTwoWayLineEdit, onDraftPickMarkersChange]);
 
   // Snapping & Geocoding State
   const [snappingStatusText, setSnappingStatusText] = useState("");
@@ -485,24 +540,40 @@ export function MapManagementTab({
 
       let revCoords: [number, number][] = [];
       if (effectiveSide === "BOTH") {
-        const matchedGroup = findBestHighwayGroupForSelection(
-          systemData.highwayLayers,
-          flood.route_no,
-          flood.section_name,
-          flood.km_start,
-          flood.km_end
-        );
-        const fwdBranch = matchedGroup?.branches.find((b) => b.directionCode === "A_TO_B" && b.coordinates.length >= 2) || matchedGroup?.primaryBranch;
-        const revBranch = matchedGroup?.branches.find((b) => b.directionCode === "B_TO_A" && b.coordinates.length >= 2);
-        if (matchedGroup && revBranch) {
-          revCoords = sliceBranchByKmRange(revBranch, fwdBranch, matchedGroup.kmStart, matchedGroup.kmEnd, flood.km_start, flood.km_end, true);
-        } else if (coords.length >= 2) {
-          revCoords = [...coords].reverse().map((p) => [...p] as [number, number]);
+        const existingRevSibling = meta.eventId
+          ? (systemData.floodRoutes || []).find((f) => {
+              if (String(f.id) === String(flood.id)) return false;
+              const fm = parseFloodDirectionMeta(f.direction_meta, f);
+              return fm.eventId === meta.eventId && fm.directionCode === "B_TO_A";
+            })
+          : undefined;
+        if (existingRevSibling) {
+          if (Array.isArray(existingRevSibling.coordinates_json)) revCoords = existingRevSibling.coordinates_json as [number, number][];
+          else if (typeof existingRevSibling.coordinates_json === "string") {
+            try { revCoords = JSON.parse(existingRevSibling.coordinates_json); } catch { revCoords = []; }
+          }
         }
-        setReverseRouteWaterLevel(flood.water_level_cm);
-        setReverseRouteStatus(flood.traffic_status);
-        setReverseWaterLevelKnown(flood.direction_meta?.water_level_known !== false);
-        setReverseAffectedParts(meta.affectedParts && meta.affectedParts.length ? meta.affectedParts : ["ALL_LANES"]);
+        if (revCoords.length < 2) {
+          const matchedGroup = findBestHighwayGroupForSelection(
+            systemData.highwayLayers,
+            flood.route_no,
+            flood.section_name,
+            flood.km_start,
+            flood.km_end
+          );
+          const fwdBranch = matchedGroup?.branches.find((b) => b.directionCode === "A_TO_B" && b.coordinates.length >= 2) || matchedGroup?.primaryBranch;
+          const revBranch = matchedGroup?.branches.find((b) => b.directionCode === "B_TO_A" && b.coordinates.length >= 2);
+          if (matchedGroup && revBranch) {
+            revCoords = sliceBranchByKmRange(revBranch, fwdBranch, matchedGroup.kmStart, matchedGroup.kmEnd, flood.km_start, flood.km_end, true);
+          } else if (coords.length >= 2) {
+            revCoords = [...coords].reverse().map((p) => [...p] as [number, number]);
+          }
+        }
+        setReverseRouteWaterLevel(existingRevSibling ? existingRevSibling.water_level_cm : flood.water_level_cm);
+        setReverseRouteStatus(existingRevSibling ? existingRevSibling.traffic_status : flood.traffic_status);
+        setReverseWaterLevelKnown(existingRevSibling ? existingRevSibling.direction_meta?.water_level_known !== false : flood.direction_meta?.water_level_known !== false);
+        const siblingMeta = existingRevSibling ? parseFloodDirectionMeta(existingRevSibling.direction_meta, existingRevSibling) : meta;
+        setReverseAffectedParts(siblingMeta.affectedParts && siblingMeta.affectedParts.length ? siblingMeta.affectedParts : ["ALL_LANES"]);
       } else {
         setReverseRouteWaterLevel("");
         setReverseRouteStatus("WARNING");
@@ -513,6 +584,17 @@ export function MapManagementTab({
       setDraftReverseCoordinates?.(revCoords);
       setDraftReverseWaypoints?.([]);
       setDraftConflictPoints?.([]);
+      if (effectiveSide === "BOTH" && revCoords.length >= 2) {
+        setRevStartLat(revCoords[0][1]);
+        setRevStartLon(revCoords[0][0]);
+        setRevEndLat(revCoords[revCoords.length - 1][1]);
+        setRevEndLon(revCoords[revCoords.length - 1][0]);
+      } else {
+        setRevStartLat("");
+        setRevStartLon("");
+        setRevEndLat("");
+        setRevEndLon("");
+      }
 
       // Phase 2 Meta Hydration
       setSelectedParentEventId(meta.eventId);
@@ -582,6 +664,17 @@ export function MapManagementTab({
       setDraftReverseWaypoints?.(revWps);
       setDraftConflictPoints?.([]);
       setClosedRoadConflicts([]);
+      if (detour.direction_mode === "TWO_WAY" && revCoords.length >= 2) {
+        setRevStartLat(revCoords[0][1]);
+        setRevStartLon(revCoords[0][0]);
+        setRevEndLat(revCoords[revCoords.length - 1][1]);
+        setRevEndLon(revCoords[revCoords.length - 1][0]);
+      } else {
+        setRevStartLat("");
+        setRevStartLon("");
+        setRevEndLat("");
+        setRevEndLon("");
+      }
     }
   }, [editingRoute, systemData]);
 
@@ -619,10 +712,42 @@ export function MapManagementTab({
       onToast(`กำหนดจุดสิ้นสุด (B): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
       handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat, "END");
       if (startLat && startLon) { setFreeEditEnabled(false); setDraftCoordinates([]); setDraftReverseCoordinates?.([]); void triggerDualRoadSnapping(startLat, startLon, pickedCoordinate.lat, pickedCoordinate.lon); }
+    } else if (pickedCoordinate.mode === "PICK_REV_START") {
+      setRevStartLat(pickedCoordinate.lat);
+      setRevStartLon(pickedCoordinate.lon);
+      setAdminPickMode(null);
+      onToast(`กำหนดจุดเริ่มขากลับ (B → A): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
+      const targetRevEndLat = Number(revEndLat) || Number(startLat);
+      const targetRevEndLon = Number(revEndLon) || Number(startLon);
+      if (!freeEditEnabled && targetRevEndLat && targetRevEndLon && startLat && startLon && endLat && endLon) {
+        void triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints, draftReverseWaypoints, {
+          revSLat: pickedCoordinate.lat,
+          revSLon: pickedCoordinate.lon,
+          revELat: targetRevEndLat,
+          revELon: targetRevEndLon,
+          reverseOnly: draftCoordinates.length >= 2,
+        });
+      }
+    } else if (pickedCoordinate.mode === "PICK_REV_END") {
+      setRevEndLat(pickedCoordinate.lat);
+      setRevEndLon(pickedCoordinate.lon);
+      setAdminPickMode(null);
+      onToast(`กำหนดจุดสิ้นสุดขากลับ (B → A): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
+      const targetRevStartLat = Number(revStartLat) || Number(endLat);
+      const targetRevStartLon = Number(revStartLon) || Number(endLon);
+      if (!freeEditEnabled && targetRevStartLat && targetRevStartLon && startLat && startLon && endLat && endLon) {
+        void triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints, draftReverseWaypoints, {
+          revSLat: targetRevStartLat,
+          revSLon: targetRevStartLon,
+          revELat: pickedCoordinate.lat,
+          revELon: pickedCoordinate.lon,
+          reverseOnly: draftCoordinates.length >= 2,
+        });
+      }
     } else if (pickedCoordinate.mode === "ADD_LINE_VERTEX" && freeEditEnabled) {
       const point: [number, number] = [pickedCoordinate.lon, pickedCoordinate.lat];
       const geometry = activeEditTarget === "REVERSE" ? draftReverseCoordinates : draftCoordinates;
-      if (geometry.length >= 2) updateFreeGeometry(insertVertex(geometry, Math.max(1, Math.min(geometry.length - 1, nearestInsertIndex(geometry, point).index)), point));
+      if (geometry.length >= 2) updateFreeGeometry(insertVertex(geometry, nearestInsertIndex(geometry, point).index, point));
       setAdminPickMode(null);
     } else if (pickedCoordinate.mode === "ADD_WAYPOINT") {
       const newWp: [number, number] = [pickedCoordinate.lon, pickedCoordinate.lat];
@@ -651,7 +776,14 @@ export function MapManagementTab({
     eLat: number | string,
     eLon: number | string,
     waypoints: [number, number][] = draftWaypoints,
-    reverseWaypoints: [number, number][] = draftReverseWaypoints
+    reverseWaypoints: [number, number][] = draftReverseWaypoints,
+    revOverrides?: {
+      revSLat?: number | string;
+      revSLon?: number | string;
+      revELat?: number | string;
+      revELon?: number | string;
+      reverseOnly?: boolean;
+    }
   ) => {
     const requestId = ++routingRequest.current;
     if (freeEditEnabled) setFreeEditEnabled(false);
@@ -659,6 +791,10 @@ export function MapManagementTab({
     const numSLon = Number(sLon);
     const numELat = Number(eLat);
     const numELon = Number(eLon);
+    const effRevSLat = Number(revOverrides?.revSLat ?? revStartLat) || numELat;
+    const effRevSLon = Number(revOverrides?.revSLon ?? revStartLon) || numELon;
+    const effRevELat = Number(revOverrides?.revELat ?? revEndLat) || numSLat;
+    const effRevELon = Number(revOverrides?.revELon ?? revEndLon) || numSLon;
 
     if (!numSLat || !numSLon || !numELat || !numELon || isNaN(numSLat) || isNaN(numELat)) {
       onToast("กรุณาระบุพิกัด A และ B ให้ครบถ้วนก่อนคำนวณเส้นเกาะถนน");
@@ -669,7 +805,7 @@ export function MapManagementTab({
     try {
       if (routeMode === "DETOUR") {
         const pointsAB: [number, number][] = [[numSLon, numSLat], ...waypoints, [numELon, numELat]];
-        const pointsBA: [number, number][] = [[numELon, numELat], ...reverseWaypoints, [numSLon, numSLat]];
+        const pointsBA: [number, number][] = [[effRevSLon, effRevSLat], ...reverseWaypoints, [effRevELon, effRevELat]];
         if (forceStraightThrough && waypoints.length === 0) {
           setDraftCoordinates([[numSLon, numSLat], [numELon, numELat]]);
           setSnappingStatusText("กรุณาเพิ่มจุดดัดบนสามแยก/สี่แยกอย่างน้อย 1 จุด แล้วคำนวณอีกครั้ง");
@@ -725,13 +861,18 @@ export function MapManagementTab({
         };
 
         const emptyPicked = { coords: [] as [number, number][], distance: 0, duration: 0, conflicts: [] as ReturnType<typeof detectClosedRoadConflicts> };
+        const preserveForward = Boolean(revOverrides?.reverseOnly && draftCoordinates.length >= 2);
         const [pickedAB, pickedBA] = await Promise.all([
-          detourDirectionMode !== "REVERSE_ONLY" ? resolveDetourDirection(pointsAB) : Promise.resolve(emptyPicked),
+          !preserveForward && detourDirectionMode !== "REVERSE_ONLY" ? resolveDetourDirection(pointsAB) : Promise.resolve(emptyPicked),
           detourDirectionMode !== "FORWARD_ONLY" ? resolveDetourDirection(pointsBA) : Promise.resolve(emptyPicked),
         ]);
         if (requestId !== routingRequest.current) return;
 
-        const forwardCoords = detourDirectionMode === "REVERSE_ONLY" ? pickedBA.coords : pickedAB.coords;
+        const forwardCoords = preserveForward
+          ? draftCoordinates
+          : detourDirectionMode === "REVERSE_ONLY"
+            ? pickedBA.coords
+            : pickedAB.coords;
         const reverseCoords = detourDirectionMode === "TWO_WAY" ? pickedBA.coords : [];
 
         if (forwardCoords.length < 2) {
@@ -741,13 +882,15 @@ export function MapManagementTab({
           return;
         }
 
-        setDraftCoordinates(forwardCoords);
+        if (!preserveForward) {
+          setDraftCoordinates(forwardCoords);
+        }
         setDraftReverseCoordinates?.(reverseCoords);
-        setDetourDistanceMeters({
-          forward: detourDirectionMode === "REVERSE_ONLY" ? 0 : pickedAB.distance,
+        setDetourDistanceMeters((prev) => ({
+          forward: preserveForward ? prev.forward : detourDirectionMode === "REVERSE_ONLY" ? 0 : pickedAB.distance,
           reverse: detourDirectionMode === "FORWARD_ONLY" ? 0 : pickedBA.distance,
-        });
-        const nextFwdDurS = detourDirectionMode === "REVERSE_ONLY" ? 0 : pickedAB.duration;
+        }));
+        const nextFwdDurS = preserveForward ? detourDurationSeconds.forward : detourDirectionMode === "REVERSE_ONLY" ? 0 : pickedAB.duration;
         const nextRevDurS = detourDirectionMode === "FORWARD_ONLY" ? 0 : pickedBA.duration;
         setDetourDurationSeconds({
           forward: nextFwdDurS,
@@ -760,7 +903,10 @@ export function MapManagementTab({
           setDetourDurationMinRev(String(Math.max(1, Math.round(nextRevDurS / 60))));
         }
 
-        const allConflicts = [...pickedAB.conflicts, ...pickedBA.conflicts];
+        const fwdConflicts = preserveForward
+          ? detectClosedRoadConflicts(forwardCoords, systemData.floodRoutes || [])
+          : pickedAB.conflicts;
+        const allConflicts = [...fwdConflicts, ...pickedBA.conflicts];
         const uniqueConflictMsgs = Array.from(
           new Set(allConflicts.map((c) => `ทล.${c.routeNo} (${c.sectionName})`))
         );
@@ -781,7 +927,7 @@ export function MapManagementTab({
           const straightLabel = forceStraightThrough ? "คำนวณแนวตรงผ่านแยกตามจุดควบคุมสำเร็จ" : "คำนวณทางเลี่ยงตามถนนสำเร็จ";
           setSnappingStatusText(
             detourDirectionMode === "TWO_WAY"
-              ? `✓ ${straightLabel}: A→B (${pickedAB.coords.length} จุด) และ B→A (${pickedBA.coords.length} จุด) — ปลอดจุดปิดจราจร`
+              ? `✓ ${straightLabel}: A→B (${forwardCoords.length} จุด) และ B→A (${pickedBA.coords.length} จุด) — ปลอดจุดปิดจราจร`
               : `✓ ${straightLabel} (${forwardCoords.length} จุด) — ปลอดจุดปิดจราจร`
           );
         }
@@ -812,15 +958,18 @@ export function MapManagementTab({
 
       if (isDividedBothFlood) {
         const pointsAB: [number, number][] = [[numSLon, numSLat], ...waypoints, [numELon, numELat]];
-        const pointsBA: [number, number][] = [[numELon, numELat], ...reverseWaypoints, [numSLon, numSLat]];
+        const pointsBA: [number, number][] = [[effRevSLon, effRevSLat], ...reverseWaypoints, [effRevELon, effRevELat]];
+        const preserveForward = Boolean(revOverrides?.reverseOnly && draftCoordinates.length >= 2);
         const [fwdSnapped, revSnapped] = await Promise.all([
-          snapFloodDirected(pointsAB),
+          preserveForward ? Promise.resolve(draftCoordinates) : snapFloodDirected(pointsAB),
           snapFloodDirected(pointsBA),
         ]);
         if (requestId !== routingRequest.current) return;
         const resolvedFwd = fwdSnapped && fwdSnapped.length >= 2 ? fwdSnapped : pointsAB;
         const resolvedRev = revSnapped && revSnapped.length >= 2 ? revSnapped : [...resolvedFwd].reverse();
-        setDraftCoordinates(resolvedFwd);
+        if (!preserveForward) {
+          setDraftCoordinates(resolvedFwd);
+        }
         setDraftReverseCoordinates?.(resolvedRev);
         setSnappingStatusText(
           `✓ คำนวณเส้นน้ำท่วม ๒ ฝั่งแยกกัน: ขาไป A→B (${resolvedFwd.length} จุด) และ ขากลับ B→A (${resolvedRev.length} จุด)`
@@ -901,11 +1050,21 @@ export function MapManagementTab({
   }, [routeNo, startArea, endArea]);
 
   const handleSelectEditDirection = (nextTarget: "FORWARD" | "REVERSE") => {
-    if (nextTarget === "REVERSE" && draftReverseCoordinates.length < 2 && draftCoordinates.length >= 2) {
-      const seeded = [...draftCoordinates].reverse().map((p) => [...p] as [number, number]);
-      setDraftReverseCoordinates?.(seeded);
-      if (originalReverseRouteCoordinates.current.length < 2) {
-        originalReverseRouteCoordinates.current = seeded.map((p) => [...p] as [number, number]);
+    if (nextTarget === "REVERSE" && draftReverseCoordinates.length < 2) {
+      const rsLat = Number(revStartLat); const rsLon = Number(revStartLon);
+      const reLat = Number(revEndLat); const reLon = Number(revEndLon);
+      if (rsLat && rsLon && reLat && reLon) {
+        const seededRev: [number, number][] = [[rsLon, rsLat], [reLon, reLat]];
+        setDraftReverseCoordinates?.(seededRev);
+        if (originalReverseRouteCoordinates.current.length < 2) {
+          originalReverseRouteCoordinates.current = seededRev.map((p) => [...p] as [number, number]);
+        }
+      } else if (draftCoordinates.length >= 2) {
+        const seeded = [...draftCoordinates].reverse().map((p) => [...p] as [number, number]);
+        setDraftReverseCoordinates?.(seeded);
+        if (originalReverseRouteCoordinates.current.length < 2) {
+          originalReverseRouteCoordinates.current = seeded.map((p) => [...p] as [number, number]);
+        }
       }
     }
     setFreeEditTarget(nextTarget);
@@ -945,6 +1104,15 @@ export function MapManagementTab({
     setEndLat(tmpLat);
     setEndLon(tmpLon);
 
+    if (revStartLat !== "" || revStartLon !== "" || revEndLat !== "" || revEndLon !== "") {
+      const tmpRevLat = revStartLat;
+      const tmpRevLon = revStartLon;
+      setRevStartLat(revEndLat);
+      setRevStartLon(revEndLon);
+      setRevEndLat(tmpRevLat);
+      setRevEndLon(tmpRevLon);
+    }
+
     if (routeMode === "DETOUR") {
       const tmpPhoto = detourStartPhotoUrl;
       const tmpCaption = detourStartPhotoCaption;
@@ -961,6 +1129,12 @@ export function MapManagementTab({
     if (draftWaypoints.length > 0) {
       setDraftWaypoints([...draftWaypoints].reverse());
     }
+    if (draftReverseCoordinates.length > 0) {
+      setDraftReverseCoordinates?.([...draftReverseCoordinates].reverse() as [number, number][]);
+    }
+    if (draftReverseWaypoints.length > 0) {
+      setDraftReverseWaypoints?.([...draftReverseWaypoints].reverse());
+    }
     onToast("สลับจุดเริ่มต้นและสิ้นสุด A ⇄ B เรียบร้อย");
   };
 
@@ -974,6 +1148,8 @@ export function MapManagementTab({
       return;
     }
     if (activeEditTarget === "REVERSE") {
+      const revStartPt: [number, number] = [Number(revStartLon) || end[0], Number(revStartLat) || end[1]];
+      const revEndPt: [number, number] = [Number(revEndLon) || start[0], Number(revEndLat) || start[1]];
       const revSource =
         draftReverseCoordinates.length >= 2
           ? draftReverseCoordinates
@@ -981,7 +1157,7 @@ export function MapManagementTab({
       const midPoint: [number, number] =
         revSource.length >= 2
           ? revSource[Math.floor(revSource.length / 2)]
-          : [(end[0] + start[0]) / 2, (end[1] + start[1]) / 2];
+          : [(revStartPt[0] + revEndPt[0]) / 2, (revStartPt[1] + revEndPt[1]) / 2];
       const nextRevWps = [...draftReverseWaypoints, midPoint];
       setDraftReverseWaypoints?.(nextRevWps);
       onToast(`เพิ่มจุดดัดแนวเส้นขากลับ (B → A) ที่พิกัด ${midPoint[1].toFixed(4)}, ${midPoint[0].toFixed(4)}`);
@@ -1079,6 +1255,10 @@ export function MapManagementTab({
     setStartLon("");
     setEndLat("");
     setEndLon("");
+    setRevStartLat("");
+    setRevStartLon("");
+    setRevEndLat("");
+    setRevEndLon("");
     setKmStart("");
     setKmEnd("");
     setSectionName("");
@@ -1636,8 +1816,11 @@ export function MapManagementTab({
           mediaPersisted = true;
         }
 
-        // 2. Reverse segment (B -> A): prefer operator's edited/snapped reverse line, fallback to GIS B_TO_A slice
+        // 2. Reverse segment (B -> A): prefer operator's edited/snapped reverse line, then explicit reverse pins, fallback to GIS B_TO_A slice
         let reverseCoords: [number, number][] = draftReverseCoordinates.length >= 2 ? draftReverseCoordinates : [];
+        if (reverseCoords.length < 2 && revStartLat && revStartLon && revEndLat && revEndLon) {
+          reverseCoords = [[Number(revStartLon), Number(revStartLat)], [Number(revEndLon), Number(revEndLat)]];
+        }
         if (reverseCoords.length < 2) {
           const matchedGroup = findBestHighwayGroupForSelection(systemData.highwayLayers, chosenRouteNo, sectionName, kmStart, kmEnd);
           const fwdBranch = matchedGroup?.branches.find((b) => b.directionCode === "A_TO_B" && b.coordinates.length >= 2) || matchedGroup?.primaryBranch;
@@ -1755,6 +1938,15 @@ export function MapManagementTab({
         }
       }
 
+      const resolvedDetourReverseCoords: [number, number][] =
+        routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY"
+          ? (draftReverseCoordinates.length >= 2
+              ? draftReverseCoordinates
+              : (revStartLat && revStartLon && revEndLat && revEndLon
+                  ? [[Number(revStartLon), Number(revStartLat)], ...draftReverseWaypoints, [Number(revEndLon), Number(revEndLat)]]
+                  : []))
+          : [];
+
       const res = await upsertRouteAction({
         id: routeEditId || undefined,
         recordType: routeMode,
@@ -1781,7 +1973,7 @@ export function MapManagementTab({
         reporterName: routeMode === "FLOOD" ? (reporterName.trim() || "เจ้าหน้าที่แขวงทางหลวงปัตตานี") : undefined,
         directionMeta: routeMode === "FLOOD" ? floodDirectionMeta : undefined,
         // Item 4: Detour Bidirectional & Asymmetric Fields
-        reverseCoordinates: routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" ? draftReverseCoordinates : undefined,
+        reverseCoordinates: routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" ? resolvedDetourReverseCoords : undefined,
         reverseWaypoints: routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" ? draftReverseWaypoints : undefined,
         directionMode: routeMode === "DETOUR" ? detourDirectionMode : undefined,
         detourMeta: routeMode === "DETOUR"
@@ -1791,7 +1983,7 @@ export function MapManagementTab({
               linkedEventId,
               detourRoutes: systemData.detourRoutes,
               coords,
-              draftReverseCoordinates,
+              draftReverseCoordinates: resolvedDetourReverseCoords,
               detourDirectionMode,
               detourDurationMinFwd,
               detourDurationMinRev,
@@ -1807,7 +1999,7 @@ export function MapManagementTab({
               detourEndPhotoCaption,
               fwdPolyKm: calculatePolylineRoadDistanceKm(coords),
               revPolyKm: calculatePolylineRoadDistanceKm(
-                detourDirectionMode === "TWO_WAY" && draftReverseCoordinates.length >= 2 ? draftReverseCoordinates : coords
+                detourDirectionMode === "TWO_WAY" && resolvedDetourReverseCoords.length >= 2 ? resolvedDetourReverseCoords : coords
               ),
             })
           : undefined,
@@ -1964,6 +2156,20 @@ export function MapManagementTab({
           setStartCoordinateText={setStartCoordinateText}
           endCoordinateText={endCoordinateText}
           setEndCoordinateText={setEndCoordinateText}
+          revStartLat={revStartLat}
+          setRevStartLat={setRevStartLat}
+          revStartLon={revStartLon}
+          setRevStartLon={setRevStartLon}
+          revEndLat={revEndLat}
+          setRevEndLat={setRevEndLat}
+          revEndLon={revEndLon}
+          setRevEndLon={setRevEndLon}
+          revStartCoordinateText={revStartCoordinateText}
+          setRevStartCoordinateText={setRevStartCoordinateText}
+          revEndCoordinateText={revEndCoordinateText}
+          setRevEndCoordinateText={setRevEndCoordinateText}
+          onSeedReverseEndpoints={handleSeedReverseEndpoints}
+          onClearReverseEndpoints={handleClearReverseEndpoints}
           detourStartPhotoUrl={detourStartPhotoUrl}
           setDetourStartPhotoUrl={setDetourStartPhotoUrl}
           detourStartPhotoCaption={detourStartPhotoCaption}
@@ -1983,6 +2189,7 @@ export function MapManagementTab({
           activeEditTarget={activeEditTarget}
           handleSelectEditDirection={handleSelectEditDirection}
           draftCoordinates={draftCoordinates}
+          setDraftCoordinates={setDraftCoordinates}
           draftReverseCoordinates={draftReverseCoordinates}
           setDraftReverseCoordinates={setDraftReverseCoordinates}
           draftWaypoints={draftWaypoints}

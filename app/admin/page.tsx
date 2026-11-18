@@ -158,7 +158,15 @@ export default function AdminPage() {
       const startCoord = draftReverseCoordinates[0];
       const endCoord = draftReverseCoordinates[draftReverseCoordinates.length - 1];
       try {
-        const snapped = await calculateRoadSnappedRoute(startCoord, endCoord, nextReverseWaypoints);
+        let snapped: [number, number][];
+        if (draftMode === "FLOOD") {
+          const points = [startCoord, ...nextReverseWaypoints, endCoord];
+          const segments = await Promise.all(points.slice(1).map((point, index) => snapRouteAction(points[index], point)));
+          if (segments.some((segment) => !segment || segment.length < 2)) throw new Error("ไม่พบแนวทางหลวง");
+          snapped = segments.flatMap((segment, index) => index === 0 ? segment! : segment!.slice(1));
+        } else {
+          snapped = await calculateRoadSnappedRoute(startCoord, endCoord, nextReverseWaypoints);
+        }
         if (requestId !== waypointRequestRef.current) return;
         setDraftReverseCoordinates(snapped);
         showToast(`ปรับดัดแนวเส้นขากลับ B→A จุด #R${idx + 1} สำเร็จ`);
@@ -386,8 +394,14 @@ export default function AdminPage() {
               adminPickMode={adminPickMode}
               onCoordinatePicked={(lat, lon, mode) => {
                 setPickedCoordinate({ lat, lon, mode, ts: Date.now() });
-                if (["PICK_START", "PICK_END", "PICK_HIGHWAY_START", "PICK_HIGHWAY_END"].includes(mode)) {
-                  const label = mode === "PICK_START" || mode === "PICK_HIGHWAY_START" ? "A" : "B";
+                if (["PICK_START", "PICK_END", "PICK_HIGHWAY_START", "PICK_HIGHWAY_END", "PICK_REV_START", "PICK_REV_END"].includes(mode)) {
+                  const label = mode === "PICK_START" || mode === "PICK_HIGHWAY_START"
+                    ? "A"
+                    : mode === "PICK_END" || mode === "PICK_HIGHWAY_END"
+                      ? "B"
+                      : mode === "PICK_REV_START"
+                        ? "B→"
+                        : "→A";
                   setDraftPickMarkers((prev) => [
                     ...prev.filter((item) => item.label !== label),
                     { lat, lon, label, mode },
@@ -437,7 +451,11 @@ export default function AdminPage() {
                         ? "คลิกบนแผนที่เพื่อกำหนดจุดเริ่มต้น..."
                         : adminPickMode === "PICK_END"
                           ? "คลิกบนแผนที่เพื่อกำหนดจุดสิ้นสุด..."
-                          : adminPickMode === "PICK_HIGHWAY_START"
+                          : adminPickMode === "PICK_REV_START"
+                            ? "คลิกบนแผนที่เพื่อกำหนดจุดเริ่มต้นขากลับ (B → A)..."
+                            : adminPickMode === "PICK_REV_END"
+                              ? "คลิกบนแผนที่เพื่อกำหนดจุดสิ้นสุดขากลับ (B → A)..."
+                              : adminPickMode === "PICK_HIGHWAY_START"
                             ? "คลิกบนแผนที่เพื่อกำหนดพิกัด กม.เริ่มต้น..."
                             : adminPickMode === "PICK_HIGHWAY_END"
                               ? "คลิกบนแผนที่เพื่อกำหนดพิกัด กม.สิ้นสุด..."

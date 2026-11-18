@@ -34,6 +34,20 @@ interface RouteGeometryEditorSectionProps {
   setStartCoordinateText: (text: string) => void;
   endCoordinateText: string;
   setEndCoordinateText: (text: string) => void;
+  revStartLat: number | string;
+  setRevStartLat: (lat: number | string) => void;
+  revStartLon: number | string;
+  setRevStartLon: (lon: number | string) => void;
+  revEndLat: number | string;
+  setRevEndLat: (lat: number | string) => void;
+  revEndLon: number | string;
+  setRevEndLon: (lon: number | string) => void;
+  revStartCoordinateText: string;
+  setRevStartCoordinateText: (text: string) => void;
+  revEndCoordinateText: string;
+  setRevEndCoordinateText: (text: string) => void;
+  onSeedReverseEndpoints: () => void;
+  onClearReverseEndpoints: () => void;
   detourStartPhotoUrl: string;
   setDetourStartPhotoUrl: (url: string) => void;
   detourStartPhotoCaption: string;
@@ -53,6 +67,7 @@ interface RouteGeometryEditorSectionProps {
   activeEditTarget: "FORWARD" | "REVERSE";
   handleSelectEditDirection: (nextTarget: "FORWARD" | "REVERSE") => void;
   draftCoordinates: [number, number][];
+  setDraftCoordinates: (coords: [number, number][]) => void;
   draftReverseCoordinates: [number, number][];
   setDraftReverseCoordinates?: (coords: [number, number][]) => void;
   draftWaypoints: [number, number][];
@@ -102,6 +117,20 @@ export function RouteGeometryEditorSection({
   setStartCoordinateText,
   endCoordinateText,
   setEndCoordinateText,
+  revStartLat,
+  setRevStartLat,
+  revStartLon,
+  setRevStartLon,
+  revEndLat,
+  setRevEndLat,
+  revEndLon,
+  setRevEndLon,
+  revStartCoordinateText,
+  setRevStartCoordinateText,
+  revEndCoordinateText,
+  setRevEndCoordinateText,
+  onSeedReverseEndpoints,
+  onClearReverseEndpoints,
   detourStartPhotoUrl,
   setDetourStartPhotoUrl,
   detourStartPhotoCaption,
@@ -121,6 +150,7 @@ export function RouteGeometryEditorSection({
   activeEditTarget,
   handleSelectEditDirection,
   draftCoordinates,
+  setDraftCoordinates,
   draftReverseCoordinates,
   setDraftReverseCoordinates,
   draftWaypoints,
@@ -304,6 +334,73 @@ export function RouteGeometryEditorSection({
         </div>
       </div>
 
+      {/* Separate B -> A Endpoints Card when 2-way editing is active */}
+      {supportsTwoWayLineEdit && (
+        <div className="rounded-xl border border-amber-500/35 bg-slate-900/50 p-3 space-y-3" role="group" aria-label="หมุดเส้นทางขากลับ (B → A)">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-heading font-bold text-amber-300">
+                หมุดเส้นทางขากลับ (B → A) แยกอิสระ
+              </p>
+              <p className="text-[11px] text-slate-400">
+                ปักหมุดต้นทาง–ปลายทางของขากลับแยกจากขาไปได้ (หรือปล่อยว่างเพื่อใช้จุด B → A ของขาไปอัตโนมัติ)
+              </p>
+            </div>
+            {revStartLat !== "" || revStartLon !== "" || revEndLat !== "" || revEndLon !== "" ? (
+              <ActionButton variant="secondary" onClick={onClearReverseEndpoints}>
+                ใช้หมุดเดียวกับ A⇄B
+              </ActionButton>
+            ) : (
+              <ActionButton variant="secondary" onClick={onSeedReverseEndpoints}>
+                แยกหมุด B→A บนแผนที่
+              </ActionButton>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 text-xs font-semibold text-white">
+                  <span aria-hidden="true" className="grid h-6 min-w-6 px-1 place-items-center rounded-full bg-amber-400 text-[11px] font-black text-slate-950">B→</span>
+                  จุดเริ่มขากลับ (B → A)
+                </span>
+                <ActionButton variant="pick" active={adminPickMode === "PICK_REV_START"} onClick={() => setAdminPickMode("PICK_REV_START")}>
+                  {adminPickMode === "PICK_REV_START" ? "เลือกจุดเริ่ม B→A..." : "เลือกจุดเริ่ม B→A"}
+                </ActionButton>
+              </div>
+              <input
+                type="text"
+                aria-label="พิกัดจุดเริ่มต้นขากลับ (B → A)"
+                value={revStartCoordinateText}
+                onChange={(e) => setRevStartCoordinateText(e.target.value)}
+                onBlur={() => { const pair = parseCoordinatePair(revStartCoordinateText); if (pair) { setRevStartLat(pair[0]); setRevStartLon(pair[1]); } else { setRevStartLat(""); setRevStartLon(""); } }}
+                placeholder="ค่าเริ่มต้น: จุด B ของขาไป (หรือปักหมุดแยก)"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500"
+              />
+            </div>
+            <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 text-xs font-semibold text-white">
+                  <span aria-hidden="true" className="grid h-6 min-w-6 px-1 place-items-center rounded-full bg-indigo-500 text-[11px] font-black text-white">→A</span>
+                  จุดสิ้นสุดขากลับ (B → A)
+                </span>
+                <ActionButton variant="pick" active={adminPickMode === "PICK_REV_END"} onClick={() => setAdminPickMode("PICK_REV_END")}>
+                  {adminPickMode === "PICK_REV_END" ? "เลือกจุดปลาย B→A..." : "เลือกจุดปลาย B→A"}
+                </ActionButton>
+              </div>
+              <input
+                type="text"
+                aria-label="พิกัดจุดสิ้นสุดขากลับ (B → A)"
+                value={revEndCoordinateText}
+                onChange={(e) => setRevEndCoordinateText(e.target.value)}
+                onBlur={() => { const pair = parseCoordinatePair(revEndCoordinateText); if (pair) { setRevEndLat(pair[0]); setRevEndLon(pair[1]); } else { setRevEndLat(""); setRevEndLon(""); } }}
+                placeholder="ค่าเริ่มต้น: จุด A ของขาไป (หรือปักหมุดแยก)"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Snapping Status Feedback Banner */}
       {snappingStatusText && (
         <div className="p-2.5 rounded-lg bg-sky-950/70 border border-sky-800 text-sky-200 text-xs flex items-center gap-2">
@@ -323,9 +420,31 @@ export function RouteGeometryEditorSection({
             <Wand2 className="h-4 w-4" /> ตามแนวถนน
           </ActionButton>
           <ActionButton variant={freeEditEnabled ? "primary" : "secondary"} active={freeEditEnabled} onClick={() => {
-            if (draftCoordinates.length < 2) { onToast("กรุณาปัก A และ B แล้วคำนวณแนวถนนก่อนดัดเส้นอิสระ"); return; }
-            if (activeEditTarget === "REVERSE" && draftReverseCoordinates.length < 2) {
-              setDraftReverseCoordinates?.([...draftCoordinates].reverse().map((p) => [...p] as [number, number]));
+            let nextFwd = draftCoordinates;
+            if (nextFwd.length < 2) {
+              const sLat = Number(startLat); const sLon = Number(startLon);
+              const eLat = Number(endLat); const eLon = Number(endLon);
+              if (!sLat || !sLon || !eLat || !eLon || isNaN(sLat) || isNaN(eLat)) {
+                onToast("กรุณาปัก A และ B แล้วคำนวณแนวถนนก่อนดัดเส้นอิสระ");
+                return;
+              }
+              nextFwd = [[sLon, sLat], [eLon, eLat]];
+              setDraftCoordinates(nextFwd);
+            }
+            if (supportsTwoWayLineEdit && draftReverseCoordinates.length < 2) {
+              const rsLat = Number(revStartLat) || Number(endLat);
+              const rsLon = Number(revStartLon) || Number(endLon);
+              const reLat = Number(revEndLat) || Number(startLat);
+              const reLon = Number(revEndLon) || Number(startLon);
+              if (rsLat && rsLon && reLat && reLon) {
+                setDraftReverseCoordinates?.(
+                  draftCoordinates.length >= 2 && (revStartLat === "" && revEndLat === "")
+                    ? [...nextFwd].reverse().map((p) => [...p] as [number, number])
+                    : [[rsLon, rsLat], [reLon, reLat]]
+                );
+              }
+            } else if (activeEditTarget === "REVERSE" && draftReverseCoordinates.length < 2) {
+              setDraftReverseCoordinates?.([...nextFwd].reverse().map((p) => [...p] as [number, number]));
             }
             routingRequestRef.current += 1;
             freePastRef.current = []; freeFutureRef.current = [];
@@ -358,7 +477,7 @@ export function RouteGeometryEditorSection({
               <ActionButton variant="secondary" disabled={!freePastRef.current.length} onClick={() => undoFreeGeometry(false)}>ย้อนกลับ</ActionButton>
               <ActionButton variant="secondary" disabled={!freeFutureRef.current.length} onClick={() => undoFreeGeometry(true)}>ทำซ้ำ</ActionButton>
             </ToolGroup>
-            <p className="text-xs text-sky-200">ลากหมุดเล็กบนเส้นเพื่อย้ายจุด คลิกจุดกึ่งกลางเพื่อแทรก คลิกขวาเพื่อลบ หรือเลือกโหมดลบจุด ข้อมูลจะคงแนวเส้นอิสระตามที่บันทึก</p>
+            <p className="text-xs text-sky-200">ลากหมุดเล็กบนเส้น (รวมถึงจุดต้นทาง–ปลายทาง) เพื่อย้ายจุด คลิกจุดกึ่งกลางเพื่อแทรก คลิกขวาเพื่อลบ หรือเลือกโหมดลบจุด ข้อมูลจะคงแนวเส้นอิสระตามที่บันทึก</p>
             {supportsTwoWayLineEdit && (
               <p className="text-xs text-amber-200">
                 กำลังดัดเส้น: <strong>{activeEditTarget === "REVERSE" ? "ขากลับ (B → A)" : "ขาไป (A → B)"}</strong> (สลับปุ่มทิศทางด้านบนเพื่อแก้แต่ละฝั่งแยกกันได้ทันที)

@@ -14,6 +14,7 @@ import {
   parseFloodDirectionMeta,
 } from "@/lib/flood-event-schema";
 import { getLinkedDetoursForFlood, getLinkedEventsForDetour } from "@/lib/event-detour-links";
+import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import { getTrafficPresentation } from "@/lib/traffic-presentation";
 import { MapLegendOverlay } from "./MapLegendOverlay";
 import {
@@ -121,6 +122,7 @@ export function LongdoGisMap({
   const draftGroupRef = useRef<any>(null);
   const arrowGroupRef = useRef<any>(null);
   const draftLineRef = useRef<any>(null);
+  const revDraftLineRef = useRef<any>(null);
   const vertexGroupRef = useRef<any>(null);
   const officeGroupRef = useRef<any>(null);
   const floodLinesRef = useRef<Record<string, FloodLineEntry>>({});
@@ -861,7 +863,7 @@ export function LongdoGisMap({
     const renderer = rendererRef.current;
     const detourStyle = mapStyles.detour;
     const dColor = detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
-    const dDash = detourStyle?.pattern === "solid" ? undefined : (detourStyle?.dashArray || LAYER_CONFIG.DETOUR_YELLOW_LINE.dashArray);
+    const dDash = dashArrayFor(detourStyle);
     const className = lineAnimationClasses(detourStyle, allowLineAnimationRef.current);
 
     (systemData.detourRoutes || []).forEach((detour) => {
@@ -923,20 +925,21 @@ export function LongdoGisMap({
         const effectiveRev = revCoords.length >= 2 ? revCoords : (dirMode === "REVERSE_ONLY" ? fwdCoords : []);
         if (effectiveRev.length >= 2) {
           const revLatLngs = effectiveRev.map(toLeafletLatLng);
-          const revColor = dirMode === "REVERSE_ONLY" ? dColor : (detour.detour_meta?.arrow_color_reverse || "#38bdf8");
-          const reverseWeight = Math.max(3.5, (detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight) - 0.5);
+          const revColor = dColor;
+          const reverseWeight = detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight;
           addLineCasing(L, group, revLatLngs, detourStyle || {}, reverseWeight, renderer);
           const revPolyline = L.polyline(revLatLngs as any, {
             color: revColor,
             weight: reverseWeight,
-            dashArray: dDash || "6, 6",
-            opacity: detourStyle?.opacity ?? 0.9,
+            dashArray: dDash,
+            opacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
+            className,
             renderer,
           }).addTo(group);
           detourLinesRef.current.push({
             line: revPolyline,
-            baseWeight: Math.max(3.5, (detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight) - 0.5),
-            baseOpacity: detourStyle?.opacity ?? 0.9,
+            baseWeight: reverseWeight,
+            baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
           });
           const revPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
           revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), revPopupOpts);
@@ -1019,7 +1022,7 @@ export function LongdoGisMap({
     const floodWaveBadge = `<span style="background:${escapeHtml(fColor)};color:white" class="inline-flex h-5 w-5 items-center justify-center rounded-md border border-white/70 shadow-sm" aria-hidden="true">${floodWaveIcon}</span>`;
     const fBaseWeight = floodStyle?.weight || LAYER_CONFIG.FLOOD_RED_LINE.weight;
     const fOpacity = floodStyle?.opacity ?? LAYER_CONFIG.FLOOD_RED_LINE.opacity;
-    const fDash = floodStyle?.pattern === "dash" ? (floodStyle.dashArray || "8, 6") : undefined;
+    const fDash = dashArrayFor(floodStyle);
     const className = lineAnimationClasses(floodStyle, allowLineAnimationRef.current);
 
     const countDetoursForFlood = (flood: FloodRoute) =>
@@ -1341,6 +1344,7 @@ export function LongdoGisMap({
     if (!mapReady || !L || !group) return;
     group.clearLayers();
     draftLineRef.current = null;
+    revDraftLineRef.current = null;
     const renderer = rendererRef.current;
 
     // Blue dashed preview of the GIS file being imported / geometry being edited
@@ -1355,17 +1359,16 @@ export function LongdoGisMap({
       }).addTo(group);
     });
 
+    const draftStyle = draftMode === "FLOOD" ? mapStyles.flood : mapStyles.detour;
+    const draftColor = draftStyle?.color || (draftMode === "FLOOD" ? LAYER_CONFIG.FLOOD_RED_LINE.color : LAYER_CONFIG.DETOUR_YELLOW_LINE.color);
+    const draftDash = dashArrayFor(draftStyle);
+
     // Snapped draft route (Primary / Forward A->B)
     if (draftCoordinates.length >= 2) {
-      const draftColor = draftMode === "FLOOD"
-        ? (mapStyles.flood?.color || "#ef4444")
-        : (mapStyles.detour?.color || "#f59e0b");
       const draftLine = L.polyline(draftCoordinates.map(toLeafletLatLng) as any, {
         color: draftColor,
         weight: 6,
-        dashArray: draftMode === "FLOOD"
-          ? (mapStyles.flood?.pattern === "dash" ? (mapStyles.flood.dashArray || "8, 6") : undefined)
-          : (mapStyles.detour?.pattern === "solid" ? undefined : (mapStyles.detour?.dashArray || "8, 6")),
+        dashArray: draftDash,
         opacity: 0.95,
         renderer,
       }).addTo(group);
@@ -1382,12 +1385,13 @@ export function LongdoGisMap({
     // Snapped reverse draft route (B->A for Detour or Dual Carriageway preview)
     if (draftReverseCoordinates.length >= 2) {
       const revDraftLine = L.polyline(draftReverseCoordinates.map(toLeafletLatLng) as any, {
-        color: "#38bdf8",
-        weight: 5,
-        dashArray: "6, 6",
+        color: draftColor,
+        weight: 6,
+        dashArray: draftDash,
         opacity: 0.95,
         renderer,
       }).addTo(group);
+      revDraftLineRef.current = revDraftLine;
       revDraftLine.on("click", (event: any) => {
         if (adminPickModeRef.current !== "ADD_REVERSE_WAYPOINT") return;
         L.DomEvent.stopPropagation(event);
@@ -1410,20 +1414,42 @@ export function LongdoGisMap({
         .addTo(group);
     });
 
-    // Start / end pick markers (A / B)
-    draftPickMarkers.forEach((point) => {
-      const icon = L.divIcon({
-        html: `<div class="w-7 h-7 rounded-full bg-sky-500 text-white border-2 border-white font-heading font-black text-xs flex items-center justify-center shadow-lg">${escapeHtml(point.label)}</div>`,
-        className: "doh-draft-endpoint",
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
+    // Start / end pick markers (A / B and separate reverse pins B→ / →A).
+    // Hidden while freeform vertex handles are active so endpoint handles can be dragged freely.
+    if (!vertexEditable) {
+      const forwardPoints = draftPickMarkers.filter((p) => p.mode !== "PICK_REV_START" && p.mode !== "PICK_REV_END");
+      draftPickMarkers.forEach((point) => {
+        const isReversePin = point.mode === "PICK_REV_START" || point.mode === "PICK_REV_END";
+        const overlapsForwardPin = isReversePin && forwardPoints.some(
+          (fp) => Math.abs(fp.lat - point.lat) < 0.00008 && Math.abs(fp.lon - point.lon) < 0.00008
+        );
+        const badgeStyle = point.mode === "PICK_REV_START"
+          ? "background:#f59e0b;color:#0f172a;border:2px solid #fff"
+          : point.mode === "PICK_REV_END"
+            ? "background:#6366f1;color:#fff;border:2px solid #fff"
+            : "background:#0ea5e9;color:#fff;border:2px solid #fff";
+        const tooltipText = point.mode === "PICK_REV_START"
+          ? "จุดเริ่มต้นขากลับ (B → A) — ลากเพื่อย้าย"
+          : point.mode === "PICK_REV_END"
+            ? "จุดสิ้นสุดขากลับ (B → A) — ลากเพื่อย้าย"
+            : `จุด${point.label}`;
+        const icon = L.divIcon({
+          html: `<div style="${badgeStyle}" class="min-w-7 h-7 px-1.5 rounded-full font-heading font-black text-xs flex items-center justify-center shadow-lg">${escapeHtml(point.label)}</div>`,
+          className: isReversePin ? "doh-draft-rev-endpoint" : "doh-draft-endpoint",
+          iconSize: [32, 28],
+          iconAnchor: overlapsForwardPin ? [-2, 14] : [16, 14],
+        });
+        const marker = L.marker([point.lat, point.lon], {
+          icon,
+          zIndexOffset: isReversePin ? 1250 : 1200,
+          draggable: true,
+        }).bindTooltip(tooltipText, { direction: "top" }).addTo(group);
+        marker.on("dragend", (event: any) => {
+          const position = event.target.getLatLng();
+          onCoordinatePickedRef.current?.(Number(position.lat.toFixed(6)), Number(position.lng.toFixed(6)), point.mode);
+        });
       });
-      const marker = L.marker([point.lat, point.lon], { icon, zIndexOffset: 1200, draggable: true }).bindTooltip(`จุด${point.label}`, { direction: "top" }).addTo(group);
-      marker.on("dragend", (event: any) => {
-        const position = event.target.getLatLng();
-        onCoordinatePickedRef.current?.(Number(position.lat.toFixed(6)), Number(position.lng.toFixed(6)), point.mode);
-      });
-    });
+    }
 
     // Numbered draggable waypoints for forward path (A->B)
     draftWaypoints.forEach((wp, idx) => {
@@ -1460,9 +1486,10 @@ export function LongdoGisMap({
     raisePathLayers(group);
     return () => {
       draftLineRef.current = null;
+      revDraftLineRef.current = null;
       group.clearLayers();
     };
-  }, [mapReady, incomingGisLines, draftCoordinates, draftReverseCoordinates, draftWaypoints, draftReverseWaypoints, draftConflictPoints, draftPickMarkers, draftMode, mapStyles]);
+  }, [mapReady, incomingGisLines, draftCoordinates, draftReverseCoordinates, draftWaypoints, draftReverseWaypoints, draftConflictPoints, draftPickMarkers, draftMode, mapStyles, vertexEditable]);
 
   // 4f-arrows. Directional Arrow System (Items 2 & 4): Viewport-culled, zoom-gated directional arrows for highways, detours, and active draft previews.
   useEffect(() => {
@@ -1538,16 +1565,18 @@ export function LongdoGisMap({
       const counter = { count: 0 };
 
       // 1. Draft preview arrows (always shown at zoom >= 11 so admin can inspect before saving)
+      const draftStyle = draftMode === "DETOUR" ? mapStyles.detour : mapStyles.flood;
+      const draftBadgeBg = draftStyle?.color || (draftMode === "DETOUR" ? LAYER_CONFIG.DETOUR_YELLOW_LINE.color : LAYER_CONFIG.FLOOD_RED_LINE.color);
+      const draftArrowColor = resolveVisibleArrowColor(draftBadgeBg, draftStyle?.arrowColor || (draftMode === "DETOUR" ? "#0f172a" : "#ffffff"));
       if (z >= 11 && draftCoordinates.length >= 2) {
-        const isDetourDraft = draftMode === "DETOUR";
         const effectiveDir = draftReverseCoordinates.length >= 2 ? "FORWARD" : draftDirectionMeta;
         placeArrowsOnLine(
           draftCoordinates,
           effectiveDir,
-          isDetourDraft ? "#0f172a" : "#ffffff",
+          draftArrowColor,
           13,
           110,
-          isDetourDraft ? "#f59e0b" : "#0284c7",
+          draftBadgeBg,
           viewport,
           counter
         );
@@ -1556,10 +1585,10 @@ export function LongdoGisMap({
         placeArrowsOnLine(
           draftReverseCoordinates,
           "FORWARD",
-          "#0f172a",
+          draftArrowColor,
           13,
           110,
-          "#38bdf8",
+          draftBadgeBg,
           viewport,
           counter
         );
@@ -1574,10 +1603,10 @@ export function LongdoGisMap({
       const showDetourArrows = detourStyle?.showArrows ?? true;
       const detourMinZoom = detourStyle?.arrowMinZoom ?? 11;
       if (showDetourLayer && showDetourArrows && z >= detourMinZoom) {
-        const dArrowColor = detourStyle?.arrowColor || "#0f172a";
+        const dBadgeBg = detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
+        const dArrowColor = resolveVisibleArrowColor(dBadgeBg, detourStyle?.arrowColor || "#0f172a");
         const dArrowSize = detourStyle?.arrowSize || 12;
         const dArrowSpacing = detourStyle?.arrowSpacingPx || 120;
-        const dBadgeBg = detourStyle?.color || "#FBC02D";
 
         (systemData.detourRoutes || []).forEach((detour) => {
           if (!detour.is_active) return;
@@ -1594,7 +1623,7 @@ export function LongdoGisMap({
           } else {
             if (rev.length >= 2) {
               placeArrowsOnLine(fwd, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
-              placeArrowsOnLine(rev, "FORWARD", "#0f172a", dArrowSize, dArrowSpacing, "#38bdf8", viewport, counter);
+              placeArrowsOnLine(rev, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
             } else {
               placeArrowsOnLine(fwd, "TWO_WAY", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
             }
@@ -1705,7 +1734,11 @@ export function LongdoGisMap({
         handle.on("drag", (event: any) => {
           const position = event.target.getLatLng();
           working[index] = [position.lat, position.lng];
-          if (!vertexEditCoordinates || vertexEditCoordinates === draftCoordinates) draftLineRef.current?.setLatLngs(working);
+          if (vertexEditCoordinates && vertexEditCoordinates === draftReverseCoordinates) {
+            revDraftLineRef.current?.setLatLngs(working);
+          } else if (!vertexEditCoordinates || vertexEditCoordinates === draftCoordinates) {
+            draftLineRef.current?.setLatLngs(working);
+          }
         });
         handle.on("dragend", (event: any) => {
           const position = event.target.getLatLng();
@@ -1758,7 +1791,7 @@ export function LongdoGisMap({
       map.off("moveend", schedule);
       group.clearLayers();
     };
-  }, [mapReady, vertexEditable, draftCoordinates, vertexEditCoordinates]);
+  }, [mapReady, vertexEditable, draftCoordinates, draftReverseCoordinates, vertexEditCoordinates]);
 
   // 4g. DOH offices & highway stations
   useEffect(() => {

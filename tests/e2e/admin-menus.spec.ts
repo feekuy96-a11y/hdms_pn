@@ -546,3 +546,153 @@ test("incident registry hides event codes, verifies complete saves, uses map flo
   expect(savedPayloads[0]?.directionMeta?.trafficStatusDetail).toBe("PASSABLE");
   expect(savedPayloads[0]?.directionMeta?.status_verified).toBe(true);
 });
+
+test("two-way detour uses configured line style color for both directions and arrow badges", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Map style rendering test runs on desktop viewport");
+
+  const styledPayload = {
+    updatedAt: "2026-11-19T00:00:00.000Z",
+    floodRoutes: [],
+    detourRoutes: [
+      {
+        id: "DET-STYLE-2WAY",
+        route_name: "ทางเลี่ยงทดสอบสีสองทิศทาง",
+        description: "ทดสอบสีสไตล์เส้นทาง",
+        is_active: true,
+        direction_mode: "TWO_WAY",
+        lat_start: 6.86,
+        lon_start: 101.24,
+        lat_end: 6.88,
+        lon_end: 101.27,
+        coordinates_json: [
+          [101.24, 6.86],
+          [101.255, 6.87],
+          [101.27, 6.88],
+        ],
+        reverse_coordinates_json: [
+          [101.271, 6.879],
+          [101.256, 6.869],
+          [101.241, 6.859],
+        ],
+        detour_meta: { show_arrows: true },
+      },
+    ],
+    timelineUpdates: [],
+    mitigationProjects: [],
+    offices: [],
+    highwayLayers: [],
+    mapStyles: {
+      flood: { color: "#D32F2F", weight: 6, opacity: 0.95, borderActive: true, borderColor: "#ffffff", borderWidth: 1.5, pattern: "solid", animation: "none" },
+      detour: { color: "#10B981", weight: 4.5, opacity: 0.95, borderActive: true, borderColor: "#000000", borderWidth: 1, pattern: "long-dash-dot", animation: "arrows", showArrows: true, arrowColor: "#0f172a", arrowSize: 12, arrowSpacingPx: 80, arrowMinZoom: 10 },
+      primary: { color: "#1B5E20", weight: 5, opacity: 0.9, pattern: "solid", animation: "none" },
+      secondary: { color: "#0284c7", weight: 3.5, opacity: 0.85, pattern: "solid", animation: "none" },
+    },
+    systemSettings: { name: "ระบบทดสอบ", org: "แขวงทางหลวงปัตตานี", phone: "1586" },
+  };
+
+  await page.route("**/functions/v1/hdms-api*", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(styledPayload) });
+  });
+
+  await page.goto(`${base}/`);
+  await expect(page.locator(".doh-detour-symbol")).toBeVisible({ timeout: 10_000 });
+  const arrowBadges = page.locator(".doh-dir-arrow-icon > div");
+  await expect.poll(async () => await arrowBadges.count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
+
+  const badgeColors = await arrowBadges.evaluateAll((els) =>
+    els.map((el) => getComputedStyle(el).backgroundColor)
+  );
+  expect(badgeColors.length).toBeGreaterThanOrEqual(2);
+  for (const bg of badgeColors) {
+    expect(bg).toBe("rgb(16, 185, 129)");
+  }
+  expect(badgeColors).not.toContain("rgb(56, 189, 248)");
+});
+
+test("two-way detour supports separate B->A pins and freeform endpoint/vertex customization", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Map editing is verified in the desktop workspace");
+  const savedPayloads: any[] = [];
+  const requestedRoutes: string[] = [];
+
+  await page.route("**/functions/v1/hdms-api*", async (route) => {
+    const body = JSON.parse(route.request().postData() || "{}");
+    if (body.action === "upsertRouteAction") {
+      savedPayloads.push(body.args[0]);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, savedId: "DET-NEW-1", systemData: { updatedAt: "2026-11-19T00:00:00.000Z", floodRoutes: [], detourRoutes: [], timelineUpdates: [], mitigationProjects: [], offices: [], highwayLayers: [], mapStyles: null, systemSettings: { name: "ทดสอบ", org: "แขวงทางหลวงปัตตานี", phone: "1586" } } }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ updatedAt: "2026-11-19T00:00:00.000Z", floodRoutes: [], detourRoutes: [], timelineUpdates: [], mitigationProjects: [], offices: [], highwayLayers: [], mapStyles: null, systemSettings: { name: "ทดสอบ", org: "แขวงทางหลวงปัตตานี", phone: "1586" } }),
+    });
+  });
+
+  await page.route("**/route/v1/driving/**", async (route) => {
+    const url = route.request().url();
+    requestedRoutes.push(url);
+    const isReverse = url.includes("101.194,6.841;101.184,6.832");
+    const coords = isReverse
+      ? [[101.194, 6.841], [101.189, 6.837], [101.184, 6.832]]
+      : [[101.186, 6.834], [101.189, 6.836], [101.192, 6.839]];
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: "Ok",
+        routes: [{ distance: 1200, duration: 90, geometry: { type: "LineString", coordinates: coords } }],
+      }),
+    });
+  });
+
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "จัดการแผนที่");
+  await page.getByRole("button", { name: "ทางเลี่ยง", exact: true }).click();
+  await page.getByPlaceholder("เช่น ทางเลี่ยง ทล.4092 สายหนองจิก - โคกโพธิ์").fill("ทางเลี่ยงทดสอบแยกหมุดสองทิศทาง");
+
+  await page.getByLabel("พิกัดจุด A").fill("6.8340, 101.1860");
+  await page.getByLabel("พิกัดจุด A").blur();
+  await page.getByLabel("พิกัดจุด B").fill("6.8390, 101.1920");
+  await page.getByLabel("พิกัดจุด B").blur();
+
+  const revGroup = page.getByRole("group", { name: "หมุดเส้นทางขากลับ (B → A)" });
+  await expect(revGroup).toBeVisible();
+  await revGroup.getByLabel("พิกัดจุดเริ่มต้นขากลับ (B → A)").fill("6.8410, 101.1940");
+  await revGroup.getByLabel("พิกัดจุดเริ่มต้นขากลับ (B → A)").blur();
+  await revGroup.getByLabel("พิกัดจุดสิ้นสุดขากลับ (B → A)").fill("6.8320, 101.1840");
+  await revGroup.getByLabel("พิกัดจุดสิ้นสุดขากลับ (B → A)").blur();
+
+  await expect(page.locator(".doh-draft-endpoint")).toHaveCount(2);
+  await expect(page.locator(".doh-draft-rev-endpoint")).toHaveCount(2);
+
+  await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
+  await expect(page.getByText(/คำนวณทางเลี่ยงตามถนนสำเร็จ: A→B \(3 จุด\) และ B→A \(3 จุด\)/)).toBeVisible();
+  expect(requestedRoutes.some((u) => u.includes("101.186,6.834;101.192,6.839"))).toBe(true);
+  expect(requestedRoutes.some((u) => u.includes("101.194,6.841;101.184,6.832"))).toBe(true);
+
+  // Enter free edit mode and verify both directions switch cleanly without endpoint lock errors
+  await page.getByRole("button", { name: "ดัดเส้นอิสระ", exact: true }).click();
+  await expect(page.locator(".doh-vertex-handle")).toHaveCount(3);
+
+  const dirSwitch = page.getByLabel("เลือกทิศทางสำหรับดัดเส้น");
+  await dirSwitch.getByRole("button", { name: "ขากลับ B → A" }).click();
+  await expect(page.getByText(/กำลังดัดเส้น:.*ขากลับ \(B → A\)/)).toBeVisible();
+  await expect(page.locator(".doh-vertex-handle")).toHaveCount(3);
+
+  // Insert a midpoint vertex on reverse B -> A line via midpoint handle click
+  await page.locator(".doh-vertex-mid").first().click();
+  await expect(page.locator(".doh-vertex-handle")).toHaveCount(4);
+
+  // Save and verify both forward and reverse geometries are preserved
+  await page.getByRole("button", { name: /บันทึกทางเลี่ยงเข้าสู่ระบบสารสนเทศ/ }).click();
+  await expect.poll(() => savedPayloads.length).toBe(1);
+  expect(savedPayloads[0].directionMode).toBe("TWO_WAY");
+  expect(savedPayloads[0].coordinates).toHaveLength(3);
+  expect(savedPayloads[0].reverseCoordinates).toHaveLength(4);
+  expect(savedPayloads[0].reverseCoordinates[0][0]).toBeCloseTo(101.194, 3);
+  expect(savedPayloads[0].reverseCoordinates[3][0]).toBeCloseTo(101.184, 3);
+});
