@@ -14,8 +14,11 @@ import {
   Navigation,
 } from "lucide-react";
 import { DETOUR_DIRECTION_MODES, DetourDirectionModeType, RoadSideType } from "@/lib/constants";
-import { FloodParentEvent, generateNextEventCode } from "@/lib/flood-event-schema";
-import { HighwayOption } from "@/lib/highway-schema";
+import { groupFloodRoutesIntoEvents, generateNextEventCode } from "@/lib/flood-event-schema";
+import { getAvailableHighwayRoutes } from "@/lib/highway-schema";
+
+export type FloodParentEvent = ReturnType<typeof groupFloodRoutesIntoEvents>[number];
+export type HighwayOption = ReturnType<typeof getAvailableHighwayRoutes>[number];
 
 export interface HighwayIdentificationSectionProps {
   routeMode: "FLOOD" | "DETOUR";

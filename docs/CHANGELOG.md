@@ -1,5 +1,13 @@
 ﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-117] 2026-11-18 แยกโมดูลย่อยส่วนที่ 1 (`HighwayIdentificationSection.tsx`) และ `buildDetourMetaPayload` จาก `MapManagementTab.tsx` พร้อมอัปเดตสถานะเผยแพร่ใน `AI_HANDOFF.md`
+- **ไฟล์:** `components/admin/tabs/HighwayIdentificationSection.tsx` (ใหม่), `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/map-management-helpers.ts`, `docs/{AI_HANDOFF,CHANGELOG,BACKLOG}.md`
+- **การแก้ไข:**
+  1. **อัปเดตสถานะเผยแพร่ล่าสุดใน `docs/AI_HANDOFF.md`:** ปรับเลข commit อ้างอิงส่วนหัวและหมวดสถานะเผยแพร่ล่าสุดจาก `d656d12` เป็น `3beabf5` (`UPDATE-116`, CI run `44331866679` / Deploy Pages run `44331865436` สำเร็จ, HTTP 200) เพื่อป้องกันความสับสนของ AI ที่รับงานต่อ
+  2. **แยกส่วนที่ 1 และฟังก์ชันสร้าง `detour_meta` (`MapManagementTab.tsx` ลดจาก 2,460 → 2,118 บรรทัด):** แยก UI ฟอร์มส่วนที่ 1 "ข้อมูลสายทางและพื้นที่" (Parent Event, หมู่บ้าน/จุดสังเกต, Smart Search ทางหลวง, ช่วง กม. Linear Referencing, และการตั้งค่าทางเลี่ยง) ออกเป็น `components/admin/tabs/HighwayIdentificationSection.tsx` (364 บรรทัด) และย้ายตรรกะสร้าง `detour_meta` ออกเป็น `buildDetourMetaPayload` ใน `map-management-helpers.ts` โดยคง DOM structure และ accessible name เดิมทุกประการ
+- **ตรวจแล้ว:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (`6/6` static pages), และ Playwright E2E บน `PLAYWRIGHT_STATIC=1` (`flood-form-rules`, `admin-menus`, `smoke`)
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Push ขึ้น `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
 ### [UPDATE-116] 2026-11-18 แยกโมดูลย่อยจาก `LongdoGisMap.tsx` และ `MapManagementTab.tsx` (B-005)
 - **ไฟล์:** `components/map/LongdoGisMap.tsx`, `components/map/longdo-map-popups.ts` (ใหม่), `components/map/MapLegendOverlay.tsx` (ใหม่), `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/map-management-helpers.ts` (ใหม่), `components/admin/tabs/RouteGeometryEditorSection.tsx` (ใหม่), `components/admin/tabs/FloodSituationSection.tsx` (ใหม่), `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
 - **การแก้ไข:**
