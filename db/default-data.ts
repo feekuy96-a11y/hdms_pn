@@ -4,7 +4,6 @@
  */
 
 import {
-  DEFAULT_DOH_OFFICES,
   DEFAULT_MAP_STYLES,
   DohOfficeLocation,
   MapLineStyleItem,
@@ -180,7 +179,7 @@ export interface SystemDataPayload {
 
 export const INITIAL_SYSTEM_DATA: SystemDataPayload = {
   updatedAt: "2026-11-02T03:00:00.000Z",
-  offices: DEFAULT_DOH_OFFICES,
+  offices: [],
   mapStyles: DEFAULT_MAP_STYLES,
   systemSettings: {
     name: APP_CONFIG.TITLE,

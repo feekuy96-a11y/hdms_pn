@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { MitigationProject, SystemDataPayload } from "@/db/default-data";
-import { HIGHWAY_ROUTES } from "@/lib/constants";
+import { getAvailableHighwayRoutes } from "@/lib/highway-schema";
 import { Briefcase, Plus, Printer, Save, Edit, Trash2, Image as ImageIcon } from "lucide-react";
 import { deleteExternalMediaAction, upsertMitigationProjectAction, deleteMitigationProjectAction, syncReportingRowAction, uploadExternalMediaAction } from "@/app/actions/doh-actions";
 
@@ -23,9 +23,13 @@ export function GovernorProjectsTab({
   showConfirmModal,
   showSuccessModal,
 }: GovernorProjectsTabProps) {
+  const availableRoutes = useMemo(
+    () => getAvailableHighwayRoutes(systemData, { uniqueRouteNo: true }),
+    [systemData]
+  );
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
   const [projId, setProjId] = useState("");
-  const [projRouteNo, setProjRouteNo] = useState("42");
+  const [projRouteNo, setProjRouteNo] = useState("");
   const [projKmRange, setProjKmRange] = useState("");
   const [projLocation, setProjLocation] = useState("");
   const [projStatus, setProjStatus] = useState<"COMPLETED" | "PENDING_BUDGET">("COMPLETED");
@@ -72,8 +76,8 @@ export function GovernorProjectsTab({
   };
 
   const handleSaveProject = async () => {
-    if (!projLocation || !projSolution) {
-      onToast("กรุณาระบุสถานที่และแนวทางการแก้ไขปัญหา");
+    if (!projRouteNo || !projLocation || !projSolution) {
+      onToast("กรุณาระบุสายทาง สถานที่ และแนวทางการแก้ไขปัญหา");
       return;
     }
     const id = projId || `P-${Date.now()}`;
@@ -161,7 +165,7 @@ export function GovernorProjectsTab({
             type="button"
             onClick={() => {
               setProjId("");
-              setProjRouteNo("42");
+              setProjRouteNo(availableRoutes[0]?.no || "");
               setProjKmRange("");
               setProjLocation("");
               setProjStatus("COMPLETED");
@@ -212,9 +216,15 @@ export function GovernorProjectsTab({
                 onChange={(e) => setProjRouteNo(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
               >
-                {HIGHWAY_ROUTES.map((h) => (
+                {availableRoutes.length === 0 && (
+                  <option value="">-- ยังไม่มีข้อมูลสายทางในฐานข้อมูล --</option>
+                )}
+                {projRouteNo && !availableRoutes.some((h) => h.no === projRouteNo) && (
+                  <option value={projRouteNo}>ทล.{projRouteNo}</option>
+                )}
+                {availableRoutes.map((h) => (
                   <option key={h.no} value={h.no}>
-                    ทล.{h.no} - {h.name}
+                    {h.name}
                   </option>
                 ))}
               </select>

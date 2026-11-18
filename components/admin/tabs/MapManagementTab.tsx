@@ -41,7 +41,6 @@ import {
   analyzeCarriagewaySeparation,
 } from "@/lib/gis-utils";
 import {
-  HIGHWAY_ROUTES,
   SAFETY_MEASURES,
   ROAD_SIDE_OPTIONS,
   AFFECTED_LANES_OPTIONS,
@@ -70,7 +69,7 @@ import {
   parseKmPostMeters,
 } from "@/lib/flood-event-schema";
 import { TRAFFIC_STATUS_OPTIONS } from "@/lib/traffic-presentation";
-import { groupHighwayFeatures, HighwaySectionGroup, HighwayBranchItem } from "@/lib/highway-schema";
+import { groupHighwayFeatures, getAvailableHighwayRoutes, HighwaySectionGroup, HighwayBranchItem } from "@/lib/highway-schema";
 import { insertVertex, moveVertex, removeVertex, nearestInsertIndex } from "@/lib/line-edit";
 import type { VertexEditEvent } from "@/lib/line-edit";
 
@@ -397,82 +396,21 @@ export function MapManagementTab({
   }, [systemData.floodRoutes]);
 
   // Dynamic Highway Routes strictly from database matching Highway Engineering Specifications
-  const availableHighways = React.useMemo(() => {
-    type HighwayOption = {
-      no: string;
-      name: string;
-      sectionName?: string;
-      kmStart?: string;
-      kmEnd?: string;
-      sortOrder: number;
-    };
-    const list: HighwayOption[] = [];
-    const seen = new Set<string>();
+  const availableHighways = React.useMemo(
+    () => getAvailableHighwayRoutes(systemData),
+    [systemData]
+  );
 
-    (systemData.highwayLayers || []).forEach((layer) => {
-      if (layer.geojson_data && Array.isArray(layer.geojson_data.features)) {
-        layer.geojson_data.features.forEach((f: any, idx: number) => {
-          const props = f.properties || {};
-          const no = props.route_no || props.route_code || props.ROAD_NO || props.route || props.code;
-          const section = props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || "";
-          if (no) {
-            const cleanNo = String(no).replace(/^ทล\.?/i, "").trim();
-            const kmS = props.km_start ? String(props.km_start).trim() : "";
-            const kmE = props.km_end ? String(props.km_end).trim() : "";
-            const key = `${cleanNo}_${section}_${kmS}_${kmE}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              const num = Number(cleanNo.match(/\d+/)?.[0] ?? Infinity);
-              list.push({
-                no: cleanNo,
-                name: section ? `ทล.${cleanNo} - ${section}` : `ทล.${cleanNo}`,
-                sectionName: section,
-                kmStart: kmS,
-                kmEnd: kmE,
-                sortOrder: num,
-              });
-            }
-          }
-        });
-      }
+  const availableOfficeNames = React.useMemo(() => {
+    const names = new Set<string>();
+    (systemData.offices || []).forEach((o) => {
+      if (o.is_active && o.name) names.add(o.name.trim());
     });
-
-    (systemData.floodRoutes || []).forEach((r) => {
-      if (r.route_no) {
-        const cleanNo = String(r.route_no).replace(/^ทล\.?/i, "").trim();
-        const key = `${cleanNo}_${r.section_name || ""}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          const num = Number(cleanNo.match(/\d+/)?.[0] ?? Infinity);
-          list.push({
-            no: cleanNo,
-            name: r.section_name ? `ทล.${cleanNo} - ${r.section_name}` : `ทล.${cleanNo}`,
-            sectionName: r.section_name,
-            kmStart: r.km_start,
-            kmEnd: r.km_end,
-            sortOrder: num,
-          });
-        }
-      }
+    availableHighways.forEach((h) => {
+      if (h.responsibleOffice) names.add(h.responsibleOffice);
     });
-
-    if (list.length === 0) {
-      HIGHWAY_ROUTES.forEach((h) => {
-        const num = Number(h.no.match(/\d+/)?.[0] ?? Infinity);
-        list.push({
-          no: h.no,
-          name: `ทล.${h.no} - ${h.name}`,
-          sectionName: h.name,
-          sortOrder: num,
-        });
-      });
-    }
-
-    return list.sort((a, b) => {
-      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-      return a.no.localeCompare(b.no, "th", { numeric: true }) || a.name.localeCompare(b.name, "th");
-    });
-  }, [systemData.highwayLayers, systemData.floodRoutes]);
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "th"));
+  }, [systemData.offices, availableHighways]);
 
   // Hydrate an existing record only once per editing session. Refetches of public/full
   // geometry must not silently overwrite the officer's unsaved manual edits.
@@ -2586,11 +2524,17 @@ export function MapManagementTab({
                 <label className="text-xs text-slate-300 block mb-1">ผู้รายงาน / หมวดทางหลวง</label>
                 <input
                   type="text"
+                  list="doh-offices-datalist"
                   value={reporterName}
                   onChange={(e) => setReporterName(e.target.value)}
                   placeholder="เช่น หมวดทางหลวงหนองจิก / เจ้าหน้าที่ศูนย์ฯ"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                 />
+                <datalist id="doh-offices-datalist">
+                  {availableOfficeNames.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
               </div>
             </div>
 
