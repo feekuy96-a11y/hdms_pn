@@ -37,9 +37,10 @@
 ### KI-012: ยังไม่มี field telemetry สำหรับ RAM/CPU ของตัวแก้แนวเส้น
 - Lab test 1,200 จุดยืนยัน canvas เดียวและเพดาน 400 handle แต่ไม่สามารถรายงาน JS heap หรือ CPU บนเครื่องเจ้าหน้าที่จริงได้อย่างน่าเชื่อถือใน CI/headless. เก็บ Chrome Performance trace/Task Manager จากเครื่องที่เคยค้างก่อนเปลี่ยนเพดานหรือเพิ่ม Web Worker; ดู B-005.
 
-### KI-013: ความสัมพันธ์ Event↔Detour หลายต่อหลาย (รอ Apply SQL 20261118000100 + Deploy Edge + Web)
-- Migration `20261117135032_event_detour_relationships.sql` และ trigger `20261117192000_sync_flood_event_segments.sql` ถูก apply Production แล้ว. ใน `UPDATE-109` เพิ่ม migration `20261118000100_event_detour_both_directions.sql` (รองรับ `BOTH`/`TWO_WAY`), ปรับ Edge `hdms-api` ให้แนบ `eventDetourLinks` (พร้อมกรอง `WITHDRAWN`/Draft ออกจาก Public) และปรับหน้ารายละเอียดทุกจุดใน Admin (`IncidentRegistryTab`, `DetourManagementTab`), ประชาชน (`app/page.tsx`) และแผนที่ (`LongdoGisMap.tsx`) ให้อ่านความสัมพันธ์จาก `eventDetourLinks` ร่วมกับ fallback `flood_id_ref` แล้ว.
-- ฟอร์มแก้ไขเส้นทางเลี่ยงเดิมยังคงแยกจาก `EventDetourLinkModal` และยังไม่ตัดข้อมูล `flood_id_ref` ออกเพื่อให้เข้ากันได้ย้อนหลัง (B-023). รอบต่อไปคือ apply SQL `20261118000100` → deploy Edge `hdms-api` → deploy เว็บขึ้น `main`.
+### KI-013: ความสัมพันธ์ Event↔Detour หลายต่อหลาย — ปิดแล้ว (2026-11-19, UPDATE-122)
+- Migration `20261117135032_event_detour_relationships.sql`, trigger `20261117192000_sync_flood_event_segments.sql` และ migration `20261118000100_event_detour_both_directions.sql` ถูก apply เข้า Supabase Production สำเร็จแล้ว (รองรับ `BOTH`/`TWO_WAY`, check constraints และฟังก์ชัน `doh_replace_event_detour_links` อัปเดตครบถ้วน)
+- Edge Function `hdms-api` v23 แนบ `eventDetourLinks` พร้อมกรอง `WITHDRAWN`/Draft สำหรับ Public
+- หน้ารายละเอียดทุกจุดใน Admin (`IncidentRegistryTab`, `DetourManagementTab`), ประชาชน (`app/page.tsx`) และแผนที่ (`LongdoGisMap.tsx`) เชื่อมโยงความสัมพันธ์ผ่าน `eventDetourLinks` ร่วมกับ fallback `flood_id_ref` ครบวงจรแล้ว. ดู B-023.
 
 ### KI-014: Public fallback patch เผยแพร่แล้ว — ปิดแล้ว
 - รวมเข้า `main` ผ่าน PR #32 และ PR #33 (commit `866eb93`) Deploy GitHub Pages สำเร็จ (Run `44104409962`); fallback ฝั่ง browser ถูกจำกัดเฉพาะ public RPC หรือแสดง Error/Retry พร้อม regression test ผ่านครบ (ดู B-019).

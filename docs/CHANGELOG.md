@@ -1,5 +1,14 @@
 ﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-122] 2026-11-19 Apply SQL Migration B-023 (`event_detour_both_directions`) บน Supabase Production
+- **ไฟล์:** `supabase/migrations/20261118000100_event_detour_both_directions.sql`, `docs/{CHANGELOG,AI_HANDOFF,BACKLOG,KNOWN_ISSUES}.md`
+- **การดำเนินการ:**
+  1. **อนุมัติและรัน DDL บน Supabase Production (B-023, KI-013):** ได้รับความยินยอมจากเจ้าของระบบ ("อนุญาตทุกครั้งจนเสร็จ") ดำเนินการ apply migration `20261118000100_event_detour_both_directions.sql` เข้า Supabase Production ผ่าน MCP tool `supabase_apply_migration` สำเร็จ (`name: event_detour_both_directions`, `{"success": true}`)
+  2. **ปรับ Check Constraints:** `chk_doh_edl_event_direction` รองรับค่า `BOTH`/`UNKNOWN`, `chk_doh_edl_detour_direction` รองรับ `TWO_WAY`/`UNKNOWN`, และ `chk_doh_edl_recommended_reviewed`
+  3. **อัปเดตฟังก์ชัน `doh_replace_event_detour_links`:** รองรับการบันทึกเชื่อมโยงทางเลี่ยงแบบ 2 ทิศทาง และ validation ตาม segments
+  4. **สถานะความเข้ากันได้:** Edge Function `hdms-api` v23 บน Supabase และหน้าเว็บ Production บน GitHub Pages รองรับ schema นี้สมบูรณ์แล้ว
+- **ลำดับ Deploy & ย้อนกลับ:** SQL รันแล้ว → Edge Function v23 ใช้งานอยู่แล้ว → เว็บ GitHub Pages เผยแพร่แล้ว; แผนย้อนกลับ: รัน restore function จาก migration `20261117135032_event_detour_relationships.sql`
+
 ### [UPDATE-121] 2026-11-19 แก้ `popupclose` และพิกัดเทส 360×640 ที่ทำให้ E2E บน CI แกว่ง
 - **ไฟล์:** `components/map/LongdoGisMap.tsx`, `tests/e2e/public-route-sheet.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
 - **การแก้ไข:**

@@ -1,6 +1,6 @@
 # AI Handoff — สถานะร่วมของโครงการ HDMS_PN
 
-> อัปเดต: 19 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (ล่าสุดผ่าน `UPDATE-121` แก้ `popupclose` และเสถียรภาพ E2E 360×640, `UPDATE-120` แถบสรุปแผนที่ 360px `e22796f`, `UPDATE-119` ป๊อปอัพมือถือ `0e57bb1`, และ `UPDATE-118` แยกโมดูลย่อย `B-005`) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
+> อัปเดต: 19 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (ล่าสุดผ่าน `UPDATE-122` apply migration `20261118000100` B-023 บน Supabase Production, `UPDATE-121` แก้ `popupclose` และเสถียรภาพ E2E 360×640, `UPDATE-120` แถบสรุปแผนที่ 360px `e22796f`, `UPDATE-119` ป๊อปอัพมือถือ `0e57bb1`, และ `UPDATE-118` แยกโมดูลย่อย `B-005`) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`, B-023). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
 
 ## ก่อนเริ่มงานทุกครั้ง
 
@@ -41,7 +41,7 @@
 2. Apps Script outbox: ต้องยืนยันว่า Edge secret ชี้ไป URL `/exec` ของ Apps Script รุ่นมี idempotency แล้วจึง deploy Edge v18 ใหม่ (B-022)
 3. OSRM สาธารณะไม่มี SLA (B-008); เพิ่ม Google Routes v2 (`computeRoutes`) และ Geocoding v4 proxy เป็น Tier 1 ใน Edge `hdms-api` แล้ว (เปิดใช้เมื่อตั้ง `GOOGLE_MAPS_API_KEY` ใน Supabase Edge Secrets; มิฉะนั้นตัดวงจรอัตโนมัติไป OSRM/Nominatim/local) และคง `server/routing-service.mjs` / Docker/OSRM local ไว้เป็นทางเลือก LAN ห้ามลบเป็น cleanup
 4. ข้อจำกัด waypoint ของ Google Maps ยังมีอยู่ (B-013); `sampleWaypointsForGoogleMaps` อัปเกรดเป็นคัดจุดหักเลี้ยวสำคัญ (Douglas-Peucker ≤ 8 จุดเรียงตามเส้นทาง) และต้องคงการใช้ฟังก์ชันนี้เสมอ
-5. ความสัมพันธ์ Flood Event ↔ Detour แบบหลายต่อหลาย: migration `20261117135032_event_detour_relationships.sql` และ trigger `20261117192000_sync_flood_event_segments.sql` (`trg_doh_sync_flood_event_segment`) ถูก apply Production แล้ว. ใน `UPDATE-109` เพิ่ม migration `20261118000100_event_detour_both_directions.sql` (รองรับ `BOTH`/`TWO_WAY` + `UNKNOWN` segment), ปรับ Edge `hdms-api` ให้แนบ `eventDetourLinks`/`eventSegments`/`floodEvents` (ตัด `WITHDRAWN`/Draft ออกในฝั่ง Public), และเชื่อมหน้ารายละเอียดทุกจุดใน Admin/Public/Map ผ่าน `getLinkedDetoursForFlood`/`getLinkedEventsForDetour` (แสดงผลตามแนวทาง A+B พร้อม fallback `flood_id_ref`). ลำดับ deploy: SQL `20261118000100` → Edge `hdms-api` → เว็บ GitHub Pages (B-023).
+5. ความสัมพันธ์ Flood Event ↔ Detour แบบหลายต่อหลาย: migration `20261117135032_event_detour_relationships.sql`, trigger `20261117192000_sync_flood_event_segments.sql` (`trg_doh_sync_flood_event_segment`), และ migration `20261118000100_event_detour_both_directions.sql` ถูก apply เข้า Supabase Production ครบถ้วนแล้ว (ปิด B-023 ใน `UPDATE-122`); Edge Function `hdms-api` v23 และหน้าเว็บ GitHub Pages ทำงานร่วมกันสมบูรณ์แล้ว.
 
 ## วิธีส่งงานร่วมกัน
 
@@ -53,12 +53,13 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** แก้ไขสาเหตุที่ `test:e2e` บน CI (`CI #179`, `Deploy #161`) ตกใน `public-route-sheet.spec.ts` และแก้ `popupclose` ค้าง (`UPDATE-121`)
-- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `e22796f` — `UPDATE-120`)
-- **ไฟล์ที่แก้ไขแล้ว:** `components/map/LongdoGisMap.tsx`, `tests/e2e/public-route-sheet.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **งานที่กำลังทำ / เป้าหมาย:** Apply SQL Migration B-023 (`event_detour_both_directions`) บน Supabase Production และอัปเดตเอกสารระบบ (`UPDATE-122`)
+- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `ac3f5da` — `UPDATE-121`)
+- **ไฟล์ที่แก้ไขแล้ว:** `docs/{CHANGELOG,AI_HANDOFF,BACKLOG,KNOWN_ISSUES}.md`
 - **สิ่งที่ทำสำเร็จ:**
-  - แก้ `popupclose` ใน `LongdoGisMap.tsx` ให้ตรวจ `activePopup !== e?.popup` ไม่ให้ `isMapPopupOpen` ค้างเป็น `true` หลังปิดป๊อปอัพ
-  - แยกพิกัดหมุดทดสอบใน `tests/e2e/public-route-sheet.spec.ts` ให้อยู่โซนกลางจอและไม่ซ้อนกับแคปซูล `ทล.42` พร้อมถอด `{ force: true }` และทดสอบซ้ำ 5 รอบผ่าน 100%
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** รอตรวจผล GitHub Actions `CI` และ `Deploy GitHub Pages` หลัง push รอบนี้
-- **ผลทดสอบล่าสุด:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (`BASE_PATH=/hdms_pn` ผ่าน), Playwright `--repeat-each=5` (`10 passed, 10 skipped, 0 failed`), และ Playwright E2E 4 ไฟล์ (`26 passed, 4 skipped, 0 failed` ใน 20.7s)
-- **ขั้นตอนถัดไป:** ยืนยันผล CI (`CI`) และ `Deploy GitHub Pages` บน `main` หลัง push และตรวจ HTTP 200 บน `https://feekuy96-a11y.github.io/hdms_pn/`
+  - รัน migration `20261118000100_event_detour_both_directions.sql` เข้า Supabase Production ผ่าน `supabase_apply_migration` สำเร็จ
+  - ปรับ check constraints ตาราง `doh_event_detour_links` ให้รองรับ `BOTH`/`TWO_WAY` และอัปเดตฟังก์ชัน `doh_replace_event_detour_links`
+  - ปิดประเด็นค้าง Backlog B-023 และ Known Issue KI-013 ครบวงจร
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี; รอ commit & push บันทึกเอกสารขึ้น `main`
+- **ผลทดสอบล่าสุด:** การรัน migration สำเร็จ (`{"success": true}`), หน้าเว็บ Production `https://feekuy96-a11y.github.io/hdms_pn/` ตอบ HTTP 200, Edge Function `hdms-api` v23 ทำงานปกติ
+- **ขั้นตอนถัดไป:** Commit และ push การบันทึกสถานะขึ้น `main`
