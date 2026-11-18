@@ -105,9 +105,9 @@ export const DetourAdviceSection = React.memo(function DetourAdviceSection({
             value={detourAdviceView}
             onChange={setDetourAdviceView}
             options={[
-              { value: "FORWARD", label: "→ ขาไป (A → B)", ariaLabel: "ขาไป A → B" },
-              { value: "REVERSE", label: "← ขากลับ (B → A)", ariaLabel: "ขากลับ B → A" },
-              { value: "COMBINED", label: "⇄ ทั้ง ๒ ทิศทาง", ariaLabel: "ทั้ง ๒ ทิศทาง" },
+              { value: "FORWARD", label: "ขาไป (A → B)", ariaLabel: "ขาไป A → B" },
+              { value: "REVERSE", label: "ขากลับ (B → A)", ariaLabel: "ขากลับ B → A" },
+              { value: "COMBINED", label: "ทั้ง ๒ ทิศทาง", ariaLabel: "ทั้ง ๒ ทิศทาง" },
             ]}
           />
         </div>

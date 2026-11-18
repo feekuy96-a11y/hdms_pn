@@ -185,6 +185,7 @@ export function MapManagementTab({
   useEffect(() => { onDraftModeChange?.(routeMode); }, [routeMode, onDraftModeChange]);
   const routingRequest = useRef(0);
   const originalRouteCoordinates = useRef<[number, number][]>([]);
+  const originalReverseRouteCoordinates = useRef<[number, number][]>([]);
   const [routeEditId, setRouteEditId] = useState<string>("");
 
   // Common Highway Attributes
@@ -231,6 +232,10 @@ export function MapManagementTab({
   const [detourRoadCondition, setDetourRoadCondition] = useState("");
   const [detourDurationMinFwd, setDetourDurationMinFwd] = useState("");
   const [detourDurationMinRev, setDetourDurationMinRev] = useState("");
+  const [detourStartPhotoUrl, setDetourStartPhotoUrl] = useState("");
+  const [detourStartPhotoCaption, setDetourStartPhotoCaption] = useState("");
+  const [detourEndPhotoUrl, setDetourEndPhotoUrl] = useState("");
+  const [detourEndPhotoCaption, setDetourEndPhotoCaption] = useState("");
   const [forceStraightThrough, setForceStraightThrough] = useState(false);
   const [detourDirectionMode, setDetourDirectionMode] = useState<DetourDirectionModeType>("TWO_WAY");
   // The highway, flood and detour editors share the same draggable Leaflet vertex handles
@@ -498,6 +503,10 @@ export function MapManagementTab({
       });
       setDetourDurationMinFwd(fwdSec ? String(Math.max(1, Math.round(fwdSec / 60))) : "");
       setDetourDurationMinRev(revSec ? String(Math.max(1, Math.round(revSec / 60))) : "");
+      setDetourStartPhotoUrl(detour.detour_meta?.start_point_photo?.url || "");
+      setDetourStartPhotoCaption(detour.detour_meta?.start_point_photo?.caption || "");
+      setDetourEndPhotoUrl(detour.detour_meta?.end_point_photo?.url || "");
+      setDetourEndPhotoCaption(detour.detour_meta?.end_point_photo?.caption || "");
       setSaveAsDraft(!detour.is_active);
       setStartLat(detour.lat_start || 0);
       setStartLon(detour.lon_start || 0);
@@ -515,6 +524,9 @@ export function MapManagementTab({
       else if (typeof detour.reverse_coordinates_json === "string") {
         try { revCoords = JSON.parse(detour.reverse_coordinates_json); } catch { revCoords = []; }
       }
+      originalReverseRouteCoordinates.current = (
+        revCoords.length >= 2 ? revCoords : [...coords].reverse()
+      ).map((coordinate) => [...coordinate] as [number, number]);
       setDraftReverseCoordinates?.(revCoords);
 
       let revWps: [number, number][] = [];
@@ -807,6 +819,45 @@ export function MapManagementTab({
     setSectionName(`${highway}(ต.${startArea.subdistrict} อ.${startArea.district} → ต.${endArea.subdistrict} อ.${endArea.district})`);
   }, [routeNo, startArea, endArea]);
 
+  const activeEditTarget: "FORWARD" | "REVERSE" =
+    routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" ? freeEditTarget : "FORWARD";
+
+  const handleSelectEditDirection = (nextTarget: "FORWARD" | "REVERSE") => {
+    if (nextTarget === "REVERSE" && draftReverseCoordinates.length < 2 && draftCoordinates.length >= 2) {
+      const seeded = [...draftCoordinates].reverse().map((p) => [...p] as [number, number]);
+      setDraftReverseCoordinates?.(seeded);
+      if (originalReverseRouteCoordinates.current.length < 2) {
+        originalReverseRouteCoordinates.current = seeded.map((p) => [...p] as [number, number]);
+      }
+    }
+    setFreeEditTarget(nextTarget);
+    setAdminPickMode(null);
+    freePast.current = [];
+    freeFuture.current = [];
+    setFreeHistoryVersion((v) => v + 1);
+  };
+
+  const handleDetourPointPhotoUpload = async (
+    target: "START" | "END",
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const { dataUrl } = await compressImageToAdaptiveBase64(file, 250 * 1024);
+      if (target === "START") {
+        setDetourStartPhotoUrl(dataUrl);
+        onToast("แนบภาพบริเวณทางเข้าจุดเริ่มต้น (A) เรียบร้อย");
+      } else {
+        setDetourEndPhotoUrl(dataUrl);
+        onToast("แนบภาพบริเวณทางเข้าจุดสิ้นสุด (B) เรียบร้อย");
+      }
+    } catch {
+      onToast("ไม่สามารถประมวลผลไฟล์ภาพได้ กรุณาลองใหม่");
+    }
+  };
+
   // Swap Endpoints
   const handleSwapEndpoints = () => {
     const tmpLat = startLat;
@@ -815,6 +866,15 @@ export function MapManagementTab({
     setStartLon(endLon);
     setEndLat(tmpLat);
     setEndLon(tmpLon);
+
+    if (routeMode === "DETOUR") {
+      const tmpPhoto = detourStartPhotoUrl;
+      const tmpCaption = detourStartPhotoCaption;
+      setDetourStartPhotoUrl(detourEndPhotoUrl);
+      setDetourStartPhotoCaption(detourEndPhotoCaption);
+      setDetourEndPhotoUrl(tmpPhoto);
+      setDetourEndPhotoCaption(tmpCaption);
+    }
 
     if (draftCoordinates.length > 0) {
       const reversed = [...draftCoordinates].reverse() as [number, number][];
@@ -826,7 +886,7 @@ export function MapManagementTab({
     onToast("สลับจุดเริ่มต้นและสิ้นสุด A ⇄ B เรียบร้อย");
   };
 
-  // Add Midpoint Waypoint
+  // Add Midpoint Waypoint (supports both A -> B and B -> A)
   const handleAddMidpointWaypoint = () => {
     const start: [number, number] = [Number(startLon), Number(startLat)];
     const end: [number, number] = [Number(endLon), Number(endLat)];
@@ -835,21 +895,52 @@ export function MapManagementTab({
       onToast("กรุณากำหนดจุด A และ B ก่อนเพิ่มจุดกึ่งกลาง");
       return;
     }
+    if (activeEditTarget === "REVERSE") {
+      const revSource =
+        draftReverseCoordinates.length >= 2
+          ? draftReverseCoordinates
+          : [...draftCoordinates].reverse();
+      const midPoint: [number, number] =
+        revSource.length >= 2
+          ? revSource[Math.floor(revSource.length / 2)]
+          : [(end[0] + start[0]) / 2, (end[1] + start[1]) / 2];
+      const nextRevWps = [...draftReverseWaypoints, midPoint];
+      setDraftReverseWaypoints?.(nextRevWps);
+      onToast(`เพิ่มจุดดัดแนวเส้นขากลับ (B → A) ที่พิกัด ${midPoint[1].toFixed(4)}, ${midPoint[0].toFixed(4)}`);
+      if (startLat && startLon && endLat && endLon) {
+        void triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints, nextRevWps);
+      }
+      return;
+    }
     const midPoint: [number, number] = draftCoordinates.length >= 2
       ? draftCoordinates[Math.floor(draftCoordinates.length / 2)]
       : [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
-    setDraftWaypoints((prev) => [...prev, midPoint]);
+    const nextFwdWps = [...draftWaypoints, midPoint];
+    setDraftWaypoints(nextFwdWps);
     onToast(`เพิ่มจุดดัดแนวเส้นทางที่พิกัด ${midPoint[1].toFixed(4)}, ${midPoint[0].toFixed(4)}`);
   };
 
-  // Undo Waypoint
+  // Undo Waypoint (supports both A -> B and B -> A)
   const handleUndoWaypoint = () => {
+    if (activeEditTarget === "REVERSE") {
+      if (draftReverseWaypoints.length > 0) {
+        const updated = draftReverseWaypoints.slice(0, -1);
+        setDraftReverseWaypoints?.(updated);
+        onToast("ยกเลิกจุดดัดขากลับ (B → A) ล่าสุดเรียบร้อย");
+        if (startLat && startLon && endLat && endLon) {
+          void triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints, updated);
+        }
+      } else {
+        onToast("ไม่มีจุดดัดเส้นทางขากลับให้ยกเลิก");
+      }
+      return;
+    }
     if (draftWaypoints.length > 0) {
       const updated = draftWaypoints.slice(0, -1);
       setDraftWaypoints(updated);
       onToast("ยกเลิกจุดดัดล่าสุดเรียบร้อย");
       if (startLat && startLon && endLat && endLon) {
-        triggerDualRoadSnapping(startLat, startLon, endLat, endLon, updated);
+        triggerDualRoadSnapping(startLat, startLon, endLat, endLon, updated, draftReverseWaypoints);
       }
     } else {
       onToast("ไม่มีจุดดัดเส้นทางให้ยกเลิก");
@@ -861,11 +952,27 @@ export function MapManagementTab({
     setDraftWaypoints(updated);
     onToast(`ลบจุดดัดที่ ${index + 1} แล้ว`);
     if (startLat && startLon && endLat && endLon) {
-      void triggerDualRoadSnapping(startLat, startLon, endLat, endLon, updated);
+      void triggerDualRoadSnapping(startLat, startLon, endLat, endLon, updated, draftReverseWaypoints);
     }
   };
 
   const handleRestoreOriginalRoute = () => {
+    if (activeEditTarget === "REVERSE") {
+      const source =
+        originalReverseRouteCoordinates.current.length >= 2
+          ? originalReverseRouteCoordinates.current
+          : [...originalRouteCoordinates.current].reverse();
+      if (source.length < 2) {
+        onToast("รายการนี้ไม่มีแนวเส้นขากลับเดิมสำหรับคืนค่า");
+        return;
+      }
+      routingRequest.current += 1;
+      setDraftReverseWaypoints?.([]);
+      setDraftReverseCoordinates?.(source.map((coordinate) => [...coordinate] as [number, number]));
+      setSnappingStatusText("คืนค่าแนวเส้นขากลับ (B → A) เดิมแล้ว กดบันทึกเพื่อยืนยัน");
+      onToast("คืนค่าแนวเส้นขากลับ (B → A) เดิมเรียบร้อยแล้ว");
+      return;
+    }
     if (originalRouteCoordinates.current.length < 2) {
       onToast("รายการนี้ไม่มีแนวเส้นเดิมสำหรับคืนค่า");
       return;
@@ -915,6 +1022,10 @@ export function MapManagementTab({
     setDetourRoadCondition("");
     setDetourDurationMinFwd("");
     setDetourDurationMinRev("");
+    setDetourStartPhotoUrl("");
+    setDetourStartPhotoCaption("");
+    setDetourEndPhotoUrl("");
+    setDetourEndPhotoCaption("");
     setDetourDistanceMeters({ forward: 0, reverse: 0 });
     setDetourDurationSeconds({ forward: 0, reverse: 0 });
     setFieldImages([]);
@@ -1497,6 +1608,39 @@ export function MapManagementTab({
         return;
       }
 
+      let resolvedDetourStartPhotoUrl = detourStartPhotoUrl.trim();
+      let resolvedDetourEndPhotoUrl = detourEndPhotoUrl.trim();
+      if (routeMode === "DETOUR") {
+        if (resolvedDetourStartPhotoUrl.startsWith("data:")) {
+          try {
+            const uploadedStart = await uploadExternalMediaAction({
+              dataUrl: resolvedDetourStartPhotoUrl,
+              fileName: `detour-start-${routeEditId || Date.now()}.webp`,
+              ownerType: "DETOUR",
+              ownerId: routeEditId || detourName || "detour",
+            });
+            uploadedMediaIds.push(uploadedStart.mediaId);
+            resolvedDetourStartPhotoUrl = uploadedStart.url;
+          } catch {
+            // Keep compressed dataUrl if staging endpoint is not mocked in offline/unit test
+          }
+        }
+        if (resolvedDetourEndPhotoUrl.startsWith("data:")) {
+          try {
+            const uploadedEnd = await uploadExternalMediaAction({
+              dataUrl: resolvedDetourEndPhotoUrl,
+              fileName: `detour-end-${routeEditId || Date.now()}.webp`,
+              ownerType: "DETOUR",
+              ownerId: routeEditId || detourName || "detour",
+            });
+            uploadedMediaIds.push(uploadedEnd.mediaId);
+            resolvedDetourEndPhotoUrl = uploadedEnd.url;
+          } catch {
+            // Keep compressed dataUrl if staging endpoint is not mocked in offline/unit test
+          }
+        }
+      }
+
       const res = await upsertRouteAction({
         id: routeEditId || undefined,
         recordType: routeMode,
@@ -1599,6 +1743,22 @@ export function MapManagementTab({
             } else {
               delete nextMeta.reverse_duration_min;
               delete nextMeta.reverse_duration_s;
+            }
+            if (resolvedDetourStartPhotoUrl) {
+              nextMeta.start_point_photo = {
+                url: resolvedDetourStartPhotoUrl,
+                ...(detourStartPhotoCaption.trim() ? { caption: detourStartPhotoCaption.trim() } : {}),
+              };
+            } else {
+              delete nextMeta.start_point_photo;
+            }
+            if (resolvedDetourEndPhotoUrl) {
+              nextMeta.end_point_photo = {
+                url: resolvedDetourEndPhotoUrl,
+                ...(detourEndPhotoCaption.trim() ? { caption: detourEndPhotoCaption.trim() } : {}),
+              };
+            } else {
+              delete nextMeta.end_point_photo;
             }
             return nextMeta;
           })()
@@ -2025,6 +2185,56 @@ export function MapManagementTab({
                 placeholder="วางจาก Google Maps เช่น 6.8340, 101.1860"
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm text-white placeholder:text-slate-500"
               />
+              {routeMode === "DETOUR" && (
+                <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-heading font-semibold text-emerald-300 flex items-center gap-1">
+                      <Camera className="h-3.5 w-3.5" />
+                      ภาพทางเข้าจุดเริ่มต้น A (ขาไป A → B)
+                    </span>
+                    <label className="cursor-pointer rounded-lg border border-emerald-700/70 bg-emerald-950/40 hover:bg-emerald-900/60 px-2.5 py-1 text-[11px] font-heading font-bold text-emerald-200 transition">
+                      {detourStartPhotoUrl ? "เปลี่ยนภาพ" : "+ แนบภาพจุดเริ่ม A"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        aria-label="แนบภาพจุดเริ่มต้น A"
+                        className="sr-only"
+                        onChange={(e) => handleDetourPointPhotoUpload("START", e)}
+                      />
+                    </label>
+                  </div>
+                  {detourStartPhotoUrl && (
+                    <div className="space-y-1.5 rounded-lg border border-slate-800 bg-slate-950 p-2">
+                      <div className="relative">
+                        <img
+                          src={detourStartPhotoUrl}
+                          alt="ภาพทางเข้าจุดเริ่มต้น A"
+                          className="h-28 w-full rounded-md object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetourStartPhotoUrl("");
+                            setDetourStartPhotoCaption("");
+                          }}
+                          aria-label="ลบภาพจุดเริ่มต้น A"
+                          className="absolute top-1.5 right-1.5 rounded-full bg-slate-950/90 p-1 text-rose-400 hover:bg-rose-950 hover:text-white border border-rose-500/40"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        aria-label="คำอธิบายภาพจุดเริ่มต้น A"
+                        value={detourStartPhotoCaption}
+                        onChange={(e) => setDetourStartPhotoCaption(e.target.value)}
+                        placeholder="คำอธิบาย เช่น ปากทางเข้าซอยฝั่งจุดเริ่มต้น A"
+                        className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
               <div className="flex items-center justify-between gap-2">
@@ -2045,6 +2255,56 @@ export function MapManagementTab({
                 placeholder="วางจาก Google Maps เช่น 6.8390, 101.1920"
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm text-white placeholder:text-slate-500"
               />
+              {routeMode === "DETOUR" && (
+                <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-heading font-semibold text-sky-300 flex items-center gap-1">
+                      <Camera className="h-3.5 w-3.5" />
+                      ภาพทางเข้าจุดสิ้นสุด B (ขากลับ B → A)
+                    </span>
+                    <label className="cursor-pointer rounded-lg border border-sky-700/70 bg-sky-950/40 hover:bg-sky-900/60 px-2.5 py-1 text-[11px] font-heading font-bold text-sky-200 transition">
+                      {detourEndPhotoUrl ? "เปลี่ยนภาพ" : "+ แนบภาพจุดสิ้นสุด B"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        aria-label="แนบภาพจุดสิ้นสุด B"
+                        className="sr-only"
+                        onChange={(e) => handleDetourPointPhotoUpload("END", e)}
+                      />
+                    </label>
+                  </div>
+                  {detourEndPhotoUrl && (
+                    <div className="space-y-1.5 rounded-lg border border-slate-800 bg-slate-950 p-2">
+                      <div className="relative">
+                        <img
+                          src={detourEndPhotoUrl}
+                          alt="ภาพทางเข้าจุดสิ้นสุด B"
+                          className="h-28 w-full rounded-md object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetourEndPhotoUrl("");
+                            setDetourEndPhotoCaption("");
+                          }}
+                          aria-label="ลบภาพจุดสิ้นสุด B"
+                          className="absolute top-1.5 right-1.5 rounded-full bg-slate-950/90 p-1 text-rose-400 hover:bg-rose-950 hover:text-white border border-rose-500/40"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        aria-label="คำอธิบายภาพจุดสิ้นสุด B"
+                        value={detourEndPhotoCaption}
+                        onChange={(e) => setDetourEndPhotoCaption(e.target.value)}
+                        placeholder="คำอธิบาย เช่น ปากทางเข้าฝั่งขากลับ (สำหรับผู้มาจากอีกฝั่ง)"
+                        className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -2068,6 +2328,9 @@ export function MapManagementTab({
               </ActionButton>
               <ActionButton variant={freeEditEnabled ? "primary" : "secondary"} active={freeEditEnabled} onClick={() => {
                 if (draftCoordinates.length < 2) { onToast("กรุณาปัก A และ B แล้วคำนวณแนวถนนก่อนดัดเส้นอิสระ"); return; }
+                if (activeEditTarget === "REVERSE" && draftReverseCoordinates.length < 2) {
+                  setDraftReverseCoordinates?.([...draftCoordinates].reverse().map((p) => [...p] as [number, number]));
+                }
                 routingRequest.current += 1;
                 freePast.current = []; freeFuture.current = [];
                 setFreeEditEnabled(true); setAdminPickMode(null); setFreeVertexTool("move");
@@ -2075,30 +2338,23 @@ export function MapManagementTab({
                 <MapPinned className="h-4 w-4" /> ดัดเส้นอิสระ
               </ActionButton>
             </div>
+            {routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" && (
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <span className="text-xs font-semibold text-slate-300">เลือกทิศทางเส้นทางที่ต้องการแก้ไข:</span>
+                <DirectionSwitch
+                  size="sm"
+                  ariaLabel="เลือกทิศทางสำหรับดัดเส้น"
+                  value={freeEditTarget}
+                  onChange={handleSelectEditDirection}
+                  options={[
+                    { value: "FORWARD", label: "ขาไป (A → B)", ariaLabel: "ขาไป A → B" },
+                    { value: "REVERSE", label: "ขากลับ (B → A)", ariaLabel: "ขากลับ B → A" },
+                  ]}
+                />
+              </div>
+            )}
             {freeEditEnabled && (
               <>
-                {routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" && (
-                  <DirectionSwitch
-                    size="sm"
-                    ariaLabel="เลือกทิศทางสำหรับดัดเส้น"
-                    value={freeEditTarget}
-                    onChange={(nextTarget) => {
-                      setFreeEditTarget(nextTarget);
-                      setAdminPickMode(null);
-                      freePast.current = [];
-                      freeFuture.current = [];
-                    }}
-                    options={[
-                      { value: "FORWARD", label: "→ ขาไป (A → B)", ariaLabel: "ขาไป A → B" },
-                      {
-                        value: "REVERSE",
-                        label: "← ขากลับ (B → A)",
-                        ariaLabel: "ขากลับ B → A",
-                        disabled: draftReverseCoordinates.length < 2,
-                      },
-                    ]}
-                  />
-                )}
                 <ToolGroup label="แก้ไขจุดดัด (ใช้เครื่องมือเดียวกับแนวทางหลวง)">
                   <ActionButton variant="secondary" active={freeVertexTool === "move" && adminPickMode !== "ADD_LINE_VERTEX"} onClick={() => { setFreeVertexTool("move"); setAdminPickMode(null); }}>ลากจุดดัด</ActionButton>
                   <ActionButton variant="pick" active={adminPickMode === "ADD_LINE_VERTEX"} onClick={() => { setFreeVertexTool("move"); setAdminPickMode(adminPickMode === "ADD_LINE_VERTEX" ? null : "ADD_LINE_VERTEX"); }}>+ เพิ่มจุดดัดอิสระ</ActionButton>
@@ -2107,7 +2363,11 @@ export function MapManagementTab({
                   <ActionButton variant="secondary" disabled={!freeFuture.current.length} onClick={() => undoFreeGeometry(true)}>ทำซ้ำ</ActionButton>
                 </ToolGroup>
                 <p className="text-xs text-sky-200">ลากหมุดเล็กบนเส้นเพื่อย้ายจุด คลิกจุดกึ่งกลางเพื่อแทรก คลิกขวาเพื่อลบ หรือเลือกโหมดลบจุด ข้อมูลจะคงแนวเส้นอิสระตามที่บันทึก</p>
-                {routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" && <p className="text-xs text-amber-200">แก้ขาไปและขากลับแยกกัน หากเส้นขากลับยังไม่มี ให้คำนวณแนวถนนก่อน</p>}
+                {routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" && (
+                  <p className="text-xs text-amber-200">
+                    กำลังดัดเส้น: <strong>{activeEditTarget === "REVERSE" ? "ขากลับ (B → A)" : "ขาไป (A → B)"}</strong> (สลับปุ่มทิศทางด้านบนเพื่อแก้แต่ละฝั่งแยกกันได้ทันที)
+                  </p>
+                )}
               </>
             )}
           </div>
@@ -2133,42 +2393,49 @@ export function MapManagementTab({
             <ActionButton
               variant="primary"
               className="w-full sm:w-auto"
-              onClick={() => triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints)}
+              onClick={() => triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints, draftReverseWaypoints)}
             >
               <Wand2 className="h-3.5 w-3.5" /> คำนวณเส้นเกาะถนน
             </ActionButton>
 
-            {!freeEditEnabled && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <ToolGroup label="ดัดแนวเส้น">
-                <ActionButton variant="secondary" className="text-amber-300" onClick={handleAddMidpointWaypoint}>
-                  <Plus className="h-3.5 w-3.5" /> แตะจุดกลางเส้นเพื่อเพิ่มจุด
-                </ActionButton>
-                <ActionButton variant="pick" active={adminPickMode === "ADD_WAYPOINT"} onClick={() => setAdminPickMode("ADD_WAYPOINT")}>
-                  {adminPickMode === "ADD_WAYPOINT"
-                    ? (forceStraightThrough && routeMode === "DETOUR" ? "คลิกกึ่งกลางแยก..." : "คลิกถนนเพื่อดัด...")
-                    : (forceStraightThrough && routeMode === "DETOUR" ? "+ เพิ่มจุดผ่านแยกตรง" : "+ เพิ่มจุดดัดเส้น")}
-                </ActionButton>
-                {routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" && (
-                  <ActionButton variant="pick" active={adminPickMode === "ADD_REVERSE_WAYPOINT"} onClick={() => setAdminPickMode("ADD_REVERSE_WAYPOINT")}>
-                    {adminPickMode === "ADD_REVERSE_WAYPOINT" ? "คลิกถนนขากลับ B→A..." : "+ เพิ่มจุดขากลับ (B→A)"}
+            {!freeEditEnabled && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <ToolGroup label={routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" ? `ดัดแนวเส้น (${activeEditTarget === "REVERSE" ? "ขากลับ B → A" : "ขาไป A → B"})` : "ดัดแนวเส้น"}>
+                  <ActionButton variant="secondary" className="text-amber-300" onClick={handleAddMidpointWaypoint}>
+                    <Plus className="h-3.5 w-3.5" /> แตะจุดกลางเส้นเพื่อเพิ่มจุด
                   </ActionButton>
-                )}
-              </ToolGroup>
+                  {(() => {
+                    const pickTargetMode = activeEditTarget === "REVERSE" ? "ADD_REVERSE_WAYPOINT" : "ADD_WAYPOINT";
+                    const isPicking = adminPickMode === pickTargetMode;
+                    return (
+                      <ActionButton
+                        variant="pick"
+                        active={isPicking}
+                        onClick={() => setAdminPickMode(isPicking ? null : pickTargetMode)}
+                      >
+                        {isPicking
+                          ? (forceStraightThrough && routeMode === "DETOUR" ? "คลิกกึ่งกลางแยก..." : "คลิกถนนเพื่อดัด...")
+                          : (forceStraightThrough && routeMode === "DETOUR" ? "+ เพิ่มจุดผ่านแยกตรง" : "+ เพิ่มจุดดัดเส้น")}
+                      </ActionButton>
+                    );
+                  })()}
+                </ToolGroup>
 
-              <ToolGroup label="ย้อนกลับหรือล้าง">
-                <ActionButton variant="secondary" onClick={handleUndoWaypoint}>
-                  <Undo2 className="h-3.5 w-3.5" /> ย้อนกลับ
-                </ActionButton>
-                {originalRouteCoordinates.current.length >= 2 && (
-                  <ActionButton variant="secondary" className="text-sky-300" onClick={handleRestoreOriginalRoute}>
-                    คืนค่าแนวเดิม
+                <ToolGroup label="ย้อนกลับหรือล้าง">
+                  <ActionButton variant="secondary" onClick={handleUndoWaypoint}>
+                    <Undo2 className="h-3.5 w-3.5" /> ย้อนกลับ
                   </ActionButton>
-                )}
-                <ActionButton variant="danger" onClick={requestClearRoute}>
-                  ล้างข้อมูลทั้งหมด
-                </ActionButton>
-              </ToolGroup>
-            </div>}
+                  {(originalRouteCoordinates.current.length >= 2 || originalReverseRouteCoordinates.current.length >= 2) && (
+                    <ActionButton variant="secondary" className="text-sky-300" onClick={handleRestoreOriginalRoute}>
+                      คืนค่าแนวเดิม
+                    </ActionButton>
+                  )}
+                  <ActionButton variant="danger" onClick={requestClearRoute}>
+                    ล้างข้อมูลทั้งหมด
+                  </ActionButton>
+                </ToolGroup>
+              </div>
+            )}
           </div>
           {!freeEditEnabled && draftWaypoints.length > 0 && (
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3" aria-label="รายการจุดดัดเส้น">

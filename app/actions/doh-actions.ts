@@ -173,7 +173,7 @@ export async function upsertRouteAction(payload: {
 export async function uploadExternalMediaAction(payload: {
   dataUrl: string;
   fileName?: string;
-  ownerType?: "FLOOD" | "PROJECT";
+  ownerType?: "FLOOD" | "PROJECT" | "DETOUR";
   ownerId?: string;
 }): Promise<{ mediaId: string; url: string; mimeType: "image/jpeg" | "image/png" | "image/webp"; sizeBytes: number; provider: "supabase-staging" | "google-drive" }> {
   return invokeHdms("uploadExternalMediaAction", [payload]);

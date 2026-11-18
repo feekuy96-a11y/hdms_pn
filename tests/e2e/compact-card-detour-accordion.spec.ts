@@ -358,6 +358,14 @@ test("map flood pin opens summary popup without stacking, per-route detour direc
               forward_distance_m: 12600,
               reverse_distance_m: 14100,
               reverse_duration_s: 960,
+              start_point_photo: {
+                url: "data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=",
+                caption: "ภาพปากทางเข้าแยกเมาะมาวี ฝั่งจุด A",
+              },
+              end_point_photo: {
+                url: "data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=",
+                caption: "ภาพปากทางเข้าแยกบ้านดี ฝั่งจุด B (ขากลับ)",
+              },
             },
             is_active: true,
             updated_at: updatedAt,
@@ -432,18 +440,30 @@ test("map flood pin opens summary popup without stacking, per-route detour direc
   const r1Trigger = dialog.getByRole("button", { name: /ทางเลี่ยงที่ 1 – ทางเลี่ยงหลัก สาย 1/ });
   await r1Trigger.click();
   const r1Panel = dialog.locator("#dossier-detour-panel-D-MAP-1");
-  await r1Panel.getByRole("button", { name: "← B → A" }).click();
+  await expect(r1Panel.getByText("ภาพปากทางเข้าแยกเมาะมาวี ฝั่งจุด A")).toBeVisible();
+  await r1Panel.getByRole("button", { name: "ขากลับ (B → A)" }).click();
   await expect(r1Panel.getByText(/จุดเริ่มต้น: แยกบ้านดี/)).toBeVisible();
+  await expect(r1Panel.getByText("ภาพปากทางเข้าแยกบ้านดี ฝั่งจุด B (ขากลับ)")).toBeVisible();
   await expect(r1Panel.getByText("1.6 กม.")).toBeVisible();
   await expect(r1Panel.getByText("เวลาประมาณ 16 นาที")).toBeVisible();
 
   const r2Trigger = dialog.getByRole("button", { name: /ทางเลี่ยงที่ 2 – ทางเลี่ยงรอง สาย 2/ });
   await r2Trigger.click();
   const r2Panel = dialog.locator("#dossier-detour-panel-D-MAP-2");
-  await expect(r2Panel.getByRole("button", { name: "→ A → B" })).toHaveAttribute("aria-pressed", "true");
+  await expect(r2Panel.getByRole("button", { name: "ขาไป (A → B)" })).toHaveAttribute("aria-pressed", "true");
   await expect(r2Panel.getByText(/สาย 2 ขาไป/)).toBeVisible();
 
   // Expand water level history -> shows real empty-history message when no DB history exists
   await dialog.getByRole("button", { name: "ดูประวัติระดับน้ำท่วม" }).click();
   await expect(dialog.getByText("ยังไม่มีข้อมูลประวัติระดับน้ำสำหรับจุดนี้")).toBeVisible();
+
+  // Verify point photo markers A and B on the map open photo popup when clicked
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  const startPhotoPin = page.locator(".doh-detour-photo-start").first();
+  const endPhotoPin = page.locator(".doh-detour-photo-end").first();
+  await expect(startPhotoPin).toBeVisible();
+  await expect(endPhotoPin).toBeVisible();
+  await startPhotoPin.click({ force: true });
+  await expect(page.locator(".doh-detour-point-photo-popup")).toContainText("ภาพปากทางเข้าแยกเมาะมาวี ฝั่งจุด A");
 });
