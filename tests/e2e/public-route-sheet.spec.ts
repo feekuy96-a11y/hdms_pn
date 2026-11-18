@@ -165,6 +165,31 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   await expect(page.locator(".doh-map-capsule-pin").first()).toBeVisible({ timeout: 15_000 });
   await expect(page.locator(".doh-detour-symbol").first()).toBeVisible({ timeout: 15_000 });
 
+  // 0. Top summary bar at 360x640 must show both badges fully without clipping or colliding with legend toggle
+  const floodBadge = page.getByText("น้ำท่วม 1 จุด", { exact: true });
+  const detourBadge = page.getByText("ทางเลี่ยง 1 เส้นทาง", { exact: true });
+  const legendBtn = page.getByRole("button", { name: /สัญลักษณ์บนแผนที่|สัญลักษณ์/, exact: true });
+  await expect(floodBadge).toBeVisible();
+  await expect(detourBadge).toBeVisible();
+  await expect(legendBtn).toBeVisible();
+  const [floodBadgeBox, detourBadgeBox, legendBtnBox] = await Promise.all([
+    floodBadge.boundingBox(),
+    detourBadge.boundingBox(),
+    legendBtn.boundingBox(),
+  ]);
+  expect(floodBadgeBox && detourBadgeBox && legendBtnBox).toBeTruthy();
+  const boxesDoNotOverlap = (a: NonNullable<typeof floodBadgeBox>, b: NonNullable<typeof floodBadgeBox>) =>
+    a.x + a.width <= b.x + 1 || b.x + b.width <= a.x + 1 || a.y + a.height <= b.y + 1 || b.y + b.height <= a.y + 1;
+  expect(boxesDoNotOverlap(floodBadgeBox!, legendBtnBox!)).toBe(true);
+  expect(boxesDoNotOverlap(detourBadgeBox!, legendBtnBox!)).toBe(true);
+  expect(detourBadgeBox!.x + detourBadgeBox!.width).toBeLessThanOrEqual(360);
+  await expect.poll(() =>
+    detourBadge.evaluate((el) => {
+      const container = el.parentElement?.parentElement;
+      return container ? container.scrollWidth <= container.clientWidth + 1 : true;
+    })
+  ).toBe(true);
+
   // 1. Flood summary popup at 360x640
   await page.locator(".doh-map-capsule-pin").first().click({ force: true });
   const floodPopup = page.locator(".doh-flood-leaflet-popup");

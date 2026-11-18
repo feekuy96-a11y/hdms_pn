@@ -189,7 +189,7 @@ export function getResponsivePopupOptions(
     maxWidth,
     minWidth,
     ...(className ? { className } : {}),
-    autoPanPaddingTopLeft: L?.point ? L.point(12, isMobile ? 96 : 24) : [12, isMobile ? 96 : 24],
+    autoPanPaddingTopLeft: L?.point ? L.point(12, isMobile ? 16 : 56) : [12, isMobile ? 16 : 56],
     autoPanPaddingBottomRight: L?.point ? L.point(12, isMobile ? 112 : 24) : [12, isMobile ? 112 : 24],
   };
 }

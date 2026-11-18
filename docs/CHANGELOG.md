@@ -1,5 +1,14 @@
 ﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-120] 2026-11-18 ปรับแถบสรุปแผนที่บนมือถือ 360px ไม่ให้ตัดข้อความทางเลี่ยง และซ่อน overlay ชั่วคราวขณะเปิดป๊อปอัพบนมือถือ
+- **ไฟล์:** `app/globals.css`, `components/map/LongdoGisMap.tsx`, `components/map/MapLegendOverlay.tsx`, `components/map/longdo-map-popups.ts`, `tests/e2e/public-route-sheet.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **แก้ข้อความ `"ทางเลี่ยง X เส้นทาง"` ถูกตัดบนจอ 360px (`components/map/MapLegendOverlay.tsx`):** เปลี่ยนแถบสรุปด้านซ้ายจาก `overflow-x-auto max-w-[calc(100%-105px)]` เป็น `flex-1 min-w-0 flex-wrap gap-1 sm:gap-1.5` (ใส่ `pointer-events-auto` เฉพาะป้าย ไม่ให้กล่องว่างดักคลิก), เปลี่ยนตัวครอบนอกเป็น `items-start`, และคงข้อความ/accessible name ของปุ่ม `"สัญลักษณ์บนแผนที่"` / `"สัญลักษณ์"` เดิม
+  2. **แก้ปุ่มปิดป๊อปอัพถูก overlay/ปุ่มซูมบังบนมือถือ (`LongdoGisMap.tsx`, `MapLegendOverlay.tsx`, `app/globals.css`, `longdo-map-popups.ts`):** ติดตามสถานะ `isMapPopupOpen` จาก `popupopen`/`popupclose` ของ Leaflet; ขณะป๊อปอัพเปิดบนมือถือ `< 640px` ซ่อนแถบสรุปด้านบน/ปุ่ม `"ตำแหน่งของฉัน"` และปุ่มซูม `+ / -` (`.doh-map-popup-open`) ชั่วคราวพร้อมคืนทันทีเมื่อปิดป๊อปอัพ และปรับ `autoPanPaddingTopLeft` บนมือถือเป็น `[12, 16]`
+  3. **เพิ่ม assertion ตรวจแถบสรุป 360×640 (`tests/e2e/public-route-sheet.spec.ts`):** ตรวจว่า badge `"น้ำท่วม 1 จุด"` และ `"ทางเลี่ยง 1 เส้นทาง"` (`exact: true`) มองเห็นครบ ไม่ถูกตัด (`scrollWidth <= clientWidth + 1`) และไม่ซ้อนทับปุ่ม `"สัญลักษณ์"`
+- **ตรวจแล้ว:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (`BASE_PATH=/hdms_pn` ผ่าน), และ Playwright Static (`PLAYWRIGHT_STATIC=1`, `BASE_PATH=/hdms_pn`: `public-route-sheet`, `smoke`, `compact-card-detour-accordion`, `detour-navigation` — `26 passed`, `4 skipped`, `0 failed`)
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Push ขึ้น `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
 ### [UPDATE-119] 2026-11-18 ปรับปรุงป๊อปอัพหน้าประชาชนให้รองรับหน้าจอมือถือ 360×640 (`f1c3453`, `5f43716`, `0e57bb1`)
 - **ไฟล์:** `app/globals.css`, `app/page.tsx`, `components/map/LongdoGisMap.tsx`, `components/map/longdo-map-popups.ts`, `tests/e2e/public-route-sheet.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
 - **การแก้ไข:**

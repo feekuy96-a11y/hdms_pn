@@ -42,6 +42,7 @@ interface MapLegendOverlayProps {
   locationStatus: string | null;
   previewPointPhoto: { url: string; title: string } | null;
   setPreviewPointPhoto: (photo: { url: string; title: string } | null) => void;
+  isMapPopupOpen?: boolean;
 }
 
 export function MapLegendOverlay({
@@ -80,18 +81,22 @@ export function MapLegendOverlay({
   locationStatus,
   previewPointPhoto,
   setPreviewPointPhoto,
+  isMapPopupOpen = false,
 }: MapLegendOverlayProps) {
+  const mobileOverlayHiddenClass = isMapPopupOpen ? "max-sm:opacity-0 max-sm:pointer-events-none" : "";
+  const mobileInteractiveClass = isMapPopupOpen ? "pointer-events-auto max-sm:pointer-events-none" : "pointer-events-auto";
+
   return (
     <>
       {/* Top Header Controls Bar (Responsive: status badges on left, legend toggle button on right) */}
-      <div className="absolute top-3 inset-x-3 z-[400] flex items-center justify-between gap-1.5 pointer-events-none" aria-label="สรุปสถานการณ์และแถบควบคุมบนแผนที่">
+      <div className={`absolute top-3 inset-x-3 z-[400] flex items-start justify-between gap-1.5 pointer-events-none transition-opacity duration-150 ${mobileOverlayHiddenClass}`} aria-label="สรุปสถานการณ์และแถบควบคุมบนแผนที่">
         {/* Status Badges on the left */}
-        <div className="flex items-center gap-1.5 pointer-events-auto overflow-x-auto no-scrollbar py-0.5 max-w-[calc(100%-105px)] sm:max-w-none">
-          <div className="rounded-lg border border-red-500/50 bg-slate-950/95 px-2.5 py-1 text-[11px] sm:text-xs font-medium text-white shadow-lg backdrop-blur shrink-0 flex items-center gap-1.5">
+        <div className="flex flex-1 min-w-0 flex-wrap items-center gap-1 sm:gap-1.5 pointer-events-none py-0.5">
+          <div className={`${mobileInteractiveClass} rounded-lg border border-red-500/50 bg-slate-950/95 px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-medium text-white shadow-lg backdrop-blur shrink-0 whitespace-nowrap flex items-center gap-1.5`}>
             <span className="inline-block h-2 w-2 rounded-full bg-red-400 animate-pulse" />
             <span>น้ำท่วม <strong className="text-red-300 font-bold">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => item.is_active).length : 0}</strong> จุด</span>
           </div>
-          <div className="rounded-lg border border-amber-500/50 bg-slate-950/95 px-2.5 py-1 text-[11px] sm:text-xs font-medium text-white shadow-lg backdrop-blur shrink-0 flex items-center gap-1.5">
+          <div className={`${mobileInteractiveClass} rounded-lg border border-amber-500/50 bg-slate-950/95 px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-medium text-white shadow-lg backdrop-blur shrink-0 whitespace-nowrap flex items-center gap-1.5`}>
             <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
             <span>ทางเลี่ยง <strong className="text-amber-300 font-bold">{showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</strong> เส้นทาง</span>
           </div>
@@ -99,7 +104,7 @@ export function MapLegendOverlay({
 
         {/* Legend Toggle Button on the right (collapsed state) */}
         {isLayerControlCollapsed && (
-          <div className="pointer-events-auto shrink-0">
+          <div className={`${mobileInteractiveClass} shrink-0`}>
             <button
               type="button"
               onClick={() => setIsLayerControlCollapsed(false)}
@@ -117,19 +122,19 @@ export function MapLegendOverlay({
 
       {/* Quick Geolocation Control & Live Status when Legend is collapsed */}
       {isLayerControlCollapsed && (
-        <div className="absolute top-12 right-3 z-[400] flex flex-col items-end gap-1.5 pointer-events-none">
+        <div className={`absolute top-12 right-3 z-[400] flex flex-col items-end gap-1.5 pointer-events-none transition-opacity duration-150 ${mobileOverlayHiddenClass}`}>
           <button
             type="button"
             onClick={locateUser}
             disabled={isLocating || !mapReady}
             aria-label="ตำแหน่งของฉัน"
-            className="pointer-events-auto inline-flex min-h-11 sm:min-h-9 items-center gap-1.5 rounded-lg border border-slate-700/80 bg-[#0b162c]/95 px-2.5 py-1 text-[11px] sm:text-xs font-semibold text-sky-300 shadow-lg backdrop-blur-md transition hover:bg-[#0f1d3a] hover:text-sky-200 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+            className={`${mobileInteractiveClass} inline-flex min-h-11 sm:min-h-9 items-center gap-1.5 rounded-lg border border-slate-700/80 bg-[#0b162c]/95 px-2.5 py-1 text-[11px] sm:text-xs font-semibold text-sky-300 shadow-lg backdrop-blur-md transition hover:bg-[#0f1d3a] hover:text-sky-200 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400`}
           >
             <LocateFixed className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span>{isLocating ? "กำลังหา…" : "ตำแหน่งของฉัน"}</span>
           </button>
           {locationStatus && (
-            <p role="status" aria-live="polite" className="pointer-events-auto max-w-[220px] rounded-md border border-slate-700/80 bg-slate-950/90 px-2.5 py-1 text-[11px] leading-snug text-slate-200 shadow-lg backdrop-blur-md">
+            <p role="status" aria-live="polite" className={`${mobileInteractiveClass} max-w-[220px] rounded-md border border-slate-700/80 bg-slate-950/90 px-2.5 py-1 text-[11px] leading-snug text-slate-200 shadow-lg backdrop-blur-md`}>
               {locationStatus}
             </p>
           )}

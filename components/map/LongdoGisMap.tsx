@@ -132,6 +132,7 @@ export function LongdoGisMap({
   const [activeBaseMap, setActiveBaseMap] = useState<"road" | "sat" | "longdo">("longdo");
   const [isLayerControlCollapsed, setIsLayerControlCollapsed] = useState(true);
   const [mapReady, setMapReady] = useState(false);
+  const [isMapPopupOpen, setIsMapPopupOpen] = useState(false);
   const [currentZoom, setCurrentZoom] = useState<number>(APP_CONFIG.DEFAULT_ZOOM);
   const [forceShowAllHighways, setForceShowAllHighways] = useState(false);
   const [showFloodLayer, setShowFloodLayer] = useState(true);
@@ -424,11 +425,15 @@ export function LongdoGisMap({
 
         // Ensure popup controls and buttons respond smoothly to clicks and touch
         map.on("popupopen", (e: any) => {
+          setIsMapPopupOpen(true);
           const container = e?.popup?.getElement?.();
           if (container && L?.DomEvent) {
             L.DomEvent.disableClickPropagation(container);
             L.DomEvent.disableScrollPropagation(container);
           }
+        });
+        map.on("popupclose", () => {
+          setIsMapPopupOpen(Boolean((map as any)._popup && (map as any)._popup.isOpen?.()));
         });
       } catch (err) {
         console.error("[LongdoGisMap] Failed to initialize Leaflet map:", err);
@@ -440,6 +445,7 @@ export function LongdoGisMap({
     return () => {
       isMounted = false;
       initialResizeTimers.forEach(clearTimeout);
+      setIsMapPopupOpen(false);
       setMapReady(false);
       if (leafletMapRef.current) {
         try {
@@ -1798,7 +1804,7 @@ export function LongdoGisMap({
   }, [mapReady, systemData.offices, showOffices, publicMode, editableOfficeId]);
 
   return (
-    <div className={`relative ${className} overflow-hidden w-full h-full min-h-[450px]`} style={{ minHeight: 450 }}>
+    <div className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full min-h-[450px]`} style={{ minHeight: 450 }}>
       <div
         ref={mapContainerRef}
         className="w-full h-full min-h-[350px] bg-[#0b1426] relative z-0"
@@ -1809,6 +1815,7 @@ export function LongdoGisMap({
         systemData={systemData}
         mapStyles={mapStyles}
         mapReady={mapReady}
+        isMapPopupOpen={isMapPopupOpen}
         isLayerControlCollapsed={isLayerControlCollapsed}
         setIsLayerControlCollapsed={setIsLayerControlCollapsed}
         showFloodLayer={showFloodLayer}
