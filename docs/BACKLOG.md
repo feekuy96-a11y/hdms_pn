@@ -9,7 +9,7 @@
 | B-002 | สูง | `.mcp.json` ให้ AI เข้าถึง Supabase production พร้อมสิทธิ์ฐานข้อมูล ขัด ADR-001 | เปิด (ต้องตัดสินใจ) |
 | B-003 | สูง | Deploy ไม่รอ CI/e2e และเจ้าของ push ตรงเข้า main | เปิด (ต้องตัดสินใจ) |
 | B-004 | กลาง | หน้าแอดมินยังโหลด GeoJSON ทางหลวงเต็มความละเอียดทุกครั้ง | ปิด (2026-11-10, ดู UPDATE-063) |
-| B-005 | กลาง | ไฟล์ใหญ่เกิน: `GisDataImportTab.tsx` (~2k บรรทัด), `MapManagementTab.tsx` (ลดจาก 3,297 → 2,460), `LongdoGisMap.tsx` (ลดจาก 2,713 → 1,846) | ปิดบางส่วน (2026-11-18, ดู UPDATE-116: แยก popups/overlay/section โมดูลย่อยแล้ว; เหลือ telemetry เครื่องจริง) |
+| B-005 | กลาง | ไฟล์ใหญ่เกิน: `GisDataImportTab.tsx` (~2k บรรทัด), `MapManagementTab.tsx` (ลดจาก 3,297 → 2,118), `LongdoGisMap.tsx` (ลดจาก 2,713 → 1,846) | ปิดบางส่วน (2026-11-18, ดู UPDATE-116/117: แยก popups/overlay/section โมดูลย่อยครบ 4 ส่วนแล้ว; เหลือ telemetry เครื่องจริง) |
 | B-006 | กลาง | `SUPPLEMENTAL_RULES.md` ~120 KB ถูกบังคับให้อ่านทุกเซสชัน | ปิดบางส่วน (ยกเลิกบังคับใน AGENTS.md, GEMINI.md, .cursorrules, .windsurfrules และหัวไฟล์แล้วใน UPDATE-103; เหลือย้ายไฟล์เก่า) |
 | B-007 | ต่ำ | โค้ดค้างที่ไม่อยู่ใน path จริง (better-auth, supabase-server, routing-service, Docker Postgres) | ปิด (ลบไฟล์ค้างแล้วใน UPDATE-065) |
 | B-008 | กลาง | พึ่ง OSRM สาธารณะ (`router.project-osrm.org`) ไม่มี SLA | กำลังทำ (เพิ่ม Google Routes API proxy เป็น Tier 1 ก่อน OSRM; รอ deploy Edge + ตั้ง secret `GOOGLE_MAPS_API_KEY`) |

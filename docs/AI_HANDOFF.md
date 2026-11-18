@@ -1,6 +1,6 @@
 # AI Handoff — สถานะร่วมของโครงการ HDMS_PN
 
-> อัปเดต: 18 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` ที่ commit `d656d12` (PR #38: Hybrid Google Maps + Pattani lookup/routing `[UPDATE-108]`); และงานรอบ `UPDATE-109` บนสาขา `feat/event-detour-cutover-and-directions` เพิ่มการเชื่อมแสดงผล Event↔Detour ครบทุกหน้ารายละเอียด พร้อม SQL `20261118000100` (รองรับ 2 ทิศทาง `BOTH`/`TWO_WAY`) และ Edge enrichment. ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
+> อัปเดต: 18 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (ล่าสุดผ่าน `UPDATE-116` commit `3beabf5` และ `UPDATE-117`) พร้อมการแยกโมดูลย่อยของ `LongdoGisMap.tsx` และ `MapManagementTab.tsx` (`B-005`), มาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
 
 ## ก่อนเริ่มงานทุกครั้ง
 
@@ -11,8 +11,8 @@
 
 ## สถานะเผยแพร่ล่าสุด
 
-- GitHub Pages: `https://feekuy96-a11y.github.io/hdms_pn/` ตอบ HTTP 200 หลัง deploy commit `d656d12`
-- Deploy run `44181033313` และ CI run `44181033387` สำเร็จ: lint, typecheck, production build, static Pages build และ Playwright E2E ผ่านครบ
+- GitHub Pages: `https://feekuy96-a11y.github.io/hdms_pn/` ตอบ HTTP 200 หลัง deploy commit `3beabf5` (`UPDATE-116`)
+- Deploy run `44331865436` (`#154`) และ CI run `44331866679` (`#172`) สำเร็จ: lint, typecheck, production build, static Pages build และ Playwright E2E ผ่านครบ
 - ห้ามอ้างว่า deploy สำเร็จจาก local build เพียงอย่างเดียว; ต้องยืนยัน workflow ของ commit ที่จะเผยแพร่
 
 ## สิ่งที่เพิ่งเปลี่ยนและห้ามทำย้อนกลับโดยไม่ตั้งใจ
@@ -53,10 +53,10 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** แยกโมดูลย่อยของ `LongdoGisMap.tsx` และ `MapManagementTab.tsx` (`B-005`) + วางแนวทาง AI ทำงานครบวงจร 0 บั๊ก (`UPDATE-116`)
-- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `e1eff9d` — `UPDATE-115`)
-- **ไฟล์ที่แก้ไขแล้ว:** `components/map/{LongdoGisMap.tsx,longdo-map-popups.ts,MapLegendOverlay.tsx}`, `components/admin/tabs/{MapManagementTab.tsx,map-management-helpers.ts,RouteGeometryEditorSection.tsx,FloodSituationSection.tsx}`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
-- **สิ่งที่ทำสำเร็จ:** ลดขนาด `LongdoGisMap.tsx` (2,713 → 1,846 บรรทัด) และ `MapManagementTab.tsx` (3,297 → 2,460 บรรทัด) โดยไม่เปลี่ยน DOM/accessible name
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี (หากต้องลดขนาดเพิ่มเติมสามารถแตก Form Step 1 และ state hooks ของ `MapManagementTab.tsx` / `GisDataImportTab.tsx` ได้อีกในรอบถัดไป)
-- **ผลทดสอบล่าสุด:** `lint` (0 warnings), `typecheck` (0 errors), `build:pages` (6/6), Playwright `smoke`/`admin-menus`/`flood-form-rules`/`detour-navigation` (`38 passed`, `18 skipped`)
-- **ขั้นตอนถัดไป:** ตรวจ CI / Deploy GitHub Pages หลัง Push; พิจารณาผ่าตัดส่วนที่เหลือของ `MapManagementTab.tsx` (Step 1 + Submit hooks) หรือ `GisDataImportTab.tsx` ตามความจำเป็น
+- **งานที่กำลังทำ / เป้าหมาย:** แยกโมดูลย่อยส่วนที่ 1 (`HighwayIdentificationSection.tsx`) และ `buildDetourMetaPayload` จาก `MapManagementTab.tsx` (`B-005`) พร้อมปรับสถานะเผยแพร่ล่าสุดใน `AI_HANDOFF.md` ให้ตรงกับ `main` (`UPDATE-117`)
+- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `3beabf5` — `UPDATE-116`)
+- **ไฟล์ที่แก้ไขแล้ว:** `components/admin/tabs/{MapManagementTab.tsx,HighwayIdentificationSection.tsx,map-management-helpers.ts}`, `docs/{AI_HANDOFF,CHANGELOG,BACKLOG}.md`
+- **สิ่งที่ทำสำเร็จ:** ลดขนาด `MapManagementTab.tsx` ลงต่อเนื่อง (3,297 → 2,460 → 2,118 บรรทัด) โดยแยกฟอร์มส่วนที่ 1 ข้อมูลสายทางและพื้นที่เป็น `HighwayIdentificationSection.tsx` และย้าย `buildDetourMetaPayload` เข้า `map-management-helpers.ts` พร้อมอัปเดตหลักฐาน CI/Deploy ของ `3beabf5`
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี (เหลือ `GisDataImportTab.tsx` หากต้องการแยกโมดูลย่อยเพิ่มในอนาคต)
+- **ผลทดสอบล่าสุด:** `lint` (0 warnings), `typecheck` (0 errors), `build:pages` (6/6), Playwright `smoke`/`admin-menus`/`flood-form-rules`/`detour-navigation`
+- **ขั้นตอนถัดไป:** ตรวจ CI / Deploy GitHub Pages หลัง Push; พิจารณาแยกโมดูลย่อยของ `GisDataImportTab.tsx` ตามความจำเป็น

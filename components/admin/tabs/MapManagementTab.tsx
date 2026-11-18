@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { ActionButton, FormSection, StickyActionBar } from "@/components/admin/ui";
+import { StickyActionBar } from "@/components/admin/ui";
 import { SystemDataPayload } from "@/db/default-data";
 import { DetourAdviceSection } from "@/components/admin/tabs/DetourAdviceSection";
+import { HighwayIdentificationSection } from "@/components/admin/tabs/HighwayIdentificationSection";
 import { RouteGeometryEditorSection } from "@/components/admin/tabs/RouteGeometryEditorSection";
 import { FloodSituationSection } from "@/components/admin/tabs/FloodSituationSection";
 import {
@@ -12,6 +13,7 @@ import {
   findBestHighwayGroupForSelection,
   sliceBranchByKmRange,
   buildAffectedPartSummary,
+  buildDetourMetaPayload,
 } from "@/components/admin/tabs/map-management-helpers";
 export { buildDetourRoutingParams } from "@/components/admin/tabs/map-management-helpers";
 import {
@@ -20,19 +22,8 @@ import {
 } from "@/lib/detour-presentation";
 import {
   MapPinned,
-  Navigation,
-  Wand2,
   Save,
   FileUp,
-  Search,
-  ChevronDown,
-  X,
-  Layers,
-  Split,
-  Clock,
-  Image as ImageIcon,
-  MapPin,
-  RotateCw,
 } from "lucide-react";
 import { deleteExternalMediaAction, upsertRouteAction, snapRouteAction, syncReportingRowAction, uploadExternalMediaAction } from "@/app/actions/doh-actions";
 import {
@@ -1794,97 +1785,31 @@ export function MapManagementTab({
         reverseWaypoints: routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" ? draftReverseWaypoints : undefined,
         directionMode: routeMode === "DETOUR" ? detourDirectionMode : undefined,
         detourMeta: routeMode === "DETOUR"
-          ? (() => {
-            const existingDetour = routeEditId ? (systemData.detourRoutes || []).find((d) => d.id === routeEditId) : undefined;
-            const existingMeta = existingDetour?.detour_meta;
-            const resolveOrderIndex = (): number => {
-              if (detourRefId && existingMeta?.event_orders && typeof existingMeta.event_orders[detourRefId] === "number" && Number.isFinite(existingMeta.event_orders[detourRefId])) {
-                return existingMeta.event_orders[detourRefId];
-              }
-              if (existingDetour && (existingDetour.flood_id_ref || "") === (detourRefId || "") && typeof existingMeta?.order_index === "number" && Number.isFinite(existingMeta.order_index)) {
-                return existingMeta.order_index;
-              }
-              const siblings = (systemData.detourRoutes || []).filter(
-                (d) =>
-                  d.id !== routeEditId &&
-                  ((detourRefId && d.flood_id_ref === detourRefId) ||
-                    (linkedEventId && d.detour_meta?.eventId === linkedEventId))
-              );
-              let maxOrder = 0;
-              siblings.forEach((d, idx) => {
-                const raw = (detourRefId && d.detour_meta?.event_orders?.[detourRefId]) ?? d.detour_meta?.order_index;
-                const val = typeof raw === "number" && Number.isFinite(raw) ? raw : idx + 1;
-                if (val > maxOrder) maxOrder = val;
-              });
-              return maxOrder + 1;
-            };
-            const orderIndex = resolveOrderIndex();
-            const mergedEventOrders = {
-              ...(existingMeta?.event_orders || {}),
-              ...(detourRefId ? { [detourRefId]: orderIndex } : {}),
-            };
-            const parsedFwdMin = Number(detourDurationMinFwd);
-            const parsedRevMin = Number(detourDurationMinRev);
-            const hasFwdMin = Number.isFinite(parsedFwdMin) && parsedFwdMin > 0;
-            const hasRevMin = Number.isFinite(parsedRevMin) && parsedRevMin > 0;
-            const fwdPolyKm = calculatePolylineRoadDistanceKm(coords);
-            const revPolyKm = calculatePolylineRoadDistanceKm(
-              detourDirectionMode === "TWO_WAY" && draftReverseCoordinates.length >= 2 ? draftReverseCoordinates : coords
-            );
-            const nextMeta: Record<string, any> = {
-              ...(existingMeta || {}),
-              order_index: typeof existingMeta?.order_index === "number" && (!detourRefId || existingDetour?.flood_id_ref === detourRefId)
-                ? existingMeta.order_index
-                : orderIndex,
-              ...(Object.keys(mergedEventOrders).length > 0 ? { event_orders: mergedEventOrders } : {}),
-              forward_distance_km: fwdPolyKm || undefined,
-              reverse_distance_km: detourDirectionMode === "FORWARD_ONLY" ? undefined : (revPolyKm || undefined),
-              forward_distance_m: fwdPolyKm > 0 ? Math.round(fwdPolyKm * 1000) : (detourDistanceMeters.forward || existingMeta?.forward_distance_m || undefined),
-              reverse_distance_m: detourDirectionMode === "FORWARD_ONLY"
-                ? undefined
-                : revPolyKm > 0
-                  ? Math.round(revPolyKm * 1000)
-                  : (detourDistanceMeters.reverse || existingMeta?.reverse_distance_m || undefined),
-              show_arrows: true,
-              verified_no_closed_overlap: closedRoadConflicts.length === 0,
-              carriageway_type: separation?.isSymmetricSingleLine ? "SINGLE_CENTERLINE" : "ASYMMETRIC_DETOUR",
-              eventId: linkedEventId,
-              ...(detourGoogleMapsUrlFwd.trim() ? { google_maps_url_forward: detourGoogleMapsUrlFwd.trim(), google_maps_url: detourGoogleMapsUrlFwd.trim() } : {}),
-              ...(detourGoogleMapsUrlRev.trim() ? { google_maps_url_reverse: detourGoogleMapsUrlRev.trim() } : {}),
-              ...(detourRoadCondition.trim() ? { road_condition: detourRoadCondition.trim() } : {}),
-            };
-            if (hasFwdMin) {
-              nextMeta.forward_duration_min = Math.round(parsedFwdMin);
-              nextMeta.forward_duration_s = Math.round(parsedFwdMin * 60);
-            } else {
-              delete nextMeta.forward_duration_min;
-              delete nextMeta.forward_duration_s;
-            }
-            if (hasRevMin) {
-              nextMeta.reverse_duration_min = Math.round(parsedRevMin);
-              nextMeta.reverse_duration_s = Math.round(parsedRevMin * 60);
-            } else {
-              delete nextMeta.reverse_duration_min;
-              delete nextMeta.reverse_duration_s;
-            }
-            if (resolvedDetourStartPhotoUrl) {
-              nextMeta.start_point_photo = {
-                url: resolvedDetourStartPhotoUrl,
-                ...(detourStartPhotoCaption.trim() ? { caption: detourStartPhotoCaption.trim() } : {}),
-              };
-            } else {
-              delete nextMeta.start_point_photo;
-            }
-            if (resolvedDetourEndPhotoUrl) {
-              nextMeta.end_point_photo = {
-                url: resolvedDetourEndPhotoUrl,
-                ...(detourEndPhotoCaption.trim() ? { caption: detourEndPhotoCaption.trim() } : {}),
-              };
-            } else {
-              delete nextMeta.end_point_photo;
-            }
-            return nextMeta;
-          })()
+          ? buildDetourMetaPayload({
+              routeEditId,
+              detourRefId,
+              linkedEventId,
+              detourRoutes: systemData.detourRoutes,
+              coords,
+              draftReverseCoordinates,
+              detourDirectionMode,
+              detourDurationMinFwd,
+              detourDurationMinRev,
+              detourDistanceMeters,
+              closedRoadConflictsCount: closedRoadConflicts.length,
+              isSymmetricSingleLine: Boolean(separation?.isSymmetricSingleLine),
+              detourGoogleMapsUrlFwd,
+              detourGoogleMapsUrlRev,
+              detourRoadCondition,
+              resolvedDetourStartPhotoUrl,
+              detourStartPhotoCaption,
+              resolvedDetourEndPhotoUrl,
+              detourEndPhotoCaption,
+              fwdPolyKm: calculatePolylineRoadDistanceKm(coords),
+              revPolyKm: calculatePolylineRoadDistanceKm(
+                detourDirectionMode === "TWO_WAY" && draftReverseCoordinates.length >= 2 ? draftReverseCoordinates : coords
+              ),
+            })
           : undefined,
       });
 
@@ -1968,325 +1893,58 @@ export function MapManagementTab({
       {/* Main Map Form Container */}
       <div className="space-y-5">
         {/* 1. Highway Identification */}
-        <FormSection step={1} title="ข้อมูลสายทางและพื้นที่" description="ระบุทางหลวง ช่วง กม. และบริเวณที่เกิดเหตุ">
-          {routeMode === "FLOOD" && (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 mb-3 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-heading font-bold text-amber-300 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-amber-400" /> การจัดกลุ่มเหตุการณ์หลัก (Parent Event)
-                </span>
-                <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => { setParentEventMode("NEW"); setSelectedParentEventId(""); setEventCode(""); }}
-                    className={`px-2.5 py-1 rounded font-heading font-bold transition ${parentEventMode === "NEW" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"}`}
-                  >
-                    + สร้างเหตุการณ์ใหม่
-                  </button>
-                  <button
-                    type="button"
-                    disabled={existingParentEvents.length === 0}
-                    onClick={() => setParentEventMode("EXISTING")}
-                    className={`px-2.5 py-1 rounded font-heading font-bold transition disabled:opacity-40 ${parentEventMode === "EXISTING" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"}`}
-                  >
-                    ผูกเหตุการณ์เดิม ({existingParentEvents.length})
-                  </button>
-                </div>
-              </div>
-
-              {parentEventMode === "EXISTING" && existingParentEvents.length > 0 && (
-                <div>
-                  <label className="text-xs text-slate-300 block mb-1">เลือกเหตุการณ์หลักที่ต้องการเพิ่มช่วง กม. ย่อย</label>
-                  <select
-                    value={selectedParentEventId}
-                    onChange={(e) => {
-                      const evId = e.target.value;
-                      setSelectedParentEventId(evId);
-                      const ev = existingParentEvents.find((item) => item.eventId === evId);
-                      if (ev) {
-                        setRouteNo(ev.routeNo);
-                        setSelectedHighwayName(`ทล.${ev.routeNo} - ${ev.sectionName}`);
-                        setSectionName(ev.sectionName);
-                        setEventCode(ev.eventCode);
-                        setEventTitle(ev.eventTitle);
-                        if (ev.villageOrLandmark) setVillageOrLandmark(ev.villageOrLandmark);
-                        if (ev.subdivisionName) setReporterName(ev.subdivisionName);
-                      }
-                    }}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-amber-300 font-heading font-semibold"
-                  >
-                    <option value="">-- เลือกเหตุการณ์หลัก --</option>
-                    {existingParentEvents.map((ev) => (
-                      <option key={ev.eventId} value={ev.eventId}>
-                        ทล.{ev.routeNo} ตอน{ev.sectionName} ({ev.segments.length} ช่วงย่อย)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-slate-300">หมู่บ้าน / จุดสังเกตหน้างาน</label>
-                  <button
-                    type="button"
-                    onClick={handleFetchLocationFromCoords}
-                    disabled={isFetchingAddress}
-                    className="text-[10px] text-sky-400 hover:text-sky-300 flex items-center gap-1 font-heading cursor-pointer disabled:opacity-50"
-                    title="ดึงชื่อหมู่บ้านและตำบลจากพิกัด"
-                  >
-                    {isFetchingAddress ? <RotateCw className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3" />}
-                    <span>{isFetchingAddress ? "กำลังดึง..." : "📍 ดึงจากพิกัด"}</span>
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={villageOrLandmark}
-                  onChange={(e) => setVillageOrLandmark(e.target.value)}
-                  placeholder="เช่น บ.ดอนยาง ม.2 ต.ดอนยาง อ.หนองจิก"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                />
-              </div>
-            </div>
-          )}
-
-          {routeMode === "FLOOD" ? (
-            <div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="relative" ref={highwayComboboxRef}>
-                  <label className="text-xs text-slate-300">หมายเลขทางหลวง *</label>
-                  <button
-                    type="button"
-                    aria-expanded={isHighwayDropdownOpen}
-                    aria-haspopup="listbox"
-                    aria-label="หมายเลขทางหลวง"
-                    className="relative mt-1 flex w-full cursor-pointer items-center justify-between rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-left text-xs text-white hover:border-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
-                    onClick={() => setIsHighwayDropdownOpen((prev) => !prev)}
-                  >
-                    <span className={`truncate ${!routeNo ? "text-slate-400" : "font-semibold text-amber-300"}`}>
-                      {selectedHighwayName || (routeNo ? (availableHighways.find((h) => h.no === routeNo)?.name || `ทล.${routeNo}`) : "-- เลือกหมายเลขทางหลวง --")}
-                    </span>
-                    <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 ml-2" />
-                  </button>
-
-                  {/* Hidden select to preserve standard form/accessible value if queried */}
-                  <select
-                    value={routeNo}
-                    onChange={(e) => setRouteNo(e.target.value)}
-                    className="sr-only"
-                    tabIndex={-1}
-                    aria-hidden="true"
-                  >
-                    {!routeNo && <option value="">-- เลือกหมายเลขทางหลวง --</option>}
-                    {availableHighways.map((h) => (
-                      <option key={`${h.no}_${h.name}`} value={h.no}>
-                        {h.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* Smart Search Filterable Dropdown */}
-                  {isHighwayDropdownOpen && (
-                    <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-full sm:min-w-[320px] overflow-hidden rounded-xl border border-slate-700 bg-slate-950 shadow-2xl backdrop-blur-md flex flex-col">
-                      <div className="p-2 border-b border-slate-800 bg-slate-900/90 flex items-center gap-2">
-                        <Search className="h-4 w-4 text-slate-400 shrink-0" />
-                        <input
-                          type="text"
-                          autoFocus
-                          value={highwaySearchQuery}
-                          onChange={(e) => setHighwaySearchQuery(e.target.value)}
-                          placeholder="พิมพ์ค้นหาเลขทางหลวง หรือชื่อตอน..."
-                          className="w-full bg-transparent text-xs text-white placeholder:text-slate-500 focus:outline-none"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        {highwaySearchQuery && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setHighwaySearchQuery("");
-                            }}
-                            className="text-slate-400 hover:text-white"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                      <div
-                        role="listbox"
-                        aria-label="รายการทางหลวง"
-                        className="overflow-y-auto max-h-52 divide-y divide-slate-850"
-                      >
-                        {(() => {
-                          const query = highwaySearchQuery.trim().toLowerCase();
-                          const filtered = availableHighways.filter(
-                            (h) => h.no.toLowerCase().includes(query) || h.name.toLowerCase().includes(query)
-                          );
-                          if (filtered.length === 0) {
-                            return (
-                              <div className="p-3 text-center text-xs text-slate-500">
-                                {availableHighways.length === 0
-                                  ? "ไม่พบข้อมูลสายทางหลวงในฐานข้อมูลโครงข่ายทางหลวง"
-                                  : `ไม่พบสายทางหลวงที่ตรงกับ "${highwaySearchQuery}"`}
-                              </div>
-                            );
-                          }
-                          return filtered.map((h) => (
-                            <div
-                              key={`${h.no}_${h.name}_${h.kmStart || ""}`}
-                              onClick={() => {
-                                setRouteNo(h.no);
-                                setSelectedHighwayName(h.name);
-                                if (h.sectionName) {
-                                  setSectionName(h.sectionName);
-                                  sectionNameManuallyEdited.current = true;
-                                }
-                                if (h.kmStart) {
-                                  setKmStart(h.kmStart);
-                                }
-                                if (h.kmEnd) {
-                                  setKmEnd(h.kmEnd);
-                                }
-                                if (routeMode === "FLOOD" && roadSide === "BOTH" && !(h.laneCount >= 4 || h.hasDualCarriageway)) {
-                                  setDraftReverseCoordinates?.([]);
-                                  setDraftReverseWaypoints?.([]);
-                                  setFreeEditTarget("FORWARD");
-                                }
-                                if (!routeEditId && (!eventCode || eventCode.startsWith("FL-"))) {
-                                  setEventCode(generateNextEventCode(h.no, existingParentEvents));
-                                }
-                                setIsHighwayDropdownOpen(false);
-                                setHighwaySearchQuery("");
-                              }}
-                              className={`cursor-pointer px-3 py-2 text-xs transition hover:bg-slate-800/80 flex items-center justify-between ${routeNo === h.no && selectedHighwayName === h.name ? "bg-amber-500/15 text-amber-300 font-semibold" : "text-slate-200"
-                                }`}
-                            >
-                              <span className="truncate">{h.name}</span>
-                              {h.kmStart && h.kmEnd && (
-                                <span className="text-[10px] text-slate-500 font-mono shrink-0 ml-2">
-                                  {h.kmStart} - {h.kmEnd}
-                                </span>
-                              )}
-                            </div>
-                          ));
-                        })()}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs text-slate-300">กม. เริ่มต้น</label>
-                  <input
-                    type="text"
-                    value={kmStart}
-                    onChange={(e) => setKmStart(e.target.value)}
-                    placeholder="เช่น 12+500"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-300">กม. สิ้นสุด</label>
-                  <input
-                    type="text"
-                    value={kmEnd}
-                    onChange={(e) => setKmEnd(e.target.value)}
-                    placeholder="เช่น 14+200"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                  />
-                </div>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={handleSlicePolylineFromKm}
-                  className="text-[11px] bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-700 px-3 py-1.5 rounded-xl font-heading font-semibold flex items-center gap-1.5 transition"
-                  title="คำนวณแนวเส้นและพิกัดเริ่มต้น-สิ้นสุดจากข้อมูล GIS ทางหลวงอัตโนมัติ"
-                >
-                  <Wand2 className="w-3.5 h-3.5 text-sky-400" /> คำนวณแนวเส้นจากช่วง กม. อัตโนมัติ (Linear Referencing)
-                </button>
-                <span className="text-[10px] text-slate-400">ระบบจะตัดเฉพาะช่วงเส้นทางหลวงตาม กม. เริ่มต้น–สิ้นสุด</span>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-slate-300">ผูกกับจุดน้ำท่วมอ้างอิง</label>
-                  <select
-                    value={detourRefId}
-                    onChange={(e) => setDetourRefId(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                  >
-                    <option value="">ไม่ผูกกับจุดน้ำท่วม</option>
-                    {systemData.floodRoutes.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        ทล.{f.route_no} - {f.section_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-300">ชื่อเส้นทางเลี่ยง *</label>
-                  <input
-                    type="text"
-                    value={detourName}
-                    onChange={(e) => setDetourName(e.target.value)}
-                    placeholder="เช่น ทางเลี่ยง ทล.4092 สายหนองจิก - โคกโพธิ์"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-slate-300 block mb-1">ทิศทางการเดินรถของทางเลี่ยง (A-B / B-A)</label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {DETOUR_DIRECTION_MODES.map((mode) => (
-                    <button
-                      key={mode.value}
-                      type="button"
-                      onClick={() => setDetourDirectionMode(mode.value)}
-                      className={`p-2.5 rounded-xl border text-left transition ${detourDirectionMode === mode.value
-                        ? "border-amber-400 bg-amber-500/15 text-amber-200"
-                        : "border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-700"
-                        }`}
-                    >
-                      <p className="text-xs font-heading font-bold">{mode.label}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{mode.desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Section Name & Auto-Geocoding Button */}
-          {routeMode === "FLOOD" && (
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-slate-300">ชื่อตอนควบคุม / บริเวณพื้นที่ *</label>
-                <button
-                  type="button"
-                  disabled={isGeocoding}
-                  onClick={async () => {
-                    await handleAutoGeocode(Number(startLon), Number(startLat), "START");
-                    if (endLon && endLat) await handleAutoGeocode(Number(endLon), Number(endLat), "END");
-                  }}
-                  className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1 bg-sky-950/60 border border-sky-800 px-2 py-0.5 rounded-lg font-heading transition"
-                >
-                  <Navigation className="w-3 h-3" />
-                  {isGeocoding ? "กำลังระบุพื้นที่..." : "ดึงตำบล/อำเภออัตโนมัติ"}
-                </button>
-              </div>
-              <input
-                type="text"
-                value={sectionName}
-                onChange={(e) => { sectionNameManuallyEdited.current = true; setSectionName(e.target.value); }}
-                placeholder="เช่น ตอน ดอนยาง - บานา (ต.ดอนยาง อ.หนองจิก)"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-              />
-            </div>
-          )}
-
-        </FormSection>
+        <HighwayIdentificationSection
+          routeMode={routeMode}
+          parentEventMode={parentEventMode}
+          setParentEventMode={setParentEventMode}
+          selectedParentEventId={selectedParentEventId}
+          setSelectedParentEventId={setSelectedParentEventId}
+          eventCode={eventCode}
+          setEventCode={setEventCode}
+          setEventTitle={setEventTitle}
+          existingParentEvents={existingParentEvents}
+          routeNo={routeNo}
+          setRouteNo={setRouteNo}
+          selectedHighwayName={selectedHighwayName}
+          setSelectedHighwayName={setSelectedHighwayName}
+          sectionName={sectionName}
+          setSectionName={setSectionName}
+          sectionNameManuallyEditedRef={sectionNameManuallyEdited}
+          villageOrLandmark={villageOrLandmark}
+          setVillageOrLandmark={setVillageOrLandmark}
+          setReporterName={setReporterName}
+          handleFetchLocationFromCoords={handleFetchLocationFromCoords}
+          isFetchingAddress={isFetchingAddress}
+          highwayComboboxRef={highwayComboboxRef}
+          isHighwayDropdownOpen={isHighwayDropdownOpen}
+          setIsHighwayDropdownOpen={setIsHighwayDropdownOpen}
+          availableHighways={availableHighways}
+          highwaySearchQuery={highwaySearchQuery}
+          setHighwaySearchQuery={setHighwaySearchQuery}
+          kmStart={kmStart}
+          setKmStart={setKmStart}
+          kmEnd={kmEnd}
+          setKmEnd={setKmEnd}
+          roadSide={roadSide}
+          setDraftReverseCoordinates={setDraftReverseCoordinates}
+          setDraftReverseWaypoints={setDraftReverseWaypoints}
+          setFreeEditTarget={setFreeEditTarget}
+          routeEditId={routeEditId}
+          handleSlicePolylineFromKm={handleSlicePolylineFromKm}
+          detourRefId={detourRefId}
+          setDetourRefId={setDetourRefId}
+          floodRoutes={systemData.floodRoutes}
+          detourName={detourName}
+          setDetourName={setDetourName}
+          detourDirectionMode={detourDirectionMode}
+          setDetourDirectionMode={setDetourDirectionMode}
+          isGeocoding={isGeocoding}
+          startLon={startLon}
+          startLat={startLat}
+          endLon={endLon}
+          endLat={endLat}
+          handleAutoGeocode={handleAutoGeocode}
+        />
 
         {/* 2. Coordinates & Dual-Source Snapping Controls */}
         <RouteGeometryEditorSection
