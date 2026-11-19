@@ -86,13 +86,21 @@ const PATTANI_AMPHOE_CENTERS = [
   { name: "อ.แม่ลาน", pt: [101.205, 6.65] },
 ];
 
-/** ค้นหาชื่ออำเภอใน จ.ปัตตานี จากพิกัด (รูปหลายเหลี่ยมโดยประมาณ แล้วใช้ศูนย์กลางอำเภอที่ใกล้ที่สุด) */
+/** ค้นหาชื่ออำเภอใน จ.ปัตตานี จากพิกัด (ขอบเขตรูปหลายเหลี่ยมอำเภอของกรมการปกครอง แล้ว fallback ศูนย์กลางอำเภอที่ใกล้ที่สุด) */
 export function findPattaniDistrictName(coord: [number, number]): string {
   if (!coord || coord.length < 2) return "จ.ปัตตานี";
   for (const feat of PATTANI_DISTRICTS_GEOJSON.features) {
-    const poly = feat.geometry.coordinates[0] as [number, number][];
-    if (isPointInPolygon(coord, poly)) {
-      return feat.properties.name;
+    const geom = feat.geometry as { type: string; coordinates: any };
+    if (geom.type === "Polygon") {
+      if (isPointInPolygon(coord, geom.coordinates[0] as [number, number][])) {
+        return feat.properties.name;
+      }
+    } else if (geom.type === "MultiPolygon") {
+      for (const poly of geom.coordinates as [number, number][][][]) {
+        if (isPointInPolygon(coord, poly[0])) {
+          return feat.properties.name;
+        }
+      }
     }
   }
 
@@ -109,38 +117,45 @@ export function findPattaniDistrictName(coord: [number, number]): string {
 }
 
 /**
- * Local answer. The tambon rectangles in gis-data.ts overlap, so a point is only given a tambon when exactly one
- * rectangle contains it; with two or more it gets the district only (the old code returned whichever rectangle
- * came first in the list).
+ * Local offline lookup using real DOPA 115 subdistrict polygons (bounding-box pre-filter -> Point-in-Polygon).
+ * Falls back to the nearest subdistrict center inside the resolved district for coastal/river-bridge points.
  */
 export function localArea(lon: number, lat: number): AreaInfo {
-  const district = cleanThaiAdminPrefix(findPattaniDistrictName([lon, lat])) || "เมืองปัตตานี";
-  const districtSubdistricts = PATTANI_SUBDISTRICTS_DATA.filter((s) => s.amphoe === district);
-  const pool = districtSubdistricts.length > 0 ? districtSubdistricts : PATTANI_SUBDISTRICTS_DATA;
-
-  const inBounds = pool.filter((s) => {
-    const [minX, minY, maxX, maxY] = s.bounds;
-    return lon >= minX && lon <= maxX && lat >= minY && lat <= maxY;
-  });
-
-  if (inBounds.length === 1) {
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
     return {
-      village: inBounds[0].village || "",
-      tambon: inBounds[0].tambon,
-      amphoe: inBounds[0].amphoe,
+      village: "",
+      tambon: "",
+      amphoe: "",
       province: "ปัตตานี",
       road: "",
-      source: "local",
+      source: "district",
       confidence: "low",
     };
   }
 
-  // If multiple match or point is slightly outside any bounding box within the district:
-  // find closest subdistrict center
-  const candidates = inBounds.length > 1 ? inBounds : pool;
+  for (const s of PATTANI_SUBDISTRICTS_DATA) {
+    const [minX, minY, maxX, maxY] = s.bounds;
+    if (lon < minX || lon > maxX || lat < minY || lat > maxY) continue;
+    if (s.polygon && s.polygon.length >= 3 && isPointInPolygon([lon, lat], s.polygon)) {
+      return {
+        village: s.village || "",
+        tambon: s.tambon,
+        amphoe: s.amphoe,
+        province: "ปัตตานี",
+        road: "",
+        source: "local",
+        confidence: "low",
+      };
+    }
+  }
+
+  const district = cleanThaiAdminPrefix(findPattaniDistrictName([lon, lat])) || "เมืองปัตตานี";
+  const districtSubdistricts = PATTANI_SUBDISTRICTS_DATA.filter((s) => s.amphoe === district);
+  const pool = districtSubdistricts.length > 0 ? districtSubdistricts : PATTANI_SUBDISTRICTS_DATA;
+
   let bestDist = Infinity;
-  let best = candidates[0];
-  for (const s of candidates) {
+  let best = pool[0];
+  for (const s of pool) {
     const cx = s.center ? s.center[0] : (s.bounds[0] + s.bounds[2]) / 2;
     const cy = s.center ? s.center[1] : (s.bounds[1] + s.bounds[3]) / 2;
     const d = Math.hypot(lon - cx, lat - cy);
@@ -156,7 +171,7 @@ export function localArea(lon: number, lat: number): AreaInfo {
     amphoe: best?.amphoe || district,
     province: "ปัตตานี",
     road: "",
-    source: inBounds.length > 0 ? "local" : "district",
+    source: "district",
     confidence: "low",
   };
 }

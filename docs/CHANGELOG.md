@@ -1,4 +1,49 @@
-﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
+# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
+
+### [UPDATE-129] 2026-11-19 ซ่อมฐานข้อมูล 115 ตำบล 12 อำเภอ จ.ปัตตานี ด้วยขอบเขตรูปหลายเหลี่ยม DOPA จริง, สร้างสคริปต์ Backfill และแก้ปัญหา CI Timeout ของ OSRM Heading Constraint
+- **ไฟล์:** `lib/gis-data.ts`, `lib/area-lookup.ts`, `lib/osrm-client.ts`, `scripts/backfill-flood-areas.mjs`, `supabase/migrations/20261119000100_backfill_flood_routes_district_subdistrict.sql`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **แทนที่ขอบเขตจำลองใน `lib/gis-data.ts` ด้วยข้อมูล DOPA จริงครบ 12 อำเภอ 115 ตำบล:**
+     - แก้ชื่อตำบลที่เคยผิดอำเภอ/นอกจังหวัดจาก `a792965` (ลบ `ตะปอเยาะ`/`บ้านดอน` ออกจาก `ปะนาเระ` เป็น `คอกกระบือ`/`บ้านน้ำบ่อ`, แก้ `แหลมโพธิ์` ใน `เมืองปัตตานี` เป็น `ปุยุด`, แก้ `ตุยง`/`บางโกลด` ใน `โคกโพธิ์` เป็น `ควนโนรี`/`บางโกระ`/`ปากล่อ`, แก้ `ระตาปันยัง` ใน `ยะรัง` เป็น `เขาตูม`)
+     - ใช้รูปหลายเหลี่ยมขอบเขตตำบล/อำเภอจริงจาก GeoThai/boundaries ที่เทียบชื่อตรงกับข้อมูลกรมการปกครอง (`kongvut/thai-province-data`) 115/115 ตำบล
+  2. **Point-in-Polygon ระดับตำบล (`lib/area-lookup.ts`):**
+     - ปรับ `localArea()` ให้คัดกรอง bounding box แล้วตรวจสอบ Point-in-Polygon บนขอบเขต 115 ตำบลจริง ก่อน fallback ไปจุดศูนย์กลางตำบลภายในอำเภอที่รองรับ `MultiPolygon`/`Polygon` แล้วใน `findPattaniDistrictName()`
+  3. **แก้ปัญหา CI Timeout ของ OSRM Heading Constraint (`lib/osrm-client.ts`):**
+     - ปรับให้ `fetchOsrmWithFailover` ข้าม Tier 2 (Edge proxy) ไปยัง Tier 3 (OSRM direct) ทันทีเมื่อคำขอมี query params เฉพาะทางอย่าง `continue_straight` หรือ `bearings` เพื่อรักษาเงื่อนไขการบังคับตรงผ่านแยก และแก้ปัญหา Playwright E2E (`admin-menus.spec.ts:115`) รอนานจน Timeout บน GitHub Actions CI เมื่อมีการตั้งค่า `NEXT_PUBLIC_SUPABASE_URL`
+  4. **One-Off Dry-Run & SQL Backfill (`scripts/backfill-flood-areas.mjs`, `supabase/migrations/20261119000100_backfill_flood_routes_district_subdistrict.sql`):**
+     - สร้างสคริปต์ read-only (`--dry-run` และ `--sql`) และ migration แบบ idempotent สำหรับ Backfill `district`/`subdistrict` ใน `public.doh_flood_routes` ทั้ง 22 แถว (19 แถวใช้งาน + 3 แถว `deleted_at IS NOT NULL`) โดยคงค่า `updated_at` เดิมไว้เพื่อไม่ให้ทริกเกอร์ `doh_enqueue_external_report()` ส่งรายงานซ้ำและไม่เปลี่ยนเวลา `"อัปเดตล่าสุด"` พร้อม Rollback SQL ในหัวไฟล์
+- **ตรวจแล้ว (รวมหลังรันบน Production ตามอนุมัติเจ้าของ):**
+  - **Production Migration (`ebyobrtvisylwawxiurx`):** Apply `backfill_flood_routes_district_subdistrict` (`version 20261119070256`) สำเร็จ · ตรวจ `public.doh_flood_routes` (`total_rows = 22`, `empty_district = 0`, `empty_subdistrict = 0`), `public.doh_external_jobs` คงที่ `94` แถว (ไม่สร้าง job ซ้ำ) และ `node scripts/backfill-flood-areas.mjs` คืน `0 active rows with blank district/subdistrict`
+  - `npm run lint` (`--max-warnings=0`), `npm run typecheck`, `npm run build:pages` (6/6 static pages) — ผ่าน
+  - Playwright E2E: `hybrid-google-maps.spec.ts` (18 passed), `flood-form-rules.spec.ts` (24 passed), `admin-menus.spec.ts` (16 passed, 20 skipped) — ผ่านครบ
+- **ลำดับ Deploy & ย้อนกลับ:**
+  1. SQL/DB รันบน Production แล้ว (`version 20261119070256`; ย้อนกลับด้วย `UPDATE public.doh_flood_routes SET district = '', subdistrict = '' WHERE id IN (...)` ในหัวไฟล์ migration)
+  2. Push กิ่ง `feat/fix-coordinates-and-detour-advice` และ Merge PR #49 เข้า `main` เพื่อ Deploy เว็บ Static Pages (ย้อนกลับด้วย `git revert`)
+
+### [UPDATE-128] 2026-11-19 แก้ปัญหาพิกัดพื้นที่ไม่ตรงกับแผนที่ และปรับปรุงเอนจินคำบรรยายทางเลี่ยงให้แม่นยำตามเส้นถนนจริง
+- **ไฟล์:** `lib/gis-data.ts`, `lib/area-lookup.ts`, `lib/gis-utils.ts`, `components/admin/tabs/MapManagementTab.tsx`, `db/default-data.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **ขยายฐานข้อมูลตำบลครอบคลุม 115 ตำบล 12 อำเภอ จ.ปัตตานี (`lib/gis-data.ts`, `lib/area-lookup.ts`):**
+     - เพิ่มฐานข้อมูลขอบเขตพิกัด (Bounding Box) และพิกัดศูนย์กลางของตำบลในจังหวัดปัตตานีครบถ้วน 115 ตำบล ทั้ง 12 อำเภอ (เมืองปัตตานี 13, โคกโพธิ์ 12, หนองจิก 12, ปะนาเระ 10, มายอ 13, ทุ่งยางแดง 4, สายบุรี 11, ไม้แก่น 4, ยะหริ่ง 18, ยะรัง 12, กะพ้อ 3, แม่ลาน 3)
+     - ปรับปรุงฟังก์ชัน `localArea` ใน `lib/area-lookup.ts` ให้กรองตำบลตามอำเภอที่คำนวณได้จากรูปหลายเหลี่ยมอำเภอจริงก่อน แล้วตรวจสอบ Bounding Box และหาระยะห่างน้อยที่สุดไปยังศูนย์กลางตำบล แก้ปัญหาการเดาตำบลเดิมซ้ำๆ นอกเขต 22 ตำบลเดิม
+  2. **ปรับปรุงเอนจินคำบรรยายทางเลี่ยง (`lib/gis-utils.ts`):**
+     - สกัด `formatHighwayOrRuralPrefix` จัดรูปแบบชื่อทางหลวงและทางหลวงชนบทให้ถูกต้อง (`ทล.xxx` สำหรับทางหลวงแผ่นดิน, `ทางหลวงชนบท ปน.xxxx` สำหรับทางหลวงชนบท) ป้องกันบั๊กชื่อซ้ำซ้อน เช่น `ทล.ปน.7081` หรือ `ทล.ทล.42`
+     - นำเทคนิค Lookahead Coordinates (~25-50 ม. ถัดจากจุดเลี้ยวตามแนวเส้นทางใหม่) มาใช้ในการค้นหาทางหลวง (`findNearestHighwayFromLayers`) และดึงที่อยู่ (`getDetailedPattaniAddress`) แทนการใช้พิกัดจุดยอดทางแยก (`maneuver.location`) ซึ่งเดิมนั่งอยู่บนสายทางหลักเดิม (เช่น ทล.42) ส่งผลให้คำแนะนำบอกว่า "เลี้ยวเข้าสู่ ทล.42" ทั้งที่เลี้ยวออกจาก ทล.42 เข้าสู่สายทางรอง
+     - ปรับขั้นตอนที่ไม่มีชื่อถนนทางการ ให้ระบุเป็น `เส้นทางเชื่อมต่อท้องถิ่น (ต... อ...)` ตามตำบลและอำเภอจริงของพิกัด Lookahead แทนคำว่า "เส้นทางเชื่อมต่อท้องถิ่น" ซ้ำๆ
+     - ละเว้น micro-maneuvers ระยะสั้น (< 30 ม.) ที่เป็นเพียงความโค้งของผิวทาง เพื่อให้คำบรรยายกระชับและไม่สับสน
+     - เสริมความปลอดภัยใน `slicePolylineByKmRange` ตรวจสอบทิศทาง `clampedStart > clampedEnd` เพื่อเรียงลำดับพิกัดจาก `targetKmStart` ไป `targetKmEnd` อย่างถูกต้องเสมอ และรองรับ `isReverseOrientation` ป้องกันปัญหาเส้นทางสลับหัวท้าย
+  3. **เชื่อมต่อการบันทึกตำบล/อำเภอ และรักษาชื่อตอนควบคุมทางการ (`components/admin/tabs/MapManagementTab.tsx`, `db/default-data.ts`):**
+     - ปรับ `handleSaveRoute` ส่ง `district` และ `subdistrict` ในคำสั่ง `upsertRouteAction` ทั้งฝั่งขาไป (A→B), ขากลับ (B→A) และเส้นทางเดี่ยว/ทางเลี่ยง โดยคำนวณจาก `startArea`, `endArea` หรือ `localArea` อัตโนมัติ ปิดช่องโหว่เดิมที่ทำให้ข้อมูลตำบล/อำเภอในตาราง `doh_flood_routes` เป็นค่าว่าง
+     - รักษาชื่อตอนควบคุมทางการ (`selectedHighwayOption.sectionName`) ใน `useEffect` ไม่ให้ถูกเขียนทับด้วยข้อความตำบลอัตโนมัติ
+     - โหลดข้อมูล `startArea` และ `endArea` อัตโนมัติเมื่อกดเปิดแก้ไขข้อมูลช่วงน้ำท่วม (`editingRoute`) ทั้งจากฟิลด์เดิมและจาก `localArea`
+     - เพิ่มฟิลด์ `district?: string; subdistrict?: string;` ให้กับ `DetourRoute` ใน `db/default-data.ts`
+- **ตรวจแล้ว:**
+  - `npm run lint` ผ่าน (`--max-warnings=0`, 0 warnings, 0 errors)
+  - `npm run typecheck` ผ่าน (`tsc --noEmit`, 0 errors)
+  - `npm run build:pages` ผ่าน (6/6 static pages compiled and optimized)
+  - Playwright E2E: `tests/e2e/flood-form-rules.spec.ts` ผ่าน (6 passed, 2 skipped)
+  - Playwright E2E: `tests/e2e/hybrid-google-maps.spec.ts` ผ่าน (18 passed, 0 failed)
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ไข DB schema/migration ใหม่ (ตารางและ Edge Function รองรับฟิลด์อยู่แล้ว) → Commit & Merge เข้า `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
 
 ### [UPDATE-127] 2026-11-19 แก้ปัญหาเชิงลึกการสร้างเส้นน้ำท่วมและทางเลี่ยงให้ตรงการใช้งานจริง (P1 & P2)
 - **ไฟล์:** `lib/gis-utils.ts`, `components/admin/tabs/HighwayIdentificationSection.tsx`, `components/admin/tabs/RouteGeometryEditorSection.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `tests/e2e/flood-form-rules.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`

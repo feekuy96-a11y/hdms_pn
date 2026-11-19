@@ -40,6 +40,7 @@ import {
   detectPassabilityFloodWarnings,
   analyzeCarriagewaySeparation,
   haversineDistanceKm,
+  localArea,
 } from "@/lib/gis-utils";
 import {
   SAFETY_MEASURES,
@@ -538,6 +539,22 @@ export function MapManagementTab({
       setStartLon(flood.lon_start);
       setEndLat(flood.lat_end);
       setEndLon(flood.lon_end);
+      if (flood.lat_start && flood.lon_start) {
+        if (flood.subdistrict && flood.district) {
+          setStartArea({ subdistrict: flood.subdistrict, district: flood.district });
+        } else {
+          const loc = localArea(Number(flood.lon_start), Number(flood.lat_start));
+          if (loc.tambon && loc.amphoe) {
+            setStartArea({ subdistrict: loc.tambon, district: loc.amphoe });
+          }
+        }
+      }
+      if (flood.lat_end && flood.lon_end) {
+        const endLoc = localArea(Number(flood.lon_end), Number(flood.lat_end));
+        if (endLoc.tambon && endLoc.amphoe) {
+          setEndArea({ subdistrict: endLoc.tambon, district: endLoc.amphoe });
+        }
+      }
 
       let coords: [number, number][] = [];
       if (Array.isArray(flood.coordinates_json)) coords = flood.coordinates_json as [number, number][];
@@ -649,6 +666,22 @@ export function MapManagementTab({
       setStartLon(detour.lon_start || 0);
       setEndLat(detour.lat_end || 0);
       setEndLon(detour.lon_end || 0);
+      if (detour.lat_start && detour.lon_start) {
+        if (detour.subdistrict && detour.district) {
+          setStartArea({ subdistrict: detour.subdistrict, district: detour.district });
+        } else {
+          const loc = localArea(Number(detour.lon_start), Number(detour.lat_start));
+          if (loc.tambon && loc.amphoe) {
+            setStartArea({ subdistrict: loc.tambon, district: loc.amphoe });
+          }
+        }
+      }
+      if (detour.lat_end && detour.lon_end) {
+        const endLoc = localArea(Number(detour.lon_end), Number(detour.lat_end));
+        if (endLoc.tambon && endLoc.amphoe) {
+          setEndArea({ subdistrict: endLoc.tambon, district: endLoc.amphoe });
+        }
+      }
 
       let coords: [number, number][] = [];
       if (Array.isArray(detour.coordinates_json)) coords = detour.coordinates_json as [number, number][];
@@ -1086,9 +1119,10 @@ export function MapManagementTab({
 
   useEffect(() => {
     if (sectionNameManuallyEdited.current || !startArea || !endArea) return;
+    if (selectedHighwayOption?.sectionName) return; // อย่าเขียนทับชื่อตอนควบคุมทางการของแขวงทางหลวง
     const highway = routeNo ? `ทล.${routeNo} ` : "";
     setSectionName(`${highway}(ต.${startArea.subdistrict} อ.${startArea.district} → ต.${endArea.subdistrict} อ.${endArea.district})`);
-  }, [routeNo, startArea, endArea]);
+  }, [routeNo, startArea, endArea, selectedHighwayOption]);
 
   const handleSelectEditDirection = (nextTarget: "FORWARD" | "REVERSE") => {
     if (nextTarget === "REVERSE" && draftReverseCoordinates.length < 2) {
@@ -1835,6 +1869,21 @@ export function MapManagementTab({
         water_level_known: waterLevelKnown,
       };
 
+      // ดึงหรือระบุ อำเภอ/ตำบล สำหรับบันทึกข้อมูลทางหลวงลงฐานข้อมูล
+      const fallbackArea = localArea(numSLon, numSLat);
+      const effectiveDistrict =
+        startArea?.district?.trim() ||
+        endArea?.district?.trim() ||
+        (editingRoute?.type === "FLOOD" ? systemData.floodRoutes.find((f) => f.id === routeEditId)?.district : undefined) ||
+        fallbackArea.amphoe ||
+        "";
+      const effectiveSubdistrict =
+        startArea?.subdistrict?.trim() ||
+        endArea?.subdistrict?.trim() ||
+        (editingRoute?.type === "FLOOD" ? systemData.floodRoutes.find((f) => f.id === routeEditId)?.subdistrict : undefined) ||
+        fallbackArea.tambon ||
+        "";
+
       if (routeMode === "FLOOD" && isDividedBothFlood) {
         // 1. Forward segment (A -> B)
         const forwardDirectionMeta: FloodSegmentDirectionMeta = {
@@ -1861,6 +1910,8 @@ export function MapManagementTab({
           routeNo: chosenRouteNo,
           kmStart,
           kmEnd,
+          district: effectiveDistrict,
+          subdistrict: effectiveSubdistrict,
           sectionName: sectionName || "จุดรายงานน้ำท่วม",
           waterLevelCm: waterLevelKnown ? numWaterLevel : 0,
           trafficStatus: dbTrafficStatus,
@@ -1932,12 +1983,18 @@ export function MapManagementTab({
                 })?.id
               : undefined;
 
+        const revFallbackArea = (revSLon && revSLat) ? localArea(Number(revSLon), Number(revSLat)) : fallbackArea;
+        const revEffectiveDistrict = endArea?.district?.trim() || effectiveDistrict || revFallbackArea.amphoe || "";
+        const revEffectiveSubdistrict = endArea?.subdistrict?.trim() || effectiveSubdistrict || revFallbackArea.tambon || "";
+
         const res = await upsertRouteAction({
           id: existingReverseSiblingId,
           recordType: "FLOOD",
           routeNo: chosenRouteNo,
           kmStart,
           kmEnd,
+          district: revEffectiveDistrict,
+          subdistrict: revEffectiveSubdistrict,
           sectionName: sectionName || "จุดรายงานน้ำท่วม",
           waterLevelCm: reverseWaterLevelKnown ? numRevWaterLevel : 0,
           trafficStatus: revTrafficStatus,
@@ -2021,6 +2078,8 @@ export function MapManagementTab({
         routeNo: chosenRouteNo,
         kmStart,
         kmEnd,
+        district: effectiveDistrict,
+        subdistrict: effectiveSubdistrict,
         sectionName: sectionName || "จุดรายงานน้ำท่วม",
         waterLevelCm: waterLevelKnown ? numWaterLevel : 0,
         trafficStatus: dbTrafficStatus,
