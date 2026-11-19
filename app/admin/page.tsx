@@ -39,10 +39,12 @@ import { OfflineSyncStatus } from "@/components/offline/OfflineSyncStatus";
 import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { ArrowLeft, RotateCw, FileText, PieChart, Settings, Smartphone, PanelLeftClose, PanelLeftOpen, MapPin } from "lucide-react";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
-import { ExecutiveDashboard } from "@/components/executive/ExecutiveDashboard";
+const ExecutiveDashboard = dynamic(
+  () => import("@/components/executive/ExecutiveDashboard").then((mod) => mod.ExecutiveDashboard),
+  { ssr: false }
+);
 import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
 
