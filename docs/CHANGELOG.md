@@ -1,5 +1,21 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-132] 2026-11-19 ขยายความครอบคลุม Playwright E2E: สรุปสถานการณ์ประชาชน, ตัวกรอง 5 สถานะ, Route Chips และปุ่มล้างตัวกรอง [B-011]
+- **ไฟล์:** `tests/e2e/compact-card-detour-accordion.spec.ts`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **เพิ่มชุดทดสอบ E2E ใหม่ใน `tests/e2e/compact-card-detour-accordion.spec.ts`:**
+     - ตรวจสอบ `SituationSummary` นับจำนวนจุดตามสีสถานะจราจรถูกต้อง (`ผ่านไม่ได้`, `รถเล็กไม่สามารถผ่านได้`, `ผ่านได้ปกติ`)
+     - ตรวจสอบการเรียงลำดับการ์ดตามความรุนแรง (Severity: `CLOSED` > `WARNING` > `PASSABLE`)
+     - ตรวจสอบการคลิกปุ่มกรองสถานะเฉพาะจุดสีแดง (`ผ่านไม่ได้`), การแสดงปุ่ม `"แสดงทุกสถานะ"`, และการกดเพื่อยกเลิกตัวกรอง
+     - ตรวจสอบการคลิกชิปหมายเลขสายทาง (`ทล.418`), การแสดงปุ่ม `"ล้างตัวกรอง"` ข้างช่องค้นหา, และการกรองเฉพาะสายทางที่เลือก
+     - ตรวจสอบสถานะผลลัพธ์ว่าง (Empty state: 0 รายการ) เมื่อรวมเงื่อนไขตัวกรอง และการกดปุ่ม `"ล้างตัวกรอง"` จากหน้าจอว่างเพื่อคืนค่ารายการทั้งหมด
+- **ตรวจแล้ว:**
+  - `node scripts/test-e2e-with-public-config.mjs tests/e2e/compact-card-detour-accordion.spec.ts` — ผ่านครบ 5 ข้อ (3 skipped for mobile)
+  - `npm run check:deploy` (`npm run lint && npm run typecheck && npm run build:pages`) — ผ่านสมบูรณ์ (0 warnings, 0 errors, 6/6 static pages)
+- **ลำดับ Deploy & ย้อนกลับ:**
+  - ไม่มีงาน SQL / DB / Edge Function
+  - เปิด PR จาก `test/e2e-roadmap-coverage` เข้า `main` (ย้อนกลับด้วย `git revert`)
+
 ### [UPDATE-131] 2026-11-19 ปิด Dependabot PR #27, ลบกิ่งเก่า และปรับแต่ง `.github/dependabot.yml` ป้องกันการอัปเกรดข้าม Major Version
 - **ไฟล์:** `.github/dependabot.yml`, `docs/{CHANGELOG,AI_HANDOFF}.md`
 - **การแก้ไข:**
