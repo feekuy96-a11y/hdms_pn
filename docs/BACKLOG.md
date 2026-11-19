@@ -15,7 +15,7 @@
 | B-008 | กลาง | พึ่ง OSRM สาธารณะ (`router.project-osrm.org`) ไม่มี SLA | กำลังทำ (เพิ่ม Google Routes API proxy เป็น Tier 1 ก่อน OSRM; รอ deploy Edge + ตั้ง secret `GOOGLE_MAPS_API_KEY`) |
 | B-009 | ต่ำ | `npm run check` ไม่ได้ build แบบ Pages (ที่ใช้ deploy จริง) | ปิด (2026-11-16, UPDATE-095) |
 | B-010 | กลาง | อ่านข้อมูลสาธารณะทุกครั้งโดน DB (ไม่มีแคช) ช่วงคนเข้าเยอะ | ปิด (เพิ่ม GET & Cache-Control ใน UPDATE-065) |
-| B-011 | กลาง | e2e ยังไม่ครอบคลุมฟีเจอร์ใหม่ (ตัวแก้ไขเส้นอิสระ, แถบสรุป, bottom sheet) | ปิดบางส่วน (เพิ่ม detour-navigation.spec.ts 12 ข้อใน UPDATE-066) |
+| B-011 | กลาง | e2e ยังไม่ครอบคลุมฟีเจอร์ใหม่ (ตัวแก้ไขเส้นอิสระ, แถบสรุป, bottom sheet) | ปิดบางส่วน (เพิ่ม detour-navigation.spec.ts 12 ข้อใน UPDATE-066; เพิ่ม compact-card-detour-accordion.spec.ts ครอบคลุมแถบสรุปสถานการณ์/Route Chips/ตัวกรอง ใน UPDATE-132) |
 | B-012 | ต่ำ | `reactStrictMode: false` ซ่อนบั๊ก cleanup ของ effect | ปิด (2026-11-16, UPDATE-096) |
 | B-013 | ต่ำ | ข้อจำกัด Google Maps Universal URL Waypoints ไม่เกิน 8-9 จุด | ปิดบางส่วน (อัปเกรด `sampleWaypointsForGoogleMaps` เป็นคัดจุดหักเลี้ยว Douglas-Peucker ≤ 8 จุดตามลำดับเส้นทางจริง) |
 | B-014 | **วิกฤต** | Edge Function Production v9 ไม่ส่งค่าฝั่งถนน/ช่องจราจร/ทิศทางไปยัง DB (ตรวจอ่านอย่างเดียว 2026-11-11) | เปิด: แก้ source แล้ว ต้อง Security Review + deploy และทดสอบ staging |
@@ -156,7 +156,11 @@
 - **ก่อนตัดสินใจทำแคช ให้วัด:** Supabase Dashboard → Reports → API และ Database ในช่วงที่เปิดให้ประชาชนใช้จริง ถ้า CPU < 50% และไม่มี timeout ไม่ต้องทำ
 
 ## B-011 [กลาง] ช่องว่างของ e2e
-- เพิ่ม: เพิ่ม/ลบ/ลากจุด และเชื่อม/ตัดเส้นในโหมดอิสระ · แถบสรุปสถานการณ์และการเรียงตามความรุนแรง · bottom sheet รายละเอียดบนมือถือ · เมนูแอดมินแบบแถบไอคอนที่จอ 1280px
+- **สิ่งที่ทำแล้ว:**
+  - เพิ่ม `detour-navigation.spec.ts` 12 ข้อ (`UPDATE-066`)
+  - เพิ่มการครอบคลุม `compact-card-detour-accordion.spec.ts` สำหรับแถบสรุปสถานการณ์ (`SituationSummary`), การนับตาม 5 สถานะจราจร, การเรียงตามความรุนแรง, ชิปกรองสายทาง (`routeChips`), และปุ่มล้างตัวกรองทั้งหน้าปกติและหน้าผลลัพธ์ว่าง (`UPDATE-132`)
+- **สิ่งที่ยังขาด:** เพิ่ม/ลบ/ลากจุด และเชื่อม/ตัดเส้นในโหมดอิสระ · bottom sheet รายละเอียดบนมือถือ · เมนูแอดมินแบบแถบไอคอนที่จอ 1280px
+- **สถานะ:** ปิดบางส่วน (2026-11-19, UPDATE-132).
 
 ## B-012 [ต่ำ] `reactStrictMode: false`
 - เปิดเฉพาะ dev เพื่อจับ effect/listener ที่ cleanup ไม่ครบ; production static export ใช้ `NODE_ENV=production` จึงไม่เปลี่ยน runtime ของประชาชนหรือ Admin.

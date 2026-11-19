@@ -467,3 +467,136 @@ test("map flood pin opens summary popup without stacking, per-route detour direc
   await startPhotoPin.click({ force: true });
   await expect(page.locator(".doh-detour-point-photo-popup")).toContainText("ภาพปากทางเข้าแยกเมาะมาวี ฝั่งจุด A");
 });
+
+
+test("citizen situation summary status filter, route chips, clear button, and empty state reset", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 1024, "Desktop citizen sidebar filter integration");
+  const updatedAt = new Date().toISOString();
+
+  await page.route("**/functions/v1/hdms-api", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        updatedAt,
+        floodRoutes: [
+          {
+            id: "F-EMERALD-418",
+            route_no: "418",
+            section_name: "ดอนยาง - ยะลา (ปกติ)",
+            km_start: "5+000",
+            km_end: "5+500",
+            lat_start: 6.80,
+            lon_start: 101.20,
+            lat_end: 6.81,
+            lon_end: 101.21,
+            coordinates_json: [[101.20, 6.80], [101.21, 6.81]],
+            water_level_cm: 0,
+            traffic_status: "PASSABLE",
+            is_active: true,
+            updated_at: updatedAt,
+          },
+          {
+            id: "F-RED-42",
+            route_no: "42",
+            section_name: "ดอนยาง - บ้านดี (ผ่านไม่ได้)",
+            km_start: "103+200",
+            km_end: "104+000",
+            lat_start: 6.86,
+            lon_start: 101.24,
+            lat_end: 6.87,
+            lon_end: 101.25,
+            coordinates_json: [[101.24, 6.86], [101.25, 6.87]],
+            water_level_cm: 50,
+            traffic_status: "CLOSED",
+            is_active: true,
+            updated_at: updatedAt,
+          },
+          {
+            id: "F-ORANGE-42",
+            route_no: "42",
+            section_name: "ดอนยาง - ปะนาเระ (รถเล็กผ่านไม่ได้)",
+            km_start: "110+000",
+            km_end: "110+400",
+            lat_start: 6.88,
+            lon_start: 101.26,
+            lat_end: 6.89,
+            lon_end: 101.27,
+            coordinates_json: [[101.26, 6.88], [101.27, 6.89]],
+            water_level_cm: 25,
+            traffic_status: "WARNING",
+            direction_meta: { trafficStatusDetail: "NO_SMALL_VEHICLES" },
+            is_active: true,
+            updated_at: updatedAt,
+          },
+        ],
+        detourRoutes: [],
+        timelineUpdates: [],
+        mitigationProjects: [],
+        highwayLayers: [],
+        offices: [],
+        mapStyles: null,
+        systemSettings: { name: "ระบบทดสอบ", org: "กรมทางหลวง", desc: "", phone: "1586" },
+      }),
+    });
+  });
+
+  await page.goto(`${base}/`);
+
+  const sidebar = page.locator("div.lg\\:flex").filter({ hasText: "จุดเฝ้าระวังและน้ำท่วมทางหลวง" });
+  await expect(sidebar).toBeVisible();
+
+  // 1. SituationSummary lists items with counts
+  const summary = sidebar.locator("ul[aria-label='สรุปสถานการณ์ทุกจุด']");
+  await expect(summary).toBeVisible();
+  const redFilterBtn = summary.getByRole("button", { name: /1 ผ่านไม่ได้/ });
+  const orangeFilterBtn = summary.getByRole("button", { name: /1 รถเล็กไม่สามารถผ่านได้/ });
+  const emeraldFilterBtn = summary.getByRole("button", { name: /1 ผ่านได้ปกติ/ });
+  await expect(redFilterBtn).toBeVisible();
+  await expect(orangeFilterBtn).toBeVisible();
+  await expect(emeraldFilterBtn).toBeVisible();
+
+  // 2. Initial list displays all 3 items sorted by severity: CLOSED > WARNING > PASSABLE
+  const floodCards = sidebar.locator("article");
+  await expect(floodCards).toHaveCount(3);
+  await expect(floodCards.nth(0)).toContainText("ทล.42");
+  await expect(floodCards.nth(0)).toContainText("ผ่านไม่ได้");
+  await expect(floodCards.nth(1)).toContainText("รถเล็กไม่สามารถผ่านได้");
+  await expect(floodCards.nth(2)).toContainText("ผ่านได้ปกติ");
+
+  // 3. Click red filter button -> only CLOSED card shown, "แสดงทุกสถานะ" button appears
+  await redFilterBtn.click();
+  await expect(redFilterBtn).toHaveAttribute("aria-pressed", "true");
+  await expect(floodCards).toHaveCount(1);
+  await expect(floodCards.first()).toContainText("ผ่านไม่ได้");
+
+  const showAllStatusBtn = sidebar.getByRole("button", { name: "แสดงทุกสถานะ" });
+  await expect(showAllStatusBtn).toBeVisible();
+  await showAllStatusBtn.click();
+  await expect(redFilterBtn).toHaveAttribute("aria-pressed", "false");
+  await expect(floodCards).toHaveCount(3);
+
+  // 4. Click route chip ทล.418 -> only 418 shown, and clear filter button appears next to search
+  const chip418 = sidebar.getByRole("button", { name: "ทล.418", exact: true });
+  await expect(chip418).toBeVisible();
+  await chip418.click();
+  await expect(chip418).toHaveAttribute("aria-pressed", "true");
+  await expect(floodCards).toHaveCount(1);
+  await expect(floodCards.first()).toContainText("ดอนยาง - ยะลา (ปกติ)");
+
+  const clearFilterBtn = sidebar.getByRole("button", { name: "ล้างตัวกรอง" });
+  await expect(clearFilterBtn).toBeVisible();
+
+  // 5. Select CLOSED while on 418 -> 0 matches -> empty state with clear button
+  await redFilterBtn.click();
+  await expect(floodCards).toHaveCount(0);
+  await expect(sidebar.getByText(/กรุณาลองเปลี่ยนคำค้นหา หรือกดปุ่มด้านล่างเพื่อล้างตัวกรอง/)).toBeVisible();
+  const emptyResetBtn = sidebar.getByRole("button", { name: "ล้างตัวกรอง" });
+  await expect(emptyResetBtn).toBeVisible();
+  await emptyResetBtn.click();
+
+  // 6. All items restored
+  await expect(floodCards).toHaveCount(3);
+  await expect(redFilterBtn).toHaveAttribute("aria-pressed", "false");
+  await expect(chip418).toHaveAttribute("aria-pressed", "false");
+});

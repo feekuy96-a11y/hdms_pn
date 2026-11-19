@@ -1,6 +1,6 @@
 # AI Handoff — สถานะร่วมของโครงการ HDMS_PN
 
-> อัปเดต: 19 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (บน `origin/main` ล่าสุดผ่าน PR #50 `7c2e6be` รวม `UPDATE-130` แก้ CRLF และรัน migration Backfill แถว `F-6bc2ee64-1ad6-412f-bf1b-bcc2033ad844` บน Production เรียบร้อยแล้ว 23/23 แถว; ดำเนินการเก็บกวาดกิ่งที่ merge/closed แล้วทั้งหมด 32 กิ่งบน origin และ 9 กิ่งบน local รวมทั้งปิด Dependabot PR #27 และลบกิ่งออก; อยู่ระหว่างเตรียม PR สำหรับ `UPDATE-131` ปรับแต่ง `.github/dependabot.yml` ป้องกันการอัปเกรดข้าม Major Version) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`, B-023). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
+> อัปเดต: 19 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (บน `origin/main` ล่าสุดผ่าน PR #51 `2eb8b85` รวม `UPDATE-131` ปรับแต่ง `.github/dependabot.yml` ป้องกันการอัปเกรดข้าม Major Version; กิ่งปัจจุบัน `test/e2e-roadmap-coverage` เพิ่ม Playwright E2E สำหรับสรุปสถานการณ์ประชาชน, ตัวกรอง 5 สถานะ, Route Chips และปุ่มล้างตัวกรอง `UPDATE-132` [B-011]) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`, B-023). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
 
 ## ก่อนเริ่มงานทุกครั้ง
 
@@ -53,12 +53,13 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** ปรับแต่ง `.github/dependabot.yml` ป้องกันไม่ให้รวมการอัปเกรดข้าม Major Version (`UPDATE-131`)
-- **Git Branch & Commit SHA:** `chore/dependabot-ignore-major`
-- **ไฟล์ที่แก้ไขแล้ว:** `.github/dependabot.yml`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **งานที่กำลังทำ / เป้าหมาย:** ขยายความครอบคลุม Playwright E2E: สรุปสถานการณ์ประชาชน, ตัวกรอง 5 สถานะ, Route Chips และปุ่มล้างตัวกรอง (`UPDATE-132` [B-011])
+- **Git Branch & Commit SHA:** `test/e2e-roadmap-coverage`
+- **ไฟล์ที่แก้ไขแล้ว:** `tests/e2e/compact-card-detour-accordion.spec.ts`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
 - **สิ่งที่ทำสำเร็จ:**
-  - ปิด Dependabot PR #27 และลบกิ่งรีโมต `dependabot/npm_and_yarn/dependencies-534e62a8e0` ออกจาก GitHub
-  - ปรับปรุง `.github/dependabot.yml` ให้จำกัดกลุ่มการอัปเดตเฉพาะ minor/patch และเพิ่ม `ignore` สำหรับ `version-update:semver-major`
+  - เพิ่มชุดทดสอบ E2E ใน `tests/e2e/compact-card-detour-accordion.spec.ts` ทดสอบ SituationSummary status filter, route chips, clear button, and empty state reset
+  - รัน E2E `node scripts/test-e2e-with-public-config.mjs tests/e2e/compact-card-detour-accordion.spec.ts` ผ่านครบ 5 ข้อ
+  - ผ่าน R6 Quality Gate: `eslint` 0 warnings, `tsc --noEmit` 0 errors, `build:pages` 6/6 static pages
 - **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี
-- **ผลทดสอบล่าสุด:** ผ่าน R6 (`lint`, `typecheck`, `build:pages`)
-- **ขั้นตอนถัดไป:** Push กิ่ง `chore/dependabot-ignore-major`, เปิด PR และ Merge เข้า `main`
+- **ผลทดสอบล่าสุด:** ผ่าน R6 (`lint`, `typecheck`, `build:pages`) และ Playwright E2E 5 passed, 3 skipped
+- **ขั้นตอนถัดไป:** Push กิ่ง `test/e2e-roadmap-coverage`, เปิด PR และเตรียมพัฒนา Roadmap ถัดไป (B-005)
