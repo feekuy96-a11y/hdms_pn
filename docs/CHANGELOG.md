@@ -1,5 +1,23 @@
 ﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-129] 2026-11-19 ซ่อมฐานข้อมูล 115 ตำบล 12 อำเภอ จ.ปัตตานี ด้วยขอบเขตรูปหลายเหลี่ยม DOPA จริง และสร้างสคริปต์ Backfill `doh_flood_routes` (รอตรวจก่อนรัน Production)
+- **ไฟล์:** `lib/gis-data.ts`, `lib/area-lookup.ts`, `scripts/backfill-flood-areas.mjs`, `supabase/migrations/20261119000100_backfill_flood_routes_district_subdistrict.sql`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **แทนที่ขอบเขตจำลองใน `lib/gis-data.ts` ด้วยข้อมูล DOPA จริงครบ 12 อำเภอ 115 ตำบล:**
+     - แก้ชื่อตำบลที่เคยผิดอำเภอ/นอกจังหวัดจาก `a792965` (ลบ `ตะปอเยาะ`/`บ้านดอน` ออกจาก `ปะนาเระ` เป็น `คอกกระบือ`/`บ้านน้ำบ่อ`, แก้ `แหลมโพธิ์` ใน `เมืองปัตตานี` เป็น `ปุยุด`, แก้ `ตุยง`/`บางโกลด` ใน `โคกโพธิ์` เป็น `ควนโนรี`/`บางโกระ`/`ปากล่อ`, แก้ `ระตาปันยัง` ใน `ยะรัง` เป็น `เขาตูม`)
+     - ใช้รูปหลายเหลี่ยมขอบเขตตำบล/อำเภอจริงจาก GeoThai/boundaries ที่เทียบชื่อตรงกับข้อมูลกรมการปกครอง (`kongvut/thai-province-data`) 115/115 ตำบล
+  2. **Point-in-Polygon ระดับตำบล (`lib/area-lookup.ts`):**
+     - ปรับ `localArea()` ให้คัดกรอง bounding box แล้วตรวจสอบ Point-in-Polygon บนขอบเขต 115 ตำบลจริง ก่อน fallback ไปจุดศูนย์กลางตำบลภายในอำเภอที่รองรับ `MultiPolygon`/`Polygon` แล้วใน `findPattaniDistrictName()`
+  3. **One-Off Dry-Run & SQL Backfill (`scripts/backfill-flood-areas.mjs`, `supabase/migrations/20261119000100_backfill_flood_routes_district_subdistrict.sql`):**
+     - สร้างสคริปต์ read-only (`--dry-run` และ `--sql`) และ migration แบบ idempotent สำหรับ Backfill `district`/`subdistrict` ใน `public.doh_flood_routes` ทั้ง 22 แถว (19 แถวใช้งาน + 3 แถว `deleted_at IS NOT NULL`) โดยคงค่า `updated_at` เดิมไว้เพื่อไม่ให้ทริกเกอร์ `doh_enqueue_external_report()` ส่งรายงานซ้ำและไม่เปลี่ยนเวลา `"อัปเดตล่าสุด"` พร้อม Rollback SQL ในหัวไฟล์ (**ยังไม่ได้รันบน Production** ตามกฎ R5 รอเจ้าของตรวจสอบตาราง Dry-Run ก่อนอนุมัติ)
+- **ตรวจแล้ว (หลังแก้ครั้งสุดท้ายบนชุดไฟล์เดียวกันก่อนสลับกิ่ง):**
+  - `node scripts/backfill-flood-areas.mjs` — ผ่าน (อ่าน 19 active rows ผ่าน Edge read-only, 19/19 match `[polygon]` จริง)
+  - `npm run lint` (`--max-warnings=0`), `npm run typecheck`, `npm run build:pages` (6/6 static pages) — ผ่าน
+  - Playwright E2E: `hybrid-google-maps.spec.ts` + `flood-form-rules.spec.ts` — ผ่าน (24 passed, 2 skipped)
+- **ลำดับ Deploy & ย้อนกลับ:**
+  1. รอเจ้าของตรวจ Dry-Run 22 แถวและอนุมัติรัน `20261119000100_backfill_flood_routes_district_subdistrict.sql` บน Production (ย้อนกลับด้วย `UPDATE public.doh_flood_routes SET district = '', subdistrict = '' WHERE id IN (...)`)
+  2. Merge PR #49 เข้า `main` เพื่อ Deploy เว็บ Static Pages (ย้อนกลับด้วย `git revert`)
+
 ### [UPDATE-128] 2026-11-19 แก้ปัญหาพิกัดพื้นที่ไม่ตรงกับแผนที่ และปรับปรุงเอนจินคำบรรยายทางเลี่ยงให้แม่นยำตามเส้นถนนจริง
 - **ไฟล์:** `lib/gis-data.ts`, `lib/area-lookup.ts`, `lib/gis-utils.ts`, `components/admin/tabs/MapManagementTab.tsx`, `db/default-data.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
 - **การแก้ไข:**
