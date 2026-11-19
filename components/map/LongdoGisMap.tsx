@@ -1101,7 +1101,14 @@ export function LongdoGisMap({
         });
 
         const primarySeg = ev.segments[0];
-        const marker = L.marker([centerLat, centerLon], { icon: pinIcon, zIndexOffset: zIndex }).addTo(group);
+        const clusterAriaLabel = `ทล.${ev.routeNo} (${ev.segments.length} ช่วง) ระดับน้ำสูงสุด ${ev.maxWaterLevelCm} ซม. — ${evPresentation.label}`;
+        const marker = L.marker([centerLat, centerLon], {
+          icon: pinIcon,
+          zIndexOffset: zIndex,
+          alt: clusterAriaLabel,
+          title: clusterAriaLabel,
+        }).addTo(group);
+        marker.getElement()?.setAttribute("aria-label", clusterAriaLabel);
         marker.bindPopup(() => buildFloodPopupHtml(primarySeg, countDetoursForFlood(primarySeg)), floodPopupOpts);
         marker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
@@ -1261,10 +1268,14 @@ export function LongdoGisMap({
             iconAnchor: pinAnchor,
           });
 
+          const markerAriaLabel = `ทล.${item.flood.route_no}${item.sideBadge} ${item.flood.section_name} กม.${item.flood.km_start} — ${item.statusLabel}`;
           const marker = L.marker([renderLat, renderLon], {
             icon: pinIcon,
             zIndexOffset: item.zIndex,
+            alt: markerAriaLabel,
+            title: markerAriaLabel,
           }).addTo(group);
+          marker.getElement()?.setAttribute("aria-label", markerAriaLabel);
 
           marker.bindPopup(() => buildFloodPopupHtml(item.flood, countDetoursForFlood(item.flood)), floodPopupOpts);
           marker.on("click", (e: any) => {

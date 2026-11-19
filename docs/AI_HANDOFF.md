@@ -53,13 +53,16 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** ปรับสีเส้นทางเลี่ยง 2 ทิศทางให้ตรงสไตล์เส้นทาง แยกหมุด A→B / B→A และปลดล็อกดัดเส้นอิสระ (`UPDATE-123`)
-- **Git Branch & Commit SHA:** `main` (ต่อยอดจาก `039f6ea` — ฝั่งโค้ดหลัก commit แล้ว เหลือเทสปรับพิกัด + เอกสารในเครื่อง)
-- **ไฟล์ที่แก้ไขแล้ว:** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/{MapManagementTab,RouteGeometryEditorSection}.tsx`, `app/admin/page.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF,UI_CONTRACT}.md`
+- **งานที่กำลังทำ / เป้าหมาย:** ปรับปรุง UI หน้าประชาชนและแอดมินตามข้อเสนอ P1 & P2 (เพิ่ม Quick Inline Edit ระดับน้ำในทะเบียนเหตุการณ์, จัดระเบียบฟอร์มแอดมิน, แก้ accessible marker labels และ mobile touch targets) (`UPDATE-124`)
+- **Git Branch & Commit SHA:** `fix/ui-p1-p2-accessibility-and-layout` (แตกจาก `main` commit `1899ccf0b32aa39d1e5831ed7b104757bbeb7183`)
+- **ไฟล์ที่แก้ไขแล้ว:** `app/page.tsx`, `components/admin/tabs/{HighwayIdentificationSection,IncidentRegistryTab,RouteGeometryEditorSection}.tsx`, `components/map/LongdoGisMap.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
 - **สิ่งที่ทำสำเร็จ:**
-  - แก้สี/ลวดลาย/ลูกศรทางเลี่ยงฝั่งขากลับและพรีวิวให้ใช้ `mapStyles.detour` (`dashArrayFor` + `resolveVisibleArrowColor`) แทนค่า hardcode `#38bdf8`
-  - เพิ่มหมุดจุดเริ่ม–ปลายขากลับแยกอิสระ (`PICK_REV_START` / `PICK_REV_END`, `.doh-draft-rev-endpoint`) และซิงค์กับ OSRM/Google routing และ freeform edit
-  - ปลดล็อกการลากหมุดปลายทาง/ต่อปลายเส้นในโหมด `ดัดเส้นอิสระ` พร้อมแก้ bug พรีวิวเส้นขากลับขณะลาก (`revDraftLineRef`)
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** รอเจ้าของ commit/push ส่วนเทสที่ปรับปรุงและเอกสารขึ้น `origin/main` เพื่อ deploy Pages
-- **ผลทดสอบล่าสุด:** ดูผล `npm run check:deploy` และ Playwright Static E2E หลังแก้เอกสารรอบล่าสุด
-- **ขั้นตอนถัดไป:** เจ้าของตรวจสอบและ push ขึ้น `origin/main` เพื่อ trigger Deploy GitHub Pages
+  - เพิ่ม Quick Inline Edit สำหรับแก้ไขระดับน้ำ (0–500 ซม.) พร้อมพรีวิวสถานะจราจรอัตโนมัติใน `IncidentRegistryTab.tsx` โดยไม่ต้องเปิดโมดอลเต็ม
+  - จัดระเบียบฟอร์มระบุสายทางหลวง (`HighwayIdentificationSection.tsx`) แยกชัดเจนระหว่างชื่อตอนตามบัญชีทางหลวงกับจุดสังเกตหน้างาน พร้อมรวมปุ่มค้นหาพิกัด
+  - ปรับลำดับชั้นภาพเครื่องมือช่วยสร้างแนวเส้นใน `RouteGeometryEditorSection.tsx` ให้เด่นชัด
+  - แก้ไข accessible name/alt/title สำหรับหมุดคลัสเตอร์และหมุดช่วงน้ำท่วมบนแผนที่ (`LongdoGisMap.tsx`) และขยาย touch target ปุ่มสลับแผนที่ให้ได้มาตรฐาน 44px (`min-h-11`) ใน `app/page.tsx`
+  - เพิ่ม E2E test ทดสอบ inline water level edit ใน `tests/e2e/admin-menus.spec.ts`
+  - ตรวจสอบผ่านด่าน R6 (`npm run lint && npm run typecheck && npm run build:pages`) และ Playwright E2E 100%
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี
+- **ผลทดสอบล่าสุด:** `npm run lint` (0 warnings), `npm run typecheck` (0 errors), `npm run build:pages` (6/6 routes สำเร็จ), `npx playwright test tests/e2e/admin-menus.spec.ts:701` (1 passed)
+- **ขั้นตอนถัดไป:** รวมกิ่ง (merge) เข้า `main` หรือเปิด PR ตาม flow ของโครงการ

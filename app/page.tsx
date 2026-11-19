@@ -1728,9 +1728,9 @@ export default function HomePage() {
                               }
                               setShowDossier(false);
                             }}
-                            className="flex min-h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-600/80 bg-[#13203c] hover:bg-[#1a2b50] px-3 py-2 font-heading text-xs font-bold text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                            className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-600/80 bg-[#13203c] hover:bg-[#1a2b50] px-3 py-2 font-heading text-xs font-bold text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                           >
-                            <MapPin aria-hidden="true" className="h-3.5 w-3.5 text-sky-300" />
+                            <MapPin aria-hidden="true" className="h-4 w-4 text-sky-300" />
                             <span>ดูตำแหน่งบนแผนที่</span>
                           </button>
                         </div>
@@ -2186,9 +2186,9 @@ export default function HomePage() {
                           </button>
                         </div>
                         {nav.disclaimer && (
-                          <details className="text-xs text-slate-400">
-                            <summary className="cursor-pointer text-center text-slate-400 underline underline-offset-2">ข้อควรทราบก่อนนำทาง</summary>
-                            <p className="mt-1 text-center leading-relaxed">{nav.disclaimer}</p>
+                          <details className="text-xs text-slate-300">
+                            <summary className="cursor-pointer text-center text-slate-300 underline underline-offset-2 hover:text-white">ข้อควรทราบก่อนนำทาง</summary>
+                            <p className="mt-1 text-center leading-relaxed text-slate-300">{nav.disclaimer}</p>
                           </details>
                         )}
                       </div>

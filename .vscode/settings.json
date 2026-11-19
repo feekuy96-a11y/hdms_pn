@@ -1,0 +1,5 @@
+{
+    "postgres-language-server.allowDownloadPrereleases": true,
+    "postgres-language-server.allowVersionChecks": true,
+    "postgres-language-server.enabled": true
+}
