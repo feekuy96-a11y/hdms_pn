@@ -96,6 +96,7 @@ interface RouteGeometryEditorSectionProps {
   handleRestoreOriginalRoute: () => void;
   requestClearRoute: () => void;
   closedRoadConflicts: string[];
+  passabilityWarnings?: string[];
   detourDirectionMode: DetourDirectionModeType;
   detourDistanceMeters: { forward: number; reverse: number };
 }
@@ -172,6 +173,7 @@ export function RouteGeometryEditorSection({
   handleRestoreOriginalRoute,
   requestClearRoute,
   closedRoadConflicts,
+  passabilityWarnings = [],
   detourDirectionMode,
   detourDistanceMeters,
 }: RouteGeometryEditorSectionProps) {
@@ -654,6 +656,11 @@ export function RouteGeometryEditorSection({
           {closedRoadConflicts.length > 0 && (
             <p className="rounded-lg bg-red-950/70 border border-red-700 p-2 text-[11px] text-red-200">
               ⚠️ เส้นทางเลี่ยงทับซ้อนช่วงถนนที่ปิดการจราจร: <strong>{closedRoadConflicts.join(", ")}</strong> — กรุณาเพิ่มจุดดัดเส้นเพื่ออ้อมจุดดังกล่าวก่อนเผยแพร่
+            </p>
+          )}
+          {passabilityWarnings.length > 0 && (
+            <p className="rounded-lg bg-amber-950/70 border border-amber-600/80 p-2 text-[11px] text-amber-200">
+              ⚠️ ข้อควรระวัง: ทางเลี่ยงนี้ผ่านช่วงถนนที่มีน้ำท่วม/จำกัดการสัญจร: <strong>{passabilityWarnings.join(", ")}</strong> — กรุณาตรวจสอบว่าประเภทรถที่แนะนำสามารถผ่านได้จริง
             </p>
           )}
         </div>

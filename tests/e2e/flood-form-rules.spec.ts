@@ -5,6 +5,7 @@ import {
   getTrafficPresentation,
 } from "../../lib/traffic-presentation";
 import { getAvailableHighwayRoutes } from "../../lib/highway-schema";
+import { detectClosedRoadConflicts, detectPassabilityFloodWarnings } from "../../lib/gis-utils";
 
 const base = process.env.BASE_PATH || "";
 
@@ -291,5 +292,40 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     // Forward starts near [101.18, 6.83], Reverse runs along reverse B->A carriageway starting near [101.1906, 6.8396]
     expect(fwdPayload.coordinates[0][0]).toBeCloseTo(101.18, 3);
     expect(revPayload.coordinates[0][0]).toBeCloseTo(101.1906, 3);
+  });
+
+  test("Step 1 quick direction selector & long KM span warning work without regressing step 3, and passability warnings flag WARNING/ONE_LANE floods", async ({ page }) => {
+    const detourCoords: [number, number][] = [[101.18, 6.83], [101.20, 6.83]];
+    const warningFloods = [
+      {
+        id: "F-WARN",
+        route_no: "42",
+        section_name: "แยกดอนยาง",
+        km_start: "103+000",
+        km_end: "103+400",
+        is_active: true,
+        traffic_status: "WARNING",
+        coordinates_json: [[101.19, 6.825], [101.19, 6.835]] as [number, number][],
+      },
+    ];
+    expect(detectClosedRoadConflicts(detourCoords, warningFloods)).toHaveLength(0);
+    const warnings = detectPassabilityFloodWarnings(detourCoords, warningFloods);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].trafficStatus).toBe("WARNING");
+
+    test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop admin form workflow");
+    await page.goto(`${base}/admin/`);
+    await page.getByRole("complementary").getByRole("button", { name: /จัดการแผนที่/ }).click();
+
+    const quickDirGroup = page.getByRole("group", { name: "เลือกฝั่งถนนเบื้องต้น" });
+    await expect(quickDirGroup).toBeVisible();
+    await quickDirGroup.getByRole("button", { name: "ขาไป A→B" }).click();
+
+    await page.getByLabel("กม. เริ่มต้น").fill("0+000");
+    await page.getByLabel("กม. สิ้นสุด").fill("25+000");
+    await expect(page.getByText(/ช่วง กม\. นี้ยาว 25\.0 กม\./)).toBeVisible();
+    await page.getByRole("button", { name: "ล้าง กม." }).click();
+    await expect(page.getByLabel("กม. เริ่มต้น")).toHaveValue("");
+    await expect(page.getByLabel("กม. สิ้นสุด")).toHaveValue("");
   });
 });

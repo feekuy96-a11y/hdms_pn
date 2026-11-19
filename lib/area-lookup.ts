@@ -20,7 +20,7 @@
 // The old public helpers (isPointInPolygon, findPattaniDistrictName, cleanThaiAdminPrefix) live here now and are
 // re-exported from lib/gis-utils.ts, so existing imports keep working.
 
-import { reverseGeocodeGoogleAction } from "@/app/actions/doh-actions";
+import { proxyReverseGeocodeAction, reverseGeocodeGoogleAction } from "@/app/actions/doh-actions";
 import { PATTANI_DISTRICTS_GEOJSON, PATTANI_SUBDISTRICTS_DATA } from "./gis-data";
 
 export interface AreaInfo {
@@ -179,6 +179,7 @@ let persisted: Record<string, { t: number; v: AreaInfo }> | null = null;
 let nominatimQueue: Promise<unknown> = Promise.resolve();
 let lastNominatimAt = 0;
 let nominatimDownUntil = 0;
+let edgeNominatimDownUntil = 0;
 let longdoDownUntil = 0;
 let googleDownUntil = 0;
 let googleGeoConfirmed = false;
@@ -193,6 +194,7 @@ export function resetAreaLookup() {
   nominatimQueue = Promise.resolve();
   lastNominatimAt = 0;
   nominatimDownUntil = 0;
+  edgeNominatimDownUntil = 0;
   longdoDownUntil = 0;
   googleDownUntil = 0;
   googleGeoConfirmed = false;
@@ -304,10 +306,48 @@ async function queryLongdo(lon: number, lat: number, key: string): Promise<Parti
   };
 }
 
+function parseNominatimAddress(addr: Record<string, any>): Partial<AreaInfo> | null {
+  const village = cleanThaiAdminPrefix(addr.village || addr.hamlet || addr.neighbourhood);
+  // Fields that name a ตำบล are trusted more than a municipality/town name, which only often equals it.
+  const strongTambon = cleanThaiAdminPrefix(addr.subdistrict || addr.suburb);
+  const rawWeakTambon = cleanThaiAdminPrefix(addr.municipality || addr.town || addr.city_district);
+  const weakTambon = NON_TAMBON_TOWN_LABELS.has(rawWeakTambon) ? "" : rawWeakTambon;
+  const tambon = strongTambon || weakTambon;
+  const amphoe = cleanThaiAdminPrefix(addr.district || addr.county || addr.city_district || addr.city);
+  if (!tambon && !amphoe && !village && !addr.road) return null;
+  return {
+    village,
+    tambon,
+    amphoe,
+    province: cleanThaiAdminPrefix(addr.state || addr.province) || "ปัตตานี",
+    road: typeof addr.road === "string" ? addr.road : "",
+    source: "nominatim",
+    confidence: strongTambon ? "high" : tambon ? "medium" : "low",
+  };
+}
+
 async function queryNominatim(lon: number, lat: number): Promise<Partial<AreaInfo> | null> {
   if (Date.now() < nominatimDownUntil) return null;
-  // No "User-Agent" header: browsers do not allow scripts to set it (it was silently ignored), and sending
-  // other custom headers would only add a preflight request.
+
+  // Prefer Edge Function proxy first so Nominatim receives a valid server-side User-Agent.
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supaKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (supaUrl && supaKey && Date.now() >= edgeNominatimDownUntil) {
+    try {
+      const edgeRes = await proxyReverseGeocodeAction(lon, lat);
+      if (edgeRes?.available) {
+        if (edgeRes.found && edgeRes.address) {
+          return parseNominatimAddress(edgeRes.address);
+        }
+        return null;
+      }
+      edgeNominatimDownUntil = Date.now() + (edgeRes?.status === 403 ? UNCONFIGURED_COOLDOWN_MS : BREAKER_MS);
+    } catch {
+      edgeNominatimDownUntil = Date.now() + BREAKER_MS;
+    }
+  }
+
+  // Fallback: direct browser Nominatim when Edge proxy is unavailable.
   const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=th&zoom=18`;
 
   const result = await enqueueNominatim(async () => {
@@ -328,24 +368,7 @@ async function queryNominatim(lon: number, lat: number): Promise<Partial<AreaInf
     return null;
   }
 
-  const addr = result.data?.address || {};
-  const village = cleanThaiAdminPrefix(addr.village || addr.hamlet || addr.neighbourhood);
-  // Fields that name a ตำบล are trusted more than a municipality/town name, which only often equals it.
-  const strongTambon = cleanThaiAdminPrefix(addr.subdistrict || addr.suburb);
-  const rawWeakTambon = cleanThaiAdminPrefix(addr.municipality || addr.town || addr.city_district);
-  const weakTambon = NON_TAMBON_TOWN_LABELS.has(rawWeakTambon) ? "" : rawWeakTambon;
-  const tambon = strongTambon || weakTambon;
-  const amphoe = cleanThaiAdminPrefix(addr.district || addr.county || addr.city_district || addr.city);
-  if (!tambon && !amphoe && !village && !addr.road) return null;
-  return {
-    village,
-    tambon,
-    amphoe,
-    province: cleanThaiAdminPrefix(addr.state || addr.province) || "ปัตตานี",
-    road: typeof addr.road === "string" ? addr.road : "",
-    source: "nominatim",
-    confidence: strongTambon ? "high" : tambon ? "medium" : "low",
-  };
+  return parseNominatimAddress(result.data?.address || {});
 }
 
 async function queryGoogleGeocode(lon: number, lat: number): Promise<Partial<AreaInfo> | null> {

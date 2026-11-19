@@ -1557,15 +1557,12 @@ export interface ClosedRoadConflict {
   sectionName: string;
   kmStart: string;
   kmEnd: string;
+  trafficStatus: string;
   direction: "FORWARD" | "REVERSE";
   conflictPoint: [number, number];
 }
 
-/**
- * ตรวจสอบว่าเส้นทางเลี่ยง (A->B หรือ B->A) วิ่งตัดหรือทับช่วงถนนที่ปิดการจราจร (CLOSED) หรือไม่
- * ไม่นับปลายจุดเริ่มต้น/สิ้นสุดระยะ 60 เมตรแรกเพื่อให้ทางเลี่ยงสามารถเริ่มต้นจากปากทางก่อนจุดปิดถนนได้
- */
-export function detectClosedRoadConflicts(
+function detectFloodStatusConflicts(
   detourCoords: [number, number][],
   floodRoutes: Array<{
     id: string;
@@ -1577,6 +1574,7 @@ export function detectClosedRoadConflicts(
     traffic_status: string;
     coordinates_json: string | [number, number][];
   }>,
+  targetStatuses: Set<string>,
   direction: "FORWARD" | "REVERSE" = "FORWARD",
   thresholdMeters = 22
 ): ClosedRoadConflict[] {
@@ -1586,7 +1584,7 @@ export function detectClosedRoadConflicts(
   const conflicts: ClosedRoadConflict[] = [];
 
   for (const flood of floodRoutes || []) {
-    if (!flood.is_active || flood.traffic_status !== "CLOSED") continue;
+    if (!flood.is_active || !targetStatuses.has(flood.traffic_status)) continue;
     let fCoords: [number, number][] = [];
     try {
       fCoords = Array.isArray(flood.coordinates_json)
@@ -1636,6 +1634,7 @@ export function detectClosedRoadConflicts(
         sectionName: flood.section_name,
         kmStart: flood.km_start,
         kmEnd: flood.km_end,
+        trafficStatus: flood.traffic_status,
         direction,
         conflictPoint: hitPoint,
       });
@@ -1643,6 +1642,55 @@ export function detectClosedRoadConflicts(
   }
 
   return conflicts;
+}
+
+/**
+ * ตรวจสอบว่าเส้นทางเลี่ยง (A->B หรือ B->A) วิ่งตัดหรือทับช่วงถนนที่ปิดการจราจร (CLOSED) หรือไม่
+ * ไม่นับปลายจุดเริ่มต้น/สิ้นสุดระยะ 45 เมตรแรกเพื่อให้ทางเลี่ยงสามารถเริ่มต้นจากปากทางก่อนจุดปิดถนนได้
+ */
+export function detectClosedRoadConflicts(
+  detourCoords: [number, number][],
+  floodRoutes: Array<{
+    id: string;
+    route_no: string;
+    section_name: string;
+    km_start: string;
+    km_end: string;
+    is_active: boolean;
+    traffic_status: string;
+    coordinates_json: string | [number, number][];
+  }>,
+  direction: "FORWARD" | "REVERSE" = "FORWARD",
+  thresholdMeters = 22
+): ClosedRoadConflict[] {
+  return detectFloodStatusConflicts(detourCoords, floodRoutes, new Set(["CLOSED"]), direction, thresholdMeters);
+}
+
+/**
+ * ตรวจสอบคำเตือนเมื่อทางเลี่ยงวิ่งผ่านช่วงที่รถเล็กผ่านไม่ได้ (WARNING) หรือผ่านได้ ๑ ช่องทาง (ONE_LANE)
+ */
+export function detectPassabilityFloodWarnings(
+  detourCoords: [number, number][],
+  floodRoutes: Array<{
+    id: string;
+    route_no: string;
+    section_name: string;
+    km_start: string;
+    km_end: string;
+    is_active: boolean;
+    traffic_status: string;
+    coordinates_json: string | [number, number][];
+  }>,
+  direction: "FORWARD" | "REVERSE" = "FORWARD",
+  thresholdMeters = 22
+): ClosedRoadConflict[] {
+  return detectFloodStatusConflicts(
+    detourCoords,
+    floodRoutes,
+    new Set(["WARNING", "ONE_LANE"]),
+    direction,
+    thresholdMeters
+  );
 }
 
 /**

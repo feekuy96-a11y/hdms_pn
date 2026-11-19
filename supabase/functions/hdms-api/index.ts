@@ -201,12 +201,86 @@ async function computeGoogleDetourRoute(raw: unknown) {
   };
 }
 
+async function proxyOsrmRoute(raw: unknown) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail("Invalid OSRM route request", 422);
+  const reqObj = raw as Record<string, unknown>;
+  const rawCoords = reqObj.coords;
+  if (!Array.isArray(rawCoords) || rawCoords.length < 2 || rawCoords.length > 25) {
+    fail("Invalid OSRM coordinates (2-25 points required)", 422);
+  }
+  const coords = rawCoords.map((pt, idx) => googleCoordPair(pt, `coords[${idx}]`));
+  const coordStr = coords.map(([lon, lat]) => `${lon},${lat}`).join(";");
+  const overview = reqObj.overview === "simplified" ? "simplified" : reqObj.overview === "false" ? "false" : "full";
+  const steps = reqObj.steps === true ? "true" : "false";
+  const upstreamUrl = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=${overview}&geometries=geojson&steps=${steps}`;
+
+  let res: Response;
+  try {
+    res = await fetch(upstreamUrl, {
+      method: "GET",
+      headers: {
+        "User-Agent": "HDMS-Pattani-DOH/2.0 (Department of Highways Pattani)",
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(7_000),
+    });
+  } catch {
+    return { available: false, status: 504 };
+  }
+  if (!res.ok) {
+    return { available: false, status: res.status };
+  }
+  const data = await res.json().catch(() => null);
+  const routes = Array.isArray(data?.routes) ? data.routes : [];
+  if (routes.length === 0) {
+    return { available: true, found: false };
+  }
+  return { available: true, found: true, data };
+}
+
+async function proxyReverseGeocode(args: unknown[]) {
+  if (args.length < 2) fail("Coordinates required", 422);
+  const [rawLon, rawLat] = args;
+  const lon = number(rawLon, -180, 180);
+  const lat = number(rawLat, -90, 90);
+  const nUrl = new URL("https://nominatim.openstreetmap.org/reverse");
+  nUrl.searchParams.set("format", "jsonv2");
+  nUrl.searchParams.set("lat", String(lat));
+  nUrl.searchParams.set("lon", String(lon));
+  nUrl.searchParams.set("accept-language", "th");
+  nUrl.searchParams.set("zoom", "18");
+
+  let res: Response;
+  try {
+    res = await fetch(nUrl.toString(), {
+      method: "GET",
+      headers: {
+        "User-Agent": "HDMS-Pattani-DOH/2.0 (Department of Highways Pattani)",
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(6_000),
+    });
+  } catch {
+    return { available: false, status: 504 };
+  }
+  if (!res.ok) {
+    return { available: false, status: res.status };
+  }
+  const data = await res.json().catch(() => null);
+  if (!data?.address || typeof data.address !== "object") {
+    return { available: true, found: false };
+  }
+  return { available: true, found: true, address: data.address };
+}
+
 const READ_ONLY_EDGE_ACTIONS = new Set([
   "getSystemDataAction",
   "getPublicSystemDataAction",
   "getExternalJobsAction",
   "reverseGeocodeGoogleAction",
   "computeGoogleDetourRouteAction",
+  "proxyOsrmRouteAction",
+  "proxyReverseGeocodeAction",
 ]);
 
 type EventDetourRequest = {
@@ -745,6 +819,12 @@ Deno.serve(async (req) => {
     }
     if (action === "computeGoogleDetourRouteAction") {
       return reply(await computeGoogleDetourRoute(args[0]));
+    }
+    if (action === "proxyOsrmRouteAction") {
+      return reply(await proxyOsrmRoute(args[0]), 200, { "Cache-Control": "public, max-age=300" });
+    }
+    if (action === "proxyReverseGeocodeAction") {
+      return reply(await proxyReverseGeocode(args), 200, { "Cache-Control": "public, max-age=3600" });
     }
     if (mutation && !serviceKey) return reply({ error: "Server mutation key is not configured" }, 503);
     const [p, second] = args;
