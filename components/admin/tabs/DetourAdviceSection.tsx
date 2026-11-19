@@ -293,8 +293,9 @@ export const DetourAdviceSection = React.memo(function DetourAdviceSection({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
-              <span className="text-[11px] text-slate-300 block mb-1">ลิงก์ขาไป (A → B):</span>
+              <label htmlFor="detour-gmaps-url-fwd" className="text-[11px] text-slate-300 block mb-1">ลิงก์ขาไป (A → B):</label>
               <input
+                id="detour-gmaps-url-fwd"
                 type="url"
                 value={detourGoogleMapsUrlFwd}
                 onChange={(e) => setDetourGoogleMapsUrlFwd(e.target.value)}
@@ -303,8 +304,9 @@ export const DetourAdviceSection = React.memo(function DetourAdviceSection({
               />
             </div>
             <div>
-              <span className="text-[11px] text-slate-300 block mb-1">ลิงก์ขากลับ (B → A):</span>
+              <label htmlFor="detour-gmaps-url-rev" className="text-[11px] text-slate-300 block mb-1">ลิงก์ขากลับ (B → A):</label>
               <input
+                id="detour-gmaps-url-rev"
                 type="url"
                 value={detourGoogleMapsUrlRev}
                 onChange={(e) => setDetourGoogleMapsUrlRev(e.target.value)}

@@ -29,7 +29,7 @@
 | B-022 | สูง | Apps Script Web App ที่ใช้งานจริงอาจยังเป็น source เวอร์ชันก่อน idempotency/stale-write guard | กำลังทำ (Web App ยืนยันแล้ว; เหลือเปลี่ยน Edge secret URL) |
 | B-023 | สูง | Cutover ความสัมพันธ์ Flood Event ↔ Detour หลายต่อหลายจาก legacy field | ปิด (2026-11-19, ดู UPDATE-122) |
 | B-024 | กลาง | Event–Detour operation ledger ไม่มีนโยบาย retention/archival | เปิด |
-| B-025 | กลาง | ช่องฟอร์มย่อยและปุ่มลบใน `MapManagementTab` (`HighwayIdentificationSection`/`FloodSituationSection`), `IncidentRegistryTab` และโมดัล `GisHighwayModals` (`ตั้งค่าคุณสมบัติทางวิศวกรรม`) ยังขาด `htmlFor`/`aria-label` และปุ่ม `32px` | ปิดส่วนหลัก 4 ไฟล์แล้ว (2026-11-19, ดู UPDATE-134); เหลือ `Google Maps URL`/`สภาพถนน` ใน `DetourAdviceSection.tsx` และโมดัล `DetourManagementTab.tsx` |
+| B-025 | กลาง | ช่องฟอร์มย่อยและปุ่มลบใน `MapManagementTab` (`HighwayIdentificationSection`/`FloodSituationSection`), `IncidentRegistryTab`, `GisHighwayModals`, `DetourAdviceSection`, โมดัล `DetourManagementTab` ขาด `htmlFor`/`aria-label` และมีปุ่ม `32–34px` รวมถึง `min-h-screen` บนเดสก์ท็อป | ปิดแล้ว (2026-11-19, ดู UPDATE-134 และ UPDATE-135) — ผ่าน `check:deploy` + Playwright static `106 passed` (44 skipped) และ audit ครบทุกโมดัล |
 
 ## B-022 [สูง] Publish Apps Script source สำหรับ outbox idempotency
 - **หลักฐาน:** Web App URL ใหม่ตอบ JSON, ปฏิเสธคำขอไม่มี secret, และการเรียก `uploadMedia` ซ้ำด้วย `operationId` เดียวกันคืน Drive `mediaId` เดิม; ลบไฟล์ QA หลังทดสอบสำเร็จ. Edge `hdms-api` v18 และ migration atomic promotion อยู่ Production แล้ว.
@@ -57,7 +57,7 @@
 - **ผลกระทบ:** ผู้ใช้คีย์บอร์ด/Screen Reader และผู้ใช้หน้าจอสัมผัสยังกดคลิกป้าย label หรือปุ่มโมดัลบางจุดได้ไม่เต็มที่ รวมถึงจอ `1024–1440px` ถูกย่อ Sidebar เป็นแถบไอคอนโดยค่าเริ่มต้น
 - **ทางเลือก:** A) ทยอยผูก `htmlFor`/`aria-label` และปรับปุ่มในโมดัลให้เป็น `min-h-10` พร้อมตรวจ E2E ใน `admin-dialog-keyboard.spec.ts` / `admin-menus.spec.ts`; B) คงไว้เฉพาะที่ทำงานแล้ว
 - **คำแนะนำ:** A เพื่อครบมาตรฐาน WCAG 2.5.8 และ `UI_CONTRACT.md` ทุกแท็บและทุกโมดัล
-- **สถานะ:** ปิดบางส่วน (2026-11-19, ดู UPDATE-134) — แก้ครบทั้ง 4 ไฟล์หลัก (`HighwayIdentificationSection.tsx`, `FloodSituationSection.tsx`, `IncidentRegistryTab.tsx`, `GisHighwayModals.tsx`) จนโมดัล `อัปเดตระดับน้ำ`/`แบ่งช่วง`/`รวมช่วง`/`ตั้งค่าคุณสมบัติทางวิศวกรรม` ได้ `missingLabels=0` และ `smallBtns=0`; คงเหลือเฉพาะ input 3 ช่องในโมดัล `แก้ไขข้อมูลเส้นทางเลี่ยง` (`DetourManagementTab.tsx`), 2 ช่อง URL ใน `DetourAdviceSection.tsx`, ปุ่มล่าง `32–34px` ใน `DetourManagementTab` modal, และ `min-h-screen` บนจอเดสก์ท็อปที่ทำให้หน้าต่างเบราว์เซอร์เลื่อนตามฟอร์มได้ (`app/admin/page.tsx`)
+- **สถานะ:** ปิดแล้ว (2026-11-19, ดู UPDATE-134 และ UPDATE-135) — แก้ครบทั้ง 4 ไฟล์หลักเดิมและส่วนที่เหลือ (`DetourAdviceSection.tsx`, โมดัล `DetourManagementTab.tsx`, `lg:h-screen lg:overflow-hidden` ใน `app/admin/page.tsx`) จน `missingLabels=0` และ `unlabeledBtns=0` ทุกโมดัลหลัก, แบนเนอร์ปักหมุดบนแผนที่ `1280×800` คง `inViewport: true` (`bannerTop: 128`, `bannerBottom: 186`), คงเหลือเฉพาะคอมโพเนนต์ขนาดย่อโดยตั้งใจ (`DirectionSwitch size="sm"` `32px`, ลิงก์ inline `จัดการความสัมพันธ์`/`จัดการทางเลี่ยงเชื่อมโยง`, และ `<select>` กว้าง `1px` ภายใน `SearchableSelect`)
 
 ## B-018 [กลาง] Keyboard focus ของ Admin dialog — ปิดแล้ว
 - **หลักฐานก่อนปิด:** `useModalAccessibility` ครอบ dialog ใน Incident Registry, Detour Management, GIS route dialogs, Animated status และ Official report. ค้น `role="dialog"` ใน `components/admin`, `components/ui`, `app/admin` แล้วไม่พบ dialog ที่อยู่นอก hook นี้.

@@ -199,7 +199,7 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-body">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col bg-slate-950 text-slate-100 font-body">
       {/* Official Thai Government Protected Top Header */}
       <header className="bg-[#0f2347] border-b-2 border-amber-500 sticky top-0 z-50 min-h-16 px-3 sm:px-5 py-2 lg:py-0 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 shadow-xl">
         <div className="flex items-center gap-2.5 min-w-0 flex-1 lg:flex-none">

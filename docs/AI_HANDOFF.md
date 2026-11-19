@@ -53,9 +53,9 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** ปิดงาน `B-025` (`htmlFor`/`aria-label`/ปุ่ม ≥ 40px ใน `HighwayIdentificationSection`, `FloodSituationSection`, `IncidentRegistryTab`, `GisHighwayModals`) ต่อเนื่องจาก `UPDATE-133` (`UPDATE-134`)
-- **Git Branch & Commit SHA:** `main` (โค้ดหลักถูก commit & push เป็น `acf2d4e` บน `origin/main` แล้ว; เหลืออัปเดตเอกสารสรุป `UPDATE-134` ใน working tree 3 ไฟล์)
-- **ไฟล์ที่แก้ไขแล้ว:** `app/admin/page.tsx`, `app/globals.css`, `components/admin/AdminConsole.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `components/admin/tabs/HighwaySpecificationsTableSection.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `components/admin/tabs/SystemSettingsTab.tsx`, `components/admin/tabs/LineStylingTab.tsx`, `components/admin/tabs/HighwayIdentificationSection.tsx`, `components/admin/tabs/FloodSituationSection.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/GisHighwayModals.tsx`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
+- **งานที่กำลังทำ / เป้าหมาย:** ปิดงาน `B-025` สมบูรณ์ (`UPDATE-134` + `UPDATE-135`: แก้ `DetourAdviceSection.tsx`, โมดัล `DetourManagementTab.tsx`, และเพิ่ม `lg:h-screen lg:overflow-hidden` ใน `app/admin/page.tsx`) พร้อมตรวจ `check:deploy` และ `PLAYWRIGHT_STATIC=1 npm run test:e2e` ผ่านแล้ว
+- **Git Branch & Commit SHA:** `main` (ฐาน `origin/main` ล่าสุดอยู่ที่ `acf2d4e`; งาน `UPDATE-135` + เอกสาร `UPDATE-134`/`UPDATE-135` อยู่ใน working tree รอ commit/push)
+- **ไฟล์ที่แก้ไขแล้ว (ใน working tree รอบล่าสุด):** `app/admin/page.tsx`, `components/admin/tabs/DetourAdviceSection.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md` (ส่วน `UPDATE-133` และ 4 ไฟล์แรกของ `UPDATE-134` อยู่ใน `acf2d4e` แล้ว)
 - **สิ่งที่ทำสำเร็จ:**
   - แก้แถบปุ่มบนสุดของ `DetourManagementTab.tsx` และ `HighwaySpecificationsTableSection.tsx` ให้ wrap ไม่ล้นขวา `.doh-form`
   - ปรับ `.doh-auto-table` เป็น `500px` ใน `app/globals.css` พร้อม `ResizeObserver` ใน `DetourManagementTab.tsx` ลด DOM ซ้ำและคง selector E2E ครบ

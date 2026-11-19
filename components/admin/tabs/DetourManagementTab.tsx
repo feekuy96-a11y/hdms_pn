@@ -1194,8 +1194,8 @@ export function DetourManagementTab({
                   {viewingDetour.direction_mode === "FORWARD_ONLY" ? "เฉพาะขาไป (A → B)" : viewingDetour.direction_mode === "REVERSE_ONLY" ? "เฉพาะขากลับ (B → A)" : viewingDetour.direction_mode === "TWO_WAY" ? "เดินรถ ๒ ทิศทาง (A ⇄ B)" : "ไม่ระบุทิศทาง (ต้องตรวจสอบ)"}
                 </p>
               </div>
-              <button type="button" aria-label="ปิดรายละเอียด" onClick={() => setViewingDetour(null)} className="rounded-xl p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white">
-                <X className="h-5 w-5" />
+              <button type="button" aria-label="ปิดรายละเอียด" onClick={() => setViewingDetour(null)} className="min-h-10 min-w-10 inline-flex items-center justify-center rounded-xl p-2 hover:bg-slate-800 text-slate-400 hover:text-white">
+                <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
 
@@ -1397,9 +1397,9 @@ export function DetourManagementTab({
                         href={nav.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition"
+                        className="min-h-10 bg-emerald-600 hover:bg-emerald-500 text-white font-heading font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition"
                       >
-                        <Navigation className="w-3.5 h-3.5" /> ทดสอบเปิด Google Maps ({viewingDetourDir === "FORWARD" ? "A → B" : "B → A"})
+                        <Navigation className="w-3.5 h-3.5" aria-hidden="true" /> ทดสอบเปิด Google Maps ({viewingDetourDir === "FORWARD" ? "A → B" : "B → A"})
                       </a>
                     ) : (
                       <span className="text-xs text-rose-400 font-medium">⚠️ {nav.warning}</span>
@@ -1418,7 +1418,7 @@ export function DetourManagementTab({
                   setViewingDetour(null);
                   handleOpenEditModal(item);
                 }}
-                className="rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-heading font-bold text-slate-950 transition"
+                className="min-h-10 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-heading font-bold text-slate-950 transition"
               >
                 แก้ไขข้อมูล
               </button>
@@ -1429,7 +1429,7 @@ export function DetourManagementTab({
                   setViewingDetour(null);
                   handleDeleteDetour(item);
                 }}
-                className="rounded-xl border border-rose-500/60 bg-rose-950/40 hover:bg-rose-900 px-4 py-2 text-xs font-heading font-bold text-rose-300 transition"
+                className="min-h-10 rounded-xl border border-rose-500/60 bg-rose-950/40 hover:bg-rose-900 px-4 py-2 text-xs font-heading font-bold text-rose-300 transition"
               >
                 ลบทางเลี่ยง
               </button>
@@ -1454,9 +1454,9 @@ export function DetourManagementTab({
                 type="button"
                 onClick={() => setEditingDetour(null)}
                 aria-label="ปิดหน้าต่างแก้ไขเส้นทางเลี่ยง"
-                className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800"
+                className="min-h-10 min-w-10 inline-flex items-center justify-center p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
 
@@ -1521,9 +1521,9 @@ export function DetourManagementTab({
                   <button
                     type="button"
                     onClick={handleGenerateAdviceInModal}
-                    className="text-[10px] bg-amber-500 text-slate-950 font-heading font-bold px-2.5 py-1 rounded-lg shadow hover:bg-amber-400 flex items-center gap-1 shrink-0"
+                    className="min-h-10 text-xs bg-amber-500 text-slate-950 font-heading font-bold px-3 py-2 rounded-lg shadow hover:bg-amber-400 flex items-center gap-1 shrink-0"
                   >
-                    <Sparkles className="w-3 h-3" /> วิเคราะห์คำแนะนำอัตโนมัติ
+                    <Sparkles className="w-3.5 h-3.5" aria-hidden="true" /> วิเคราะห์คำแนะนำอัตโนมัติ
                   </button>
                 </div>
 
@@ -1730,17 +1730,18 @@ export function DetourManagementTab({
 
               {/* Row 2.5: Approved Google Maps Navigation URLs */}
               <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-heading font-bold text-emerald-400 flex items-center gap-1.5">
-                    <Navigation className="w-3.5 h-3.5" />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-heading font-bold text-emerald-400 flex items-center gap-1.5">
+                    <Navigation className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>Google Maps URL ที่เจ้าหน้าที่ตรวจสอบและอนุมัติแล้ว (Optional)</span>
-                  </label>
+                  </span>
                   <span className="text-[10px] text-slate-400">ถ้ามี จะใช้นำทางแทนการคำนวณอัตโนมัติ</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div>
-                    <span className="text-[11px] text-slate-300 block mb-1">ลิงก์ขาไป (A → B):</span>
+                    <label htmlFor="edit-detour-gmaps-url-fwd" className="text-[11px] text-slate-300 block mb-1">ลิงก์ขาไป (A → B):</label>
                     <input
+                      id="edit-detour-gmaps-url-fwd"
                       type="url"
                       value={editDetourGoogleMapsUrlFwd}
                       onChange={(e) => setEditDetourGoogleMapsUrlFwd(e.target.value)}
@@ -1749,8 +1750,9 @@ export function DetourManagementTab({
                     />
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-300 block mb-1">ลิงก์ขากลับ (B → A):</span>
+                    <label htmlFor="edit-detour-gmaps-url-rev" className="text-[11px] text-slate-300 block mb-1">ลิงก์ขากลับ (B → A):</label>
                     <input
+                      id="edit-detour-gmaps-url-rev"
                       type="url"
                       value={editDetourGoogleMapsUrlRev}
                       onChange={(e) => setEditDetourGoogleMapsUrlRev(e.target.value)}
@@ -1763,8 +1765,9 @@ export function DetourManagementTab({
 
               {/* Road Condition */}
               <div>
-                <label className="text-slate-300 block mb-1">สภาพผิวทาง (Road Surface Condition)</label>
+                <label htmlFor="edit-detour-road-condition" className="text-slate-300 block mb-1">สภาพผิวทาง (Road Surface Condition)</label>
                 <input
+                  id="edit-detour-road-condition"
                   type="text"
                   value={editDetourRoadCondition}
                   onChange={(e) => setEditDetourRoadCondition(e.target.value)}
@@ -1786,6 +1789,7 @@ export function DetourManagementTab({
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
+                    aria-label="เปิดใช้งานเส้นทางเลี่ยง"
                     checked={editIsActive}
                     onChange={(e) => setEditIsActive(e.target.checked)}
                     className="sr-only peer"
@@ -1795,7 +1799,7 @@ export function DetourManagementTab({
               </div>
 
               {/* Action Link to Redraw Path on Map */}
-              <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between">
+              <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <span className="text-xs font-bold text-amber-300 block font-heading">
                     ต้องการวาดหรือดัดแนวเส้นทางบนแผนที่?
@@ -1811,9 +1815,9 @@ export function DetourManagementTab({
                     setEditingDetour(null);
                     onEditDetourOnMap(id);
                   }}
-                  className="bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 px-3 py-1.5 rounded-xl font-heading text-xs font-bold transition flex items-center gap-1.5 shrink-0"
+                  className="min-h-10 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 px-3 py-2 rounded-xl font-heading text-xs font-bold transition flex items-center gap-1.5 shrink-0"
                 >
-                  <MapPin className="w-3.5 h-3.5 text-sky-400" />
+                  <MapPin className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
                   <span>เปิดเครื่องมือวาดแผนที่</span>
                 </button>
               </div>
@@ -1824,7 +1828,7 @@ export function DetourManagementTab({
               <button
                 type="button"
                 onClick={() => setEditingDetour(null)}
-                className="bg-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs hover:bg-slate-700 transition"
+                className="min-h-10 bg-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs hover:bg-slate-700 transition"
               >
                 ยกเลิก
               </button>
@@ -1832,9 +1836,9 @@ export function DetourManagementTab({
                 type="button"
                 disabled={isSubmitting}
                 onClick={handleSaveModal}
-                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-5 py-2 rounded-xl text-xs shadow-lg transition flex items-center gap-1.5 disabled:opacity-50"
+                className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-5 py-2 rounded-xl text-xs shadow-lg transition flex items-center gap-1.5 disabled:opacity-50"
               >
-                <Save className="w-4 h-4" />
+                <Save className="w-4 h-4" aria-hidden="true" />
                 <span>{isSubmitting ? "กำลังบันทึก..." : "บันทึกข้อมูล"}</span>
               </button>
             </div>

@@ -1,5 +1,20 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-135] 2026-11-19 ปิดงาน B-025 ส่วนที่เหลือ (`DetourAdviceSection`, โมดัล `DetourManagementTab`, และ `lg:h-screen` ใน `app/admin/page.tsx`)
+- **ปัญหา:**
+  - `components/admin/tabs/DetourAdviceSection.tsx` ยังใช้ `<span>` กับช่องกรอก Google Maps URL 2 ช่อง (`ขาไป A→B` และ `ขากลับ B→A`) ทำให้ `<input type="url">` ขาด `htmlFor`/`id`
+  - โมดัล `รายละเอียดเส้นทางเลี่ยง` และ `แก้ไขข้อมูลเส้นทางเลี่ยง` ใน `components/admin/tabs/DetourManagementTab.tsx` มีปุ่มปิด/ปุ่มล่างสูง `32–34px` (< `40px`), group label ใช้ `<label>` ไม่ผูก input และช่อง URL ขาไป-ขากลับ / สภาพถนน / Checkbox เปิดใช้งานยังขาด `htmlFor`/`id` หรือ `aria-label`
+  - `app/admin/page.tsx` ใช้ `min-h-screen` โดยไม่ล็อกความสูงบนเดสก์ท็อป (`lg+`) ทำให้การเลื่อนฟอร์มฝั่งซ้าย (`.doh-form`) ดันหัวเว็บและแถบแผนที่ GIS ฝั่งขวาหลุดออกจาก viewport ได้ (`bannerTop: -407`, `inViewport: false`)
+- **การแก้ไข:**
+  - `components/admin/tabs/DetourAdviceSection.tsx`: เปลี่ยนป้ายกำกับเป็น `<label htmlFor="detour-gmaps-url-fwd">` / `<label htmlFor="detour-gmaps-url-rev">` และผูก `id` ให้ `<input type="url">` ทั้ง 2 ช่อง
+  - `components/admin/tabs/DetourManagementTab.tsx`: ปรับปุ่มปิดโมดัล (`ปิดรายละเอียด`, `ปิดหน้าต่างแก้ไขเส้นทางเลี่ยง`), ลิงก์ `ทดสอบเปิด Google Maps`, และปุ่ม `แก้ไขข้อมูล`, `ลบทางเลี่ยง`, `วิเคราะห์คำแนะนำอัตโนมัติ`, `เปิดเครื่องมือวาดแผนที่`, `ยกเลิก`, `บันทึกข้อมูล` เป็น `min-h-10` (และ `min-w-10` สำหรับปุ่มปิด), เปลี่ยน `<label>` กลุ่มเส้นทางเป็น `<span>`, ผูก `htmlFor`/`id` (`edit-detour-gmaps-url-fwd`, `edit-detour-gmaps-url-rev`, `edit-detour-road-condition`) และเพิ่ม `aria-label="เปิดใช้งานเส้นทางเลี่ยง"`
+  - `app/admin/page.tsx`: เพิ่ม `lg:h-screen lg:overflow-hidden` ให้คอนเทนเนอร์หลักบนเดสก์ท็อป โดยคงการเลื่อนปกติบนจอ `< lg`
+- **ความสอดคล้อง & การทดสอบ (ตรวจจริงบน working tree ล่าสุด):**
+  - `npm run check:deploy` (`eslint . --max-warnings=0`, `tsc --noEmit`, `build:pages`): ผ่าน (exit code 0)
+  - `PLAYWRIGHT_STATIC=1 npm run test:e2e`: `106 passed`, `44 skipped` (กรณีที่ต้องใช้ server/backend สดหรือถูก skip ตามเงื่อนไข static), `0 failed`
+  - สคริปต์ตรวจ Playwright 5 ขนาดหน้าจอ (`360–1600px`) และตรวจโมดัล (`360×640`, `1280×800`): `จัดการแผนที่(DETOUR)` มี `missingLabelInputsCount: 0`, โมดัล `รายละเอียดเส้นทางเลี่ยง` และ `แก้ไขข้อมูลเส้นทางเลี่ยง` ได้ `missingLabels: 0` และ `unlabeledBtns: 0`, แบนเนอร์ปักหมุด A บนแผนที่ `1280×800` อยู่ที่ `bannerTop: 128`, `bannerBottom: 186`, `inViewport: true`
+- **ลำดับ Deploy / แผนย้อนกลับ:** Deploy เฉพาะ **เว็บ** (`build:pages` / GitHub Pages) ไม่มีการเปลี่ยน SQL/Edge Function; ย้อนกลับได้ทันทีด้วยการ revert commit ในไฟล์ UI 3 ไฟล์ (`app/admin/page.tsx`, `DetourAdviceSection.tsx`, `DetourManagementTab.tsx`)
+
 ### [UPDATE-134] 2026-11-19 ปรับปรุง `htmlFor`/`aria-label` และขนาดปุ่ม ≥ 40px ใน `HighwayIdentificationSection`, `FloodSituationSection`, `IncidentRegistryTab` และ `GisHighwayModals` [B-025]
 - **ไฟล์:** `components/admin/tabs/HighwayIdentificationSection.tsx`, `components/admin/tabs/FloodSituationSection.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/GisHighwayModals.tsx`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
 - **การแก้ไข:**
