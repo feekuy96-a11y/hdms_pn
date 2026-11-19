@@ -217,7 +217,12 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   await expect(dossier).toHaveCount(0);
 
   // 2. Detour popup at 360x640
-  await page.locator(".doh-detour-symbol").first().click();
+  // Activate the detour marker via keyboard (role="button", tabindex=0). After closing the dossier,
+  // Leaflet flyTo() can leave the marker under the mobile floating bar or the A endpoint marker,
+  // so a pointer click is position-dependent; Enter exercises the same accessible control deterministically.
+  const detourSymbol = page.locator(".doh-detour-symbol").first();
+  await detourSymbol.focus();
+  await detourSymbol.press("Enter");
   const detourPopup = page.locator(".doh-detour-leaflet-popup").filter({ hasText: "เส้นทางเลี่ยง" });
   await expect(detourPopup).toBeVisible();
   await expect.poll(async () => {
