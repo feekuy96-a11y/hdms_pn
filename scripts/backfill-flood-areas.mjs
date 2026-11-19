@@ -17,7 +17,7 @@ const GIS_DATA_PATH = path.join(ROOT, "lib", "gis-data.ts");
 const PUBLIC_CFG_PATH = path.join(ROOT, ".github", "hdms-public.json");
 
 function loadDopaSubdistricts() {
-  const src = fs.readFileSync(GIS_DATA_PATH, "utf8");
+  const src = fs.readFileSync(GIS_DATA_PATH, "utf8").replace(/\r\n/g, "\n");
   const startMarker = "export const PATTANI_SUBDISTRICTS_DATA: SubdistrictDataEntry[] = [";
   const endMarker = "];\n\nexport const PATTANI_DISTRICTS_GEOJSON";
   const sIdx = src.indexOf(startMarker);
