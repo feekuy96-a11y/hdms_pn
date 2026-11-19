@@ -1,5 +1,19 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-134] 2026-11-19 ปรับปรุง `htmlFor`/`aria-label` และขนาดปุ่ม ≥ 40px ใน `HighwayIdentificationSection`, `FloodSituationSection`, `IncidentRegistryTab` และ `GisHighwayModals` [B-025]
+- **ไฟล์:** `components/admin/tabs/HighwayIdentificationSection.tsx`, `components/admin/tabs/FloodSituationSection.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/GisHighwayModals.tsx`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **`HighwayIdentificationSection.tsx`:** ผูก `htmlFor`/`id` ครบทุกช่องกรอก (เหตุการณ์หลัก, จุดสังเกตหน้างาน, จุดน้ำท่วมอ้างอิง/ชื่อทางเลี่ยงในโหมด DETOUR, ชื่อตอนสายทางหลวง), เพิ่ม `role="group"` + `aria-pressed` ให้ปุ่มทิศทางเดินรถทางเลี่ยง, และขยายปุ่มเลือกโหมดเหตุการณ์/ปุ่มดึงพิกัด/ปุ่มฝั่งถนนเบื้องต้น/ปุ่มคำนวณ Linear Referencing เป็น `min-h-10`
+  2. **`FloodSituationSection.tsx`:** ผูก `htmlFor`/`id` ให้วันเวลาเริ่มเกิดเหตุ, มาตรการอำนวยความปลอดภัย, ผู้รายงาน, สาเหตุ/หมายเหตุ และ `aria-label` บน input อัปโหลดภาพ, เพิ่ม `aria-pressed` และ `min-h-10` ให้ปุ่มส่วนถนนที่กระทบทั้งแบบเดี่ยวและแยก 2 ฝั่ง, ขยายปุ่มลบภาพเป็น `min-h-9 min-w-9` พร้อม `aria-label`
+  3. **`IncidentRegistryTab.tsx`:** เพิ่ม `aria-label="ค้นหาเหตุการณ์น้ำท่วม"`, คง `aria-label="ลบช่วงนี้ (กู้คืนได้)"` ตาม E2E, ขยายปุ่มแถวเหตุการณ์/ปุ่มในโมดัล (`รายละเอียด`, `อัปเดตระดับน้ำ`, `แบ่งช่วง`, `รวมช่วง`) เป็น `min-h-10`, ปุ่มแก้ตัวเลข inline เป็น `min-h-9` และผูก `htmlFor`/`id` ครบทุกช่องในโมดัล `อัปเดตระดับน้ำ` และ `แบ่งช่วงกิโลเมตร`
+  4. **`GisHighwayModals.tsx`:** ผูก `htmlFor`/`id`/`aria-label` ครบทุกช่องในโมดัล `ตั้งค่าคุณสมบัติทางวิศวกรรม` (หมายเลขทางหลวง, ชื่อตอน, ช่องจราจร, ผิวจราจร, หน่วยงาน, ประเภททางหลวง, หมายเหตุ, สวิตช์แสดงผลบนแผนที่) และขยายปุ่มปิดและปุ่มล่างของโมดัล `ตั้งค่า`, `รายละเอียดสายทาง` และ `ปรับแนวถนนทางหลวง` เป็น `min-h-10`
+- **ตรวจแล้ว:**
+  - `npm run check:deploy` (`eslint . --max-warnings=0 && tsc --noEmit && build:pages` 6/6 หน้า) — ผ่านสมบูรณ์
+  - `PLAYWRIGHT_STATIC=1 BASE_PATH=/hdms_pn npm run test:e2e` — **106 passed, 44 skipped, 0 failed** (ทุกเคส `admin-menus.spec.ts`, `flood-form-rules.spec.ts`, `admin-dialog-keyboard.spec.ts`, `admin-shared-dialog-keyboard.spec.ts`, `gis-dialog-keyboard.spec.ts` ผ่าน)
+  - Playwright 5 ขนาดหน้าจอ + โมดัล (`360×640`–`1600×960`): `unlabeledControls=0` ทุกหน้าจอที่แก้, โมดัล `ตั้งค่าคุณสมบัติทางวิศวกรรม`, `อัปเดตระดับน้ำ`, `แบ่งช่วงกิโลเมตร`, `รวมช่วงกิโลเมตร` มี `smallBtns=0, missingLabels=0`
+- **ลำดับ Deploy & ย้อนกลับ:**
+  - ไม่มีงาน SQL / DB / Edge Function (เว็บ static อย่างเดียว; ย้อนกลับด้วย `git revert`)
+
 ### [UPDATE-133] 2026-11-19 ปรับปรุง Layout แผงแอดมิน (768–1600px), Accessibility (`aria-label`/`htmlFor`), ขนาดปุ่มสัมผัส และสลับดูแผนที่บนมือถือ `< lg`
 - **ไฟล์:** `app/admin/page.tsx`, `app/globals.css`, `components/admin/AdminConsole.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `components/admin/tabs/HighwaySpecificationsTableSection.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `components/admin/tabs/SystemSettingsTab.tsx`, `components/admin/tabs/LineStylingTab.tsx`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
 - **การแก้ไข:**

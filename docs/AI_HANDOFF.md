@@ -53,13 +53,13 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** แก้ไขปัญหา Layout แผงแอดมินล้น/ถูกตัด (`768–1600px`), ปรับเกณฑ์ตาราง `รายการทางเลี่ยง`, เพิ่ม `aria-label`/`htmlFor`/ขนาดปุ่มสัมผัส และสลับดูแผนที่บนมือถือ `< lg` (`UPDATE-133` [B-025])
-- **Git Branch & Commit SHA:** `main` (ฐาน `dd6e966` พร้อมแก้ไขใน working tree ยังไม่ commit/push)
-- **ไฟล์ที่แก้ไขแล้ว:** `app/admin/page.tsx`, `app/globals.css`, `components/admin/AdminConsole.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `components/admin/tabs/HighwaySpecificationsTableSection.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `components/admin/tabs/SystemSettingsTab.tsx`, `components/admin/tabs/LineStylingTab.tsx`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
+- **งานที่กำลังทำ / เป้าหมาย:** ปิดงาน `B-025` (`htmlFor`/`aria-label`/ปุ่ม ≥ 40px ใน `HighwayIdentificationSection`, `FloodSituationSection`, `IncidentRegistryTab`, `GisHighwayModals`) ต่อเนื่องจาก `UPDATE-133` (`UPDATE-134`)
+- **Git Branch & Commit SHA:** `main` (โค้ดหลักถูก commit & push เป็น `acf2d4e` บน `origin/main` แล้ว; เหลืออัปเดตเอกสารสรุป `UPDATE-134` ใน working tree 3 ไฟล์)
+- **ไฟล์ที่แก้ไขแล้ว:** `app/admin/page.tsx`, `app/globals.css`, `components/admin/AdminConsole.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `components/admin/tabs/HighwaySpecificationsTableSection.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `components/admin/tabs/SystemSettingsTab.tsx`, `components/admin/tabs/LineStylingTab.tsx`, `components/admin/tabs/HighwayIdentificationSection.tsx`, `components/admin/tabs/FloodSituationSection.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `components/admin/tabs/GisHighwayModals.tsx`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
 - **สิ่งที่ทำสำเร็จ:**
   - แก้แถบปุ่มบนสุดของ `DetourManagementTab.tsx` และ `HighwaySpecificationsTableSection.tsx` ให้ wrap ไม่ล้นขวา `.doh-form`
   - ปรับ `.doh-auto-table` เป็น `500px` ใน `app/globals.css` พร้อม `ResizeObserver` ใน `DetourManagementTab.tsx` ลด DOM ซ้ำและคง selector E2E ครบ
-  - เพิ่ม `aria-label`/`htmlFor`/ขนาดปุ่มสัมผัสในหน้าแอดมิน, `SystemSettingsTab`, `LineStylingTab` (`w-8 h-8`), `GisDataImportTab`, และระบบสลับ/เลื่อนดูแผนที่ `lg:hidden` บนมือถือใน `app/admin/page.tsx`
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** บันทึกงานย่อยในส่วนที่อยู่นอกขอบเขตรอบนี้ (`MapManagementTab` sub-sections, `IncidentRegistryTab` search/delete, โมดัลย่อย `GisHighwayModals`) ลง `B-025` แล้ว
-- **ผลทดสอบล่าสุด:** `eslint --max-warnings=0`, `tsc --noEmit`, `npm run build:pages` (6/6), Playwright E2E `PLAYWRIGHT_STATIC=1 BASE_PATH=/hdms_pn` (106 passed, 44 skipped, 0 failed) และ Playwright audit 5 ขนาดหน้าจอบน `out/` (`clippedCount=0` ทุกแท็บ)
-- **ขั้นตอนถัดไป:** ตรวจสอบ diff บนเครื่องและ commit/push เมื่อเจ้าของพร้อม หรือทำต่อ `B-025`
+  - เพิ่ม `aria-label`/`htmlFor`/ขนาดปุ่มสัมผัสในหน้าแอดมิน, `SystemSettingsTab`, `LineStylingTab` (`w-8 h-8`), `GisDataImportTab`, `HighwayIdentificationSection`, `FloodSituationSection`, `IncidentRegistryTab`, `GisHighwayModals` และสลับ/เลื่อนดูแผนที่ `lg:hidden` บนมือถือใน `app/admin/page.tsx`
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** เหลือรายละเอียดเล็กน้อยใน `DetourAdviceSection.tsx` (URL 2 ช่อง), โมดัล `DetourManagementTab.tsx` (3 ช่อง / ปุ่ม `32–34px`), และการล็อกความสูงหน้าเดสก์ท็อป `lg:h-screen` บน `app/admin/page.tsx` (บันทึกใน `B-025`)
+- **ผลทดสอบล่าสุด:** `npm run check:deploy` (`eslint --max-warnings=0`, `tsc --noEmit`, `build:pages` 6/6) + `PLAYWRIGHT_STATIC=1 BASE_PATH=/hdms_pn npm run test:e2e` (106 passed, 44 skipped, 0 failed) และ Playwright audit 5 ขนาดหน้าจอ + โมดัลหลังแก้ `B-025`
+- **ขั้นตอนถัดไป:** ตรวจ diff และ commit/push เข้า `main` หรือเปิด PR เพื่อรัน GitHub Actions Deploy
