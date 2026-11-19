@@ -1,5 +1,17 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-130] 2026-11-19 แก้ปัญหา CRLF ใน `scripts/backfill-flood-areas.mjs` และเพิ่ม Migration Backfill แถว `F-6bc2ee64-1ad6-412f-bf1b-bcc2033ad844`
+- **ไฟล์:** `scripts/backfill-flood-areas.mjs`, `supabase/migrations/20261119000200_backfill_flood_route_f6bc2ee64.sql`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **รองรับ CRLF บน Windows (`scripts/backfill-flood-areas.mjs`):** Normalize `\r\n` เป็น `\n` ใน `loadDopaSubdistricts()` ก่อนค้นหา `endMarker` เพื่อไม่ให้ fail หลัง `git pull` บน Windows
+  2. **Migration Backfill 1 แถวใหม่ (`supabase/migrations/20261119000200_backfill_flood_route_f6bc2ee64.sql`):** เตรียม migration idempotent (คงค่า `updated_at` เดิมและแนบ Rollback SQL) สำหรับแถว `F-6bc2ee64-1ad6-412f-bf1b-bcc2033ad844` (ทล.418 งาแม่ - ยุโป ที่บันทึกเมื่อ `2026-11-19 07:12:30Z` ก่อน PR #49 Deploy เสร็จ) เป็น `อ.เมืองปัตตานี / ต.รูสะมิแล` (**รออนุมัติก่อนรันบน Production** ตามกฎ R5)
+- **ตรวจแล้ว:**
+  - `node scripts/backfill-flood-areas.mjs` และ `--sql` — ผ่าน (1/1 match `[polygon]` บน Windows CRLF)
+  - `npm run lint` (`--max-warnings=0`), `npm run typecheck`, `npm run build:pages` (6/6 static pages) — ผ่าน
+- **ลำดับ Deploy & ย้อนกลับ:**
+  1. ขออนุมัติเจ้าของก่อนรัน `20261119000200_backfill_flood_route_f6bc2ee64.sql` บน Production (ย้อนกลับด้วย `UPDATE public.doh_flood_routes SET district = '', subdistrict = '' WHERE id = 'F-6bc2ee64-1ad6-412f-bf1b-bcc2033ad844'`)
+  2. เปิด PR / Merge กิ่ง `fix/crlf-backfill-and-row` เข้า `main` (ย้อนกลับด้วย `git revert`)
+
 ### [UPDATE-129] 2026-11-19 ซ่อมฐานข้อมูล 115 ตำบล 12 อำเภอ จ.ปัตตานี ด้วยขอบเขตรูปหลายเหลี่ยม DOPA จริง, สร้างสคริปต์ Backfill และแก้ปัญหา CI Timeout ของ OSRM Heading Constraint
 - **ไฟล์:** `lib/gis-data.ts`, `lib/area-lookup.ts`, `lib/osrm-client.ts`, `scripts/backfill-flood-areas.mjs`, `supabase/migrations/20261119000100_backfill_flood_routes_district_subdistrict.sql`, `docs/{CHANGELOG,AI_HANDOFF}.md`
 - **การแก้ไข:**
