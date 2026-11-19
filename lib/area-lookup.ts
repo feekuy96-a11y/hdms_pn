@@ -114,33 +114,49 @@ export function findPattaniDistrictName(coord: [number, number]): string {
  * came first in the list).
  */
 export function localArea(lon: number, lat: number): AreaInfo {
-  const matches = PATTANI_SUBDISTRICTS_DATA.filter((s) => {
+  const district = cleanThaiAdminPrefix(findPattaniDistrictName([lon, lat])) || "เมืองปัตตานี";
+  const districtSubdistricts = PATTANI_SUBDISTRICTS_DATA.filter((s) => s.amphoe === district);
+  const pool = districtSubdistricts.length > 0 ? districtSubdistricts : PATTANI_SUBDISTRICTS_DATA;
+
+  const inBounds = pool.filter((s) => {
     const [minX, minY, maxX, maxY] = s.bounds;
     return lon >= minX && lon <= maxX && lat >= minY && lat <= maxY;
   });
-  const district = cleanThaiAdminPrefix(findPattaniDistrictName([lon, lat]));
-  const refined = district ? matches.filter((m) => m.amphoe === district) : matches;
-  const pool = refined.length > 0 ? refined : matches;
 
-  if (pool.length === 1) {
+  if (inBounds.length === 1) {
     return {
-      village: "",
-      tambon: pool[0].tambon,
-      amphoe: pool[0].amphoe,
+      village: inBounds[0].village || "",
+      tambon: inBounds[0].tambon,
+      amphoe: inBounds[0].amphoe,
       province: "ปัตตานี",
       road: "",
       source: "local",
       confidence: "low",
     };
   }
-  const amphoes = Array.from(new Set(pool.map((m) => m.amphoe)));
+
+  // If multiple match or point is slightly outside any bounding box within the district:
+  // find closest subdistrict center
+  const candidates = inBounds.length > 1 ? inBounds : pool;
+  let bestDist = Infinity;
+  let best = candidates[0];
+  for (const s of candidates) {
+    const cx = s.center ? s.center[0] : (s.bounds[0] + s.bounds[2]) / 2;
+    const cy = s.center ? s.center[1] : (s.bounds[1] + s.bounds[3]) / 2;
+    const d = Math.hypot(lon - cx, lat - cy);
+    if (d < bestDist) {
+      bestDist = d;
+      best = s;
+    }
+  }
+
   return {
-    village: "",
-    tambon: "",
-    amphoe: amphoes.length === 1 ? amphoes[0] : district,
+    village: best?.village || "",
+    tambon: best?.tambon || "",
+    amphoe: best?.amphoe || district,
     province: "ปัตตานี",
     road: "",
-    source: pool.length > 1 ? "local" : "district",
+    source: inBounds.length > 0 ? "local" : "district",
     confidence: "low",
   };
 }
