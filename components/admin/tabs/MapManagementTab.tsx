@@ -2299,7 +2299,7 @@ export function MapManagementTab({
           <button
             type="button"
             onClick={() => { if (routeMode !== "FLOOD") { handleClearRoute(); setRouteMode("FLOOD"); } }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-heading font-bold transition ${routeMode === "FLOOD" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"
+            className={`min-h-[2.5rem] px-[0.9em] py-[0.45em] rounded-lg text-xs font-heading font-bold transition ${routeMode === "FLOOD" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"
               }`}
           >
             เส้นน้ำท่วม
@@ -2307,7 +2307,7 @@ export function MapManagementTab({
           <button
             type="button"
             onClick={() => { if (routeMode !== "DETOUR") { handleClearRoute(); setRouteMode("DETOUR"); } }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-heading font-bold transition ${routeMode === "DETOUR" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
+            className={`min-h-[2.5rem] px-[0.9em] py-[0.45em] rounded-lg text-xs font-heading font-bold transition ${routeMode === "DETOUR" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
               }`}
           >
             ทางเลี่ยง

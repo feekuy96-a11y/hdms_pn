@@ -115,7 +115,7 @@ export const DetourAdviceSection = React.memo(function DetourAdviceSection({
         <button
           type="button"
           onClick={onGenerateAdvice}
-          className="text-[10px] bg-amber-500 text-slate-950 font-heading font-bold px-2.5 py-1 rounded-lg shadow hover:bg-amber-400 flex items-center gap-1 shrink-0"
+          className="min-h-[2.5rem] text-[0.75rem] bg-amber-500 text-slate-950 font-heading font-bold px-[0.9em] py-[0.45em] rounded-lg shadow hover:bg-amber-400 flex items-center gap-[0.4em] shrink-0"
         >
           <Sparkles className="w-3 h-3" /> วิเคราะห์คำแนะนำ (ไป-กลับ)
         </button>

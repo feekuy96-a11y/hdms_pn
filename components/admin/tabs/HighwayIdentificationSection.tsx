@@ -237,7 +237,7 @@ export function HighwayIdentificationSection({
                 aria-expanded={isHighwayDropdownOpen}
                 aria-haspopup="listbox"
                 aria-label="หมายเลขทางหลวง"
-                className="relative mt-1 flex w-full cursor-pointer items-center justify-between rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-left text-xs text-white hover:border-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                className="relative mt-1 flex min-h-[2.5rem] w-full cursor-pointer items-center justify-between rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-left text-xs text-white hover:border-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                 onClick={() => setIsHighwayDropdownOpen((prev) => !prev)}
               >
                 <span className={`truncate ${!routeNo ? "text-slate-400" : "font-semibold text-amber-300"}`}>
