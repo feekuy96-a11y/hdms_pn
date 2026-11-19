@@ -53,13 +53,13 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** ขยายความครอบคลุม Playwright E2E: สรุปสถานการณ์ประชาชน, ตัวกรอง 5 สถานะ, Route Chips และปุ่มล้างตัวกรอง (`UPDATE-132` [B-011])
-- **Git Branch & Commit SHA:** `test/e2e-roadmap-coverage`
-- **ไฟล์ที่แก้ไขแล้ว:** `tests/e2e/compact-card-detour-accordion.spec.ts`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
+- **งานที่กำลังทำ / เป้าหมาย:** แก้ไขปัญหา Layout แผงแอดมินล้น/ถูกตัด (`768–1600px`), ปรับเกณฑ์ตาราง `รายการทางเลี่ยง`, เพิ่ม `aria-label`/`htmlFor`/ขนาดปุ่มสัมผัส และสลับดูแผนที่บนมือถือ `< lg` (`UPDATE-133` [B-025])
+- **Git Branch & Commit SHA:** `main` (ฐาน `dd6e966` พร้อมแก้ไขใน working tree ยังไม่ commit/push)
+- **ไฟล์ที่แก้ไขแล้ว:** `app/admin/page.tsx`, `app/globals.css`, `components/admin/AdminConsole.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `components/admin/tabs/HighwaySpecificationsTableSection.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `components/admin/tabs/SystemSettingsTab.tsx`, `components/admin/tabs/LineStylingTab.tsx`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
 - **สิ่งที่ทำสำเร็จ:**
-  - เพิ่มชุดทดสอบ E2E ใน `tests/e2e/compact-card-detour-accordion.spec.ts` ทดสอบ SituationSummary status filter, route chips, clear button, and empty state reset
-  - รัน E2E `node scripts/test-e2e-with-public-config.mjs tests/e2e/compact-card-detour-accordion.spec.ts` ผ่านครบ 5 ข้อ
-  - ผ่าน R6 Quality Gate: `eslint` 0 warnings, `tsc --noEmit` 0 errors, `build:pages` 6/6 static pages
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี
-- **ผลทดสอบล่าสุด:** ผ่าน R6 (`lint`, `typecheck`, `build:pages`) และ Playwright E2E 5 passed, 3 skipped
-- **ขั้นตอนถัดไป:** Push กิ่ง `test/e2e-roadmap-coverage`, เปิด PR และเตรียมพัฒนา Roadmap ถัดไป (B-005)
+  - แก้แถบปุ่มบนสุดของ `DetourManagementTab.tsx` และ `HighwaySpecificationsTableSection.tsx` ให้ wrap ไม่ล้นขวา `.doh-form`
+  - ปรับ `.doh-auto-table` เป็น `500px` ใน `app/globals.css` พร้อม `ResizeObserver` ใน `DetourManagementTab.tsx` ลด DOM ซ้ำและคง selector E2E ครบ
+  - เพิ่ม `aria-label`/`htmlFor`/ขนาดปุ่มสัมผัสในหน้าแอดมิน, `SystemSettingsTab`, `LineStylingTab` (`w-8 h-8`), `GisDataImportTab`, และระบบสลับ/เลื่อนดูแผนที่ `lg:hidden` บนมือถือใน `app/admin/page.tsx`
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** บันทึกงานย่อยในส่วนที่อยู่นอกขอบเขตรอบนี้ (`MapManagementTab` sub-sections, `IncidentRegistryTab` search/delete, โมดัลย่อย `GisHighwayModals`) ลง `B-025` แล้ว
+- **ผลทดสอบล่าสุด:** `eslint --max-warnings=0`, `tsc --noEmit`, `npm run build:pages` (6/6), Playwright E2E `PLAYWRIGHT_STATIC=1 BASE_PATH=/hdms_pn` (106 passed, 44 skipped, 0 failed) และ Playwright audit 5 ขนาดหน้าจอบน `out/` (`clippedCount=0` ทุกแท็บ)
+- **ขั้นตอนถัดไป:** ตรวจสอบ diff บนเครื่องและ commit/push เมื่อเจ้าของพร้อม หรือทำต่อ `B-025`

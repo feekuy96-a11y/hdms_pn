@@ -1,5 +1,23 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-133] 2026-11-19 ปรับปรุง Layout แผงแอดมิน (768–1600px), Accessibility (`aria-label`/`htmlFor`), ขนาดปุ่มสัมผัส และสลับดูแผนที่บนมือถือ `< lg`
+- **ไฟล์:** `app/admin/page.tsx`, `app/globals.css`, `components/admin/AdminConsole.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `components/admin/tabs/HighwaySpecificationsTableSection.tsx`, `components/admin/tabs/GisDataImportTab.tsx`, `components/admin/tabs/SystemSettingsTab.tsx`, `components/admin/tabs/LineStylingTab.tsx`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **แก้แถบเครื่องมือล้นขวา `.doh-form` (768–1600px):** ปรับแถบด้านบนของ `DetourManagementTab.tsx` และ `HighwaySpecificationsTableSection.tsx` ให้ wrap อัตโนมัติ (เอา `shrink-0` และ `md:flex-row`/`sm:flex-row` ที่ดันทะลุความกว้างแผงออก) พร้อมเพิ่ม `min-h-10` ให้ปุ่มหลัก
+  2. **ปรับเกณฑ์ตาราง `รายการทางเลี่ยง` และป้องกัน DOM ซ้ำซ้อน:** ปรับ `@container` ของ `.doh-auto-table` ใน `app/globals.css` เป็น `500px` (`cards` `<= 500px`, `table` `> 500px`) เพื่อให้เดสก์ท็อป (`1280×800`, `1600×960`) แสดงตารางได้โดยไม่บังคับการ์ดมือถือ พร้อมใช้ `ResizeObserver` ใน `DetourManagementTab.tsx` แสดงเฉพาะโหมดที่ใช้งานจริงหลัง mount เพื่อไม่ให้เหลือ DOM ซ้ำซ้อนและคงตัวเลือกปุ่ม `"แก้ไข"` (`aria-label="แก้ไข"`) ตาม E2E
+  3. **เพิ่ม `aria-label`, `htmlFor` และขนาดปุ่มสัมผัส:**
+     - `app/admin/page.tsx`: เพิ่ม `aria-label` และขนาด `min-h-10 min-w-10` ให้ลิงก์ `หน้าประชาชน` (มือถือ) และปุ่มรีเฟรชข้อมูล; เพิ่มปุ่ม `ดูแผนที่` (`lg:hidden`) ใน Header, ปุ่ม `↑ กลับไปฟอร์ม` ในกรอบแผนที่ และ auto-scroll ไปยังแผนที่เมื่อเปิดโหมดปักหมุด (`adminPickMode`) บนจอ `< 1024px` แล้วเลื่อนคืนตำแหน่งเดิมเมื่อปักหมุดเสร็จ
+     - `AdminConsole.tsx`: เพิ่ม `aria-label`/`aria-expanded`/`min-h-10` ให้ปุ่มย่อ-ขยาย Sidebar และเปลี่ยนแถบแท็บมือถือเป็น `<nav aria-label="เมนูจัดการแอดมินมือถือ">` พร้อม `aria-current="page"` และ `min-h-10`
+     - `SystemSettingsTab.tsx`: ผูก `htmlFor`/`id` ครบทั้งฟอร์มข้อมูลระบบ (4 ช่อง) และฟอร์มสำนักงาน (5 ช่อง) พร้อมปรับปุ่มเป็น `min-h-10` (`40px`) และปุ่มแก้ไข/ลบสำนักงานเป็น `min-h-10 min-w-10`
+     - `DetourManagementTab.tsx`, `HighwaySpecificationsTableSection.tsx`, `GisDataImportTab.tsx`: เพิ่ม `aria-label` บนช่องค้นหา/ตัวกรอง/ปุ่มไอคอน (ตา, ลบ, ซูม, แก้ไข, ลบเลเยอร์) และเพิ่มความสูง/กว้างสัมผัส `>= 36–40px`
+     - `LineStylingTab.tsx`: ผูก `htmlFor`/`id`/`aria-label` ครบทั้ง 13 คอนโทรล และขยายปุ่มสีด่วน 15 ปุ่มจาก `w-5 h-5` (`20×20px`) เป็น `w-8 h-8` (`32×32px`) พร้อม `aria-label`
+- **ตรวจแล้ว:**
+  - `npm run lint` (`--max-warnings=0`), `npm run typecheck`, `npm run build:pages` (6/6 static pages) — ผ่านสมบูรณ์
+  - `PLAYWRIGHT_STATIC=1 BASE_PATH=/hdms_pn npm run test:e2e` — 106 passed, 44 skipped (desktop/mobile env skip), 0 failed
+  - Playwright 5 ขนาดหน้าจอ (`360×640`, `768×1024`, `1024×768`, `1280×800`, `1600×960`) บน `out/` — `docOverflow=0` และ `clippedCount=0` ทุกแท็บหลัก, `unlabeledControls=0` ในแท็บที่แก้ไข
+- **ลำดับ Deploy & ย้อนกลับ:**
+  - ไม่มีงาน SQL / DB / Edge Function (เว็บ static อย่างเดียว; ย้อนกลับด้วย `git revert`)
+
 ### [UPDATE-132] 2026-11-19 ขยายความครอบคลุม Playwright E2E: สรุปสถานการณ์ประชาชน, ตัวกรอง 5 สถานะ, Route Chips และปุ่มล้างตัวกรอง [B-011]
 - **ไฟล์:** `tests/e2e/compact-card-detour-accordion.spec.ts`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
 - **การแก้ไข:**

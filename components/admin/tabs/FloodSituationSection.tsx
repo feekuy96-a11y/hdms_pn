@@ -270,6 +270,7 @@ export function FloodSituationSection({
                   <button
                     key={part.value}
                     type="button"
+                    aria-pressed={isSelected}
                     onClick={() =>
                       toggleAffectedPartWithAutoStatus(
                         part.value,
@@ -281,7 +282,7 @@ export function FloodSituationSection({
                       )
                     }
                     title={part.desc}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-heading font-bold border transition ${isSelected
+                    className={`min-h-10 px-3 py-2 rounded-lg text-xs font-heading font-bold border transition ${isSelected
                         ? "bg-amber-500 text-slate-950 border-amber-400 shadow"
                         : "bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700"
                       }`}
@@ -420,6 +421,7 @@ export function FloodSituationSection({
                       <button
                         key={`${side.key}-${part.value}`}
                         type="button"
+                        aria-pressed={isSelected}
                         onClick={() =>
                           toggleAffectedPartWithAutoStatus(
                             part.value,
@@ -431,7 +433,7 @@ export function FloodSituationSection({
                           )
                         }
                         title={part.desc}
-                        className={`px-2 py-1 rounded-lg text-[11px] font-heading font-bold border transition ${isSelected
+                        className={`min-h-10 px-2.5 py-2 rounded-lg text-[11px] font-heading font-bold border transition ${isSelected
                             ? "bg-amber-500 text-slate-950 border-amber-400 shadow"
                             : "bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700"
                           }`}
@@ -546,8 +548,9 @@ export function FloodSituationSection({
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <label className="text-xs text-slate-300 block mb-1">วันและเวลาเริ่มเกิดเหตุ</label>
+          <label htmlFor="flood-started-at-input" className="text-xs text-slate-300 block mb-1">วันและเวลาเริ่มเกิดเหตุ</label>
           <input
+            id="flood-started-at-input"
             type="datetime-local"
             value={startedAt}
             onChange={(e) => setStartedAt(e.target.value)}
@@ -555,8 +558,9 @@ export function FloodSituationSection({
           />
         </div>
         <div>
-          <label className="text-xs text-slate-300 block mb-1">มาตรการอำนวยความปลอดภัย</label>
+          <label htmlFor="flood-safety-measure-select" className="text-xs text-slate-300 block mb-1">มาตรการอำนวยความปลอดภัย</label>
           <select
+            id="flood-safety-measure-select"
             value={selectedMeasure}
             onChange={(e) => setSelectedMeasure(e.target.value)}
             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
@@ -569,8 +573,9 @@ export function FloodSituationSection({
           </select>
         </div>
         <div>
-          <label className="text-xs text-slate-300 block mb-1">ผู้รายงาน / หมวดทางหลวง</label>
+          <label htmlFor="flood-reporter-name-input" className="text-xs text-slate-300 block mb-1">ผู้รายงาน / หมวดทางหลวง</label>
           <input
+            id="flood-reporter-name-input"
             type="text"
             list="doh-offices-datalist"
             value={reporterName}
@@ -587,8 +592,9 @@ export function FloodSituationSection({
       </div>
 
       <div>
-        <label className="text-xs text-slate-300 block mb-1">สาเหตุ / ลักษณะน้ำท่วม / หมายเหตุเจ้าหน้าที่</label>
+        <label htmlFor="flood-cause-note-input" className="text-xs text-slate-300 block mb-1">สาเหตุ / ลักษณะน้ำท่วม / หมายเหตุเจ้าหน้าที่</label>
         <input
+          id="flood-cause-note-input"
           type="text"
           value={causeAndNote}
           onChange={(e) => setCauseAndNote(e.target.value)}
@@ -600,9 +606,9 @@ export function FloodSituationSection({
       {/* Image Upload Gallery (Max 5 photos, <= 300 KB each) */}
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="text-xs text-slate-300">
+          <span className="text-xs text-slate-300">
             ภาพถ่ายหน้างาน (สูงสุด ๕ ภาพ)
-          </label>
+          </span>
           <span className="text-[11px] text-amber-300 font-mono">
             {detailedPhotos.length} / 5 ภาพ
           </span>
@@ -611,11 +617,12 @@ export function FloodSituationSection({
           รองรับไฟล์ .jpg, .png (ระบบบีบอัดขนาดอัตโนมัติไม่เกิน 300 KB ต่อภาพ)
         </p>
         <div className="flex flex-wrap gap-2 items-center">
-          <label className={`bg-slate-900 hover:bg-slate-800 border border-dashed border-slate-700 rounded-xl p-3 flex items-center gap-2 cursor-pointer text-xs text-amber-300 ${detailedPhotos.length >= 5 ? "opacity-50 pointer-events-none" : ""}`}>
-            <Camera className="w-4 h-4" />
+          <label className={`min-h-10 bg-slate-900 hover:bg-slate-800 border border-dashed border-slate-700 rounded-xl p-3 flex items-center gap-2 cursor-pointer text-xs text-amber-300 ${detailedPhotos.length >= 5 ? "opacity-50 pointer-events-none" : ""}`}>
+            <Camera className="w-4 h-4" aria-hidden="true" />
             <span>{detailedPhotos.length >= 5 ? "ครบ ๕ ภาพแล้ว" : "เลือกรูปภาพจากเครื่อง / มือถือ"}</span>
             <input
               type="file"
+              aria-label="เลือกรูปภาพหน้างาน"
               accept="image/*"
               multiple
               disabled={detailedPhotos.length >= 5}
@@ -637,15 +644,16 @@ export function FloodSituationSection({
                 </div>
                 <button
                   type="button"
+                  aria-label={`ลบรูปภาพที่ ${i + 1}`}
                   onClick={() => {
                     const nextPhotos = detailedPhotos.filter((_, idx) => idx !== i);
                     setDetailedPhotos(nextPhotos);
                     setFieldImages(nextPhotos.map((p) => p.dataUrl));
                   }}
-                  className="absolute top-1 right-1 bg-red-600/90 hover:bg-red-500 text-white rounded p-1 text-[10px] leading-none shadow"
+                  className="min-h-9 min-w-9 flex items-center justify-center absolute top-1 right-1 bg-red-600/90 hover:bg-red-500 text-white rounded p-1 text-[10px] leading-none shadow"
                   title="ลบรูปภาพนี้"
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>
               </div>
             ))}

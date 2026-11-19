@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { LonLat, VertexEditEvent } from "@/lib/line-edit";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
@@ -33,7 +33,7 @@ import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { ArrowLeft, RotateCw, FileText, PieChart, Settings, Smartphone, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ArrowLeft, RotateCw, FileText, PieChart, Settings, Smartphone, PanelLeftClose, PanelLeftOpen, MapPin } from "lucide-react";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 import { ExecutiveDashboard } from "@/components/executive/ExecutiveDashboard";
 import { usePollingActivity } from "@/lib/use-polling-activity";
@@ -49,6 +49,9 @@ export default function AdminPage() {
   const [workspacePaneWidth, setWorkspacePaneWidth] = useState<number | null>(null);
   const workspaceDrag = useRef<{ startX: number; startWidth: number } | null>(null);
   const workspacePaneRef = useRef<HTMLDivElement>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const savedMobileScrollYRef = useRef<number | null>(null);
+  const prevAdminPickModeRef = useRef<string | null>(null);
   const clampWorkspaceWidth = (width: number) => Math.max(440, Math.min(width, window.innerWidth - 350));
   const startWorkspaceDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (isSidebarCollapsed) return;
@@ -114,6 +117,24 @@ export default function AdminPage() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3800);
   };
+
+  useEffect(() => {
+    const prevMode = prevAdminPickModeRef.current;
+    prevAdminPickModeRef.current = adminPickMode;
+    if (typeof window === "undefined" || window.innerWidth >= 1024) return;
+
+    if (!prevMode && adminPickMode) {
+      savedMobileScrollYRef.current = window.scrollY;
+      mapContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    if (prevMode && !adminPickMode && savedMobileScrollYRef.current !== null) {
+      const targetY = savedMobileScrollYRef.current;
+      savedMobileScrollYRef.current = null;
+      window.scrollTo({ top: targetY, behavior: "smooth" });
+    }
+  }, [adminPickMode]);
 
   // Dragging a numbered waypoint marker on the map immediately re-snaps the road path!
   const handleWaypointDragged = async (idx: number, newCoord: [number, number]) => {
@@ -184,9 +205,11 @@ export default function AdminPage() {
         <div className="flex items-center gap-2.5 min-w-0 flex-1 lg:flex-none">
           <Link
             href="/"
-            className="flex items-center gap-1.5 text-xs text-amber-300 hover:text-white bg-slate-900/90 px-2.5 py-1.5 rounded-lg border border-slate-700 transition font-heading font-bold shrink-0"
+            aria-label="หน้าประชาชน"
+            title="กลับหน้าประชาชน"
+            className="min-h-10 min-w-10 flex items-center justify-center gap-1.5 text-xs text-amber-300 hover:text-white bg-slate-900/90 px-2.5 py-2 rounded-lg border border-slate-700 transition font-heading font-bold shrink-0"
           >
-            <ArrowLeft className="w-3.5 h-3.5" /> <span className="hidden sm:inline">หน้าประชาชน</span>
+            <ArrowLeft className="w-4 h-4" aria-hidden="true" /> <span className="hidden sm:inline">หน้าประชาชน</span>
           </Link>
           <div className="flex items-center gap-2 min-w-0">
             {systemData.systemSettings?.logoUrl ? (
@@ -250,14 +273,25 @@ export default function AdminPage() {
           {isError && <span role="status" className="rounded-lg border border-red-700/70 bg-red-950/80 px-2 py-1 text-[10px] text-red-200">โหลดข้อมูลฐานข้อมูลไม่สำเร็จ</span>}
           <button
             type="button"
+            onClick={() => mapContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            aria-label="เลื่อนลงไปดูแผนที่ GIS"
+            title="เลื่อนไปดูแผนที่ GIS"
+            className="lg:hidden min-h-10 px-2.5 py-2 rounded-lg border border-slate-700 bg-slate-900/90 text-xs font-heading font-bold text-sky-300 hover:text-white hover:border-sky-500 flex items-center gap-1 shrink-0 transition"
+          >
+            <MapPin className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>ดูแผนที่</span>
+          </button>
+          <button
+            type="button"
             onClick={() => {
               refetch();
               showToast("รีเฟรชฐานข้อมูลสารสนเทศเรียบร้อย");
             }}
+            aria-label="รีเฟรชข้อมูล"
             title="รีเฟรชข้อมูล"
-            className="p-1.5 text-slate-300 hover:text-amber-400 shrink-0"
+            className="min-h-10 min-w-10 flex items-center justify-center rounded-lg text-slate-300 hover:text-amber-400 hover:bg-slate-900/70 shrink-0 transition"
           >
-            <RotateCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
+            <RotateCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} aria-hidden="true" />
           </button>
         </div>
       </header>
@@ -347,7 +381,26 @@ export default function AdminPage() {
           ><span aria-hidden="true" className="h-12 w-0.5 rounded-full bg-slate-500" /></div>}
 
           {/* Right: Interactive GIS Map */}
-          <div className="h-[44vh] min-h-[360px] lg:h-auto lg:min-h-0 lg:flex-1 relative">
+          <div ref={mapContainerRef} className="h-[44vh] min-h-[360px] lg:h-auto lg:min-h-0 lg:flex-1 relative scroll-mt-16">
+            {/* Mobile Jump Back To Form Button */}
+            <div className="lg:hidden absolute bottom-3 left-3 z-[450]">
+              <button
+                type="button"
+                onClick={() => {
+                  if (savedMobileScrollYRef.current !== null) {
+                    const y = savedMobileScrollYRef.current;
+                    savedMobileScrollYRef.current = null;
+                    window.scrollTo({ top: y, behavior: "smooth" });
+                  } else {
+                    workspacePaneRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }
+                }}
+                aria-label="กลับไปส่วนกรอกฟอร์ม"
+                className="min-h-10 rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-2 text-xs font-heading font-bold text-amber-300 shadow-xl backdrop-blur hover:bg-slate-800 hover:text-white transition"
+              >
+                ↑ กลับไปฟอร์ม
+              </button>
+            </div>
             {/* Sidebar Toggle Button (พับ/เปิด แผงควบคุมฝั่งซ้าย) */}
             <div className="absolute top-3 left-3 z-[450] hidden lg:block">
               <button
@@ -467,7 +520,7 @@ export default function AdminPage() {
                 <button
                   type="button"
                   onClick={() => setAdminPickMode(null)}
-                  className="bg-slate-950 text-white px-2.5 py-1 rounded-lg text-[10px]"
+                  className="min-h-10 bg-slate-950 text-white px-3 py-2 rounded-lg text-xs font-heading font-bold shrink-0"
                 >
                   เสร็จสิ้น / ปิดโหมด
                 </button>

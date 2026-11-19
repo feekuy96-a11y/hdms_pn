@@ -148,7 +148,7 @@ export function HighwayIdentificationSection({
               <button
                 type="button"
                 onClick={() => { setParentEventMode("NEW"); setSelectedParentEventId(""); setEventCode(""); }}
-                className={`px-2.5 py-1 rounded font-heading font-bold transition ${parentEventMode === "NEW" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"}`}
+                className={`min-h-10 px-3 py-2 rounded font-heading font-bold transition ${parentEventMode === "NEW" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"}`}
               >
                 + สร้างเหตุการณ์ใหม่
               </button>
@@ -156,7 +156,7 @@ export function HighwayIdentificationSection({
                 type="button"
                 disabled={existingParentEvents.length === 0}
                 onClick={() => setParentEventMode("EXISTING")}
-                className={`px-2.5 py-1 rounded font-heading font-bold transition disabled:opacity-40 ${parentEventMode === "EXISTING" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"}`}
+                className={`min-h-10 px-3 py-2 rounded font-heading font-bold transition disabled:opacity-40 ${parentEventMode === "EXISTING" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"}`}
               >
                 ผูกเหตุการณ์เดิม ({existingParentEvents.length})
               </button>
@@ -165,8 +165,9 @@ export function HighwayIdentificationSection({
 
           {parentEventMode === "EXISTING" && existingParentEvents.length > 0 && (
             <div>
-              <label className="text-xs text-slate-300 block mb-1">เลือกเหตุการณ์หลักที่ต้องการเพิ่มช่วง กม. ย่อย</label>
+              <label htmlFor="flood-parent-event-select" className="text-xs text-slate-300 block mb-1">เลือกเหตุการณ์หลักที่ต้องการเพิ่มช่วง กม. ย่อย</label>
               <select
+                id="flood-parent-event-select"
                 value={selectedParentEventId}
                 onChange={(e) => {
                   const evId = e.target.value;
@@ -196,7 +197,7 @@ export function HighwayIdentificationSection({
 
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-              <label className="text-xs font-medium text-slate-200">จุดสังเกตหน้างาน / หมู่บ้าน / ตำบล–อำเภอ</label>
+              <label htmlFor="flood-village-landmark-input" className="text-xs font-medium text-slate-200">จุดสังเกตหน้างาน / หมู่บ้าน / ตำบล–อำเภอ</label>
               <button
                 type="button"
                 onClick={async () => {
@@ -207,14 +208,15 @@ export function HighwayIdentificationSection({
                   }
                 }}
                 disabled={isFetchingAddress || isGeocoding}
-                className="text-[11px] text-sky-300 hover:text-sky-200 bg-sky-950/60 border border-sky-800/80 px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-heading cursor-pointer disabled:opacity-50 transition"
+                className="min-h-10 text-[11px] text-sky-300 hover:text-sky-200 bg-sky-950/60 border border-sky-800/80 px-3 py-2 rounded-lg flex items-center gap-1.5 font-heading cursor-pointer disabled:opacity-50 transition"
                 title="ดึงชื่อหมู่บ้าน ตำบล และอำเภอจากพิกัดจุดเริ่มต้น"
               >
-                {isFetchingAddress || isGeocoding ? <RotateCw className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3" />}
+                {isFetchingAddress || isGeocoding ? <RotateCw className="w-3 h-3 animate-spin" aria-hidden="true" /> : <MapPin className="w-3 h-3" aria-hidden="true" />}
                 <span>{isFetchingAddress || isGeocoding ? "กำลังดึงพิกัด..." : "📍 ดึงตำแหน่ง-ตำบล/อำเภอจากพิกัด"}</span>
               </button>
             </div>
             <input
+              id="flood-village-landmark-input"
               type="text"
               value={villageOrLandmark}
               onChange={(e) => setVillageOrLandmark(e.target.value)}
@@ -405,7 +407,7 @@ export function HighwayIdentificationSection({
                 setDraftReverseWaypoints?.([]);
                 setFreeEditTarget("FORWARD");
               }}
-              className={`rounded-lg px-2.5 py-1 text-[11px] font-heading font-bold border transition cursor-pointer ${directionCode === "A_TO_B" && roadSide === "LEFT" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600"}`}
+              className={`min-h-10 rounded-lg px-3 py-2 text-[11px] font-heading font-bold border transition cursor-pointer ${directionCode === "A_TO_B" && roadSide === "LEFT" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600"}`}
             >
               ขาไป A→B
             </button>
@@ -418,7 +420,7 @@ export function HighwayIdentificationSection({
                 setDraftReverseWaypoints?.([]);
                 setFreeEditTarget("FORWARD");
               }}
-              className={`rounded-lg px-2.5 py-1 text-[11px] font-heading font-bold border transition cursor-pointer ${directionCode === "B_TO_A" && roadSide === "RIGHT" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600"}`}
+              className={`min-h-10 rounded-lg px-3 py-2 text-[11px] font-heading font-bold border transition cursor-pointer ${directionCode === "B_TO_A" && roadSide === "RIGHT" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600"}`}
             >
               ขากลับ B→A
             </button>
@@ -429,7 +431,7 @@ export function HighwayIdentificationSection({
                 setRoadSide("BOTH");
                 if (isSelectedHighwayDivided) ensureReverseFloodGeometry(draftCoordinates);
               }}
-              className={`rounded-lg px-2.5 py-1 text-[11px] font-heading font-bold border transition cursor-pointer ${directionCode === "BOTH" && roadSide === "BOTH" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600"}`}
+              className={`min-h-10 rounded-lg px-3 py-2 text-[11px] font-heading font-bold border transition cursor-pointer ${directionCode === "BOTH" && roadSide === "BOTH" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600"}`}
             >
               ทั้ง ๒ ฝั่ง A⇄B
             </button>
@@ -439,10 +441,10 @@ export function HighwayIdentificationSection({
             <button
               type="button"
               onClick={handleSlicePolylineFromKm}
-              className="text-[11px] bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-700 px-3 py-1.5 rounded-xl font-heading font-semibold flex items-center gap-1.5 transition"
+              className="min-h-10 text-[11px] bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-700 px-3 py-2 rounded-xl font-heading font-semibold flex items-center gap-1.5 transition"
               title="คำนวณแนวเส้นและพิกัดเริ่มต้น-สิ้นสุดจากข้อมูล GIS ทางหลวงอัตโนมัติ"
             >
-              <Wand2 className="w-3.5 h-3.5 text-sky-400" /> คำนวณแนวเส้นจากช่วง กม. อัตโนมัติ (Linear Referencing)
+              <Wand2 className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" /> คำนวณแนวเส้นจากช่วง กม. อัตโนมัติ (Linear Referencing)
             </button>
             <span className="text-[10px] text-slate-400">ระบบจะตัดเฉพาะช่วงเส้นทางหลวงตาม กม. เริ่มต้น–สิ้นสุด</span>
           </div>
@@ -451,8 +453,9 @@ export function HighwayIdentificationSection({
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-300">ผูกกับจุดน้ำท่วมอ้างอิง</label>
+              <label htmlFor="detour-ref-flood-select" className="text-xs text-slate-300">ผูกกับจุดน้ำท่วมอ้างอิง</label>
               <select
+                id="detour-ref-flood-select"
                 value={detourRefId}
                 onChange={(e) => setDetourRefId(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
@@ -477,8 +480,9 @@ export function HighwayIdentificationSection({
               </select>
             </div>
             <div>
-              <label className="text-xs text-slate-300">ชื่อเส้นทางเลี่ยง *</label>
+              <label htmlFor="detour-route-name-input" className="text-xs text-slate-300">ชื่อเส้นทางเลี่ยง *</label>
               <input
+                id="detour-route-name-input"
                 type="text"
                 value={detourName}
                 onChange={(e) => setDetourName(e.target.value)}
@@ -487,15 +491,16 @@ export function HighwayIdentificationSection({
               />
             </div>
           </div>
-          <div>
-            <label className="text-xs text-slate-300 block mb-1">ทิศทางการเดินรถของทางเลี่ยง (A-B / B-A)</label>
+          <div role="group" aria-label="ทิศทางการเดินรถของทางเลี่ยง (A-B / B-A)">
+            <span className="text-xs text-slate-300 block mb-1">ทิศทางการเดินรถของทางเลี่ยง (A-B / B-A)</span>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {DETOUR_DIRECTION_MODES.map((mode) => (
                 <button
                   key={mode.value}
                   type="button"
+                  aria-pressed={detourDirectionMode === mode.value}
                   onClick={() => setDetourDirectionMode(mode.value)}
-                  className={`p-2.5 rounded-xl border text-left transition ${detourDirectionMode === mode.value
+                  className={`min-h-10 p-2.5 rounded-xl border text-left transition ${detourDirectionMode === mode.value
                     ? "border-amber-400 bg-amber-500/15 text-amber-200"
                     : "border-slate-800 bg-slate-900/70 text-slate-300 hover:border-slate-700"
                     }`}
@@ -512,8 +517,9 @@ export function HighwayIdentificationSection({
       {/* Highway Section Name (Distinct from Landmark/Subdistrict) */}
       {routeMode === "FLOOD" && (
         <div>
-          <label className="text-xs font-medium text-slate-200 block mb-1">ชื่อตอนสายทางหลวง (ตามบัญชีทางหลวง) *</label>
+          <label htmlFor="flood-section-name-input" className="text-xs font-medium text-slate-200 block mb-1">ชื่อตอนสายทางหลวง (ตามบัญชีทางหลวง) *</label>
           <input
+            id="flood-section-name-input"
             type="text"
             value={sectionName}
             onChange={(e) => { sectionNameManuallyEditedRef.current = true; setSectionName(e.target.value); }}

@@ -29,6 +29,7 @@
 | B-022 | สูง | Apps Script Web App ที่ใช้งานจริงอาจยังเป็น source เวอร์ชันก่อน idempotency/stale-write guard | กำลังทำ (Web App ยืนยันแล้ว; เหลือเปลี่ยน Edge secret URL) |
 | B-023 | สูง | Cutover ความสัมพันธ์ Flood Event ↔ Detour หลายต่อหลายจาก legacy field | ปิด (2026-11-19, ดู UPDATE-122) |
 | B-024 | กลาง | Event–Detour operation ledger ไม่มีนโยบาย retention/archival | เปิด |
+| B-025 | กลาง | ช่องฟอร์มย่อยและปุ่มลบใน `MapManagementTab` (`HighwayIdentificationSection`/`FloodSituationSection`), `IncidentRegistryTab` (ค้นหา, ปุ่มลบช่วง, โมดัลย่อย) และโมดัล `GisHighwayModals` (`ตั้งค่าคุณสมบัติทางวิศวกรรม`) ยังขาด `htmlFor`/`aria-label` และปุ่ม `32px` | เปิด (บันทึกจากการตรวจ Admin 5 ขนาด, 2026-11-19) |
 
 ## B-022 [สูง] Publish Apps Script source สำหรับ outbox idempotency
 - **หลักฐาน:** Web App URL ใหม่ตอบ JSON, ปฏิเสธคำขอไม่มี secret, และการเรียก `uploadMedia` ซ้ำด้วย `operationId` เดียวกันคืน Drive `mediaId` เดิม; ลบไฟล์ QA หลังทดสอบสำเร็จ. Edge `hdms-api` v18 และ migration atomic promotion อยู่ Production แล้ว.
@@ -50,6 +51,13 @@
 - **ทางเลือก:** A) ตั้ง retention ตามระยะเวลาที่หน่วยงานกำหนดแล้ว archive เป็นไฟล์/ตาราง audit; B) partition รายเดือน; C) เก็บถาวรทั้งหมด.
 - **คำแนะนำ:** A โดยกำหนดระยะเวลาที่ตรวจสอบย้อนหลังได้ก่อน และทำ worker/migration แยกพร้อม dry-run count; ห้ามลบ audit history อัตโนมัติโดยไม่มีนโยบายเจ้าของ.
 - **สถานะ:** เปิด — ไม่ขัดขวาง database foundation หรือ public cutover ระยะแรก.
+
+## B-025 [กลาง] ช่องฟอร์มย่อย `MapManagementTab`, `IncidentRegistryTab` และโมดัลสเปคสายทางยังขาด `htmlFor`/`aria-label` และปุ่มขนาด ≥ 40px
+- **หลักฐาน:** Playwright audit 5 ขนาดหน้าจอ (2026-11-19) พบหลังจากแก้ชุดแรกแล้วว่ายังมี input/select ไม่มี `htmlFor`/`aria-label` ใน `HighwayIdentificationSection`/`FloodSituationSection` (7 ช่องโหมด FLOOD, 4 ช่องโหมด DETOUR), ช่องค้นหา + ปุ่มลบช่วงใน `IncidentRegistryTab` (ขาด `aria-label`), และปุ่ม `32px`/input ในโมดัล `อัปเดตระดับน้ำ` (3 ช่อง), `แบ่งช่วงกิโลเมตร` (3 ช่อง), `แก้ไขข้อมูลเส้นทางเลี่ยง` (5 ช่องที่เหลือ), `ตั้งค่าคุณสมบัติทางวิศวกรรม` (7 ช่อง) รวมถึงปุ่ม Sidebar auto-collapse ที่ `max-width: 1535px`
+- **ผลกระทบ:** ผู้ใช้คีย์บอร์ด/Screen Reader และผู้ใช้หน้าจอสัมผัสยังกดคลิกป้าย label หรือปุ่มโมดัลบางจุดได้ไม่เต็มที่ รวมถึงจอ `1024–1440px` ถูกย่อ Sidebar เป็นแถบไอคอนโดยค่าเริ่มต้น
+- **ทางเลือก:** A) ทยอยผูก `htmlFor`/`aria-label` และปรับปุ่มในโมดัลให้เป็น `min-h-10` พร้อมตรวจ E2E ใน `admin-dialog-keyboard.spec.ts` / `admin-menus.spec.ts`; B) คงไว้เฉพาะที่ทำงานแล้ว
+- **คำแนะนำ:** A เพื่อครบมาตรฐาน WCAG 2.5.8 และ `UI_CONTRACT.md` ทุกแท็บและทุกโมดัล
+- **สถานะ:** เปิด (พบเพิ่มเติมใน `UPDATE-133`, 2026-11-19)
 
 ## B-018 [กลาง] Keyboard focus ของ Admin dialog — ปิดแล้ว
 - **หลักฐานก่อนปิด:** `useModalAccessibility` ครอบ dialog ใน Incident Registry, Detour Management, GIS route dialogs, Animated status และ Official report. ค้น `role="dialog"` ใน `components/admin`, `components/ui`, `app/admin` แล้วไม่พบ dialog ที่อยู่นอก hook นี้.

@@ -1203,11 +1203,12 @@ export function GisDataImportTab({
                   </span>
                   <button
                     type="button"
+                    aria-label={`ลบเลเยอร์โครงข่าย ${layer.layer_name}`}
                     onClick={() => handleDeleteHighwayLayer(layer.layer_id, layer.layer_name)}
                     title="ลบเลเยอร์โครงข่าย"
-                    className="p-1.5 bg-slate-900 hover:bg-red-600 hover:text-white text-red-400 rounded-lg text-xs transition"
+                    className="min-h-10 min-w-10 inline-flex items-center justify-center bg-slate-900 hover:bg-red-600 hover:text-white text-red-400 rounded-lg text-xs transition"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
                 </div>
               </div>

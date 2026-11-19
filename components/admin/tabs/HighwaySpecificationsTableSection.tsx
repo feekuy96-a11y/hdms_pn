@@ -75,21 +75,21 @@ export function HighwaySpecificationsTableSection({
       className="space-y-3 pt-3 border-t border-slate-800"
       style={{ contentVisibility: "auto", containIntrinsicSize: "auto 600px" }}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-[260px]">
           <h3 className="font-heading font-bold text-sm text-white flex items-center gap-2">
-            <Building className="w-4 h-4 text-amber-400" /> ตารางรายการทางหลวงและคุณสมบัติทางวิศวกรรม
+            <Building className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" /> ตารางรายการทางหลวงและคุณสมบัติทางวิศวกรรม
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
             คลิกไอคอนรูปดวงตาเพื่อ เปิด/ปิด การแสดงผลเส้นทาง หรือคลิก &quot;ตั้งค่า&quot; เพื่อปรับแต่งช่องจราจร (มีผลต่อความหนาเส้นบนแผนที่) ผิวจราจร และข้อมูลเฉพาะสายทาง
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 max-w-full">
           <span className="text-[11px] bg-slate-900 border border-slate-700 px-2.5 py-1.5 rounded-xl text-amber-300 font-mono">
             {highwaySectionGroups.length} ตอนควบคุม ({allHighwayFeatures.length} เส้นย่อย)
           </span>
           <label className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-2 text-xs text-slate-200 shadow-sm">
-            <FileSpreadsheet className="w-3.5 h-3.5 text-sky-400" />
+            <FileSpreadsheet className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
             <select
               aria-label="ส่งออกโครงข่ายตามผลการค้นหา"
               defaultValue=""
@@ -128,9 +128,9 @@ export function HighwaySpecificationsTableSection({
                 isVisible: true,
               })
             }
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20"
+            className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
             <span>+ เพิ่มสายทางใหม่</span>
           </button>
         </div>
@@ -243,14 +243,15 @@ export function HighwaySpecificationsTableSection({
                         <button
                           type="button"
                           onClick={() => handleToggleGroupVisibility(group)}
-                          className={`p-1.5 rounded-lg border transition ${
+                          aria-label={group.isVisible ? `ซ่อนสายทาง ทล.${group.routeNo} ${group.sectionName} บนแผนที่` : `แสดงสายทาง ทล.${group.routeNo} ${group.sectionName} บนแผนที่`}
+                          className={`min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg border transition ${
                             group.isVisible
                               ? "bg-emerald-950/80 text-emerald-300 border-emerald-600 hover:bg-emerald-900"
                               : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"
                           }`}
                           title={group.isVisible ? "คลิกเพื่อซ่อนสายทางนี้บนแผนที่" : "คลิกเพื่อแสดงสายทางนี้บนแผนที่"}
                         >
-                          {group.isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                          {group.isVisible ? <Eye className="w-4 h-4" aria-hidden="true" /> : <EyeOff className="w-4 h-4" aria-hidden="true" />}
                         </button>
                       </td>
                       <td className="p-3">
@@ -310,20 +311,21 @@ export function HighwaySpecificationsTableSection({
                                 e.stopPropagation();
                                 toggleGroupExpand(group.groupId);
                               }}
-                              className="p-1.5 bg-slate-900 hover:bg-slate-800 text-sky-300 border border-slate-700 hover:border-sky-400 rounded-xl text-xs transition"
+                              aria-label={isExpanded ? `ย่อรายละเอียด ทล.${group.routeNo} ${group.sectionName}` : `เปิดดูรายละเอียด ทล.${group.routeNo} ${group.sectionName}`}
+                              className="min-h-9 min-w-9 inline-flex items-center justify-center bg-slate-900 hover:bg-slate-800 text-sky-300 border border-slate-700 hover:border-sky-400 rounded-xl text-xs transition"
                               title={isExpanded ? "ย่อรายละเอียดเส้น ๒ ฝั่ง" : "เปิดดูรายละเอียดเส้น ๒ ฝั่ง"}
                             >
-                              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />}
                             </button>
                           )}
                           {primaryBranch && (
                             <button
                               type="button"
                               onClick={() => openGeometryEditor(group.layerId, primaryBranch.featureIdx)}
-                              className="bg-slate-900 hover:bg-slate-800 text-sky-300 border border-slate-700 hover:border-sky-400 px-2.5 py-1.5 rounded-xl font-heading text-xs font-bold transition inline-flex items-center gap-1 shadow-sm"
+                              className="min-h-9 bg-slate-900 hover:bg-slate-800 text-sky-300 border border-slate-700 hover:border-sky-400 px-2.5 py-1.5 rounded-xl font-heading text-xs font-bold transition inline-flex items-center gap-1 shadow-sm"
                               title="แก้แนวถนน ปักจุดและเกาะแนวถนน"
                             >
-                              <MapPin className="w-3.5 h-3.5" /> แนวถนน
+                              <MapPin className="w-3.5 h-3.5" aria-hidden="true" /> แนวถนน
                             </button>
                           )}
                           {primaryBranch && (
@@ -346,19 +348,20 @@ export function HighwaySpecificationsTableSection({
                                   isVisible: group.isVisible,
                                 })
                               }
-                              className="bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 hover:border-amber-400 px-2.5 py-1.5 rounded-xl font-heading text-xs font-bold transition inline-flex items-center gap-1 shadow-sm"
+                              className="min-h-9 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700 hover:border-amber-400 px-2.5 py-1.5 rounded-xl font-heading text-xs font-bold transition inline-flex items-center gap-1 shadow-sm"
                               title="ตั้งค่าคุณสมบัติทางวิศวกรรม"
                             >
-                              <Sliders className="w-3.5 h-3.5 text-amber-400" /> ตั้งค่า
+                              <Sliders className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" /> ตั้งค่า
                             </button>
                           )}
                           <button
                             type="button"
                             onClick={() => handleDeleteHighwayGroup(group)}
-                            className="p-1.5 bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 hover:border-rose-600 rounded-xl transition shadow-sm"
+                            aria-label={`ลบสายทาง ทล.${group.routeNo} ${group.sectionName}`}
+                            className="min-h-9 min-w-9 inline-flex items-center justify-center bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 hover:border-rose-600 rounded-xl transition shadow-sm"
                             title="ลบสายทางนี้"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         </div>
                       </td>
@@ -392,14 +395,15 @@ export function HighwaySpecificationsTableSection({
                               <button
                                 type="button"
                                 onClick={() => handleToggleFeatureVisibility(group.layerId, branch.featureIdx)}
-                                className={`p-1 rounded-md border transition ${
+                                aria-label={isBranchVis ? `ซ่อนเส้นฝั่ง ${branch.branchLabel} บนแผนที่` : `แสดงเส้นฝั่ง ${branch.branchLabel} บนแผนที่`}
+                                className={`min-h-9 min-w-9 inline-flex items-center justify-center rounded-md border transition ${
                                   isBranchVis
                                     ? "bg-emerald-950/80 text-emerald-300 border-emerald-600 hover:bg-emerald-900"
                                     : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"
                                 }`}
                                 title={isBranchVis ? "คลิกเพื่อซ่อนเส้นฝั่งนี้บนแผนที่" : "คลิกเพื่อแสดงเส้นฝั่งนี้บนแผนที่"}
                               >
-                                {isBranchVis ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                                {isBranchVis ? <Eye className="w-3.5 h-3.5" aria-hidden="true" /> : <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />}
                               </button>
                             </td>
                             <td className="p-2.5 whitespace-nowrap">
@@ -477,10 +481,11 @@ export function HighwaySpecificationsTableSection({
                                       `ทล.${group.routeNo} ${branch.branchLabel}`
                                     )
                                   }
-                                  className="p-1 bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 hover:border-rose-600 rounded-lg transition shadow-sm"
+                                  aria-label={`ลบเส้นทางฝั่ง ${branch.branchLabel}`}
+                                  className="min-h-9 min-w-9 inline-flex items-center justify-center bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 hover:border-rose-600 rounded-lg transition shadow-sm"
                                   title="ลบเส้นทางฝั่งนี้"
                                 >
-                                  <Trash2 className="w-3 h-3" />
+                                  <Trash2 className="w-3 h-3" aria-hidden="true" />
                                 </button>
                               </div>
                             </td>

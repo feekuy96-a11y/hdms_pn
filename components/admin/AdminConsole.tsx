@@ -401,8 +401,10 @@ export function AdminConsole({
           <button
             type="button"
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="w-full flex items-center justify-center p-2 rounded-xl text-slate-400 hover:bg-white/10 hover:text-white text-xs transition"
+            className="w-full min-h-10 flex items-center justify-center p-2 rounded-xl text-slate-400 hover:bg-white/10 hover:text-white text-xs transition cursor-pointer"
             title={isSidebarCollapsed ? "ขยายเมนู" : "ย่อเมนู"}
+            aria-label={isSidebarCollapsed ? "ขยายเมนู" : "ย่อเมนู"}
+            aria-expanded={!isSidebarCollapsed}
           >
             {isSidebarCollapsed ? (
               <ChevronRight className="w-4 h-4" />
@@ -445,7 +447,7 @@ export function AdminConsole({
       {/* ===================================================================== */}
       <main className={`flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-950 ${isPaneCollapsed ? "hidden lg:hidden" : ""}`}>
         {/* Mobile / Tablet Horizontal Navigation Bar */}
-        <div className="lg:hidden flex items-center overflow-x-auto border-b border-slate-800 p-2 gap-1.5 bg-slate-900 shrink-0">
+        <nav aria-label="เมนูจัดการแอดมินมือถือ" className="lg:hidden flex items-center overflow-x-auto border-b border-slate-800 p-2 gap-1.5 bg-slate-900 shrink-0">
           {NAV_ITEMS.filter((item) => !(HIDE_GOVERNOR_EXECUTIVE_UI && item.id === "projects")).map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -453,23 +455,24 @@ export function AdminConsole({
               <button
                 key={item.id}
                 type="button"
+                aria-current={isActive ? "page" : undefined}
                 onClick={() => {
                   setActiveTab(item.id);
                   if (item.id === "routes") onRequestFullGeometry?.();
                   if (item.id !== "map") setEditingRoute(null);
                   if (item.id !== "system") onOfficeEditModeChange?.(null);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-heading font-bold shrink-0 flex items-center gap-1.5 transition ${isActive
+                className={`min-h-10 px-3.5 py-2 rounded-lg text-xs font-heading font-bold shrink-0 flex items-center gap-1.5 transition cursor-pointer ${isActive
                     ? "bg-amber-500 text-slate-950"
                     : "text-slate-300 hover:bg-slate-800 hover:text-white"
                   }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>{item.label}</span>
               </button>
             );
           })}
-        </div>
+        </nav>
 
         {/* Scrollable Tab Workspace (do not use layout/paint containment so fixed modals stay viewport-centered) */}
         <div className="doh-form flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 lg:p-6">

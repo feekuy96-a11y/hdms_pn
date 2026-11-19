@@ -82,20 +82,20 @@ export function LineStylingTab({
             ปรับสี ความหนา ขอบเส้น รัศมีเรืองแสง (Glow) และอนิเมชันไฟวิ่งตามเส้น ลิงก์ตรงกับแผนที่ทันที
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handleResetStylesToDefault}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-heading font-semibold text-xs px-3 py-2 rounded-xl border border-slate-700 transition"
+            className="min-h-10 bg-slate-800 hover:bg-slate-700 text-slate-300 font-heading font-semibold text-xs px-3.5 py-2 rounded-xl border border-slate-700 transition"
           >
             รีเซ็ตค่าเริ่มต้น
           </button>
           <button
             type="button"
             onClick={handleSaveLineStyles}
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs px-4 py-2 rounded-xl shadow transition flex items-center gap-1.5"
+            className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs px-4 py-2 rounded-xl shadow transition flex items-center gap-1.5"
           >
-            <Save className="w-4 h-4" /> บันทึกสไตล์เส้น
+            <Save className="w-4 h-4" aria-hidden="true" /> บันทึกสไตล์เส้น
           </button>
         </div>
       </div>
@@ -248,15 +248,17 @@ export function LineStylingTab({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {/* Color Picker & Quick Palettes */}
             <div className="space-y-2">
-              <label className="text-xs text-slate-300 block font-heading font-medium">สีของเส้นทาง (Line Color)</label>
+              <label htmlFor="line-style-color-hex" className="text-xs text-slate-300 block font-heading font-medium">สีของเส้นทาง (Line Color)</label>
               <div className="flex items-center gap-2">
                 <input
                   type="color"
+                  aria-label="เลือกสีของเส้นทาง"
                   value={currentItem.color}
                   onChange={(e) => handleUpdateCurrentStyle({ color: e.target.value })}
                   className="w-10 h-10 rounded-xl cursor-pointer bg-slate-900 border border-slate-700 p-0.5"
                 />
                 <input
+                  id="line-style-color-hex"
                   type="text"
                   value={currentItem.color}
                   onChange={(e) => handleUpdateCurrentStyle({ color: e.target.value.toUpperCase() })}
@@ -265,7 +267,7 @@ export function LineStylingTab({
               </div>
 
               {/* Quick Palette Chips */}
-              <div className="flex flex-wrap gap-1.5 pt-1">
+              <div className="flex flex-wrap gap-1.5 pt-1" role="group" aria-label="ชุดสีแนะนำสำหรับเส้นทาง">
                 {[
                   "#D32F2F", "#EF4444", "#B91C1C",
                   "#FBC02D", "#F59E0B", "#EAB308",
@@ -276,8 +278,10 @@ export function LineStylingTab({
                   <button
                     key={c}
                     type="button"
+                    aria-label={`เลือกสี ${c}`}
+                    title={`เลือกสี ${c}`}
                     onClick={() => handleUpdateCurrentStyle({ color: c })}
-                    className="w-5 h-5 rounded-lg border border-slate-700 transition hover:scale-110"
+                    className="w-8 h-8 rounded-lg border border-slate-700 transition hover:scale-110"
                     style={{ backgroundColor: c }}
                   />
                 ))}
@@ -288,10 +292,11 @@ export function LineStylingTab({
             <div className="space-y-4">
               <div>
                 <div className="flex justify-between text-xs text-slate-300 mb-1">
-                  <span>ความหนาเส้น (Line Weight):</span>
+                  <label htmlFor="line-style-weight-range">ความหนาเส้น (Line Weight):</label>
                   <span className="font-mono text-amber-400 font-bold">{currentItem.weight} px</span>
                 </div>
                 <input
+                  id="line-style-weight-range"
                   type="range"
                   min="0.1"
                   max="16"
@@ -314,10 +319,11 @@ export function LineStylingTab({
 
               <div>
                 <div className="flex justify-between text-xs text-slate-300 mb-1">
-                  <span>ความทึบแสง (Opacity):</span>
+                  <label htmlFor="line-style-opacity-range">ความทึบแสง (Opacity):</label>
                   <span className="font-mono text-amber-400 font-bold">{Math.round((currentItem.opacity ?? 0.9) * 100)}%</span>
                 </div>
                 <input
+                  id="line-style-opacity-range"
                   type="range"
                   min="0.2"
                   max="1"
@@ -333,8 +339,9 @@ export function LineStylingTab({
           {/* Pattern & Animation Controls */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-800">
             <div>
-              <label className="text-xs text-slate-300 block mb-1.5 font-heading font-medium">ลวดลายเส้น (Line Pattern)</label>
+              <label htmlFor="line-style-pattern-select" className="text-xs text-slate-300 block mb-1.5 font-heading font-medium">ลวดลายเส้น (Line Pattern)</label>
               <select
+                id="line-style-pattern-select"
                 value={currentItem.pattern}
                 onChange={(e: any) => handleUpdateCurrentStyle({ pattern: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
@@ -347,8 +354,9 @@ export function LineStylingTab({
             </div>
 
             <div>
-              <label className="text-xs text-slate-300 block mb-1.5 font-heading font-medium">อนิเมชันลูกเล่น (Animation Effect)</label>
+              <label htmlFor="line-style-animation-select" className="text-xs text-slate-300 block mb-1.5 font-heading font-medium">อนิเมชันลูกเล่น (Animation Effect)</label>
               <select
+                id="line-style-animation-select"
                 value={currentItem.animation}
                 onChange={(e: any) => handleUpdateCurrentStyle({ animation: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
@@ -362,8 +370,9 @@ export function LineStylingTab({
             </div>
 
             <div>
-              <label className="text-xs text-slate-300 block mb-1.5 font-heading font-medium">ความเร็วการเคลื่อนไหว (Speed)</label>
+              <label htmlFor="line-style-speed-select" className="text-xs text-slate-300 block mb-1.5 font-heading font-medium">ความเร็วการเคลื่อนไหว (Speed)</label>
               <select
+                id="line-style-speed-select"
                 value={currentItem.animationSpeed || "normal"}
                 onChange={(e: any) => handleUpdateCurrentStyle({ animationSpeed: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
@@ -386,8 +395,9 @@ export function LineStylingTab({
               เปิดเส้นขอบ (Stroke/Casing)
             </label>
             <div>
-              <label className="mb-1 block text-xs text-slate-300">สีเส้นขอบ</label>
+              <label htmlFor="line-style-border-color" className="mb-1 block text-xs text-slate-300">สีเส้นขอบ</label>
               <input
+                id="line-style-border-color"
                 type="color"
                 value={currentItem.borderColor || "#ffffff"}
                 disabled={!currentItem.borderActive}
@@ -396,9 +406,10 @@ export function LineStylingTab({
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-slate-300">ความหนาเส้นขอบ (px)</label>
+              <label htmlFor="line-style-border-width-range" className="mb-1 block text-xs text-slate-300">ความหนาเส้นขอบ (px)</label>
               <div className="flex items-center gap-2">
                 <input
+                  id="line-style-border-width-range"
                   type="range"
                   min="0.1"
                   max="8"
@@ -442,16 +453,18 @@ export function LineStylingTab({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="mb-1 block text-xs text-slate-300">สีลูกศรบอกทิศทาง</label>
+                <label htmlFor="line-style-arrow-color-hex" className="mb-1 block text-xs text-slate-300">สีลูกศรบอกทิศทาง</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
+                    aria-label="เลือกสีลูกศรบอกทิศทาง"
                     value={currentItem.arrowColor || (selectedStyleKey === "detour" ? "#0f172a" : "#ffffff")}
                     disabled={!(currentItem.showArrows ?? (selectedStyleKey !== "flood"))}
                     onChange={(e) => handleUpdateCurrentStyle({ arrowColor: e.target.value })}
-                    className="h-9 w-12 rounded-lg border border-slate-700 bg-slate-900 p-0.5 disabled:opacity-40"
+                    className="h-10 w-12 rounded-lg border border-slate-700 bg-slate-900 p-0.5 disabled:opacity-40"
                   />
                   <input
+                    id="line-style-arrow-color-hex"
                     type="text"
                     value={currentItem.arrowColor || (selectedStyleKey === "detour" ? "#0f172a" : "#ffffff")}
                     disabled={!(currentItem.showArrows ?? (selectedStyleKey !== "flood"))}
@@ -463,10 +476,11 @@ export function LineStylingTab({
 
               <div>
                 <div className="flex justify-between text-xs text-slate-300 mb-1">
-                  <span>ขนาดหัวลูกศร (Size):</span>
+                  <label htmlFor="line-style-arrow-size">ขนาดหัวลูกศร (Size):</label>
                   <span className="font-mono text-amber-400 font-bold">{currentItem.arrowSize || 12} px</span>
                 </div>
                 <input
+                  id="line-style-arrow-size"
                   type="range"
                   min="8"
                   max="22"
@@ -480,10 +494,11 @@ export function LineStylingTab({
 
               <div>
                 <div className="flex justify-between text-xs text-slate-300 mb-1">
-                  <span>ระยะห่างลูกศร (Spacing):</span>
+                  <label htmlFor="line-style-arrow-spacing">ระยะห่างลูกศร (Spacing):</label>
                   <span className="font-mono text-amber-400 font-bold">{currentItem.arrowSpacingPx || 140} px</span>
                 </div>
                 <input
+                  id="line-style-arrow-spacing"
                   type="range"
                   min="70"
                   max="300"

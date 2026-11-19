@@ -564,11 +564,11 @@
 
 /* Phase 6: tables adapt to the actual admin panel (resizable), not only screen breakpoints. */
 .doh-auto-table { container-type: inline-size; min-width: 0; }
-@container (max-width: 900px) {
+@container (max-width: 500px) {
   .doh-auto-table .doh-auto-table-cards { display: block !important; }
   .doh-auto-table .doh-auto-table-desktop { display: none !important; }
 }
-@container (min-width: 901px) {
+@container (min-width: 501px) {
   .doh-auto-table .doh-auto-table-cards { display: none !important; }
   .doh-auto-table .doh-auto-table-desktop { display: block !important; }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AdviceText } from "@/components/AdviceText";
 import { DetourRoute, SystemDataPayload } from "@/db/default-data";
 import {
@@ -112,6 +112,8 @@ export function DetourManagementTab({
   } | null>(null);
   const viewingDialog = useModalAccessibility(Boolean(viewingDetour), () => setViewingDetour(null));
   const editingDialog = useModalAccessibility(Boolean(editingDetour), () => setEditingDetour(null));
+  const autoTableRef = useRef<HTMLDivElement | null>(null);
+  const [tableLayoutMode, setTableLayoutMode] = useState<"cards" | "table" | null>(null);
 
   const detourList = systemData.detourRoutes || [];
   const floodList = systemData.floodRoutes || [];
@@ -158,6 +160,22 @@ export function DetourManagementTab({
     });
     return sortDetoursByOrder(matched, floodFilter !== "ALL" ? floodFilter : undefined);
   }, [detourList, linkedEventsByDetourId, detourFilter, floodFilter, searchQuery]);
+
+  useEffect(() => {
+    const el = autoTableRef.current;
+    if (!el) return;
+    const updateMode = (width: number) => {
+      if (!width) return;
+      setTableLayoutMode(width > 500 ? "table" : "cards");
+    };
+    updateMode(el.getBoundingClientRect().width);
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) updateMode(entry.contentRect.width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [filteredDetours.length]);
 
   // Sibling detours within the same flood scope (used for Up/Down reordering)
   const getReorderSiblings = (item: DetourRoute): DetourRoute[] => {
@@ -687,13 +705,14 @@ export function DetourManagementTab({
       </div>
 
       {/* 2. Top Action Bar: Search, Filters & Buttons */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
-        <div className="flex flex-wrap items-center gap-2 flex-1">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
           {/* Search Input */}
-          <div className="relative min-w-[200px] flex-1 max-w-xs">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <div className="relative min-w-[180px] flex-1 basis-[210px] max-w-xs">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
             <input
               type="text"
+              aria-label="ค้นหาเส้นทางเลี่ยง"
               placeholder="ค้นหาเส้นทางเลี่ยง, ทล., ตอนควบคุม..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -703,6 +722,7 @@ export function DetourManagementTab({
 
           {/* Status Filter */}
           <select
+            aria-label="กรองตามสถานะทางเลี่ยง"
             value={detourFilter}
             onChange={(e: any) => setDetourFilter(e.target.value)}
             className="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-amber-400 font-heading"
@@ -714,6 +734,7 @@ export function DetourManagementTab({
 
           {/* Linked Flood Filter */}
           <select
+            aria-label="กรองตามจุดน้ำท่วม"
             value={floodFilter}
             onChange={(e) => setFloodFilter(e.target.value)}
             className="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-amber-400 font-heading max-w-[200px] truncate"
@@ -741,17 +762,17 @@ export function DetourManagementTab({
         </div>
 
         {/* Primary Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2 self-end md:self-auto shrink-0">
+        <div className="flex flex-wrap items-center gap-2 max-w-full">
           <button
             type="button"
             onClick={() => setLinkModalState({ mode: "BY_DETOUR" })}
             className="min-h-10 bg-sky-500/15 hover:bg-sky-500 text-sky-300 hover:text-slate-950 border border-sky-500/50 font-heading font-bold text-xs px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition"
           >
-            <Link2 className="w-3.5 h-3.5" />
+            <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
             <span>จัดการความสัมพันธ์ (หลายจุด)</span>
           </button>
           <label className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-2 text-xs text-slate-200">
-            <FileText className="w-3.5 h-3.5 text-sky-400" />
+            <FileText className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
             <select aria-label="ขอบเขตส่งออกทางเลี่ยง" value={exportScope} onChange={(e) => setExportScope(e.target.value as typeof exportScope)} className="min-h-10 max-w-28 bg-transparent font-heading outline-none">
               <option value="FILTERED">ตามตัวกรอง</option><option value="ALL">ทั้งหมด</option><option value="SELECTED">ที่เลือก</option>
             </select>
@@ -763,9 +784,9 @@ export function DetourManagementTab({
           <button
             type="button"
             onClick={onAddDetour}
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20"
+            className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4" aria-hidden="true" />
             <span>วาดทางเลี่ยงใหม่บนแผนที่</span>
           </button>
         </div>
@@ -785,9 +806,9 @@ export function DetourManagementTab({
           </button>
         </div>
       ) : (
-        <div className="doh-auto-table space-y-3">
+        <div ref={autoTableRef} className="doh-auto-table space-y-3">
           {/* Mobile Card View (จอแคบ / มือถือ / พื้นที่แสดงจริงแคบ) */}
-          <div className="doh-auto-table-cards block md:hidden space-y-3">
+          {tableLayoutMode !== "table" && <div className="doh-auto-table-cards block md:hidden space-y-3">
             {filteredDetours.map((item, idx) => {
               const linkedEvents = linkedEventsByDetourId.get(item.id) || [];
               const ext = extractDirectionalAdvice(item.description || "");
@@ -831,7 +852,7 @@ export function DetourManagementTab({
                         e.stopPropagation();
                         handleToggleStatus(item.id, item.is_active);
                       }}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border whitespace-nowrap transition ${item.is_active
+                      className={`min-h-9 px-2.5 py-1 rounded-full text-[10px] font-heading font-bold border whitespace-nowrap transition cursor-pointer ${item.is_active
                           ? "bg-emerald-950 text-emerald-300 border-emerald-600"
                           : "bg-slate-900 text-slate-400 border-slate-700"
                         }`}
@@ -917,26 +938,28 @@ export function DetourManagementTab({
                       <button
                         type="button"
                         onClick={() => handleOpenEditModal(item)}
-                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg font-heading font-bold text-xs border border-slate-700"
+                        className="min-h-10 px-3 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg font-heading font-bold text-xs border border-slate-700"
                       >
                         แก้ไข
                       </button>
                       <button
                         type="button"
+                        aria-label={`ลบทางเลี่ยง ${item.route_name}`}
+                        title="ลบเส้นทางเลี่ยง"
                         onClick={() => handleDeleteDetour(item)}
-                        className="p-1 bg-red-950/60 text-red-400 hover:bg-red-900 rounded-lg border border-red-900/40"
+                        className="min-h-10 min-w-10 inline-flex items-center justify-center bg-red-950/60 text-red-400 hover:bg-red-900 rounded-lg border border-red-900/40"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                     </div>
                   </div>
                 </div>
               );
             })}
-          </div>
+          </div>}
 
           {/* Desktop & Tablet Table View */}
-          <div className="doh-auto-table-desktop hidden md:block overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-xl">
+          {tableLayoutMode !== "cards" && <div className="doh-auto-table-desktop hidden md:block overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-xl">
             <table className="w-full min-w-[880px] table-auto text-left text-xs text-slate-300">
               <thead className="bg-[#091122] text-slate-400 font-heading border-b border-slate-800">
                 <tr>
@@ -993,7 +1016,7 @@ export function DetourManagementTab({
                         <button
                           type="button"
                           onClick={() => handleToggleStatus(item.id, item.is_active)}
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold border whitespace-nowrap transition cursor-pointer ${item.is_active
+                          className={`min-h-9 px-2.5 py-1 rounded-full text-[10px] font-heading font-bold border whitespace-nowrap transition cursor-pointer ${item.is_active
                               ? "bg-emerald-950 text-emerald-300 border-emerald-600 hover:bg-emerald-900"
                               : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"
                             }`}
@@ -1087,9 +1110,9 @@ export function DetourManagementTab({
                             disabled={!canMoveUp}
                             onClick={() => handleMoveDetourOrder(item, "UP")}
                             title={`เลื่อนลำดับขึ้น (ปัจจุบันลำดับที่ ${groupPos + 1})`}
-                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
+                            className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
                           >
-                            <ChevronUp className="w-3.5 h-3.5" />
+                            <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                           <button
                             type="button"
@@ -1097,20 +1120,21 @@ export function DetourManagementTab({
                             disabled={!canMoveDown}
                             onClick={() => handleMoveDetourOrder(item, "DOWN")}
                             title={`เลื่อนลำดับลง (ปัจจุบันลำดับที่ ${groupPos + 1})`}
-                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
+                            className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
                           >
-                            <ChevronDown className="w-3.5 h-3.5" />
+                            <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
 
                           {/* Focus on map */}
                           {item.lat_start && item.lon_start && onFocusCoordinates && (
                             <button
                               type="button"
+                              aria-label={`ซูมไปยังทางเลี่ยง ${item.route_name} บนแผนที่`}
                               onClick={() => onFocusCoordinates([item.lon_start, item.lat_start])}
                               title="ซูมไปยังเส้นทางบนแผนที่"
-                              className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-sky-400 border border-slate-700 transition cursor-pointer"
+                              className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 text-sky-400 border border-slate-700 transition cursor-pointer"
                             >
-                              <Eye className="w-3.5 h-3.5" />
+                              <Eye className="w-3.5 h-3.5" aria-hidden="true" />
                             </button>
                           )}
 
@@ -1120,29 +1144,31 @@ export function DetourManagementTab({
                             aria-label={`ผูกหลายเหตุการณ์ ${item.route_name}`}
                             onClick={() => setLinkModalState({ mode: "BY_DETOUR", detourId: item.id })}
                             title="ผูกหลายเหตุการณ์ (Many-to-Many)"
-                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-sky-300 border border-sky-700/60 transition cursor-pointer"
+                            className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 text-sky-300 border border-sky-700/60 transition cursor-pointer"
                           >
-                            <Link2 className="w-3.5 h-3.5" />
+                            <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
 
                           {/* Quick Edit Modal */}
                           <button
                             type="button"
+                            aria-label="แก้ไข"
                             onClick={() => handleOpenEditModal(item)}
                             title="แก้ไขรายละเอียด & คำแนะนำ"
-                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-700 transition cursor-pointer"
+                            className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-700 transition cursor-pointer"
                           >
-                            <Edit className="w-3.5 h-3.5" />
+                            <Edit className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
 
                           {/* Delete */}
                           <button
                             type="button"
+                            aria-label={`ลบทางเลี่ยง ${item.route_name}`}
                             onClick={() => handleDeleteDetour(item)}
                             title="ลบเส้นทางเลี่ยง"
-                            className="p-1.5 rounded-lg bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 hover:border-rose-600 transition cursor-pointer"
+                            className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 hover:border-rose-600 transition cursor-pointer"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         </div>
                       </td>
@@ -1151,7 +1177,7 @@ export function DetourManagementTab({
                 })}
               </tbody>
             </table>
-          </div>
+          </div>}
         </div>
       )}
 
@@ -1439,8 +1465,9 @@ export function DetourManagementTab({
               {/* Row 1: Name & Linked Flood */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-300 block mb-1">ชื่อเส้นทางเลี่ยง *</label>
+                  <label htmlFor="edit-detour-name-input" className="text-slate-300 block mb-1">ชื่อเส้นทางเลี่ยง *</label>
                   <input
+                    id="edit-detour-name-input"
                     type="text"
                     value={editDetourName}
                     onChange={(e) => setEditDetourName(e.target.value)}
@@ -1450,8 +1477,9 @@ export function DetourManagementTab({
                 </div>
 
                 <div>
-                  <label className="text-slate-300 block mb-1">ผูกกับจุดน้ำท่วมอ้างอิง</label>
+                  <label htmlFor="edit-detour-ref-select" className="text-slate-300 block mb-1">ผูกกับจุดน้ำท่วมอ้างอิง</label>
                   <select
+                    id="edit-detour-ref-select"
                     value={editDetourRefId}
                     onChange={(e) => setEditDetourRefId(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"

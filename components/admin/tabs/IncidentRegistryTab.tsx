@@ -687,6 +687,7 @@ export function IncidentRegistryTab({
             <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
+              aria-label="ค้นหาเหตุการณ์น้ำท่วม"
               value={incidentSearch}
               onChange={(e) => setIncidentSearch(e.target.value)}
               placeholder="ค้นหาสายทาง 42, 43, หนองจิก..."
@@ -765,18 +766,18 @@ export function IncidentRegistryTab({
                       type="button"
                       onClick={() => setLinkingEventId(ev.eventId)}
                       aria-label={`จัดการทางเลี่ยงเชื่อมโยง ${ev.eventTitle || ev.sectionName}`}
-                      className="min-h-9 bg-sky-500/15 hover:bg-sky-500 text-sky-300 hover:text-slate-950 border border-sky-500/50 px-3 py-1 rounded-xl text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap"
+                      className="min-h-10 bg-sky-500/15 hover:bg-sky-500 text-sky-300 hover:text-slate-950 border border-sky-500/50 px-3 py-1.5 rounded-xl text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap"
                       title="จัดการทางเลี่ยงเชื่อมโยงแบบหลายต่อหลาย"
                     >
-                      <Link2 className="w-3.5 h-3.5" /> จัดการทางเลี่ยงเชื่อมโยง
+                      <Link2 className="w-3.5 h-3.5" aria-hidden="true" /> จัดการทางเลี่ยงเชื่อมโยง
                     </button>
                     <button
                       type="button"
                       onClick={() => onAddFlood({ routeNo: ev.routeNo, sectionName: ev.sectionName, eventId: ev.eventId })}
-                      className="min-h-9 bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/50 px-3 py-1 rounded-xl text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap"
+                      className="min-h-10 bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/50 px-3 py-1.5 rounded-xl text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap"
                       title="เพิ่มช่วง กม. ย่อยในเหตุการณ์หลักนี้"
                     >
-                      <Plus className="w-3.5 h-3.5" /> เพิ่มช่วง กม.
+                      <Plus className="w-3.5 h-3.5" aria-hidden="true" /> เพิ่มช่วง กม.
                     </button>
                     <button
                       type="button"
@@ -790,11 +791,11 @@ export function IncidentRegistryTab({
                           return next;
                         });
                       }}
-                      className="min-h-9 flex items-center justify-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
+                      className="min-h-10 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
                       title={isCollapsed ? "กางดูช่วงย่อยทั้งหมด" : "ย่อเก็บช่วงย่อย"}
                     >
                       <span className="text-[11px] font-semibold whitespace-nowrap">{ev.segments.length} ช่วง</span>
-                      {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                      {isCollapsed ? <ChevronDown className="w-4 h-4" aria-hidden="true" /> : <ChevronUp className="w-4 h-4" aria-hidden="true" />}
                     </button>
                   </div>
                 </div>
@@ -925,14 +926,14 @@ export function IncidentRegistryTab({
                                   <button
                                     type="submit"
                                     disabled={inlineSavingId === r.id}
-                                    className="h-7 rounded bg-emerald-500 hover:bg-emerald-400 px-2 text-[11px] font-bold text-slate-950 transition disabled:opacity-50 cursor-pointer"
+                                    className="min-h-9 rounded bg-emerald-500 hover:bg-emerald-400 px-2.5 text-[11px] font-bold text-slate-950 transition disabled:opacity-50 cursor-pointer"
                                   >
                                     {inlineSavingId === r.id ? "กำลังบันทึก..." : "บันทึก"}
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => setInlineEditId(null)}
-                                    className="h-7 rounded border border-slate-700 bg-slate-800 hover:bg-slate-700 px-2 text-[11px] text-slate-200 transition cursor-pointer"
+                                    className="min-h-9 rounded border border-slate-700 bg-slate-800 hover:bg-slate-700 px-2.5 text-[11px] text-slate-200 transition cursor-pointer"
                                   >
                                     ยกเลิก
                                   </button>
@@ -954,9 +955,9 @@ export function IncidentRegistryTab({
                                     }}
                                     aria-label={`แก้ไขระดับน้ำด่วน ทล.${r.route_no} กม.${r.km_start}`}
                                     title="แก้ไขระดับน้ำแบบด่วนทันที"
-                                    className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900/90 hover:border-amber-400/70 hover:text-amber-300 px-1.5 py-0.5 text-[11px] text-slate-300 transition cursor-pointer"
+                                    className="min-h-9 inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900/90 hover:border-amber-400/70 hover:text-amber-300 px-2 py-1 text-[11px] text-slate-300 transition cursor-pointer"
                                   >
-                                    <Edit className="h-3 w-3" />
+                                    <Edit className="h-3 w-3" aria-hidden="true" />
                                     <span>แก้ตัวเลข</span>
                                   </button>
                                   {r.water_level_cm === 0 && meta.waterLevelKnown !== false && (
@@ -998,7 +999,7 @@ export function IncidentRegistryTab({
                                   setNewWaterLevel(r.water_level_cm);
                                   setNewTrafficStatus(r.traffic_status);
                                 }}
-                                className="min-h-9 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1 shadow transition whitespace-nowrap cursor-pointer"
+                                className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-2.5 py-2 rounded-lg text-xs flex items-center gap-1 shadow transition whitespace-nowrap cursor-pointer"
                                 title="อัปเดตระดับน้ำและสถานะจราจรด่วน"
                               >
                                 ⚡ อัปเดตด่วน
@@ -1006,21 +1007,21 @@ export function IncidentRegistryTab({
                               <button
                                 type="button"
                                 onClick={() => onEditFlood(r.id)}
-                                className="min-h-9 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-300 px-2.5 py-1.5 rounded-lg text-xs font-heading font-semibold transition whitespace-nowrap cursor-pointer"
+                                className="min-h-10 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-300 px-2.5 py-2 rounded-lg text-xs font-heading font-semibold transition whitespace-nowrap cursor-pointer"
                               >
                                 แก้ไข
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setViewingIncident(r)}
-                                className="min-h-9 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-100 hover:bg-slate-700 whitespace-nowrap cursor-pointer"
+                                className="min-h-10 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-700 whitespace-nowrap cursor-pointer"
                               >
                                 รายละเอียด
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleToggleIncidentStatus(r.id, r.is_active)}
-                                className={`min-h-9 px-2.5 py-1.5 rounded-lg text-xs font-heading font-semibold transition border whitespace-nowrap cursor-pointer ${r.is_active
+                                className={`min-h-10 px-2.5 py-2 rounded-lg text-xs font-heading font-semibold transition border whitespace-nowrap cursor-pointer ${r.is_active
                                     ? "bg-slate-800 text-slate-300 hover:bg-emerald-950 hover:text-emerald-300 border-slate-700"
                                     : "bg-emerald-950 text-emerald-300 hover:bg-emerald-900 border-emerald-700"
                                   }`}
@@ -1038,10 +1039,10 @@ export function IncidentRegistryTab({
                                   setSplitNewWaterLevel(Math.max(0, Math.round(r.water_level_cm / 2)));
                                   setSplitNewTrafficStatus(r.traffic_status);
                                 }}
-                                className="min-h-9 bg-sky-950/70 hover:bg-sky-900 text-sky-300 border border-sky-800/80 px-2.5 py-1.5 rounded-lg text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap cursor-pointer"
+                                className="min-h-10 bg-sky-950/70 hover:bg-sky-900 text-sky-300 border border-sky-800/80 px-2.5 py-2 rounded-lg text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap cursor-pointer"
                                 title="แบ่งช่วง กม. นี้ออกเป็น ๒ ช่วงย่อย"
                               >
-                                <Split className="w-3.5 h-3.5" /> แบ่งช่วง
+                                <Split className="w-3.5 h-3.5" aria-hidden="true" /> แบ่งช่วง
                               </button>
                               <button
                                 type="button"
@@ -1049,18 +1050,19 @@ export function IncidentRegistryTab({
                                   setMergeModalIncident(r);
                                   setTargetMergeIncidentId("");
                                 }}
-                                className="min-h-9 bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 border border-indigo-800/80 px-2.5 py-1.5 rounded-lg text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap cursor-pointer"
+                                className="min-h-10 bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 border border-indigo-800/80 px-2.5 py-2 rounded-lg text-xs font-heading font-bold flex items-center gap-1 transition whitespace-nowrap cursor-pointer"
                                 title="รวมช่วง กม. นี้เข้ากับช่วงย่อยอื่นในสายทางเดียวกัน"
                               >
-                                <Merge className="w-3.5 h-3.5" /> รวมช่วง
+                                <Merge className="w-3.5 h-3.5" aria-hidden="true" /> รวมช่วง
                               </button>
                               <button
                                 type="button"
+                                aria-label="ลบช่วงนี้ (กู้คืนได้)"
                                 onClick={() => handleDeleteRoute(r.id)}
-                                className="min-h-9 min-w-9 flex items-center justify-center bg-red-950/70 hover:bg-red-800 text-red-300 p-1.5 rounded-lg text-xs transition border border-red-900/50 cursor-pointer"
+                                className="min-h-10 min-w-10 flex items-center justify-center bg-red-950/70 hover:bg-red-800 text-red-300 p-2 rounded-lg text-xs transition border border-red-900/50 cursor-pointer"
                                 title="ลบช่วงนี้ (กู้คืนได้)"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                               </button>
                             </div>
                           </div>
@@ -1080,7 +1082,7 @@ export function IncidentRegistryTab({
           <div ref={viewingDialog.dialogRef} role="dialog" aria-modal="true" aria-label="รายละเอียดเหตุการณ์" tabIndex={-1} onKeyDown={viewingDialog.onKeyDown} className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 border-b border-slate-700 pb-3">
               <div><p className="text-xs font-semibold text-amber-300">ทล.{viewingIncident.route_no}</p><h3 className="text-lg font-semibold text-white">{viewingIncident.section_name}</h3></div>
-              <button type="button" onClick={() => setViewingIncident(null)} className="rounded-lg p-2 text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer" aria-label="ปิดรายละเอียด">×</button>
+              <button type="button" onClick={() => setViewingIncident(null)} className="min-h-10 min-w-10 flex items-center justify-center rounded-lg p-2 text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer" aria-label="ปิดรายละเอียด">×</button>
             </div>
 
             {viewingIncident.latest_photo_url && (
@@ -1199,8 +1201,8 @@ export function IncidentRegistryTab({
             })()}
 
             <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <button type="button" onClick={() => { setViewingIncident(null); onEditFlood(viewingIncident.id); }} className="rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-heading font-bold text-slate-950 transition cursor-pointer">แก้ไขข้อมูลบนแผนที่</button>
-              <button type="button" onClick={() => { setViewingIncident(null); handleDeleteRoute(viewingIncident.id); }} className="rounded-xl border border-rose-500/60 bg-rose-950/40 hover:bg-rose-900 px-4 py-2 text-xs font-heading font-bold text-rose-300 transition cursor-pointer">ลบ</button>
+              <button type="button" onClick={() => { setViewingIncident(null); onEditFlood(viewingIncident.id); }} className="min-h-10 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-heading font-bold text-slate-950 transition cursor-pointer">แก้ไขข้อมูลบนแผนที่</button>
+              <button type="button" onClick={() => { setViewingIncident(null); handleDeleteRoute(viewingIncident.id); }} className="min-h-10 rounded-xl border border-rose-500/60 bg-rose-950/40 hover:bg-rose-900 px-4 py-2 text-xs font-heading font-bold text-rose-300 transition cursor-pointer">ลบ</button>
             </div>
           </div>
         </div>
@@ -1216,12 +1218,13 @@ export function IncidentRegistryTab({
             <div className="space-y-3">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-slate-300">ระดับน้ำใหม่ (ซม.) *</label>
+                  <label htmlFor="quick-update-water-level" className="text-xs text-slate-300">ระดับน้ำใหม่ (ซม.) *</label>
                   <span className="text-xs text-slate-400">
                     เดิม: <strong className="text-amber-300">{updateModalIncident.water_level_cm} ซม.</strong>
                   </span>
                 </div>
                 <input
+                  id="quick-update-water-level"
                   type="number"
                   min={0}
                   value={newWaterLevel}
@@ -1241,8 +1244,9 @@ export function IncidentRegistryTab({
                 )}
               </div>
               <div>
-                <label className="text-xs text-slate-300 block mb-1">สถานะการจราจร (เจ้าหน้าที่ยืนยัน) *</label>
+                <label htmlFor="quick-update-traffic-status" className="text-xs text-slate-300 block mb-1">สถานะการจราจร (เจ้าหน้าที่ยืนยัน) *</label>
                 <select
+                  id="quick-update-traffic-status"
                   value={newTrafficStatus}
                   onChange={(e) => setNewTrafficStatus(e.target.value as FloodRoute["traffic_status"])}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
@@ -1253,8 +1257,9 @@ export function IncidentRegistryTab({
                 </select>
               </div>
               <div>
-                <label className="text-xs text-slate-300">หมายเหตุ / มาตรการความปลอดภัย</label>
+                <label htmlFor="quick-update-note" className="text-xs text-slate-300">หมายเหตุ / มาตรการความปลอดภัย</label>
                 <input
+                  id="quick-update-note"
                   type="text"
                   value={updateNote}
                   onChange={(e) => setUpdateNote(e.target.value)}
@@ -1267,7 +1272,7 @@ export function IncidentRegistryTab({
               <button
                 type="button"
                 onClick={() => setUpdateModalIncident(null)}
-                className="bg-slate-800 text-slate-300 px-3.5 py-2 rounded-xl text-xs"
+                className="min-h-10 bg-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs"
               >
                 ยกเลิก
               </button>
@@ -1275,7 +1280,7 @@ export function IncidentRegistryTab({
                 type="button"
                 disabled={isSubmitting}
                 onClick={handleSubmitQuickUpdate}
-                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-4 py-2 rounded-xl text-xs shadow"
+                className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-4 py-2 rounded-xl text-xs shadow"
               >
                 บันทึกการอัปเดต
               </button>
@@ -1290,7 +1295,7 @@ export function IncidentRegistryTab({
           <div ref={splitDialog.dialogRef} role="dialog" aria-modal="true" aria-label="แบ่งช่วงกิโลเมตรน้ำท่วม" tabIndex={-1} onKeyDown={splitDialog.onKeyDown} className="bg-slate-900 border-2 border-sky-400/80 rounded-2xl p-5 max-w-md w-full space-y-4 shadow-2xl animate-scale-up">
             <div className="border-b border-slate-800 pb-2">
               <h3 className="font-heading font-bold text-sm text-white flex items-center gap-1.5">
-                <Split className="w-4 h-4 text-sky-400" /> แบ่งช่วงกิโลเมตรน้ำท่วม (Split Segment)
+                <Split className="w-4 h-4 text-sky-400" aria-hidden="true" /> แบ่งช่วงกิโลเมตรน้ำท่วม (Split Segment)
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
                 ทล.{splitModalIncident.route_no} {splitModalIncident.section_name} (เดิม: กม.{splitModalIncident.km_start} - {splitModalIncident.km_end})
@@ -1299,8 +1304,9 @@ export function IncidentRegistryTab({
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="text-slate-300 block mb-1">หลักกิโลเมตรจุดตัดแบ่งช่วง (Split KM) *</label>
+                <label htmlFor="split-km-input" className="text-slate-300 block mb-1">หลักกิโลเมตรจุดตัดแบ่งช่วง (Split KM) *</label>
                 <input
+                  id="split-km-input"
                   type="text"
                   value={splitKm}
                   onChange={(e) => setSplitKm(e.target.value)}
@@ -1314,8 +1320,9 @@ export function IncidentRegistryTab({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-slate-300 block mb-1">ระดับน้ำช่วงที่ ๒ (ซม.)</label>
+                  <label htmlFor="split-water-level-input" className="text-slate-300 block mb-1">ระดับน้ำช่วงที่ ๒ (ซม.)</label>
                   <input
+                    id="split-water-level-input"
                     type="number"
                     min={0}
                     value={splitNewWaterLevel}
@@ -1330,8 +1337,9 @@ export function IncidentRegistryTab({
                   />
                 </div>
                 <div>
-                  <label className="text-slate-300 block mb-1">สถานะจราจรช่วงที่ ๒</label>
+                  <label htmlFor="split-traffic-status-select" className="text-slate-300 block mb-1">สถานะจราจรช่วงที่ ๒</label>
                   <select
+                    id="split-traffic-status-select"
                     value={splitNewTrafficStatus}
                     onChange={(e) => setSplitNewTrafficStatus(e.target.value as FloodRoute["traffic_status"])}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2 py-2 text-white text-xs"
@@ -1348,7 +1356,7 @@ export function IncidentRegistryTab({
               <button
                 type="button"
                 onClick={() => setSplitModalIncident(null)}
-                className="bg-slate-800 text-slate-300 px-3.5 py-2 rounded-xl text-xs"
+                className="min-h-10 bg-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs"
               >
                 ยกเลิก
               </button>
@@ -1356,7 +1364,7 @@ export function IncidentRegistryTab({
                 type="button"
                 disabled={isSubmitting || !splitKm.trim()}
                 onClick={handleSplitSegment}
-                className="bg-sky-500 hover:bg-sky-400 text-slate-950 font-heading font-bold px-4 py-2 rounded-xl text-xs shadow disabled:opacity-50"
+                className="min-h-10 bg-sky-500 hover:bg-sky-400 text-slate-950 font-heading font-bold px-4 py-2 rounded-xl text-xs shadow disabled:opacity-50"
               >
                 ยืนยันการแบ่งช่วง
               </button>
@@ -1432,7 +1440,7 @@ export function IncidentRegistryTab({
                   setMergeModalIncident(null);
                   setTargetMergeIncidentId("");
                 }}
-                className="bg-slate-800 text-slate-300 px-3.5 py-2 rounded-xl text-xs"
+                className="min-h-10 bg-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs"
               >
                 ยกเลิก
               </button>
@@ -1440,7 +1448,7 @@ export function IncidentRegistryTab({
                 type="button"
                 disabled={isSubmitting || !targetMergeIncidentId}
                 onClick={handleMergeSegments}
-                className="bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-heading font-bold px-4 py-2 rounded-xl text-xs shadow disabled:opacity-50"
+                className="min-h-10 bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-heading font-bold px-4 py-2 rounded-xl text-xs shadow disabled:opacity-50"
               >
                 ยืนยันการรวมช่วง
               </button>

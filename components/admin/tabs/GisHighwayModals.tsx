@@ -91,17 +91,18 @@ export function HighwaySpecsEditModal({
             type="button"
             onClick={() => setEditingRouteSpecs(null)}
             aria-label="ปิดหน้าต่างแก้ไขคุณสมบัติ"
-            className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800"
+            className="min-h-10 min-w-10 flex items-center justify-center p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         <div className="space-y-3 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="text-slate-300 block mb-1">หมายเลขทางหลวง *</label>
+              <label htmlFor="specs-route-no" className="text-slate-300 block mb-1">หมายเลขทางหลวง *</label>
               <input
+                id="specs-route-no"
                 type="text"
                 value={editingRouteSpecs.routeNo}
                 onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, routeNo: e.target.value })}
@@ -109,8 +110,9 @@ export function HighwaySpecsEditModal({
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="text-slate-300 block mb-1">ชื่อสายทาง / ตอนควบคุม *</label>
+              <label htmlFor="specs-section-name" className="text-slate-300 block mb-1">ชื่อสายทาง / ตอนควบคุม *</label>
               <input
+                id="specs-section-name"
                 type="text"
                 value={editingRouteSpecs.sectionName}
                 onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, sectionName: e.target.value })}
@@ -121,8 +123,9 @@ export function HighwaySpecsEditModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="text-slate-300 block mb-1">กม.เริ่มต้น</label>
+              <label htmlFor="specs-km-start" className="text-slate-300 block mb-1">กม.เริ่มต้น</label>
               <input
+                id="specs-km-start"
                 type="text"
                 aria-label="กม.เริ่มต้น"
                 value={editingRouteSpecs.kmStart}
@@ -144,8 +147,9 @@ export function HighwaySpecsEditModal({
               />
             </div>
             <div>
-              <label className="text-slate-300 block mb-1">กม.สิ้นสุด</label>
+              <label htmlFor="specs-km-end" className="text-slate-300 block mb-1">กม.สิ้นสุด</label>
               <input
+                id="specs-km-end"
                 type="text"
                 aria-label="กม.สิ้นสุด"
                 value={editingRouteSpecs.kmEnd}
@@ -167,8 +171,9 @@ export function HighwaySpecsEditModal({
               />
             </div>
             <div>
-              <label className="text-slate-300 block mb-1">ระยะทาง (กม.) · คำนวณอัตโนมัติ</label>
+              <label htmlFor="specs-length-km" className="text-slate-300 block mb-1">ระยะทาง (กม.) · คำนวณอัตโนมัติ</label>
               <input
+                id="specs-length-km"
                 type="number"
                 step="any"
                 value={editingRouteSpecs.lengthKm}
@@ -182,10 +187,11 @@ export function HighwaySpecsEditModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-slate-300 block mb-1">
+              <label htmlFor="specs-lanes" className="text-slate-300 block mb-1">
                 จำนวนช่องจราจร (มีผลต่อความหนาเส้นบนแผนที่) *
               </label>
               <select
+                id="specs-lanes"
                 value={editingRouteSpecs.lanes}
                 onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, lanes: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sky-300 font-heading font-medium"
@@ -198,8 +204,9 @@ export function HighwaySpecsEditModal({
               </select>
             </div>
             <div>
-              <label className="text-slate-300 block mb-1">ชนิดผิวจราจร</label>
+              <label htmlFor="specs-surface" className="text-slate-300 block mb-1">ชนิดผิวจราจร</label>
               <select
+                id="specs-surface"
                 value={editingRouteSpecs.surface}
                 onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, surface: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-amber-300"
@@ -213,8 +220,9 @@ export function HighwaySpecsEditModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-slate-300 block mb-1">หน่วยงานที่รับผิดชอบ *</label>
+              <label htmlFor="specs-office" className="text-slate-300 block mb-1">หน่วยงานที่รับผิดชอบ *</label>
               <select
+                id="specs-office"
                 value={editingRouteSpecs.responsibleOffice}
                 onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, responsibleOffice: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
@@ -227,8 +235,9 @@ export function HighwaySpecsEditModal({
               </select>
             </div>
             <div>
-              <label className="text-slate-300 block mb-1">ประเภททางหลวง</label>
+              <label htmlFor="specs-highway-type" className="text-slate-300 block mb-1">ประเภททางหลวง</label>
               <select
+                id="specs-highway-type"
                 value={editingRouteSpecs.highwayType}
                 onChange={(e: any) => setEditingRouteSpecs({ ...editingRouteSpecs, highwayType: e.target.value })}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
@@ -240,8 +249,9 @@ export function HighwaySpecsEditModal({
           </div>
 
           <div>
-            <label className="text-slate-300 block mb-1">หมายเหตุ</label>
+            <label htmlFor="specs-remarks" className="text-slate-300 block mb-1">หมายเหตุ</label>
             <input
+              id="specs-remarks"
               type="text"
               value={editingRouteSpecs.remarks}
               onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, remarks: e.target.value })}
@@ -260,6 +270,7 @@ export function HighwaySpecsEditModal({
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
+                aria-label="แสดงผลบนแผนที่"
                 checked={editingRouteSpecs.isVisible}
                 onChange={(e) => setEditingRouteSpecs({ ...editingRouteSpecs, isVisible: e.target.checked })}
                 className="sr-only peer"
@@ -273,16 +284,16 @@ export function HighwaySpecsEditModal({
           <button
             type="button"
             onClick={() => setEditingRouteSpecs(null)}
-            className="bg-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs hover:bg-slate-700 transition"
+            className="min-h-10 bg-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs hover:bg-slate-700 transition"
           >
             ยกเลิก
           </button>
           <button
             type="button"
             onClick={onSave}
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-5 py-2 rounded-xl text-xs shadow-lg transition flex items-center gap-1.5"
+            className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-5 py-2 rounded-xl text-xs shadow-lg transition flex items-center gap-1.5"
           >
-            <Save className="w-4 h-4" /> บันทึกคุณสมบัติทางวิศวกรรม
+            <Save className="w-4 h-4" aria-hidden="true" /> บันทึกคุณสมบัติทางวิศวกรรม
           </button>
         </div>
       </div>
@@ -333,9 +344,9 @@ export function HighwayRouteDetailModal({
             type="button"
             aria-label="ปิดรายละเอียด"
             onClick={() => setSelectedRoute(null)}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition"
+            className="min-h-10 min-w-10 flex items-center justify-center rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -384,7 +395,7 @@ export function HighwayRouteDetailModal({
         <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
           <button
             type="button"
-            className="flex-1 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2.5 text-xs font-bold font-heading text-slate-950 transition shadow-md"
+            className="min-h-10 flex-1 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2.5 text-xs font-bold font-heading text-slate-950 transition shadow-md"
             onClick={() => {
               setSelectedRoute(null);
               setEditingRouteSpecs({
@@ -399,7 +410,7 @@ export function HighwayRouteDetailModal({
           </button>
           <button
             type="button"
-            className="flex-1 rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-2.5 text-xs font-bold font-heading text-slate-200 transition border border-slate-700"
+            className="min-h-10 flex-1 rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-2.5 text-xs font-bold font-heading text-slate-200 transition border border-slate-700"
             onClick={() => {
               setSelectedRoute(null);
               openGeometryEditor(item.layerId, item.featureIdx);
@@ -409,7 +420,7 @@ export function HighwayRouteDetailModal({
           </button>
           <button
             type="button"
-            className="rounded-xl bg-rose-950/80 hover:bg-rose-900 px-4 py-2.5 text-xs font-bold font-heading text-rose-300 transition border border-rose-800/60"
+            className="min-h-10 rounded-xl bg-rose-950/80 hover:bg-rose-900 px-4 py-2.5 text-xs font-bold font-heading text-rose-300 transition border border-rose-800/60"
             onClick={() => {
               setSelectedRoute(null);
               handleDeleteHighwayFeature(item.layerId, item.featureIdx, `ทล.${item.routeNo} ${item.sectionName}`);
@@ -526,9 +537,9 @@ export function HighwayGeometryEditorPanel({
             type="button"
             aria-label="ปิดตัวแก้ไขแนวถนน"
             onClick={closeGeometryEditor}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+            className="min-h-10 min-w-10 flex items-center justify-center rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
         <div className="flex rounded-xl border border-slate-700 bg-slate-900 p-1 text-xs" role="group" aria-label="โหมดแก้ไขแนวถนน">
