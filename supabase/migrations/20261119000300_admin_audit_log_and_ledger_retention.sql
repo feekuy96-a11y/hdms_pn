@@ -13,13 +13,12 @@
 --   - งานลบข้อมูลเก่าจะแตะเฉพาะ doh_external_jobs ที่ status = 'done' เท่านั้น (ไม่แตะ pending/processing/failed)
 --
 -- แผนย้อนกลับ (Rollback):
+--   Safe rollback (คงหลักฐาน audit ไว้):
 --   select cron.unschedule('hdms-prune-operational-ledgers');
 --   drop trigger if exists trg_doh_audit_flood_routes on public.doh_flood_routes;
 --   drop trigger if exists trg_doh_audit_detour_routes on public.doh_detour_routes;
 --   drop trigger if exists trg_doh_audit_highway_layers on public.doh_highway_layers;
---   drop function if exists public.doh_record_admin_audit_log();
---   drop function if exists public.doh_prune_operational_ledgers(integer, integer, integer);
---   drop table if exists public.doh_admin_audit_log;
+--   Full removal ต้อง export doh_admin_audit_log ก่อน แล้วจึง drop function/table ที่เพิ่มใน migration นี้
 
 -- 1. Admin Audit Log Table (service_role only; zero public/anon exposure)
 create table if not exists public.doh_admin_audit_log (
@@ -29,7 +28,7 @@ create table if not exists public.doh_admin_audit_log (
   op text not null check (op in ('INSERT', 'UPDATE', 'DELETE')),
   old_row jsonb,
   new_row jsonb,
-  actor text not null default current_user,
+  actor text not null default 'system:unknown',
   changed_at timestamptz not null default now()
 );
 
@@ -38,6 +37,10 @@ create index if not exists doh_admin_audit_log_changed_at_idx
 
 create index if not exists doh_admin_audit_log_target_idx
   on public.doh_admin_audit_log (table_name, record_id, changed_at desc);
+
+create index if not exists doh_external_jobs_done_updated_idx
+  on public.doh_external_jobs (updated_at)
+  where status = 'done';
 
 alter table public.doh_admin_audit_log enable row level security;
 revoke all on public.doh_admin_audit_log from public, anon, authenticated;
@@ -54,6 +57,7 @@ declare
   v_old jsonb;
   v_new jsonb;
   v_record_id text;
+  v_actor text;
 begin
   if tg_op in ('UPDATE', 'DELETE') then
     v_old := to_jsonb(old);
@@ -73,10 +77,21 @@ begin
     return new;
   end if;
 
-  v_record_id := coalesce(v_new ->> 'id', v_old ->> 'id', '');
+  if tg_table_name = 'doh_highway_layers' then
+    v_record_id := coalesce(v_new ->> 'layer_id', v_old ->> 'layer_id', '');
+  else
+    v_record_id := coalesce(v_new ->> 'id', v_old ->> 'id', '');
+  end if;
+
+  -- SECURITY DEFINER ทำให้ current_user เป็นเจ้าของฟังก์ชันเสมอ จึงบันทึก JWT subject
+  -- ของคำขอแทน; การแก้จาก SQL Editor ที่ไม่มี JWT จะระบุอย่างซื่อตรงว่าเป็น system actor.
+  v_actor := coalesce(
+    nullif(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', ''),
+    'system:database'
+  );
 
   insert into public.doh_admin_audit_log (table_name, record_id, op, old_row, new_row, actor)
-  values (tg_table_name, v_record_id, tg_op, v_old, v_new, current_user);
+  values (tg_table_name, v_record_id, tg_op, v_old, v_new, v_actor);
 
   if tg_op = 'DELETE' then
     return old;
@@ -102,7 +117,47 @@ create trigger trg_doh_audit_highway_layers
   after insert or update or delete on public.doh_highway_layers
   for each row execute function public.doh_record_admin_audit_log();
 
--- 3. Operational Ledger & Audit Retention Function (B-024)
+-- 3. Read-only Retention Preflight (run and record counts before enabling the cron schedule)
+create or replace function public.doh_preview_operational_ledger_prune(
+  p_ops_days integer default 90,
+  p_jobs_days integer default 90,
+  p_audit_days integer default 180
+)
+returns jsonb
+language sql
+security definer
+set search_path = public, pg_temp
+as $$
+  with bounds as (
+    select
+      greatest(coalesce(p_ops_days, 90), 7) as ops_days,
+      greatest(coalesce(p_jobs_days, 90), 7) as jobs_days,
+      greatest(coalesce(p_audit_days, 180), 30) as audit_days
+  )
+  select jsonb_build_object(
+    'eventDetourOperations', (
+      select count(*) from public.doh_event_detour_operations, bounds
+      where created_at < now() - make_interval(days => bounds.ops_days)
+    ),
+    'completedExternalJobs', (
+      select count(*) from public.doh_external_jobs, bounds
+      where status = 'done'
+        and updated_at < now() - make_interval(days => bounds.jobs_days)
+    ),
+    'auditLogs', (
+      select count(*) from public.doh_admin_audit_log, bounds
+      where changed_at < now() - make_interval(days => bounds.audit_days)
+    ),
+    'opsRetentionDays', (select ops_days from bounds),
+    'jobsRetentionDays', (select jobs_days from bounds),
+    'auditRetentionDays', (select audit_days from bounds),
+    'checkedAt', now()
+  );
+$$;
+
+revoke all on function public.doh_preview_operational_ledger_prune(integer, integer, integer) from public, anon, authenticated;
+
+-- 4. Operational Ledger & Audit Retention Function (B-024)
 create or replace function public.doh_prune_operational_ledgers(
   p_ops_days integer default 90,
   p_jobs_days integer default 90,
@@ -149,19 +204,29 @@ $$;
 revoke all on function public.doh_prune_operational_ledgers(integer, integer, integer) from public, anon, authenticated;
 grant execute on function public.doh_prune_operational_ledgers(integer, integer, integer) to service_role;
 
--- 4. Daily Off-Peak Cron Schedule (20:15 UTC = 03:15 ICT)
+-- 5. Daily Off-Peak Cron Schedule (20:15 UTC = 03:15 ICT)
+-- The job is created inactive. Before activation, record the result of:
+-- select public.doh_preview_operational_ledger_prune(90, 90, 180);
+-- Then, after owner approval, activate it with:
+-- select cron.alter_job(
+--   (select jobid from cron.job where jobname = 'hdms-prune-operational-ledgers'),
+--   active := true
+-- );
 create extension if not exists pg_cron with schema pg_catalog;
 
 do $$
+declare
+  v_job_id bigint;
 begin
   if exists (select 1 from cron.job where jobname = 'hdms-prune-operational-ledgers') then
     perform cron.unschedule('hdms-prune-operational-ledgers');
   end if;
+
+  v_job_id := cron.schedule(
+    'hdms-prune-operational-ledgers',
+    '15 20 * * *',
+    $job$select public.doh_prune_operational_ledgers(90, 90, 180);$job$
+  );
+  perform cron.alter_job(v_job_id, active := false);
 end;
 $$;
-
-select cron.schedule(
-  'hdms-prune-operational-ledgers',
-  '15 20 * * *',
-  $job$select public.doh_prune_operational_ledgers(90, 90, 180);$job$
-);

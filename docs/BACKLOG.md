@@ -18,7 +18,7 @@
 | B-011 | กลาง | e2e ยังไม่ครอบคลุมฟีเจอร์ใหม่ (ตัวแก้ไขเส้นอิสระ, แถบสรุป, bottom sheet) | ปิดบางส่วน (เพิ่ม detour-navigation.spec.ts 12 ข้อใน UPDATE-066; เพิ่ม compact-card-detour-accordion.spec.ts ครอบคลุมแถบสรุปสถานการณ์/Route Chips/ตัวกรอง ใน UPDATE-132) |
 | B-012 | ต่ำ | `reactStrictMode: false` ซ่อนบั๊ก cleanup ของ effect | ปิด (2026-11-16, UPDATE-096) |
 | B-013 | ต่ำ | ข้อจำกัด Google Maps Universal URL Waypoints ไม่เกิน 8-9 จุด | ปิดบางส่วน (อัปเกรด `sampleWaypointsForGoogleMaps` เป็นคัดจุดหักเลี้ยว Douglas-Peucker ≤ 8 จุดตามลำดับเส้นทางจริง) |
-| B-014 | **วิกฤต** | Edge Function Production v9 ไม่ส่งค่าฝั่งถนน/ช่องจราจร/ทิศทางไปยัง DB (ตรวจอ่านอย่างเดียว 2026-11-11) | เปิด: แก้ source แล้ว ต้อง Security Review + deploy และทดสอบ staging |
+| B-014 | **วิกฤต** | Edge Function Production v9 ไม่ส่งค่าฝั่งถนน/ช่องจราจร/ทิศทางไปยัง DB (ตรวจอ่านอย่างเดียว 2026-11-11) | ปิด (2026-11-19, UPDATE-142): ยืนยัน Production `hdms-api` v24 เป็น ACTIVE และสกัดนิยาม RPC จริงไว้ใน `docs/db-schema-snapshot.md` |
 | B-015 | สูง | Phase 6 ยังไม่ผ่าน Build/E2E/CRUD integration บน staging เพราะ dependencies ในสภาพแวดล้อมทดสอบไม่ครบ | ปิด (2026-11-11, ดู UPDATE-070: Playwright E2E 46 passed, lint 0 warnings, typecheck 0 errors, build:pages 6/6 ผ่านสมบูรณ์) |
 | B-016 | กลาง | ตราครุฑทางการสำหรับป้ายทางหลวงยังไม่มี Asset ที่ผ่านอนุมัติ | เปิด |
 | B-017 | ต่ำ | รัน Playwright ในเครื่องโดยไม่ build พร้อม public config ทำให้หน้า public ค้าง Loading และ test ที่ mock Edge Function ล้ม | ปิด (2026-11-12, UPDATE-074) |
@@ -28,7 +28,7 @@
 | B-021 | กลาง | ตั้ง schedule อิสระสำหรับคิวส่ง Drive/Sheets และหน้าตรวจงานที่ `failed` | ปิด (2026-11-16) — Cron, Edge v17 และหน้า Admin deploy แล้ว; Production read + live browser ผ่าน |
 | B-022 | สูง | Apps Script Web App ที่ใช้งานจริงอาจยังเป็น source เวอร์ชันก่อน idempotency/stale-write guard | กำลังทำ (Web App ยืนยันแล้ว; เหลือเปลี่ยน Edge secret URL) |
 | B-023 | สูง | Cutover ความสัมพันธ์ Flood Event ↔ Detour หลายต่อหลายจาก legacy field | ปิด (2026-11-19, ดู UPDATE-122) |
-| B-024 | กลาง | Event–Detour operation ledger ไม่มีนโยบาย retention/archival | กำลังทำ (ร่าง migration `20261119000300_admin_audit_log_and_ledger_retention.sql` แล้วใน UPDATE-138; รอเจ้าของ apply บน Production) |
+| B-024 | กลาง | Event–Detour operation ledger ไม่มีนโยบาย retention/archival | กำลังทำ (ปรับ migration `20261119000300_admin_audit_log_and_ledger_retention.sql` ใน UPDATE-143: มี preflight และ partial index; รอเจ้าของตรวจจำนวนแถวและ apply บน Production) |
 | B-025 | กลาง | ช่องฟอร์มย่อยและปุ่มลบใน `MapManagementTab` (`HighwayIdentificationSection`/`FloodSituationSection`), `IncidentRegistryTab`, `GisHighwayModals`, `DetourAdviceSection`, โมดัล `DetourManagementTab` ขาด `htmlFor`/`aria-label` และมีปุ่ม `32–34px` รวมถึง `min-h-screen` บนเดสก์ท็อป | ปิดแล้ว (2026-11-19, ดู UPDATE-134 และ UPDATE-135) — ผ่าน `check:deploy` + Playwright static `106 passed` (44 skipped) และ audit ครบทุกโมดัล |
 
 ## B-022 [สูง] Publish Apps Script source สำหรับ outbox idempotency

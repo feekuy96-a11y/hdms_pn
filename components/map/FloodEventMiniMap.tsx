@@ -84,10 +84,10 @@ export function FloodEventMiniMap({ flood }: { flood: FloodRoute }) {
       const pinIcon = L.divIcon({
         html: `
           <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);">
-            <div style="width:26px;height:26px;border-radius:9999px;background:#ef4444;border:2.5px solid #ffffff;box-shadow:0 4px 10px rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;">
-              <div style="width:8px;height:8px;border-radius:9999px;background:#ffffff;"></div>
+            <div style="width:1.625rem;height:1.625rem;border-radius:9999px;background:#ef4444;border:2.5px solid #ffffff;box-shadow:0 4px 10px rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;">
+              <div style="width:0.5rem;height:0.5rem;border-radius:9999px;background:#ffffff;"></div>
             </div>
-            ${cleanRoute ? `<span style="margin-top:2px;padding:1px 6px;border-radius:6px;background:#0f172a;border:1px solid #f59e0b;color:#fde68a;font-size:10px;font-weight:800;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.6);">${cleanRoute}</span>` : ""}
+            ${cleanRoute ? `<span style="margin-top:0.167em;padding:0.083em 0.5em;border-radius:0.375rem;background:#0f172a;border:1px solid #f59e0b;color:#fde68a;font-size:0.75rem;font-weight:800;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.6);">${cleanRoute}</span>` : ""}
           </div>
         `,
         className: "doh-flood-minimap-pin",

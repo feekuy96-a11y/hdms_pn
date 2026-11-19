@@ -85,7 +85,7 @@
   background: #090d16 !important;
   color: #f8fafc !important;
   border: 1px solid #d97706 !important;
-  border-radius: 12px !important;
+  border-radius: 0.75rem !important;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.65), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
   padding: 0 !important;
   overflow: hidden !important;
@@ -102,9 +102,9 @@
 
 .leaflet-popup-close-button {
   color: #cbd5e1 !important;
-  padding: 8px !important;
-  top: 6px !important;
-  right: 6px !important;
+  padding: 0.5rem !important;
+  top: 0.375rem !important;
+  right: 0.375rem !important;
   z-index: 20 !important;
 }
 
@@ -117,7 +117,7 @@
   background: #070d1e !important;
   color: #f8fafc !important;
   border: 1.5px solid #0369a1 !important;
-  border-radius: 24px !important;
+  border-radius: 1.5rem !important;
   padding: 0 !important;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 20px rgba(3, 105, 161, 0.25) !important;
   overflow: hidden !important;
@@ -130,12 +130,12 @@
 
 .doh-detour-leaflet-popup .leaflet-popup-close-button {
   color: #94a3b8 !important;
-  top: 12px !important;
-  right: 12px !important;
-  font-size: 18px !important;
+  top: 0.667em !important;
+  right: 0.667em !important;
+  font-size: 1.125rem !important;
   font-weight: 700 !important;
-  width: 28px !important;
-  height: 28px !important;
+  width: 1.556em !important;
+  height: 1.556em !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -156,7 +156,7 @@
   background: #081120 !important;
   color: #f8fafc !important;
   border: 1.5px solid #f59e0b !important;
-  border-radius: 22px !important;
+  border-radius: 1.375rem !important;
   padding: 0 !important;
   box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.88), 0 0 22px rgba(245, 158, 11, 0.18) !important;
   overflow: hidden !important;
@@ -169,12 +169,12 @@
 
 .doh-flood-leaflet-popup .leaflet-popup-close-button {
   color: #cbd5e1 !important;
-  top: 12px !important;
-  right: 12px !important;
-  font-size: 18px !important;
+  top: 0.667em !important;
+  right: 0.667em !important;
+  font-size: 1.125rem !important;
   font-weight: 700 !important;
-  width: 28px !important;
-  height: 28px !important;
+  width: 1.556em !important;
+  height: 1.556em !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -189,35 +189,35 @@
   background: rgba(51, 65, 85, 0.95) !important;
 }
 
-@media (max-width: 639px) {
+@media (max-width: 39.9375rem) {
   .leaflet-popup-content-wrapper {
-    max-width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 1.5rem) !important;
   }
   .leaflet-popup-content {
     width: auto !important;
-    max-width: calc(100vw - 26px) !important;
+    max-width: calc(100vw - 1.625rem) !important;
   }
   .doh-detour-leaflet-popup .leaflet-popup-content-wrapper,
   .doh-flood-leaflet-popup .leaflet-popup-content-wrapper {
-    border-radius: 16px !important;
+    border-radius: 1rem !important;
   }
   .leaflet-popup-close-button {
-    width: 44px !important;
-    height: 44px !important;
+    width: 2.75rem !important;
+    height: 2.75rem !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    top: 4px !important;
-    right: 4px !important;
-    font-size: 22px !important;
+    top: 0.25rem !important;
+    right: 0.25rem !important;
+    font-size: 1.375rem !important;
   }
   .doh-detour-leaflet-popup .leaflet-popup-close-button,
   .doh-flood-leaflet-popup .leaflet-popup-close-button {
-    top: 6px !important;
-    right: 6px !important;
-    width: 44px !important;
-    height: 44px !important;
-    font-size: 22px !important;
+    top: 0.375rem !important;
+    right: 0.375rem !important;
+    width: 2.75rem !important;
+    height: 2.75rem !important;
+    font-size: 1.375rem !important;
   }
   .doh-map-popup-open .leaflet-top.leaflet-left .leaflet-control-zoom {
     opacity: 0 !important;
@@ -345,9 +345,9 @@
   color: #f8fafc !important;
   font-family: inherit !important;
   font-weight: 700 !important;
-  font-size: 11px !important;
-  border-radius: 8px !important;
-  padding: 4px 8px !important;
+  font-size: 0.75rem !important;
+  border-radius: 0.5rem !important;
+  padding: 0.333em 0.667em !important;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
 }
 

@@ -1,5 +1,20 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน docs/archive/SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-144] 2026-11-20 ตรวจ Roadmap 3.2 และแยก coverage 4.2
+- ตรวจ source บน `origin/main` @ `ce105ab`: ปิด 3.2 จาก RAF resize scheduling, dynamic dashboard และการถอด import ที่ไม่ใช้; แยก 4.2 เป็นรายการย่อยตาม test ที่มีอยู่ พร้อมระบุว่ายังไม่ได้รันทดสอบรอบนี้
+- พัก 4.3 (login/auth) ตามคำสั่งเจ้าของ; เอกสารเท่านั้น ไม่ต้อง deploy และย้อนกลับได้ด้วยการ revert การแก้เอกสาร
+
+### [UPDATE-143] 2026-11-19 แก้ migration Admin Audit และ retention preflight [B-001, B-024]
+- **ไฟล์:** `supabase/migrations/20261119000300_admin_audit_log_and_ledger_retention.sql`, `docs/{AI_HANDOFF,BACKLOG,KNOWN_ISSUES,CHANGELOG}.md`
+- **การแก้ไข:** Audit trigger ใช้ `layer_id` สำหรับ `doh_highway_layers`; บันทึก JWT subject หรือ `system:database` แทน `current_user` ภายใน `SECURITY DEFINER`; เพิ่ม `doh_preview_operational_ledger_prune()` สำหรับนับข้อมูลก่อนลบ และ partial index `doh_external_jobs_done_updated_idx` สำหรับงาน `done` ที่ retention query ใช้; cron job ถูกสร้างแบบ inactive เพื่อให้เจ้าของตรวจ preflight ก่อนเปิดใช้
+- **ลำดับ Deploy / แผนย้อนกลับ:** ผู้ใช้ต้องรัน SQL migration ก่อน; Edge Function และเว็บไม่ต้อง deploy. จากนั้นบันทึกผล `select public.doh_preview_operational_ledger_prune(90, 90, 180);` และให้เจ้าของ activate cron job เมื่ออนุมัติแล้ว การย้อนกลับแบบปลอดภัยให้ unschedule cron และลบ trigger โดยเก็บ audit table ไว้ก่อน
+
+### [UPDATE-142] 2026-11-19 ซิงก์เอกสารสถานะ Production Edge และปิด B-014
+- **ไฟล์:** `docs/AI_HANDOFF.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/ADMIN_ROADMAP.md`, `docs/CHANGELOG.md`
+- **การแก้ไข:** อ้างอิง `docs/db-schema-snapshot.md` ซึ่งยืนยันแบบ read-only ว่า Production `hdms-api` เป็น v24, `verify_jwt: false`, สถานะ ACTIVE และเก็บนิยาม RPC ที่ deploy จริงแล้ว; ปิด B-014 และปรับแผน Phase 1.1/งานส่งต่อให้ไม่ทำซ้ำ
+- **การตรวจ:** ตรวจ cross-reference ของเอกสารทั้งหมดกับ `origin/main` @ `ce105ab` และ `docs/db-schema-snapshot.md`; ไม่ได้รัน build หรือ E2E เพราะไม่มีโค้ดหรือ test เปลี่ยน
+- **ลำดับ Deploy / แผนย้อนกลับ:** ไม่ต้อง deploy (เอกสารเท่านั้น); ย้อนกลับด้วย `git revert` commit เอกสารนี้
+
 ### [UPDATE-141] 2026-11-19 เพิ่มระบบ Draft Auto-Save และแบนเนอร์กู้คืนร่างใน `MapManagementTab` [ADMIN_ROADMAP Phase 2.4]
 - **ไฟล์:** `components/admin/tabs/map-draft-storage.ts` (ใหม่), `components/admin/tabs/MapManagementTab.tsx`
 - **การแก้ไข:**

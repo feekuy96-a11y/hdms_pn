@@ -34,8 +34,10 @@ interface WaterTimelineChartProps {
 
 export function WaterTimelineChart({ timelineUpdates, floodId }: WaterTimelineChartProps) {
   const [isMounted, setIsMounted] = React.useState(false);
+  const [chartFontSize, setChartFontSize] = React.useState(12);
   React.useEffect(() => {
     setIsMounted(true);
+    setChartFontSize(parseFloat(window.getComputedStyle(document.documentElement).fontSize) * 0.75);
   }, []);
 
   // Filter updates for this specific flood location, sorted chronologically.
@@ -85,8 +87,8 @@ export function WaterTimelineChart({ timelineUpdates, floodId }: WaterTimelineCh
           position: "top" as const,
           labels: {
             color: "#cbd5e1",
-            font: { size: 10, family: "Prompt" },
-            boxWidth: 12,
+            font: { size: chartFontSize, family: "Prompt" },
+            boxWidth: chartFontSize,
           },
         },
         tooltip: {
@@ -108,16 +110,16 @@ export function WaterTimelineChart({ timelineUpdates, floodId }: WaterTimelineCh
         y: {
           beginAtZero: true,
           grid: { color: "rgba(51, 65, 85, 0.4)" },
-          ticks: { color: "#94a3b8", font: { size: 10 } },
+          ticks: { color: "#94a3b8", font: { size: chartFontSize } },
           suggestedMax: 60,
         },
         x: {
           grid: { color: "rgba(51, 65, 85, 0.2)" },
-          ticks: { color: "#94a3b8", font: { size: 10 } },
+          ticks: { color: "#94a3b8", font: { size: chartFontSize } },
         },
       },
     }),
-    [filtered]
+    [filtered, chartFontSize]
   );
 
   if (!isMounted) {
@@ -137,7 +139,7 @@ export function WaterTimelineChart({ timelineUpdates, floodId }: WaterTimelineCh
   }
 
   return (
-    <div className="w-full h-full min-h-[170px] relative">
+    <div className="relative h-full min-h-[10.625rem] w-full">
       <Line data={data} options={options} />
     </div>
   );
