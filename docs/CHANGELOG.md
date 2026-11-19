@@ -1,5 +1,14 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน docs/archive/SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-139] 2026-11-19 ปรับชั้นฐานหน้าแอดมินเป็น Modern CSS Units (`rem`/`em`/`%`/`dvh`/`ch`) และเพิ่มปุ่มสลับ ฟอร์ม/แผนที่ บน `< lg` [ADMIN_ROADMAP Phase 3.2/3.4]
+- **ไฟล์ที่แก้:** `app/globals.css`, `components/admin/ui.tsx`, `app/admin/page.tsx`
+- **การแก้ไข:**
+  1. `app/globals.css`: แปลง container query (`31.25rem`/`31.3125rem`/`42.5rem`/`53.75rem`), `.doh-capsule-tag` และ `.doh-highway-shield` เป็น `rem`/`em` (คง `px` เฉพาะเส้นขอบ hairline และ `box-shadow`) พร้อมเพิ่ม `.doh-readable-copy { max-width: 65ch; }`
+  2. `components/admin/ui.tsx`: ปรับ `FormSection`, `ToolGroup`, `ActionButton`, `StickyActionBar` ใช้ `rem` สำหรับตัวอักษร/ความสูงขั้นต่ำ `2.5rem`, `em` สำหรับ padding/gap ในปุ่มและส่วนหัว, และ `max-w-[65ch]` สำหรับคำอธิบาย
+  3. `app/admin/page.tsx`: เปลี่ยนเป็น `min-h-dvh lg:h-dvh`, `clamp(45rem,50vw,65rem)`, `min-h-[2.5rem]` บนปุ่มหลักรวมถึง `พับแผง`, ใช้ `requestAnimationFrame` throttle event `resize` ระหว่างลากแบ่งหน้าจอ (`scheduleMapResize`), และเพิ่ม Sticky Segmented Switch `ฟอร์มข้อมูล` / `แผนที่ GIS` สำหรับ `< lg` (สลับไปแผนที่อัตโนมัติเมื่อเปิดโหมดปักหมุด `adminPickMode`)
+- **การทดสอบ:** `npm run check:deploy` ผ่าน (0 warnings, 0 errors, build 6/6); `PLAYWRIGHT_STATIC=1 npm run test:e2e` รอบเต็มผ่าน 105/106 (44 skipped, 1 timeout ชั่วคราวที่ `admin-menus.spec.ts:251` ซึ่งรันซ้ำผ่านใน `1.5s`)
+- **ลำดับ Deploy / แผนย้อนกลับ:** Deploy เฉพาะ **เว็บ**; ย้อนกลับได้ทันทีด้วย `git checkout HEAD -- app/globals.css components/admin/ui.tsx app/admin/page.tsx`
+
 ### [UPDATE-138] 2026-11-19 ร่าง SQL Migration สำหรับ Phase 1.3 (DB Audit Log) และ Phase 1.4 (Ledger Retention 90 วัน) [B-001, B-024]
 - **ไฟล์ใหม่:** `supabase/migrations/20261119000300_admin_audit_log_and_ledger_retention.sql`
 - **รายละเอียด:**

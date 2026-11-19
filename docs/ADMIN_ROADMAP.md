@@ -67,9 +67,9 @@
 
 ### Phase 3: Frontend State & Modular Refactoring
 - [ ] `3.1` แยก State 20+ ตัวจาก `app/admin/page.tsx` เป็น Scoped Contexts/Hooks (`MapInteractionContext`, `AdminLayoutState`, `useToastQueue`)
-- [ ] `3.2` แก้ `resize` storm ใน `moveWorkspaceDrag` ด้วย `requestAnimationFrame`/`ResizeObserver`, ย้าย `ExecutiveDashboard` เป็น `next/dynamic`, ลบ unused import `createClient`
+- [ ] `3.2` แก้ `resize` storm ใน `moveWorkspaceDrag` ด้วย `requestAnimationFrame` (*ทำแล้วใน UPDATE-139*), ย้าย `ExecutiveDashboard` เป็น `next/dynamic`, ลบ unused import `createClient`
 - [ ] `3.3` แตกไฟล์ > 1,200 บรรทัด (`MapManagementTab`, `DetourManagementTab`, `IncidentRegistryTab`, `EventDetourLinkModal`) ให้แต่ละไฟล์ ≤ ~800 บรรทัด โดยคง DOM/E2E selector ครบ 100% (`R7`)
-- [ ] `3.4` ปรับปุ่มปฏิบัติการหลักที่ยัง `< 40px` (`เส้นน้ำท่วม`/`ทางเลี่ยง`, Combobox `หมายเลขทางหลวง`, `พับแผง`, `วิเคราะห์คำแนะนำ`) เป็น `min-h-10` และเพิ่ม Sticky Switch "ฟอร์ม / แผนที่" สำหรับ `< lg`
+- [ ] `3.4` ปรับปุ่มปฏิบัติการหลักที่ยัง `< 40px` (`พับแผง` และชั้นฐาน `ui.tsx`/`page.tsx` *ทำแล้วใน UPDATE-139*; เหลือปุ่ม `เส้นน้ำท่วม`/`ทางเลี่ยง`, Combobox `หมายเลขทางหลวง`, `วิเคราะห์คำแนะนำ`) และเพิ่ม Sticky Switch "ฟอร์ม / แผนที่" สำหรับ `< lg` (*ทำแล้วใน UPDATE-139*)
 
 ### Phase 4: Field Observability, E2E Stability & Auth Readiness
 - [ ] `4.1` เพิ่ม `?debugPerf=1` telemetry mode เก็บตัวเลข canvas/handles/API/memory บนเครื่องเจ้าหน้าที่จริง (`B-005` / `KI-012`)
