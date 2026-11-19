@@ -5,6 +5,13 @@ import { StickyActionBar } from "@/components/admin/ui";
 import { SystemDataPayload } from "@/db/default-data";
 import { DetourAdviceSection } from "@/components/admin/tabs/DetourAdviceSection";
 import { HighwayIdentificationSection } from "@/components/admin/tabs/HighwayIdentificationSection";
+import {
+  clearAdminMapDraft,
+  hasMeaningfulAdminMapDraft,
+  readAdminMapDraft,
+  writeAdminMapDraft,
+  type AdminMapDraftSnapshot,
+} from "@/components/admin/tabs/map-draft-storage";
 import { RouteGeometryEditorSection } from "@/components/admin/tabs/RouteGeometryEditorSection";
 import { FloodSituationSection } from "@/components/admin/tabs/FloodSituationSection";
 import {
@@ -469,6 +476,7 @@ export function MapManagementTab({
   const [fieldImages, setFieldImages] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveAsDraft, setSaveAsDraft] = useState(false);
+  const [recoverableDraft, setRecoverableDraft] = useState<AdminMapDraftSnapshot | null>(null);
 
   // Phase 2: Parent Event & Multi-Segment Management
   const [parentEventMode, setParentEventMode] = useState<"NEW" | "EXISTING">("NEW");
@@ -479,6 +487,115 @@ export function MapManagementTab({
   const [isFetchingAddress, setIsFetchingAddress] = useState<boolean>(false);
   const [startedAt, setStartedAt] = useState<string>(() => new Date().toISOString().slice(0, 16));
   const [causeAndNote, setCauseAndNote] = useState<string>("");
+
+  // Phase 2.4: Detect unsaved draft on mount (new-record mode only)
+  useEffect(() => {
+    if (editingRoute?.id) return;
+    const saved = readAdminMapDraft();
+    if (saved) setRecoverableDraft(saved);
+  }, [editingRoute?.id]);
+
+  // Phase 2.4: Debounced Draft Auto-Save (600ms) for new flood/detour forms
+  useEffect(() => {
+    if (routeEditId || editingRoute?.id) return;
+    const snapshot: AdminMapDraftSnapshot = {
+      savedAt: Date.now(),
+      routeMode,
+      routeNo,
+      kmStart,
+      kmEnd,
+      sectionName,
+      reporterName,
+      routeWaterLevel,
+      routeStatus,
+      causeAndNote,
+      villageOrLandmark,
+      detourRefId,
+      detourName,
+      detourDesc,
+      detourGoogleMapsUrlFwd,
+      detourGoogleMapsUrlRev,
+      detourRoadCondition,
+      detourDurationMinFwd,
+      detourDurationMinRev,
+      detourDirectionMode,
+      saveAsDraft,
+      draftCoordinates,
+      draftWaypoints,
+      draftReverseCoordinates,
+      draftReverseWaypoints,
+    };
+    if (!hasMeaningfulAdminMapDraft(snapshot)) return;
+    const timer = window.setTimeout(() => {
+      writeAdminMapDraft(snapshot);
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [
+    routeEditId,
+    editingRoute?.id,
+    routeMode,
+    routeNo,
+    kmStart,
+    kmEnd,
+    sectionName,
+    reporterName,
+    routeWaterLevel,
+    routeStatus,
+    causeAndNote,
+    villageOrLandmark,
+    detourRefId,
+    detourName,
+    detourDesc,
+    detourGoogleMapsUrlFwd,
+    detourGoogleMapsUrlRev,
+    detourRoadCondition,
+    detourDurationMinFwd,
+    detourDurationMinRev,
+    detourDirectionMode,
+    saveAsDraft,
+    draftCoordinates,
+    draftWaypoints,
+    draftReverseCoordinates,
+    draftReverseWaypoints,
+  ]);
+
+  const handleRestoreSavedDraft = () => {
+    if (!recoverableDraft) return;
+    setRouteMode(recoverableDraft.routeMode);
+    setRouteNo(recoverableDraft.routeNo);
+    setKmStart(recoverableDraft.kmStart);
+    setKmEnd(recoverableDraft.kmEnd);
+    setSectionName(recoverableDraft.sectionName);
+    setReporterName(recoverableDraft.reporterName);
+    setRouteWaterLevel(recoverableDraft.routeWaterLevel);
+    setRouteStatus(recoverableDraft.routeStatus);
+    setCauseAndNote(recoverableDraft.causeAndNote);
+    setVillageOrLandmark(recoverableDraft.villageOrLandmark);
+    setDetourRefId(recoverableDraft.detourRefId);
+    setDetourName(recoverableDraft.detourName);
+    setDetourDesc(recoverableDraft.detourDesc);
+    setDetourGoogleMapsUrlFwd(recoverableDraft.detourGoogleMapsUrlFwd);
+    setDetourGoogleMapsUrlRev(recoverableDraft.detourGoogleMapsUrlRev);
+    setDetourRoadCondition(recoverableDraft.detourRoadCondition);
+    setDetourDurationMinFwd(recoverableDraft.detourDurationMinFwd);
+    setDetourDurationMinRev(recoverableDraft.detourDurationMinRev);
+    setDetourDirectionMode(recoverableDraft.detourDirectionMode);
+    setSaveAsDraft(recoverableDraft.saveAsDraft);
+    if (recoverableDraft.draftCoordinates.length >= 2) {
+      setDraftCoordinates(recoverableDraft.draftCoordinates);
+    }
+    if (recoverableDraft.draftWaypoints.length > 0) {
+      setDraftWaypoints(recoverableDraft.draftWaypoints);
+    }
+    if (recoverableDraft.draftReverseCoordinates.length >= 2) {
+      setDraftReverseCoordinates(recoverableDraft.draftReverseCoordinates);
+    }
+    if (recoverableDraft.draftReverseWaypoints.length > 0) {
+      setDraftReverseWaypoints(recoverableDraft.draftReverseWaypoints);
+    }
+    setRecoverableDraft(null);
+    onToast("กู้คืนร่างข้อมูลที่พิมพ์ค้างไว้เรียบร้อย");
+  };
   const [detailedPhotos, setDetailedPhotos] = useState<FloodPhotoItem[]>([]);
 
   // Group existing flood routes into parent events
@@ -1387,6 +1504,8 @@ export function MapManagementTab({
     setReverseAffectedParts(["ALL_LANES"]);
     setSaveAsDraft(false);
     setForceStraightThrough(false);
+    clearAdminMapDraft();
+    setRecoverableDraft(null);
     originalRouteCoordinates.current = [];
     onDraftPickMarkersChange?.([]);
     onToast("ล้างเส้นทางร่างและแบบฟอร์มแล้ว");
@@ -2195,6 +2314,40 @@ export function MapManagementTab({
           </button>
         </div>
       </div>
+
+      {/* Phase 2.4: Draft Auto-Save Recovery Banner */}
+      {recoverableDraft && !routeEditId && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-[0.65em] rounded-xl border border-amber-500/50 bg-amber-950/35 px-[1rem] py-[0.75rem]"
+        >
+          <p className="max-w-[65ch] text-[0.8125rem] text-amber-200">
+            <strong className="font-heading text-amber-300">พบร่างข้อมูลที่พิมพ์ค้างไว้</strong>{" "}
+            ({recoverableDraft.routeMode === "FLOOD" ? "เส้นน้ำท่วม" : "ทางเลี่ยง"} · บันทึกเมื่อ{" "}
+            {new Date(recoverableDraft.savedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.)
+          </p>
+          <div className="flex flex-wrap items-center gap-[0.5em]">
+            <button
+              type="button"
+              onClick={handleRestoreSavedDraft}
+              className="min-h-[2.5rem] rounded-lg bg-amber-500 px-[0.9em] py-[0.45em] text-[0.75rem] font-heading font-bold text-slate-950 hover:bg-amber-400 transition"
+            >
+              กู้คืนร่างที่ค้างไว้
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                clearAdminMapDraft();
+                setRecoverableDraft(null);
+                onToast("ลบร่างข้อมูลที่ค้างไว้แล้ว");
+              }}
+              className="min-h-[2.5rem] rounded-lg border border-slate-700 bg-slate-900 px-[0.9em] py-[0.45em] text-[0.75rem] font-heading font-bold text-slate-300 hover:text-white transition"
+            >
+              ลบร่าง
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Save options: import a file, or keep the record hidden from citizens until it is reviewed */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

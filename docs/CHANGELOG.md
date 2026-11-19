@@ -1,5 +1,13 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน docs/archive/SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-141] 2026-11-19 เพิ่มระบบ Draft Auto-Save และแบนเนอร์กู้คืนร่างใน `MapManagementTab` [ADMIN_ROADMAP Phase 2.4]
+- **ไฟล์:** `components/admin/tabs/map-draft-storage.ts` (ใหม่), `components/admin/tabs/MapManagementTab.tsx`
+- **การแก้ไข:**
+  1. สร้าง helper `map-draft-storage.ts` เก็บร่างฟอร์มลง `localStorage` (`hdms_admin_map_draft_v1`, อายุสูงสุด 24 ชม.) พร้อมตรวจข้อมูลที่มีสาระและจับ error กรณี private mode/quota เต็ม
+  2. เพิ่ม debounced auto-save (600ms) เฉพาะโหมดสร้างรายการใหม่ (`!routeEditId && !editingRoute?.id`), แสดงแบนเนอร์ `พบร่างข้อมูลที่พิมพ์ค้างไว้` พร้อมปุ่ม `กู้คืนร่างที่ค้างไว้` และ `ลบร่าง` (`min-h-[2.5rem]`, `max-w-[65ch]`), และล้างร่างอัตโนมัติใน `handleClearRoute()` หลังบันทึกสำเร็จหรือกดล้างฟอร์ม
+- **การทดสอบ:** `npm run check:deploy` ผ่าน (0 warnings, 0 errors, build 6/6); `PLAYWRIGHT_STATIC=1 npm run test:e2e` ผ่าน **106 passed, 44 skipped, 0 failed** (1.5m)
+- **ลำดับ Deploy / แผนย้อนกลับ:** Deploy เฉพาะ **เว็บ**; ย้อนกลับได้ทันทีด้วยการ revert ไฟล์ทั้ง 2 ไฟล์
+
 ### [UPDATE-140] 2026-11-19 แยกการโหลดข้อมูลหน้าแอดมินเป็น 2 ระดับ (Static GIS vs Operational) ลด payload `refetch()` ลง 63.9% [ADMIN_ROADMAP Phase 2.1]
 - **ตัวเลขวัดจริงจาก Production Read-Only (`getSystemDataAction`):**
   - ก่อนแยก (Refetch ก้อนเดียวทุกครั้งหลังบันทึก): **`469,183 bytes` (`458.2 KB`)** (latency 3 รอบ: `1970 / 586 / 509 ms`)
