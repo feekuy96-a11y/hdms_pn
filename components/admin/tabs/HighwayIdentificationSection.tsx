@@ -231,7 +231,7 @@ export function HighwayIdentificationSection({
         <div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="relative" ref={highwayComboboxRef}>
-              <label className="text-xs text-slate-300">หมายเลขทางหลวง *</label>
+              <label htmlFor="highway-route-select-fallback" className="text-xs text-slate-300">หมายเลขทางหลวง *</label>
               <button
                 type="button"
                 aria-expanded={isHighwayDropdownOpen}
@@ -248,6 +248,8 @@ export function HighwayIdentificationSection({
 
               {/* Hidden select to preserve standard form/accessible value if queried */}
               <select
+                id="highway-route-select-fallback"
+                aria-label="หมายเลขทางหลวง"
                 value={routeNo}
                 onChange={(e) => setRouteNo(e.target.value)}
                 className="sr-only"

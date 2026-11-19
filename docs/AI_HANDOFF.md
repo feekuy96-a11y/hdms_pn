@@ -53,13 +53,12 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** ปิดงาน `B-025` สมบูรณ์ (`UPDATE-134` + `UPDATE-135`: แก้ `DetourAdviceSection.tsx`, โมดัล `DetourManagementTab.tsx`, และเพิ่ม `lg:h-screen lg:overflow-hidden` ใน `app/admin/page.tsx`) พร้อมตรวจ `check:deploy` และ `PLAYWRIGHT_STATIC=1 npm run test:e2e` ผ่านแล้ว
-- **Git Branch & Commit SHA:** `main` (ฐาน `origin/main` ล่าสุดอยู่ที่ `acf2d4e`; งาน `UPDATE-135` + เอกสาร `UPDATE-134`/`UPDATE-135` อยู่ใน working tree รอ commit/push)
-- **ไฟล์ที่แก้ไขแล้ว (ใน working tree รอบล่าสุด):** `app/admin/page.tsx`, `components/admin/tabs/DetourAdviceSection.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md` (ส่วน `UPDATE-133` และ 4 ไฟล์แรกของ `UPDATE-134` อยู่ใน `acf2d4e` แล้ว)
+- **งานที่กำลังทำ / เป้าหมาย:** ปิดงาน `B-025` และ `UPDATE-136` (แก้ fallback `<select>` ใน `HighwayIdentificationSection.tsx` ผูก `htmlFor`/`id`/`aria-label` จน `missingLabelInputs` เป็น 0 ทั่วทั้งระบบ) พร้อมตรวจ `check:deploy` และ `PLAYWRIGHT_STATIC=1 npm run test:e2e` ผ่าน 106 passed ครบถ้วน
+- **Git Branch & Commit SHA:** `main` (commit ล่าสุดบน `origin/main` คือ `3b0c324`; งาน `UPDATE-136` อยู่ใน working tree พร้อมส่งมอบ)
+- **ไฟล์ที่แก้ไขแล้ว (ใน working tree รอบล่าสุด):** `components/admin/tabs/HighwayIdentificationSection.tsx`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
 - **สิ่งที่ทำสำเร็จ:**
-  - แก้แถบปุ่มบนสุดของ `DetourManagementTab.tsx` และ `HighwaySpecificationsTableSection.tsx` ให้ wrap ไม่ล้นขวา `.doh-form`
-  - ปรับ `.doh-auto-table` เป็น `500px` ใน `app/globals.css` พร้อม `ResizeObserver` ใน `DetourManagementTab.tsx` ลด DOM ซ้ำและคง selector E2E ครบ
-  - เพิ่ม `aria-label`/`htmlFor`/ขนาดปุ่มสัมผัสในหน้าแอดมิน, `SystemSettingsTab`, `LineStylingTab` (`w-8 h-8`), `GisDataImportTab`, `HighwayIdentificationSection`, `FloodSituationSection`, `IncidentRegistryTab`, `GisHighwayModals` และสลับ/เลื่อนดูแผนที่ `lg:hidden` บนมือถือใน `app/admin/page.tsx`
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** เหลือรายละเอียดเล็กน้อยใน `DetourAdviceSection.tsx` (URL 2 ช่อง), โมดัล `DetourManagementTab.tsx` (3 ช่อง / ปุ่ม `32–34px`), และการล็อกความสูงหน้าเดสก์ท็อป `lg:h-screen` บน `app/admin/page.tsx` (บันทึกใน `B-025`)
-- **ผลทดสอบล่าสุด:** `npm run check:deploy` (`eslint --max-warnings=0`, `tsc --noEmit`, `build:pages` 6/6) + `PLAYWRIGHT_STATIC=1 BASE_PATH=/hdms_pn npm run test:e2e` (106 passed, 44 skipped, 0 failed) และ Playwright audit 5 ขนาดหน้าจอ + โมดัลหลังแก้ `B-025`
-- **ขั้นตอนถัดไป:** ตรวจ diff และ commit/push เข้า `main` หรือเปิด PR เพื่อรัน GitHub Actions Deploy
+  - ปิดงาน `B-025` ครบทุกประเด็น (`UPDATE-133`, `UPDATE-134`, `UPDATE-135`) และ push ขึ้น `origin/main` (`3b0c324`)
+  - แก้ fallback `<select className="sr-only">` ใน `HighwayIdentificationSection.tsx` ผูก `htmlFor="highway-route-select-fallback"` บน `<label>` และ `aria-label="หมายเลขทางหลวง"` + `id="highway-route-select-fallback"` บน `<select>` (UPDATE-136) ทำให้สคริปต์ audit รายงาน `missingLabelInputsCount: 0` ทุกขนาดหน้าจอ
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี (ผ่านการทดสอบครบ 106 เคส ไม่มี failed)
+- **ผลทดสอบล่าสุด:** `npm run check:deploy` (`eslint --max-warnings=0`, `tsc --noEmit`, `build:pages` 6/6) + `PLAYWRIGHT_STATIC=1 BASE_PATH=/hdms_pn npm run test:e2e` (106 passed, 44 skipped, 0 failed) และ Playwright audit 5 ขนาดหน้าจอพบ `missingLabelInputsCount: 0` ทุกหน้าจอ
+- **ขั้นตอนถัดไป:** ตรวจ diff และ commit/push เข้า `main` เมื่อเจ้าของระบบต้องการ deploy ขึ้น GitHub Pages

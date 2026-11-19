@@ -1,5 +1,16 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-136] 2026-11-19 ผูก `htmlFor`/`id` และ `aria-label` ให้ fallback `<select>` ของช่องเลือกหมายเลขทางหลวงใน `HighwayIdentificationSection`
+- **ปัญหา:**
+  - Fallback `<select className="sr-only">` ของช่องหมายเลขทางหลวงใน `HighwayIdentificationSection.tsx` มี `tabIndex={-1}` และ `aria-hidden="true"` เพื่อรองรับการส่งฟอร์ม/fallback มาตรฐาน แต่ไม่มี `id` และ `aria-label` และป้าย `<label>` ด้านบนไม่มี `htmlFor` ทำให้สคริปต์ตรวจความเข้าถึง (Accessibility Audit) รายงาน `missingLabelInputsCount: 1` ทุก viewport
+- **การแก้ไข:**
+  - `components/admin/tabs/HighwayIdentificationSection.tsx`: ผูก `<label htmlFor="highway-route-select-fallback">` พร้อมกำหนด `id="highway-route-select-fallback"` และ `aria-label="หมายเลขทางหลวง"` ให้ `<select className="sr-only">` โดยคง `tabIndex={-1}` และ `aria-hidden="true"`
+- **ความสอดคล้อง & การทดสอบ:**
+  - `npm run check:deploy` (`eslint . --max-warnings=0`, `tsc --noEmit`, `build:pages`): ผ่าน (exit code 0)
+  - `PLAYWRIGHT_STATIC=1 npm run test:e2e`: `106 passed`, `44 skipped`, `0 failed` ครบทั้ง 150 เคส
+  - สคริปต์ตรวจ 5 ขนาดหน้าจอ (`360–1600px`): `missingLabelInputsCount` ลดจาก `1` เป็น `0` ครบทุก viewport ทุกบริบท
+- **ลำดับ Deploy / แผนย้อนกลับ:** Deploy เฉพาะ **เว็บ**; ย้อนกลับได้ด้วยการ revert ไฟล์ `components/admin/tabs/HighwayIdentificationSection.tsx`
+
 ### [UPDATE-135] 2026-11-19 ปิดงาน B-025 ส่วนที่เหลือ (`DetourAdviceSection`, โมดัล `DetourManagementTab`, และ `lg:h-screen` ใน `app/admin/page.tsx`)
 - **ปัญหา:**
   - `components/admin/tabs/DetourAdviceSection.tsx` ยังใช้ `<span>` กับช่องกรอก Google Maps URL 2 ช่อง (`ขาไป A→B` และ `ขากลับ B→A`) ทำให้ `<input type="url">` ขาด `htmlFor`/`id`
