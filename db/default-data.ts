@@ -99,6 +99,8 @@ export interface DetourRoute {
   detour_meta?: DetourMeta;
   description: string;
   is_active: boolean;
+  district?: string;
+  subdistrict?: string;
   updated_at: string;
 }
 
