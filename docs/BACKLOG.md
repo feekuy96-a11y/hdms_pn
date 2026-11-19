@@ -6,11 +6,11 @@
 | ID | ระดับ | เรื่อง | สถานะ |
 |---|---|---|---|
 | B-001 | **วิกฤต** | Edge Function เขียนข้อมูลด้วย service role โดยไม่ตรวจสิทธิ์ผู้เรียก | ยอมรับความเสี่ยง (เจ้าของระบบ, 2026-11-16) |
-| B-002 | สูง | `.mcp.json` ให้ AI เข้าถึง Supabase production พร้อมสิทธิ์ฐานข้อมูล ขัด ADR-001 | เปิด (ต้องตัดสินใจ) |
-| B-003 | สูง | Deploy ไม่รอ CI/e2e และเจ้าของ push ตรงเข้า main | เปิด (ต้องตัดสินใจ) |
+| B-002 | สูง | `.mcp.json` ให้ AI เข้าถึง Supabase production พร้อมสิทธิ์ฐานข้อมูล ขัด ADR-001 | ปิด (2026-11-19, ดู UPDATE-137 — ล็อก `read_only=true` และจำกัดฟีเจอร์อ่าน) |
+| B-003 | สูง | Deploy ไม่รอ CI/e2e และรัน Playwright ซ้ำซ้อนเมื่อ push main | ปิด (2026-11-19, ดู UPDATE-137 — ผูก `deploy.yml` รอ `CI` ด้วย `workflow_run` + คง `workflow_dispatch`) |
 | B-004 | กลาง | หน้าแอดมินยังโหลด GeoJSON ทางหลวงเต็มความละเอียดทุกครั้ง | ปิด (2026-11-10, ดู UPDATE-063) |
-| B-005 | กลาง | ไฟล์ใหญ่เกิน: `GisDataImportTab.tsx` (ลดจาก 2,006 → 1,306), `MapManagementTab.tsx` (ลดจาก 3,297 → 2,118), `LongdoGisMap.tsx` (ลดจาก 2,713 → 1,846) | ปิดบางส่วน (2026-11-18, ดู UPDATE-116/117/118: แยกโมดูลย่อยของทั้ง 3 ไฟล์หลักครบแล้ว; เหลือ telemetry เครื่องจริง) |
-| B-006 | กลาง | `SUPPLEMENTAL_RULES.md` ~120 KB ถูกบังคับให้อ่านทุกเซสชัน | ปิดบางส่วน (ยกเลิกบังคับใน AGENTS.md, GEMINI.md, .cursorrules, .windsurfrules และหัวไฟล์แล้วใน UPDATE-103; เหลือย้ายไฟล์เก่า) |
+| B-005 | กลาง | ไฟล์ใหญ่เกิน: `GisDataImportTab.tsx` (1,218), `MapManagementTab.tsx` (2,353), `LongdoGisMap.tsx` (1,749), `DetourManagementTab.tsx` (1,770), `IncidentRegistryTab.tsx` (1,393), `EventDetourLinkModal.tsx` (1,306) | ปิดบางส่วน (ดู `docs/ADMIN_ROADMAP.md` Phase 3 & 4.1 สำหรับแผนแตกไฟล์และ telemetry เครื่องจริง) |
+| B-006 | กลาง | `SUPPLEMENTAL_RULES.md` ~120 KB ถูกบังคับให้อ่านทุกเซสชัน | ปิด (2026-11-19, ดู UPDATE-103 และ UPDATE-137 — ย้ายไป `docs/archive/SUPPLEMENTAL_RULES.md` พร้อมอัปเดตลิงก์ครบ) |
 | B-007 | ต่ำ | โค้ดค้างที่ไม่อยู่ใน path จริง (better-auth, supabase-server, routing-service, Docker Postgres) | ปิด (ลบไฟล์ค้างแล้วใน UPDATE-065) |
 | B-008 | กลาง | พึ่ง OSRM สาธารณะ (`router.project-osrm.org`) ไม่มี SLA | กำลังทำ (เพิ่ม Google Routes API proxy เป็น Tier 1 ก่อน OSRM; รอ deploy Edge + ตั้ง secret `GOOGLE_MAPS_API_KEY`) |
 | B-009 | ต่ำ | `npm run check` ไม่ได้ build แบบ Pages (ที่ใช้ deploy จริง) | ปิด (2026-11-16, UPDATE-095) |
@@ -107,22 +107,15 @@
 - **ข้อเสนอแนะการยืนยัน:** เปิด Supabase Dashboard → Edge Functions → `hdms-api` ดูโค้ดที่ deploy จริง ว่ามี `getUser`/ตรวจบทบาทหรือไม่ (อย่าทดสอบด้วยการลบข้อมูลจริง)
 - **ข้อห้ามชั่วคราว:** AI ห้ามเพิ่ม action เขียน/ลบใหม่ใน Edge Function จนกว่ารายการนี้จะปิดหรือเจ้าของยอมรับความเสี่ยง (AGENTS §4)
 
-## B-002 [สูง] AI เข้าถึง production ผ่าน MCP
-- **หลักฐาน:** `.mcp.json` ใส่ `project_ref` ของ production พร้อมฟีเจอร์ `database,functions,branching` · ADR-001: production อ่านอย่างเดียวเป็นค่าเริ่มต้น
-- **ผลกระทบ:** เครื่องมือ AI ที่โหลดไฟล์นี้อาจรัน SQL เขียน/ลบบน production ได้ถ้าไม่มีสิทธิ์จำกัดฝั่ง Supabase
-- **ทางเลือก:** A) ใช้ MCP แบบอ่านอย่างเดียว (พารามิเตอร์ `read_only=true` ตามเอกสาร Supabase MCP — **ตรวจเอกสารปัจจุบันก่อนใช้**) · B) ชี้ไป branch/โปรเจกต์ dev แล้วให้ AI ทดลองที่นั่น · C) นำ `database` ออกจาก `features` · D) คงเดิม (ไม่แนะนำ)
-- **คำแนะนำ:** A ทันที + B ระยะยาว; ผมไม่แก้ `.mcp.json` ให้เอง เพราะอาจกระทบวิธีที่เจ้าของใช้งานอยู่
+## B-002 [สูง] AI เข้าถึง production ผ่าน MCP — ปิดแล้ว
+- **หลักฐาน:** `.mcp.json` เดิมใส่ `project_ref` ของ production พร้อมฟีเจอร์ `database,functions,branching` ขัด ADR-001
+- **การแก้ไข (`UPDATE-137`, 2026-11-19):** เจ้าของระบบอนุมัติปรับ `.mcp.json` เป็น `https://mcp.supabase.com/mcp?project_ref=ebyobrtvisylwawxiurx&read_only=true&features=docs%2Cdatabase%2Cdebugging%2Cdevelopment` เพื่อบังคับสิทธิ์อ่านอย่างเดียวและถอด `account`/`functions`/`branching` ออก
+- **สถานะ:** ปิด (2026-11-19, ดู UPDATE-137)
 
-## B-003 [สูง] Deploy ไม่ผูกกับ CI และ push ตรง main
-- **หลักฐาน:** `ci.yml` (lint, typecheck, build, e2e ×2) กับ `deploy.yml` (lint, typecheck, build:pages) ทำงานคู่ขนานเมื่อ push main; deploy ไม่รัน e2e · ADR-001: ห้าม direct push main แต่ประวัติ commit ("Update page.tsx") แสดงว่าทำผ่านหน้าเว็บ · เหตุการณ์จริง: ไฟล์ที่วางผิดทำให้ build แดงต่อเนื่อง 3 รอบ
-- **ผลกระทบ:** UI ที่พังแต่ lint/build ผ่านขึ้นเว็บจริงได้ · ช่วงน้ำท่วมแก้ผิดที่เดียวทำให้เว็บล่ม
-- **ทางเลือก:**
-  - **A (แนะนำ)** ให้ `deploy.yml` รันหลัง `CI` สำเร็จเท่านั้น (`on: workflow_run` + ตรวจ `conclusion == 'success'`, checkout `head_sha`) และเก็บ `workflow_dispatch` ไว้ใช้ฉุกเฉิน
-  - **B** ใช้ Pull Request + branch protection (ต้อง CI เขียวก่อน merge) — ปลอดภัยสุดแต่ต้องปรับวิธีทำงานของเจ้าของ
-  - **C** เพิ่ม e2e แบบ static เข้า `deploy.yml` โดยตรง (ช้าลง ~2–3 นาที และ e2e ที่ไม่เสถียรจะขวางการ deploy ฉุกเฉิน)
-  - **D** คงเดิม
-- **คำแนะนำ:** A + ขั้นต่ำเสมอ: commit ผ่าน "Create a new branch" แล้วดูผล CI ก่อน merge (ไม่ต้องเปลี่ยน workflow) · ผมไม่แก้ pipeline เอง เพราะแก้แล้วทดสอบไม่ได้ในที่นี้และ pipeline ตอนนี้แดงอยู่
-- **ร่างสำหรับ A (ยังไม่ใช้งาน):** ใน `deploy.yml` เปลี่ยน trigger เป็น `workflow_run: { workflows: ["CI"], types: [completed], branches: [main] }` + `workflow_dispatch`; เพิ่ม `if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'` ที่ job `build`; ใส่ `ref: ${{ github.event.workflow_run.head_sha || github.sha }}` ใน `actions/checkout`
+## B-003 [สูง] Deploy ไม่ผูกกับ CI และรัน Playwright ซ้ำซ้อน — ปิดแล้ว
+- **หลักฐาน:** ก่อนหน้านี้ `ci.yml` และ `deploy.yml` ทำงานคู่ขนานเมื่อ push `main` และรัน Playwright static ซ้ำกัน 2 รอบ
+- **การแก้ไข (`UPDATE-137`, 2026-11-19):** เจ้าของระบบอนุมัติเปลี่ยน trigger ใน `.github/workflows/deploy.yml` เป็น `workflow_run` รอ `workflows: ["CI"]` (`types: [completed]`, `branches: [main]`) พร้อมเงื่อนไข `conclusion == 'success'` และ checkout `head_sha` ของ CI โดยคง `workflow_dispatch` ไว้สำหรับ deploy ฉุกเฉิน และตัดขั้นตอนรัน Playwright ซ้ำออกจาก `deploy.yml` (ให้ `CI` เป็นด่าน E2E เดียว)
+- **สถานะ:** ปิด (2026-11-19, ดู UPDATE-137)
 
 ## B-004 [กลาง] หน้าแอดมินโหลดข้อมูลครบและไม่ซ่อนรายการ `is_active = false`
 - **สถานะ:** แก้แล้ว (2026-11-17, ดู `UPDATE-099`) — `getPublicSystemDataAction` ถูกจำกัดเฉพาะข้อมูล active ของประชาชนตั้งแต่ `20261113091500` จึงปรับหน้า `/admin` (`app/admin/page.tsx`) ให้เรียก `getSystemDataAction()` โดยตรงเพื่อให้เห็นทั้งรายการที่เปิดใช้งานและปิดชั่วคราวครบถ้วน (ขนาด payload จริงบน production วัดได้ 375.6 KB, 356 ms; หากต้องลด geometry บน `/admin` ในอนาคตให้แยก action เฉพาะสำหรับ Admin Display แทนการใช้ `getPublicSystemDataAction`)
@@ -138,9 +131,9 @@
 - **ผลตรวจ:** `npm run lint` (0 warnings), `npm run typecheck` (0 errors), `next build` (static export 6/6 หน้า), และ Playwright E2E **59 passed, 0 failed** (27 skipped ตามเงื่อนไข viewport)
 - **สิ่งที่เหลือสำหรับอนาคต (เมื่อต้องการแยกเพิ่ม):** แยกส่วนตารางทางหลวง (`GisHighwaySpecsTable`) และฟอร์มย่อยของโหมดจุดน้ำท่วมใน `MapManagementTab.tsx` ใน PR ถัดไปโดยยึดชุดทดสอบ E2E เดียวกัน
 
-## B-006 [กลาง] `SUPPLEMENTAL_RULES.md`
-- แก้แล้ว: `AGENTS.md` ให้ค้นด้วย grep ไม่อ่านทั้งไฟล์ และประวัติใหม่ลง `docs/CHANGELOG.md`; ใน `UPDATE-103` ได้ปรับ `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `CLAUDE.md` และหัวไฟล์ `SUPPLEMENTAL_RULES.md` ให้ชี้ไปที่ `AGENTS.md` และ `docs/AI_HANDOFF.md` ครบทุกตัวแล้ว
-- เหลือ: ย้ายไฟล์ไป `docs/archive/` + ปรับลิงก์ (ต้องแก้ไฟล์ใหญ่ ควรทำแยกครั้ง)
+## B-006 [กลาง] `SUPPLEMENTAL_RULES.md` — ปิดแล้ว
+- แก้แล้ว: ยกเลิกการบังคับอ่านทั้งไฟล์ใน `UPDATE-103` และใน `UPDATE-137` (2026-11-19) ย้ายไฟล์ไป `docs/archive/SUPPLEMENTAL_RULES.md` พร้อมปรับลิงก์อ้างอิงใน `AGENTS.md`, `GEMINI.md`, `CLAUDE.md`, `.cursorrules`, `.windsurfrules`, `docs/AI_HANDOFF.md` และ `docs/PLAYBOOKS.md` ครบถ้วน
+- **สถานะ:** ปิด (2026-11-19, ดู UPDATE-137)
 
 ## B-007 [ต่ำ] โค้ดค้าง — ปิดบางส่วน
 - **ถอดแล้ว:** `lib/auth.ts` (better-auth) และ `db/supabase-server.ts` รวมทั้ง dependencies `better-auth`, `flatpickr`, `pg`, `@types/pg` ที่ค้นทั้งรีโปแล้วไม่มีโค้ดหรือสคริปต์นำเข้า

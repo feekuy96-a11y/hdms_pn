@@ -14,8 +14,9 @@
 4. `docs/UI_CONTRACT.md` — ก่อนแตะหน้าจอ ปุ่ม ฟอร์ม หรือข้อความที่ test อ้างถึง
 5. `docs/PLAYBOOKS.md` — เลือก playbook ที่ตรงกับงาน (UI / DB / Edge Function / ประสิทธิภาพ / deploy / CI แดง)
 6. `docs/BACKLOG.md` และ `docs/KNOWN_ISSUES.md` — ดูข้อที่เปิดอยู่ ปัญหาที่ทราบ ข้อจำกัดทางเทคนิค และหลักฐานการทดสอบ
-7. `docs/CHANGELOG.md`, `SUPPLEMENTAL_RULES.md`, `DECISION_LOG.md` — **ค้นด้วย grep ตามชื่อโมดูล ห้ามอ่านทั้งไฟล์** (`SUPPLEMENTAL_RULES.md` ใหญ่ ~120 KB เป็นประวัติเก่า ใช้เป็นคลังอ้างอิงเท่านั้น)
-ถ้าเอกสารขัดกับโค้ดจริง **โค้ดชนะ** และต้องแก้เอกสารให้ตรงในงานเดียวกัน (ที่ทราบว่าเก่าแล้ว: `DESIGN.md` ส่วน Server Actions/Docker, `MANUAL.md`, `PRODUCTION.md` บางย่อหน้า)
+7. `docs/ADMIN_ROADMAP.md` — กติกาถาวรและแผนปรับโครงสร้างฝั่งหน้าแอดมิน 5 เฟส (Incremental Zero-Downtime, ห้าม Big-Bang, หนึ่ง PR หนึ่งขอบเขต, วัด KPI ก่อน-หลัง)
+8. `docs/CHANGELOG.md`, `docs/archive/SUPPLEMENTAL_RULES.md`, `DECISION_LOG.md` — **ค้นด้วย grep ตามชื่อโมดูล ห้ามอ่านทั้งไฟล์** (`docs/archive/SUPPLEMENTAL_RULES.md` ใหญ่ ~120 KB เป็นประวัติเก่า ใช้เป็นคลังอ้างอิงเท่านั้น)
+ถ้าเอกสารขัดกับโค้ดจริง **โค้ดชนะ** และต้องแก้เอกสารให้ตรงในงานเดียวกัน (ที่ทราบว่าเก่าแล้ว: `DESIGN.md` ส่วน Server Actions/Docker, `MANUAL.md`)
 
 ### 0.1 HDMS AI Workflow Optimization (4 กติกาหลัก: อ่านเท่าที่จำเป็น · แก้เท่าที่จำเป็น · ทดสอบอย่างเหมาะสม · ส่งต่องานให้ครบ)
 1. **อ่านเท่าที่จำเป็น (Smart Context & Surgical Lookup):** อ่านเฉพาะไฟล์ที่เกี่ยวกับงาน ใช้ `grep`/`rg -n` หาเลขบรรทัดก่อน แล้ว `read_file` เฉพาะช่วงฟังก์ชันที่แก้ (อนุญาตให้อ่านกว้างขึ้นเมื่อจำเป็นต่อการเข้าใจภาพรวมฟังก์ชัน)

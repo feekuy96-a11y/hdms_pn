@@ -69,13 +69,13 @@
 ## 6. ความปลอดภัย (ตามโค้ดจริง) — อ่านก่อนแตะ Edge Function
 - `supabase/config.toml`: `verify_jwt = false`; `index.ts`: ทุก action ที่ไม่อยู่ใน `READ_ONLY_EDGE_ACTIONS` (เช่น `getSystemDataAction`, `getPublicSystemDataAction`, `getExternalJobsAction`, `reverseGeocodeGoogleAction`, `computeGoogleDetourRouteAction`) ใช้ **service role** และ **ไม่มีการตรวจ token หรือบทบาท** (คอมเมนต์ในโค้ดระบุว่า "ตั้งใจให้เข้า /admin ได้โดยไม่ต้อง login")
 - ผลคือใครก็ตามที่รู้ URL ของฟังก์ชัน (อยู่ในไฟล์ JS สาธารณะ) ส่ง POST แก้สถานะจราจร/ลบเส้นทางหลวงได้ CORS ไม่ใช่การควบคุมสิทธิ์ ที่ validate คือรูปแบบข้อมูล (เช่น สถานะจราจร 5 ค่า) ไม่ใช่ตัวผู้เรียก
-- `PRODUCTION.md` เขียนว่ามีการตรวจ JWT/บทบาท ซึ่ง **ไม่ตรงกับโค้ดในรีโป** **(ต้องยืนยันกับฟังก์ชันที่ deploy จริงใน Supabase Dashboard)** — ดู BACKLOG B-001
-- `.mcp.json` ชี้ Supabase production พร้อมความสามารถ `database` — ขัดกับ ADR-001 (production อ่านอย่างเดียว) ดู B-002
+- `PRODUCTION.md` อัปเดตให้ตรงกับสถานะจริง (`B-001` ยอมรับความเสี่ยงชั่วคราว 2026-11-16) แล้วใน `UPDATE-137` **(ควรยืนยันโค้ดที่ deploy จริงใน Supabase Dashboard เทียบกับรีโปตาม B-014)**
+- `.mcp.json` ล็อกเป็น `read_only=true` และจำกัดเฉพาะฟีเจอร์อ่าน (`docs,database,debugging,development`) ตาม ADR-001 แล้วใน `UPDATE-137` (ปิด B-002)
 
 ## 7. ทดสอบและ CI/CD
 - `tests/e2e/*.spec.ts` (Playwright; โปรเจกต์ `desktop-chromium` = Desktop Chrome 1280×720, `mobile-chromium` = Pixel 7) mock ที่ `**/functions/v1/hdms-api` จึงตอบทุก action ด้วยข้อมูลชุดเดียว
 - `.github/workflows/ci.yml` (PR + push main): lint → typecheck → build:pages → e2e (static)
-- `.github/workflows/deploy.yml` (push main + manual): lint → typecheck → build:pages → e2e (static) → deploy (ดูประวัติ B-003)
+- `.github/workflows/deploy.yml` (`workflow_run` รอ `CI` เขียวบน `main` + `workflow_dispatch` เผื่อฉุกเฉิน): checkout `head_sha` → lint → typecheck → build:pages → deploy (ปิด B-003 ใน `UPDATE-137` ไม่รัน Playwright ซ้ำ)
 - `npm run check` = lint + typecheck + `build` (ไม่ใช่ `build:pages`) จึงอาจผ่านทั้งที่ deploy ไม่ผ่าน
 
 ## 8. โค้ดเก่าที่ไม่อยู่ใน path จริง (ห้ามขยาย ดู B-007)

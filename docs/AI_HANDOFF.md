@@ -1,13 +1,13 @@
 # AI Handoff — สถานะร่วมของโครงการ HDMS_PN
 
-> อัปเดต: 19 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (บน `origin/main` ล่าสุดผ่าน PR #51 `2eb8b85` รวม `UPDATE-131` ปรับแต่ง `.github/dependabot.yml` ป้องกันการอัปเกรดข้าม Major Version; กิ่งปัจจุบัน `test/e2e-roadmap-coverage` เพิ่ม Playwright E2E สำหรับสรุปสถานการณ์ประชาชน, ตัวกรอง 5 สถานะ, Route Chips และปุ่มล้างตัวกรอง `UPDATE-132` [B-011]) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`, B-023). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
+> อัปเดต: 19 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (ฐานล่าสุดก่อนรอบนี้คือ `0be5f8c` รวม `B-025` / `UPDATE-134`–`136` ครบถ้วน; รอบนี้ปิด **Phase 0 (`UPDATE-137`)** และบันทึกกติกาถาวรปรับโครงสร้างหน้าแอดมิน 5 เฟสไว้ที่ `docs/ADMIN_ROADMAP.md`) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`, B-023). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
 
 ## ก่อนเริ่มงานทุกครั้ง
 
 1. อ่าน `AGENTS.md` แล้วอ่านไฟล์นี้ทั้งหมด
 2. รัน `git fetch origin`; ตรวจ `origin/main`, branch ปัจจุบัน และ `git status --short` ก่อนแก้ไฟล์
 3. ห้ามเขียนทับไฟล์ที่มีการแก้ค้างอยู่ และห้ามแก้จาก SHA เก่าหรือจากรายงานเก่าโดยไม่เทียบกับ `origin/main`
-4. อ่านเอกสารตามงาน: `docs/ARCHITECTURE.md`, `docs/UI_CONTRACT.md`, `docs/PLAYBOOKS.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`; ใช้ `docs/CHANGELOG.md`, `SUPPLEMENTAL_RULES.md` และ `DECISION_LOG.md` แบบค้นคำ (`grep`) เท่านั้น
+4. อ่านเอกสารตามงาน: `docs/ARCHITECTURE.md`, `docs/UI_CONTRACT.md`, `docs/PLAYBOOKS.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/ADMIN_ROADMAP.md`; ใช้ `docs/CHANGELOG.md`, `docs/archive/SUPPLEMENTAL_RULES.md` และ `DECISION_LOG.md` แบบค้นคำ (`grep`) เท่านั้น
 
 ## สถานะเผยแพร่ล่าสุด
 
@@ -53,12 +53,15 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** ปิดงาน `B-025` และ `UPDATE-136` (แก้ fallback `<select>` ใน `HighwayIdentificationSection.tsx` ผูก `htmlFor`/`id`/`aria-label` จน `missingLabelInputs` เป็น 0 ทั่วทั้งระบบ) พร้อมตรวจ `check:deploy` และ `PLAYWRIGHT_STATIC=1 npm run test:e2e` ผ่าน 106 passed ครบถ้วน
-- **Git Branch & Commit SHA:** `main` (commit ล่าสุดบน `origin/main` คือ `3b0c324`; งาน `UPDATE-136` อยู่ใน working tree พร้อมส่งมอบ)
-- **ไฟล์ที่แก้ไขแล้ว (ใน working tree รอบล่าสุด):** `components/admin/tabs/HighwayIdentificationSection.tsx`, `docs/{CHANGELOG,BACKLOG,AI_HANDOFF}.md`
+- **งานที่กำลังทำ / เป้าหมาย:** บันทึกกติกาถาวรปรับโครงสร้างหน้าแอดมิน (`docs/ADMIN_ROADMAP.md`) และปิด **Phase 0 (`UPDATE-137`)** ครบชุด (`B-002` ล็อก `.mcp.json` read-only, `B-003` ผูก `deploy.yml` รอ `CI` ด้วย `workflow_run`, `B-006` ย้าย `SUPPLEMENTAL_RULES.md` ไป `docs/archive/`, ซิงก์ `PRODUCTION.md` และเอกสารอ้างอิงทั้งหมด)
+- **Git Branch & Commit SHA:** `main` (ฐาน `origin/main` ก่อน push รอบนี้คือ `0be5f8c` ซึ่งรวม `UPDATE-136` แล้ว)
+- **ไฟล์ที่แก้ไขแล้ว (รอบ `UPDATE-137`):** `docs/ADMIN_ROADMAP.md` (ใหม่), `.mcp.json`, `.github/workflows/deploy.yml`, `PRODUCTION.md`, `AGENTS.md`, `GEMINI.md`, `CLAUDE.md`, `.cursorrules`, `.windsurfrules`, `docs/{ARCHITECTURE,PLAYBOOKS,BACKLOG,KNOWN_ISSUES,AI_HANDOFF,CHANGELOG}.md`, `docs/archive/SUPPLEMENTAL_RULES.md` (ย้ายจากรากรีโป)
 - **สิ่งที่ทำสำเร็จ:**
-  - ปิดงาน `B-025` ครบทุกประเด็น (`UPDATE-133`, `UPDATE-134`, `UPDATE-135`) และ push ขึ้น `origin/main` (`3b0c324`)
-  - แก้ fallback `<select className="sr-only">` ใน `HighwayIdentificationSection.tsx` ผูก `htmlFor="highway-route-select-fallback"` บน `<label>` และ `aria-label="หมายเลขทางหลวง"` + `id="highway-route-select-fallback"` บน `<select>` (UPDATE-136) ทำให้สคริปต์ audit รายงาน `missingLabelInputsCount: 0` ทุกขนาดหน้าจอ
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี (ผ่านการทดสอบครบ 106 เคส ไม่มี failed)
-- **ผลทดสอบล่าสุด:** `npm run check:deploy` (`eslint --max-warnings=0`, `tsc --noEmit`, `build:pages` 6/6) + `PLAYWRIGHT_STATIC=1 BASE_PATH=/hdms_pn npm run test:e2e` (106 passed, 44 skipped, 0 failed) และ Playwright audit 5 ขนาดหน้าจอพบ `missingLabelInputsCount: 0` ทุกหน้าจอ
-- **ขั้นตอนถัดไป:** ตรวจ diff และ commit/push เข้า `main` เมื่อเจ้าของระบบต้องการ deploy ขึ้น GitHub Pages
+  - บันทึกแผนปรับโครงสร้างหน้าแอดมิน 5 เฟสและกติกาควบคุมความเสี่ยงเป็นเอกสารหลักถาวร (`docs/ADMIN_ROADMAP.md`) พร้อมอ้างอิงจาก `AGENTS.md` และไฟล์ตัวชี้ทุกตัว
+  - ปิด `B-002`: ล็อก `.mcp.json` ด้วย `read_only=true` และจำกัดเฉพาะฟีเจอร์อ่าน (`docs,database,debugging,development`)
+  - ปิด `B-003`: ปรับ `.github/workflows/deploy.yml` ให้รอ `CI` ผ่านผ่าน `workflow_run` (`head_sha`) พร้อมคง `workflow_dispatch` และไม่รัน Playwright ซ้ำซ้อน
+  - ปิด `B-006`: ย้าย `SUPPLEMENTAL_RULES.md` ไป `docs/archive/SUPPLEMENTAL_RULES.md` และอัปเดตลิงก์ครบทุกไฟล์
+  - ซิงก์ `PRODUCTION.md` ให้ตรงกับสถานะจริง (`B-001` ยอมรับความเสี่ยงชั่วคราว, `npm run check:deploy`, `PLAYWRIGHT_STATIC=1`)
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี (พร้อมเข้าสู่ **Phase 1** ตาม `docs/ADMIN_ROADMAP.md`)
+- **ผลทดสอบล่าสุด:** `npm run check:deploy` (`eslint --max-warnings=0`, `tsc --noEmit`, `build:pages` 6/6) + ตรวจไวยากรณ์ JSON/YAML ของ `.mcp.json` และ `.github/workflows/deploy.yml` ผ่าน
+- **ขั้นตอนถัดไป:** เริ่ม **Phase 1** ใน `docs/ADMIN_ROADMAP.md` (ยืนยัน Edge Production `B-014` + สกัด RPC snapshot, ตั้ง secrets `B-022`/`B-008`, ร่าง migration DB Audit Trail `doh_admin_audit_log` และ Ledger Retention `B-024`)

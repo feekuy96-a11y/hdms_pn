@@ -1,6 +1,8 @@
 name: Deploy GitHub Pages
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 permissions:
@@ -12,9 +14,12 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -30,11 +35,6 @@ jobs:
             echo "BASE_PATH=/$REPO" >> "$GITHUB_ENV"
           fi
       - run: npm run lint && npm run typecheck && npm run build:pages
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
-        env:
-          PLAYWRIGHT_STATIC: "1"
-          BASE_PATH: /hdms_pn
       - uses: actions/upload-pages-artifact@v3
         with:
           path: out

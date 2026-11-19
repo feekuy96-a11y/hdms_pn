@@ -1,4 +1,14 @@
-# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
+# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน docs/archive/SUPPLEMENTAL_RULES.md)
+
+### [UPDATE-137] 2026-11-19 บันทึกกติกาถาวรปรับโครงสร้างหน้าแอดมิน (`docs/ADMIN_ROADMAP.md`) และปิด Phase 0 ครบชุด [B-002, B-003, B-006]
+- **การอนุมัติจากเจ้าของระบบ:** อนุมัติให้บันทึกแผน Roadmap 5 เฟสและกติกาควบคุมความเสี่ยงเป็นกติกาถาวร พร้อมอนุมัติแก้ `.mcp.json` และ `.github/workflows/deploy.yml` ตาม `AGENTS.md §4`
+- **การแก้ไข:**
+  1. สร้าง `docs/ADMIN_ROADMAP.md` (แผนโครงสร้างหน้าแอดมิน 5 เฟสแบบ Incremental Zero-Downtime, เมทริกซ์ 6 มิติ × 5 สภาพแวดล้อม และกติกาความปลอดภัยถาวร) พร้อมเชื่อมใน `AGENTS.md`, `docs/AI_HANDOFF.md`, `GEMINI.md`, `CLAUDE.md`, `.cursorrules`, `.windsurfrules`
+  2. **ปิด `B-002`:** ปรับ `.mcp.json` เพิ่ม `read_only=true` และจำกัดเฉพาะฟีเจอร์อ่าน (`docs,database,debugging,development`) ให้สอดคล้องกับ ADR-001
+  3. **ปิด `B-003`:** ปรับ `.github/workflows/deploy.yml` ใช้ `workflow_run` รอ `workflows: ["CI"]` (`conclusion == 'success'`, checkout `head_sha`) โดยคง `workflow_dispatch` สำหรับฉุกเฉิน และตัดการรัน Playwright ซ้ำออกจาก `deploy.yml` (ให้ `ci.yml` เป็นด่าน E2E เดียว)
+  4. **ปิด `B-006`:** ย้าย `SUPPLEMENTAL_RULES.md` ไปที่ `docs/archive/SUPPLEMENTAL_RULES.md` และปรับลิงก์อ้างอิงทุกไฟล์
+  5. ซิงก์ `PRODUCTION.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/PLAYBOOKS.md` และ `docs/AI_HANDOFF.md` ให้ตรงกับโค้ดจริง
+- **ลำดับ Deploy / แผนย้อนกลับ:** ไม่กระทบ SQL/Edge Function; ย้อนกลับได้ทันทีด้วย `git revert` commit นี้
 
 ### [UPDATE-136] 2026-11-19 ผูก `htmlFor`/`id` และ `aria-label` ให้ fallback `<select>` ของช่องเลือกหมายเลขทางหลวงใน `HighwayIdentificationSection`
 - **ปัญหา:**

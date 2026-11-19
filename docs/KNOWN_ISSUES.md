@@ -2,7 +2,7 @@
 
 **ระบบ:** ศูนย์ข้อมูลน้ำท่วมและโครงข่ายทางหลวง แขวงทางหลวงปัตตานี (HDMS_PN)  
 **Production URLs:** [https://feekuy96-a11y.github.io/hdms_pn/](https://feekuy96-a11y.github.io/hdms_pn/) (หน้าประชาชน) \| [https://feekuy96-a11y.github.io/hdms_pn/admin](https://feekuy96-a11y.github.io/hdms_pn/admin) (หน้าแอดมิน)  
-**อัปเดตล่าสุด:** 2026-11-18 (`UPDATE-114`: ปรับสถานะจราจร 5 ค่าและคำนวณอัตโนมัติตามระดับน้ำ, แยกเส้นและระดับน้ำ 2 ฝั่งบนถนน ≥ 4 ช่องจราจร, กรอง Dropdown ทางหลวงเฉพาะจากโครงข่าย DB)
+**อัปเดตล่าสุด:** 2026-11-19 (`UPDATE-137`: วางกติกาถาวรและแผนโครงสร้างหน้าแอดมิน 5 เฟสใน `docs/ADMIN_ROADMAP.md`, ปิด Phase 0 — ล็อก `.mcp.json` read-only [B-002], ผูก `deploy.yml` รอ `CI` ด้วย `workflow_run` [B-003], ย้าย `SUPPLEMENTAL_RULES.md` เข้า archive [B-006], และซิงก์ `PRODUCTION.md` ให้ตรงโค้ดจริง)
 
 > UPDATE-073: ปิดช่องว่างการแสดง Stroke/Casing ของแผนที่แล้ว โดย `LongdoGisMap` วาดเส้นฐานแบบ Canvas สำหรับน้ำท่วม ทางเลี่ยง และโครงข่ายสายทางเมื่อเปิดค่า Stroke/Casing; ผล lint, typecheck และ build:pages ผ่าน. ยังต้องตรวจภาพจริงหลังนำเว็บขึ้น GitHub Pages เพราะการทดสอบอัตโนมัติยืนยันการโหลดแผนที่และพฤติกรรม ไม่สามารถอ่านสีพิกเซลของ Canvas ได้อย่างน่าเชื่อถือ.
 
@@ -108,13 +108,16 @@
 
 ---
 
-## 4. รายการงานที่ยังรอการตัดสินใจ (Pending Backlog จาก BACKLOG.md)
+## 4. รายการงานที่ยังรอการดำเนินการ (Pending Backlog จาก BACKLOG.md และ `docs/ADMIN_ROADMAP.md`)
 
-- **B-001 (วิกฤต):** Edge Function เขียนข้อมูลด้วย service role โดยไม่ตรวจสิทธิ์ผู้เรียก (รอการตัดสินใจวางระบบ Auth หน้าแอดมิน)
-- **B-002 (สูง):** `.mcp.json` ให้สิทธิ์ฐานข้อมูลระดับ Production
-- **B-003 (สูง):** Pipeline การ Deploy ยังไม่บังคับรอ CI E2E ให้เสร็จสมบูรณ์
-- **B-005 (กลาง):** การแยกไฟล์ขนาดใหญ่ในแอดมิน (`GisDataImportTab.tsx`, `MapManagementTab.tsx`)
-- **B-008 (กลาง):** การรองรับ OSRM ทางเลือกหรือ Caching Proxy
+- **B-001 (วิกฤต — ยอมรับความเสี่ยงชั่วคราว 2026-11-16):** Edge Function เขียนข้อมูลด้วย service role โดยไม่ตรวจสิทธิ์ผู้เรียก (แผน Phase 1.3 เพิ่ม DB Audit Log และ Phase 4.3 เตรียม Opt-in Auth)
+- **B-014 (วิกฤต — เปิด):** ยืนยันโค้ด Edge Function Production เทียบกับรีโปและสกัด schema snapshot (`docs/ADMIN_ROADMAP.md` Phase 1.1)
+- **B-022 (สูง — กำลังทำ):** ตั้ง `APPS_SCRIPT_WEB_APP_URL` ใหม่ใน Supabase Edge Secrets แล้ว deploy Edge (`Phase 1.2`)
+- **B-008 (กลาง — กำลังทำ):** ตั้ง `GOOGLE_MAPS_API_KEY` ใน Supabase Edge Secrets เพื่อเปิด Tier 1 Routing ลดการพึ่ง OSRM สาธารณะ (`Phase 1.2`)
+- **B-024 (กลาง — เปิด):** เพิ่มนโยบาย retention/archival สำหรับตาราง `doh_event_detour_operations` (`Phase 1.4`)
+- **B-005 (กลาง — ปิดบางส่วน):** เก็บ field telemetry เครื่องเจ้าหน้าที่จริง (`KI-012`) และแยกไฟล์ขนาดใหญ่ > 1,200 บรรทัด (`Phase 3 & 4.1`)
+- **B-016 (กลาง — เปิด):** ตราครุฑทางการสำหรับป้ายทางหลวงยังรอไฟล์ Asset ที่ผ่านอนุมัติ (`Phase 4.4`)
+- *(ปิดแล้วใน `UPDATE-137`: `B-002` ล็อก `.mcp.json` read-only, `B-003` ผูก `deploy.yml` รอ `CI`, `B-006` ย้าย `SUPPLEMENTAL_RULES.md` ไป `docs/archive/`)*
 
 
 

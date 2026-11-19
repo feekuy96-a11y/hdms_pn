@@ -11,6 +11,6 @@
 6. ห้ามเปลี่ยนชื่อปุ่ม/label/role ที่ `tests/e2e` อ้างถึง (ดู `docs/UI_CONTRACT.md`)
 7. แก้เฉพาะที่จำเป็น ส่งมอบเป็นตาราง path เต็ม + ลำดับ deploy (`app/page.tsx` ≠ `app/admin/page.tsx`)
 8. **ทบทวนและโต้แย้งก่อนลงมือ:** ถ้าแนวคิดของผู้สั่งมีปัญหา ให้ชี้พร้อมหลักฐาน เสนอทางเลือก A/B และคำแนะนำ ห้ามเออตาม และปิดท้ายทุกคำตอบด้วย "พบเพิ่ม / ข้อเสนอ" (พร้อมแนบตัวอย่าง Prompt สำเร็จรูป)
-9. บันทึกงานที่ `docs/CHANGELOG.md` ข้อค้นพบที่ยังไม่แก้ที่ `docs/BACKLOG.md` (ห้ามอ่าน `SUPPLEMENTAL_RULES.md` ทั้งไฟล์ ใช้ grep)
+9. บันทึกงานที่ `docs/CHANGELOG.md` ข้อค้นพบที่ยังไม่แก้ที่ `docs/BACKLOG.md` และยึดแผนปรับโครงสร้างหน้าแอดมินที่ `docs/ADMIN_ROADMAP.md` (ห้ามอ่าน `docs/archive/SUPPLEMENTAL_RULES.md` ทั้งไฟล์ ใช้ grep)
 
 **เฉพาะ Antigravity / Gemini:** ตรวจ `git fetch origin` และ `origin/main` ก่อนเริ่มงาน; รันคำสั่งตรวจจริงแทนการเดา; ห้ามขยายขอบเขตเกินที่ตกลง
