@@ -60,7 +60,7 @@
 - [ ] `1.5` แยก `supabase/functions/hdms-api/index.ts` เป็น `_shared/{validation,google-proxy,outbox,event-detour,handlers}.ts` + basic rate-limit/size guard + Deno unit tests
 
 ### Phase 2: Data Layer & Concurrency Architecture
-- [ ] `2.1` แยก Admin Query เป็น 2 ระดับ: `["dohAdminStaticGis"]` (`staleTime: 10m`) และ `["dohAdminOperational"]` (`staleTime: 0`) ผ่าน RPC wrapper ใหม่ (เป้าหมาย: ลด refetch payload จาก ~375 KB+ เหลือ < 40–80 KB)
+- [x] `2.1` แยก Admin Query เป็น 2 ระดับ: `["dohAdminStaticGis"]` (`staleTime: 10m`) และ `["dohAdminOperational"]` (`staleTime: 0`) พร้อม 1-RTT initial bootstrap และ read-only actions `getAdminOperationalDataAction`/`getAdminStaticGisDataAction` (*ทำแล้วใน UPDATE-140 — ลด refetch payload จาก 458.2 KB เหลือ 165.2 KB (-63.9%) เมื่อ deploy Edge*)
 - [ ] `2.2` ขยาย Optimistic Concurrency (`row_version` + `409 Conflict` UI) ไปยัง `doh_flood_routes`, `doh_detour_routes`, `doh_highway_layers`
 - [ ] `2.3` เพิ่ม Lightweight Version-Poll / Realtime Banner แจ้งเมื่อมีเจ้าหน้าที่อื่นอัปเดตข้อมูลโดยไม่ล้างฟอร์มที่กำลังพิมพ์
 - [ ] `2.4` เพิ่ม Draft Auto-Save (IndexedDB/sessionStorage) สำหรับฟอร์มสร้างจุดน้ำท่วม/ทางเลี่ยงใน `MapManagementTab`

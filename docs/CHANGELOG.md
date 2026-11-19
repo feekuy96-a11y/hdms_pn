@@ -1,5 +1,18 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน docs/archive/SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-140] 2026-11-19 แยกการโหลดข้อมูลหน้าแอดมินเป็น 2 ระดับ (Static GIS vs Operational) ลด payload `refetch()` ลง 63.9% [ADMIN_ROADMAP Phase 2.1]
+- **ตัวเลขวัดจริงจาก Production Read-Only (`getSystemDataAction`):**
+  - ก่อนแยก (Refetch ก้อนเดียวทุกครั้งหลังบันทึก): **`469,183 bytes` (`458.2 KB`)** (latency 3 รอบ: `1970 / 586 / 509 ms`)
+  - สัดส่วน Static GIS (`highwayLayers` `231.9 KB` + `offices`/`mapStyles`/`systemSettings`): **`300,010 bytes` (`293.0 KB` = `63.9%`)**
+  - สัดส่วน Operational (`floodRoutes`, `detourRoutes`, `timelineUpdates`, `mitigationProjects`, `eventDetourLinks`, `eventSegments`, `floodEvents`): **`169,174 bytes` (`165.2 KB` = `36.1%`)** → หลัง deploy Edge Function `hdms-api` รอบนี้ การบันทึกเหตุการณ์/ทางเลี่ยงจะดาวน์โหลดเฉพาะ `165.2 KB` (**ลดลง 293.0 KB / -63.9%**) และคง reference ของ `highwayLayers` ไม่ให้ `LongdoGisMap` วาดเส้นทางหลวงใหม่
+- **ไฟล์ที่แก้:**
+  1. `supabase/functions/hdms-api/index.ts`: เพิ่ม read-only actions `getAdminOperationalDataAction` และ `getAdminStaticGisDataAction` ใน `READ_ONLY_EDGE_ACTIONS` (คง `getSystemDataAction` ไว้ 100%)
+  2. `app/actions/doh-actions.ts`: เพิ่ม `getAdminOperationalDataAction` / `getAdminStaticGisDataAction` พร้อม automatic fallback กลับ `getSystemDataAction()` หาก Edge Production ยังไม่ deploy เวอร์ชันใหม่
+  3. `app/admin/page.tsx`: โหลดเริ่มต้น 1 RTT ด้วย `getSystemDataAction` เพื่อ hydrate ทั้ง `["dohAdminStaticGis"]` (`staleTime: 10m`) และ `["dohAdminOperational"]` (`staleTime: 0`) จากนั้น `refreshAdminData(scope)` รีเฟรชเฉพาะชั้นที่เปลี่ยน
+  4. `components/admin/AdminConsole.tsx`: ส่ง `onDataRefresh("static")` ให้แท็บ `routes`, `style`, `system` และคง default `"operational"` ให้แท็บปฏิบัติการ (`map`, `incidents`, `detours`, `projects`)
+- **การทดสอบ:** `npm run check:deploy` ผ่าน (0 warnings, 0 errors, build 6/6); `PLAYWRIGHT_STATIC=1 npm run test:e2e` ผ่าน **106 passed, 44 skipped, 0 failed** (1.7m)
+- **ลำดับ Deploy / แผนย้อนกลับ:** 1) Deploy Edge Function `hdms-api` (optional ทำก่อนหรือหลังเว็บก็ได้เพราะมี fallback อัตโนมัติ) → 2) Deploy เว็บ; ย้อนกลับได้ทันทีด้วย `git revert`
+
 ### [UPDATE-139] 2026-11-19 ปรับชั้นฐานหน้าแอดมินเป็น Modern CSS Units (`rem`/`em`/`%`/`dvh`/`ch`) และเพิ่มปุ่มสลับ ฟอร์ม/แผนที่ บน `< lg` [ADMIN_ROADMAP Phase 3.2/3.4]
 - **ไฟล์ที่แก้:** `app/globals.css`, `components/admin/ui.tsx`, `app/admin/page.tsx`
 - **การแก้ไข:**

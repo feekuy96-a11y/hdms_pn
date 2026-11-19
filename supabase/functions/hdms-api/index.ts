@@ -275,6 +275,8 @@ async function proxyReverseGeocode(args: unknown[]) {
 
 const READ_ONLY_EDGE_ACTIONS = new Set([
   "getSystemDataAction",
+  "getAdminOperationalDataAction",
+  "getAdminStaticGisDataAction",
   "getPublicSystemDataAction",
   "getExternalJobsAction",
   "reverseGeocodeGoogleAction",
@@ -774,6 +776,30 @@ Deno.serve(async (req) => {
     if (action === "getSystemDataAction") {
       if (serviceKey) scheduleExternalJobs(createClient(url, serviceKey));
       return reply(await system());
+    }
+    if (action === "getAdminOperationalDataAction") {
+      if (serviceKey) scheduleExternalJobs(createClient(url, serviceKey));
+      const full = await system();
+      return reply({
+        updatedAt: full.updatedAt,
+        floodRoutes: full.floodRoutes,
+        detourRoutes: full.detourRoutes,
+        timelineUpdates: full.timelineUpdates,
+        mitigationProjects: full.mitigationProjects,
+        eventDetourLinks: full.eventDetourLinks,
+        eventSegments: full.eventSegments,
+        floodEvents: full.floodEvents,
+      });
+    }
+    if (action === "getAdminStaticGisDataAction") {
+      const full = await system();
+      return reply({
+        updatedAt: full.updatedAt,
+        highwayLayers: full.highwayLayers,
+        offices: full.offices,
+        mapStyles: full.mapStyles,
+        systemSettings: full.systemSettings,
+      });
     }
     if (action === "getPublicSystemDataAction") {
       return reply(await system(true, true), 200, {

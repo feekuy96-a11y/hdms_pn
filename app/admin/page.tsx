@@ -1,10 +1,17 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LonLat, VertexEditEvent } from "@/lib/line-edit";
 import dynamic from "next/dynamic";
-import { useQuery } from "@tanstack/react-query";
-import { getSystemDataAction, snapRouteAction } from "@/app/actions/doh-actions";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  getAdminOperationalDataAction,
+  getAdminStaticGisDataAction,
+  getSystemDataAction,
+  snapRouteAction,
+  type AdminOperationalDataPayload,
+  type AdminStaticGisDataPayload,
+} from "@/app/actions/doh-actions";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload } from "@/db/default-data";
 import { AdminConsole } from "@/components/admin/AdminConsole";
 
@@ -110,16 +117,102 @@ export default function AdminPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [editableOfficeId, setEditableOfficeId] = useState<string | null>(null);
 
-  // Admin must fetch full system data rather than the public citizen payload, which omits
-  // inactive/draft incidents and detours (making deactivated detours vanish from Admin).
-  const { data: systemData = INITIAL_SYSTEM_DATA, refetch, isFetching, isError } = useQuery<SystemDataPayload>({
+  // Phase 2.1: Single initial bootstrap (1 RTT via getSystemDataAction) hydrates both split caches:
+  // ["dohAdminStaticGis"] (10m staleTime) and ["dohAdminOperational"] (live). Subsequent saves
+  // refetch only the affected tier, avoiding ~293 KB (-63.9%) of unchanged full-res highway GeoJSON.
+  const queryClient = useQueryClient();
+  const bootstrapQuery = useQuery<SystemDataPayload>({
     queryKey: ["dohAdminSystemData"],
-    queryFn: async () => await getSystemDataAction(),
-    staleTime: 0,
+    queryFn: async () => {
+      const full = await getSystemDataAction();
+      queryClient.setQueryData<AdminStaticGisDataPayload>(["dohAdminStaticGis"], {
+        updatedAt: full.updatedAt,
+        highwayLayers: full.highwayLayers,
+        offices: full.offices,
+        mapStyles: full.mapStyles,
+        systemSettings: full.systemSettings,
+      });
+      queryClient.setQueryData<AdminOperationalDataPayload>(["dohAdminOperational"], {
+        updatedAt: full.updatedAt,
+        floodRoutes: full.floodRoutes,
+        detourRoutes: full.detourRoutes,
+        timelineUpdates: full.timelineUpdates,
+        mitigationProjects: full.mitigationProjects,
+        eventDetourLinks: full.eventDetourLinks,
+        eventSegments: full.eventSegments,
+        floodEvents: full.floodEvents,
+      });
+      return full;
+    },
+    staleTime: 10 * 60 * 1000,
     refetchOnMount: "always",
+    refetchInterval: false,
+  });
+
+  const staticGisQuery = useQuery<AdminStaticGisDataPayload>({
+    queryKey: ["dohAdminStaticGis"],
+    queryFn: async () => await getAdminStaticGisDataAction(),
+    enabled: false,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const operationalQuery = useQuery<AdminOperationalDataPayload>({
+    queryKey: ["dohAdminOperational"],
+    queryFn: async () => await getAdminOperationalDataAction(),
+    enabled: bootstrapQuery.isSuccess,
+    staleTime: 0,
+    refetchOnMount: false,
     refetchInterval: isPollingActive ? 30 * 60 * 1000 : false,
     refetchIntervalInBackground: false,
   });
+
+  const systemData = useMemo<SystemDataPayload>(() => ({
+    updatedAt: operationalQuery.data?.updatedAt || staticGisQuery.data?.updatedAt || bootstrapQuery.data?.updatedAt || INITIAL_SYSTEM_DATA.updatedAt,
+    floodRoutes: operationalQuery.data?.floodRoutes ?? bootstrapQuery.data?.floodRoutes ?? INITIAL_SYSTEM_DATA.floodRoutes,
+    detourRoutes: operationalQuery.data?.detourRoutes ?? bootstrapQuery.data?.detourRoutes ?? INITIAL_SYSTEM_DATA.detourRoutes,
+    timelineUpdates: operationalQuery.data?.timelineUpdates ?? bootstrapQuery.data?.timelineUpdates ?? INITIAL_SYSTEM_DATA.timelineUpdates,
+    mitigationProjects: operationalQuery.data?.mitigationProjects ?? bootstrapQuery.data?.mitigationProjects ?? INITIAL_SYSTEM_DATA.mitigationProjects,
+    eventDetourLinks: operationalQuery.data?.eventDetourLinks ?? bootstrapQuery.data?.eventDetourLinks ?? INITIAL_SYSTEM_DATA.eventDetourLinks,
+    eventSegments: operationalQuery.data?.eventSegments ?? bootstrapQuery.data?.eventSegments ?? INITIAL_SYSTEM_DATA.eventSegments,
+    floodEvents: operationalQuery.data?.floodEvents ?? bootstrapQuery.data?.floodEvents ?? INITIAL_SYSTEM_DATA.floodEvents,
+    highwayLayers: staticGisQuery.data?.highwayLayers ?? bootstrapQuery.data?.highwayLayers ?? INITIAL_SYSTEM_DATA.highwayLayers,
+    offices: staticGisQuery.data?.offices ?? bootstrapQuery.data?.offices ?? INITIAL_SYSTEM_DATA.offices,
+    mapStyles: staticGisQuery.data?.mapStyles ?? bootstrapQuery.data?.mapStyles ?? INITIAL_SYSTEM_DATA.mapStyles,
+    systemSettings: staticGisQuery.data?.systemSettings ?? bootstrapQuery.data?.systemSettings ?? INITIAL_SYSTEM_DATA.systemSettings,
+  }), [bootstrapQuery.data, operationalQuery.data, staticGisQuery.data]);
+
+  const isFetching = bootstrapQuery.isFetching || operationalQuery.isFetching || staticGisQuery.isFetching;
+  const isError = bootstrapQuery.isError || operationalQuery.isError || staticGisQuery.isError;
+
+  const refreshAdminData = useCallback(async (scope: "operational" | "static" | "all" = "operational"): Promise<SystemDataPayload> => {
+    if (scope === "all") {
+      const result = await bootstrapQuery.refetch();
+      if (result.error) throw result.error;
+      return result.data ?? systemData;
+    }
+    const [opRes, stRes] = await Promise.all([
+      scope === "static" ? Promise.resolve(null) : operationalQuery.refetch(),
+      scope === "operational" ? Promise.resolve(null) : staticGisQuery.refetch(),
+    ]);
+    if (opRes?.error) throw opRes.error;
+    if (stRes?.error) throw stRes.error;
+    const op = opRes?.data ?? operationalQuery.data;
+    const st = stRes?.data ?? staticGisQuery.data;
+    return {
+      updatedAt: op?.updatedAt || st?.updatedAt || systemData.updatedAt,
+      floodRoutes: op?.floodRoutes ?? systemData.floodRoutes,
+      detourRoutes: op?.detourRoutes ?? systemData.detourRoutes,
+      timelineUpdates: op?.timelineUpdates ?? systemData.timelineUpdates,
+      mitigationProjects: op?.mitigationProjects ?? systemData.mitigationProjects,
+      eventDetourLinks: op?.eventDetourLinks ?? systemData.eventDetourLinks,
+      eventSegments: op?.eventSegments ?? systemData.eventSegments,
+      floodEvents: op?.floodEvents ?? systemData.floodEvents,
+      highwayLayers: st?.highwayLayers ?? systemData.highwayLayers,
+      offices: st?.offices ?? systemData.offices,
+      mapStyles: st?.mapStyles ?? systemData.mapStyles,
+      systemSettings: st?.systemSettings ?? systemData.systemSettings,
+    };
+  }, [bootstrapQuery, operationalQuery, staticGisQuery, systemData]);
   useSystemFavicon(systemData.systemSettings?.logoUrl, systemData.systemSettings?.name, systemData.systemSettings?.org);
 
   const showToast = (msg: string) => {
@@ -306,7 +399,7 @@ export default function AdminPage() {
           <button
             type="button"
             onClick={() => {
-              refetch();
+              void refreshAdminData("all");
               showToast("รีเฟรชฐานข้อมูลสารสนเทศเรียบร้อย");
             }}
             aria-label="รีเฟรชข้อมูล"
@@ -380,10 +473,8 @@ export default function AdminPage() {
           >
             <AdminConsole
               systemData={systemData}
-              onDataRefresh={async () => {
-                const result = await refetch();
-                if (result.error) throw result.error;
-                return result.data;
+              onDataRefresh={async (scope?: "operational" | "static" | "all") => {
+                return await refreshAdminData(scope === "static" || scope === "all" ? scope : "operational");
               }}
               adminPickMode={adminPickMode}
               setAdminPickMode={setAdminPickMode}

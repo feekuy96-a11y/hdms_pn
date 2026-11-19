@@ -119,6 +119,58 @@ export async function getSystemDataAction(): Promise<SystemDataPayload> {
   return invokeHdms("getSystemDataAction", []);
 }
 
+export type AdminOperationalDataPayload = Pick<
+  SystemDataPayload,
+  "updatedAt" | "floodRoutes" | "detourRoutes" | "timelineUpdates" | "mitigationProjects" | "eventDetourLinks" | "eventSegments" | "floodEvents"
+>;
+
+export type AdminStaticGisDataPayload = Pick<
+  SystemDataPayload,
+  "updatedAt" | "highwayLayers" | "offices" | "mapStyles" | "systemSettings"
+>;
+
+function shouldFallbackToFullAdminAction(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /unknown operation|unexpected action|unsupported action|404/i.test(error.message);
+}
+
+/** Phase 2.1: Operational admin data only (omits ~293 KB of static highway GeoJSON/offices/styles). Falls back to full action on older Edge deployments. */
+export async function getAdminOperationalDataAction(): Promise<AdminOperationalDataPayload> {
+  try {
+    return await invokeHdms<AdminOperationalDataPayload>("getAdminOperationalDataAction", []);
+  } catch (error) {
+    if (!shouldFallbackToFullAdminAction(error)) throw error;
+    const full = await getSystemDataAction();
+    return {
+      updatedAt: full.updatedAt,
+      floodRoutes: full.floodRoutes,
+      detourRoutes: full.detourRoutes,
+      timelineUpdates: full.timelineUpdates,
+      mitigationProjects: full.mitigationProjects,
+      eventDetourLinks: full.eventDetourLinks,
+      eventSegments: full.eventSegments,
+      floodEvents: full.floodEvents,
+    };
+  }
+}
+
+/** Phase 2.1: Static GIS & config data (highwayLayers, offices, mapStyles, systemSettings), cached with longer staleTime in Admin. */
+export async function getAdminStaticGisDataAction(): Promise<AdminStaticGisDataPayload> {
+  try {
+    return await invokeHdms<AdminStaticGisDataPayload>("getAdminStaticGisDataAction", []);
+  } catch (error) {
+    if (!shouldFallbackToFullAdminAction(error)) throw error;
+    const full = await getSystemDataAction();
+    return {
+      updatedAt: full.updatedAt,
+      highwayLayers: full.highwayLayers,
+      offices: full.offices,
+      mapStyles: full.mapStyles,
+      systemSettings: full.systemSettings,
+    };
+  }
+}
+
 export interface EventDetourLinksResult {
   eventId: string;
   version: number;

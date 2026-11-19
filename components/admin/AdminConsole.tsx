@@ -480,7 +480,7 @@ export function AdminConsole({
           {activeTab === "system" && (
             <SystemSettingsTab
               systemData={systemData}
-              onDataRefresh={onDataRefresh}
+              onDataRefresh={() => onDataRefresh("static")}
               onToast={onToast}
               showConfirmModal={showConfirmModal}
               showSuccessModal={showSuccessModal}
@@ -577,7 +577,7 @@ export function AdminConsole({
             <GisDataImportTab
               systemData={systemData}
               lineStyles={systemData.mapStyles || DEFAULT_MAP_STYLES}
-              onDataRefresh={onDataRefresh}
+              onDataRefresh={() => onDataRefresh("static")}
               onToast={onToast}
               showConfirmModal={showConfirmModal}
               showSuccessModal={showSuccessModal}
@@ -607,7 +607,7 @@ export function AdminConsole({
           {activeTab === "style" && (
             <LineStylingTab
               systemData={systemData}
-              onDataRefresh={onDataRefresh}
+              onDataRefresh={() => onDataRefresh("static")}
               onToast={onToast}
               showSuccessModal={showSuccessModal}
             />
