@@ -79,6 +79,8 @@ export function IncidentRegistryTab({
   onAddFlood,
 }: IncidentRegistryTabProps) {
   const [incidentFilter, setIncidentFilter] = useState<"ALL" | "ACTIVE" | "RESOLVED">("ACTIVE");
+  const [routeNoFilter, setRouteNoFilter] = useState<string>("ALL");
+  const [trafficStatusFilter, setTrafficStatusFilter] = useState<string>("ALL");
   const [incidentSearch, setIncidentSearch] = useState("");
   const [deleted, setDeleted] = useState<{ id: string; route_no: string; section_name: string }[] | null>(null);
   const [updateModalIncident, setUpdateModalIncident] = useState<FloodRoute | null>(null);
@@ -89,6 +91,7 @@ export function IncidentRegistryTab({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlineWaterLevel, setInlineWaterLevel] = useState<string>("");
+  const [inlineTrafficStatus, setInlineTrafficStatus] = useState<FloodRoute["traffic_status"]>("WARNING");
   const [inlineSavingId, setInlineSavingId] = useState<string | null>(null);
   const [selectedIncidentIds, setSelectedIncidentIds] = useState<Set<string>>(() => new Set());
   const [exportScope, setExportScope] = useState<"FILTERED" | "ALL" | "SELECTED">("FILTERED");
@@ -116,9 +119,19 @@ export function IncidentRegistryTab({
   const resolvedCount = (systemData.floodRoutes || []).filter((r) => !r.is_active).length;
   const totalCount = (systemData.floodRoutes || []).length;
 
+  const availableRouteNumbers = React.useMemo(() => {
+    const routes = new Set<string>();
+    for (const r of systemData.floodRoutes || []) {
+      if (r.route_no) routes.add(r.route_no);
+    }
+    return Array.from(routes).sort((a, b) => a.localeCompare(b, "th", { numeric: true }));
+  }, [systemData.floodRoutes]);
+
   const filteredIncidents = (systemData.floodRoutes || []).filter((r) => {
     if (incidentFilter === "ACTIVE" && !r.is_active) return false;
     if (incidentFilter === "RESOLVED" && r.is_active) return false;
+    if (routeNoFilter !== "ALL" && r.route_no !== routeNoFilter) return false;
+    if (trafficStatusFilter !== "ALL" && r.traffic_status !== trafficStatusFilter) return false;
     if (incidentSearch.trim()) {
       const q = incidentSearch.toLowerCase().trim();
       return (
@@ -478,7 +491,10 @@ export function IncidentRegistryTab({
     }
     const nextLevel = Math.round(parsed);
     const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
-    const nextStatus = deriveTrafficStatusFromWaterLevel(nextLevel, meta.affectedParts) || flood.traffic_status;
+    const nextStatus =
+      inlineTrafficStatus ||
+      deriveTrafficStatusFromWaterLevel(nextLevel, meta.affectedParts) ||
+      flood.traffic_status;
 
     setInlineSavingId(flood.id);
     try {
@@ -486,7 +502,8 @@ export function IncidentRegistryTab({
       if (res.success) {
         onDataRefresh(res.systemData);
         setInlineEditId(null);
-        onToast(`บันทึกระดับน้ำ ทล.${flood.route_no} เป็น ${nextLevel} ซม. สำเร็จ`);
+        const pres = getTrafficPresentation(nextStatus, nextLevel);
+        onToast(`บันทึก ทล.${flood.route_no} (${nextLevel} ซม. · ${pres.label}) สำเร็จ`);
       }
     } catch (e: any) {
       onToast("เกิดข้อผิดพลาด: " + (e?.message || "ไม่สามารถบันทึกได้"));
@@ -637,15 +654,59 @@ export function IncidentRegistryTab({
           </button>
         </div>
 
-        <div className="relative min-w-[220px]">
-          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={incidentSearch}
-            onChange={(e) => setIncidentSearch(e.target.value)}
-            placeholder="ค้นหาสายทาง 42, 43, หนองจิก..."
-            className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-sm text-white"
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label="กรองตามสายทางหลวง"
+            value={routeNoFilter}
+            onChange={(e) => setRouteNoFilter(e.target.value)}
+            className="min-h-10 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:border-amber-400 focus:outline-none"
+          >
+            <option value="ALL">ทุกสายทาง</option>
+            {availableRouteNumbers.map((rn) => (
+              <option key={rn} value={rn}>
+                ทล.{rn}
+              </option>
+            ))}
+          </select>
+
+          <select
+            aria-label="กรองตามสถานะจราจร"
+            value={trafficStatusFilter}
+            onChange={(e) => setTrafficStatusFilter(e.target.value)}
+            className="min-h-10 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:border-amber-400 focus:outline-none"
+          >
+            <option value="ALL">ทุกสถานะจราจร</option>
+            {TRAFFIC_STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+
+          <div className="relative min-w-[200px]">
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={incidentSearch}
+              onChange={(e) => setIncidentSearch(e.target.value)}
+              placeholder="ค้นหาสายทาง 42, 43, หนองจิก..."
+              className="min-h-10 w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-sm text-white"
+            />
+          </div>
+
+          {(routeNoFilter !== "ALL" || trafficStatusFilter !== "ALL" || incidentSearch.trim() !== "") && (
+            <button
+              type="button"
+              onClick={() => {
+                setRouteNoFilter("ALL");
+                setTrafficStatusFilter("ALL");
+                setIncidentSearch("");
+              }}
+              className="min-h-10 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 px-3 text-xs text-slate-300 hover:text-white transition cursor-pointer"
+            >
+              ล้างตัวกรอง
+            </button>
+          )}
         </div>
       </div>
 
@@ -729,9 +790,10 @@ export function IncidentRegistryTab({
                           return next;
                         });
                       }}
-                      className="min-h-9 min-w-9 flex items-center justify-center p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
+                      className="min-h-9 flex items-center justify-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
                       title={isCollapsed ? "กางดูช่วงย่อยทั้งหมด" : "ย่อเก็บช่วงย่อย"}
                     >
+                      <span className="text-[11px] font-semibold whitespace-nowrap">{ev.segments.length} ช่วง</span>
                       {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
                     </button>
                   </div>
@@ -825,7 +887,18 @@ export function IncidentRegistryTab({
                                     max={500}
                                     autoFocus
                                     value={inlineWaterLevel}
-                                    onChange={(e) => setInlineWaterLevel(e.target.value)}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setInlineWaterLevel(val);
+                                      const parsed = Number(val);
+                                      if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 500) {
+                                        const suggested = deriveTrafficStatusFromWaterLevel(
+                                          Math.round(parsed),
+                                          meta.affectedParts
+                                        );
+                                        if (suggested) setInlineTrafficStatus(suggested);
+                                      }
+                                    }}
                                     onKeyDown={(e) => {
                                       if (e.key === "Escape") {
                                         e.preventDefault();
@@ -835,17 +908,20 @@ export function IncidentRegistryTab({
                                     aria-label="ระดับน้ำใหม่ (ซม.)"
                                     className="h-7 w-16 rounded border border-slate-600 bg-slate-950 px-1.5 text-center font-mono text-xs font-bold text-white focus:border-amber-400 focus:outline-none"
                                   />
-                                  {(() => {
-                                    const previewLevel = Number(inlineWaterLevel);
-                                    if (!Number.isFinite(previewLevel) || previewLevel < 0) return null;
-                                    const previewStatus = deriveTrafficStatusFromWaterLevel(Math.round(previewLevel), meta.affectedParts) || r.traffic_status;
-                                    const previewPres = getTrafficPresentation(previewStatus, Math.round(previewLevel));
-                                    return (
-                                      <span className="text-[10px] text-slate-300" title="สถานะจราจรอัตโนมัติ">
-                                        → {previewPres.icon} {previewPres.label}
-                                      </span>
-                                    );
-                                  })()}
+                                  <select
+                                    aria-label="สถานะจราจรใหม่"
+                                    value={inlineTrafficStatus}
+                                    onChange={(e) =>
+                                      setInlineTrafficStatus(e.target.value as FloodRoute["traffic_status"])
+                                    }
+                                    className="h-7 rounded border border-slate-600 bg-slate-950 px-2 text-[11px] font-semibold text-white focus:border-amber-400 focus:outline-none"
+                                  >
+                                    {TRAFFIC_STATUS_OPTIONS.map((opt) => (
+                                      <option key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                      </option>
+                                    ))}
+                                  </select>
                                   <button
                                     type="submit"
                                     disabled={inlineSavingId === r.id}
@@ -874,6 +950,7 @@ export function IncidentRegistryTab({
                                     onClick={() => {
                                       setInlineEditId(r.id);
                                       setInlineWaterLevel(String(r.water_level_cm ?? 0));
+                                      setInlineTrafficStatus(r.traffic_status);
                                     }}
                                     aria-label={`แก้ไขระดับน้ำด่วน ทล.${r.route_no} กม.${r.km_start}`}
                                     title="แก้ไขระดับน้ำแบบด่วนทันที"

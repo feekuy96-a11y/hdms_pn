@@ -9,7 +9,10 @@ import {
   FloodDirectionCode,
   FloodPhotoItem,
 } from "@/lib/flood-event-schema";
-import { TRAFFIC_STATUS_OPTIONS } from "@/lib/traffic-presentation";
+import {
+  TRAFFIC_STATUS_OPTIONS,
+  deriveTrafficStatusFromWaterLevel,
+} from "@/lib/traffic-presentation";
 import { Camera, Trash2 } from "lucide-react";
 
 type TrafficStatusValue = "WARNING" | "CLOSED" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE";
@@ -120,6 +123,20 @@ export function FloodSituationSection({
   setFieldImages,
   handleImageUpload,
 }: FloodSituationSectionProps) {
+  const applyAffectedPartsPreset = (
+    nextParts: AffectedRoadPart[],
+    setParts: React.Dispatch<React.SetStateAction<AffectedRoadPart[]>>,
+    waterLevelValue: number | string,
+    isKnown: boolean,
+    setStatus: React.Dispatch<React.SetStateAction<TrafficStatusValue>>
+  ) => {
+    setParts(nextParts);
+    if (isKnown && waterLevelValue !== "" && Number.isFinite(Number(waterLevelValue))) {
+      const derived = deriveTrafficStatusFromWaterLevel(Number(waterLevelValue), nextParts);
+      if (derived) setStatus(derived);
+    }
+  };
+
   return (
     <FormSection step={3} title="สถานการณ์น้ำและมาตรการ" description="ทิศทาง เส้นทางที่ได้รับผลกระทบ ระดับน้ำ สถานะจราจร ๕ สถานะ วันเวลา และภาพถ่ายหน้างาน (สูงสุด ๕ ภาพ)">
       {/* Direction and Highway Carriageway Info */}
@@ -206,11 +223,45 @@ export function FloodSituationSection({
 
         {!isDividedBothFlood && (
           <div>
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
               <label className="text-xs text-slate-300 font-heading font-semibold">
                 เส้นทางที่ได้รับผลกระทบ (เลือกได้หลายรายการตามสภาพจริง) *
               </label>
-              <span className="text-[10px] text-amber-300 font-mono">เลือกแล้ว {affectedParts.length} ส่วน</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    applyAffectedPartsPreset(
+                      AFFECTED_ROAD_PARTS.map((p) => p.value),
+                      setAffectedParts,
+                      routeWaterLevel,
+                      waterLevelKnown,
+                      setRouteStatus
+                    )
+                  }
+                  className="text-[11px] text-sky-300 hover:text-sky-200 underline underline-offset-2 cursor-pointer"
+                >
+                  เลือกทั้งหมด
+                </button>
+                {affectedParts.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      applyAffectedPartsPreset(
+                        [],
+                        setAffectedParts,
+                        routeWaterLevel,
+                        waterLevelKnown,
+                        setRouteStatus
+                      )
+                    }
+                    className="text-[11px] text-slate-400 hover:text-slate-200 underline underline-offset-2 cursor-pointer"
+                  >
+                    ล้าง
+                  </button>
+                )}
+                <span className="text-[10px] text-amber-300 font-mono">เลือกแล้ว {affectedParts.length} ส่วน</span>
+              </div>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {AFFECTED_ROAD_PARTS.map((part) => {
