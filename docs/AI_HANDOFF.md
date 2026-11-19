@@ -53,14 +53,13 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** ปรับปรุง UX/UI ครบทั้ง 4 ชุดตาม Roadmap รายเมนู (`UPDATE-125`) ต่อยอดจาก `UPDATE-124`
-- **Git Branch & Commit SHA:** `feat/ui-roadmap-batches` (แตกจาก `fix/ui-p1-p2-accessibility-and-layout` commit `6a3e460`)
-- **ไฟล์ที่แก้ไขแล้ว:** `components/admin/tabs/{IncidentRegistryTab,FloodSituationSection,MapManagementTab,DetourManagementTab}.tsx`, `app/page.tsx`, `app/globals.css`, `tests/e2e/admin-menus.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **งานที่กำลังทำ / เป้าหมาย:** แก้ปัญหาเชิงลึกการสร้างเส้นน้ำท่วมและทางเลี่ยง P1 & P2 (`UPDATE-127`) ต่อยอดจาก `UPDATE-126` (Edge `hdms-api` v24)
+- **Git Branch & Commit SHA:** `feat/ui-roadmap-batches`
+- **ไฟล์ที่แก้ไขแล้ว:** `lib/gis-utils.ts`, `components/admin/tabs/{HighwayIdentificationSection,RouteGeometryEditorSection,MapManagementTab}.tsx`, `tests/e2e/flood-form-rules.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md` (รวมชุดงาน `UPDATE-125`–`UPDATE-127`)
 - **สิ่งที่ทำสำเร็จ:**
-  - ชุดที่ 3 (`IncidentRegistryTab.tsx`): เพิ่มตัวกรองสายทางหลวงและสถานะจราจร, Quick Status Override คู่ช่องระดับน้ำ, และแสดงจำนวนช่วงย่อยบนปุ่มกางการ์ด
-  - ชุดที่ 1 (`app/page.tsx`, `app/globals.css`): เพิ่มปุ่มล้างตัวกรองฝั่งเดสก์ท็อป, Gradient Scroll Hint แถบชิปสายทาง, และขยายปุ่มปิดป๊อปอัปแผนที่มือถือเป็น 44×44px
-  - ชุดที่ 2 (`FloodSituationSection.tsx`, `MapManagementTab.tsx`): เพิ่มปุ่มลัด `เลือกทั้งหมด`/`ล้าง` ส่วนถนนที่ท่วม, คำแนะนำขนาดไฟล์รูป, และป้าย/สีแยกโหมด `ฉบับร่าง` vs `เผยแพร่จริง` ใน `StickyActionBar`
-  - ชุดที่ 4 (`DetourManagementTab.tsx`): แสดงสถานะเหตุการณ์ใน dropdown กรองทางเลี่ยง, เพิ่มปุ่มล้างตัวกรอง, และ SVG Mini-Map Preview ในโมดอลรายละเอียดทางเลี่ยง
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** รอตรวจทานและ commit/push ขึ้น GitHub
-- **ผลทดสอบล่าสุด:** `npm run lint` (0 warnings), `npm run typecheck` (0 errors), `npm run build:pages` (6/6 routes สำเร็จ), Playwright E2E `admin-menus.spec.ts:701` (passed)
-- **ขั้นตอนถัดไป:** Commit และ Merge เข้า `main` เพื่อ Deploy GitHub Pages
+  - เพิ่มเลือกฝั่งเบื้องต้นใน Step 1 ซิงค์ Step 3, เตือนช่วง กม. ยาวเกิน 5 กม., ปรับ dropdown ผูกจุดน้ำท่วมให้แสดง กม.+ทิศทาง
+  - ปรับ `snapFloodDirected` ใช้ PostGIS `snapRouteAction` เป็นหลัก + U-turn guard (≤ 2.5×), แก้ fallback ช่วง กม. และ ID ตอนสลับแก้ `B_TO_A` → `BOTH`
+  - แก้ `handleAddMidpointWaypoint` ให้ re-snap ฝั่ง `A → B` ทันที, อัปเดตเวลาเดินทางอัตโนมัติตามเส้นใหม่ และเพิ่ม Soft Warning (`WARNING`/`ONE_LANE`) ใน `RouteGeometryEditorSection`
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี
+- **ผลทดสอบล่าสุด:** ผ่าน R6 (`lint`, `typecheck`, `build:pages`) และ Playwright E2E (`flood-form-rules`, `admin-menus`, `gis-dual-carriageway-save`, `hybrid-google-maps`, `smoke`)
+- **ขั้นตอนถัดไป:** Commit และ Merge `feat/ui-roadmap-batches` เข้า `main` เพื่อ Deploy GitHub Pages

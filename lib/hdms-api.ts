@@ -30,31 +30,7 @@ async function executeDirectAction<T = any>(client: any, action: string, args: u
       throw new Error("ไม่สามารถโหลดข้อมูลสาธารณะได้ในขณะนี้");
     }
 
-    case "setIncidentStatusAction": {
-      const { error } = await client.from("doh_flood_routes").update({ is_active: second, updated_at: now }).eq("id", p);
-      if (error) throw error;
-      return { success: true, systemData: await refreshSystemData() } as T;
-    }
 
-    case "toggleDetourStatusAction": {
-      const { error } = await client.from("doh_detour_routes").update({ is_active: second, updated_at: now }).eq("id", p);
-      if (error) throw error;
-      return { success: true, systemData: await refreshSystemData() } as T;
-    }
-
-    case "deleteRouteAction": {
-      const table = p === "FLOOD" ? "doh_flood_routes" : "doh_detour_routes";
-      const { error } = await client.from(table).update({ deleted_at: now, updated_at: now }).eq("id", second);
-      if (error) throw error;
-      return { success: true, systemData: await refreshSystemData() } as T;
-    }
-
-    case "restoreRouteAction": {
-      const table = p === "FLOOD" ? "doh_flood_routes" : "doh_detour_routes";
-      const { error } = await client.from(table).update({ deleted_at: null, updated_at: now }).eq("id", second);
-      if (error) throw error;
-      return { success: true, systemData: await refreshSystemData() } as T;
-    }
 
     case "getDeletedRoutesAction": {
       const { data } = await client.from("doh_flood_routes").select("id,route_no,section_name,deleted_at").not("deleted_at", "is", null).order("deleted_at", { ascending: false });
@@ -88,6 +64,8 @@ const READ_ONLY_ACTIONS = new Set([
   "snapRouteAction",
   "reverseGeocodeGoogleAction",
   "computeGoogleDetourRouteAction",
+  "proxyOsrmRouteAction",
+  "proxyReverseGeocodeAction",
 ]);
 
 /** An HTTP error answered by the Edge Function (so callers can tell it apart from a network failure). */

@@ -13,8 +13,8 @@ import {
   RotateCw,
 } from "lucide-react";
 import { DETOUR_DIRECTION_MODES, DetourDirectionModeType, RoadSideType } from "@/lib/constants";
-import { groupFloodRoutesIntoEvents, generateNextEventCode } from "@/lib/flood-event-schema";
-import { getAvailableHighwayRoutes } from "@/lib/highway-schema";
+import { FloodDirectionCode, groupFloodRoutesIntoEvents, generateNextEventCode, parseFloodDirectionMeta } from "@/lib/flood-event-schema";
+import { getAvailableHighwayRoutes, parseKmPostMeters } from "@/lib/highway-schema";
 
 export type FloodParentEvent = ReturnType<typeof groupFloodRoutesIntoEvents>[number];
 export type HighwayOption = ReturnType<typeof getAvailableHighwayRoutes>[number];
@@ -51,7 +51,13 @@ export interface HighwayIdentificationSectionProps {
   setKmStart: (km: string) => void;
   kmEnd: string;
   setKmEnd: (km: string) => void;
+  directionCode: FloodDirectionCode;
+  setDirectionCode: (code: FloodDirectionCode) => void;
   roadSide: RoadSideType;
+  setRoadSide: (side: RoadSideType) => void;
+  isSelectedHighwayDivided: boolean;
+  draftCoordinates: [number, number][];
+  ensureReverseFloodGeometry: (forwardSource: [number, number][]) => void;
   setDraftReverseCoordinates?: (coords: [number, number][]) => void;
   setDraftReverseWaypoints?: (pts: [number, number][]) => void;
   setFreeEditTarget: (target: "FORWARD" | "REVERSE") => void;
@@ -104,7 +110,13 @@ export function HighwayIdentificationSection({
   setKmStart,
   kmEnd,
   setKmEnd,
+  directionCode,
+  setDirectionCode,
   roadSide,
+  setRoadSide,
+  isSelectedHighwayDivided,
+  draftCoordinates,
+  ensureReverseFloodGeometry,
   setDraftReverseCoordinates,
   setDraftReverseWaypoints,
   setFreeEditTarget,
@@ -338,8 +350,9 @@ export function HighwayIdentificationSection({
               )}
             </div>
             <div>
-              <label className="text-xs text-slate-300">กม. เริ่มต้น</label>
+              <label htmlFor="flood-km-start" className="text-xs text-slate-300">กม. เริ่มต้น</label>
               <input
+                id="flood-km-start"
                 type="text"
                 value={kmStart}
                 onChange={(e) => setKmStart(e.target.value)}
@@ -348,8 +361,9 @@ export function HighwayIdentificationSection({
               />
             </div>
             <div>
-              <label className="text-xs text-slate-300">กม. สิ้นสุด</label>
+              <label htmlFor="flood-km-end" className="text-xs text-slate-300">กม. สิ้นสุด</label>
               <input
+                id="flood-km-end"
                 type="text"
                 value={kmEnd}
                 onChange={(e) => setKmEnd(e.target.value)}
@@ -358,6 +372,69 @@ export function HighwayIdentificationSection({
               />
             </div>
           </div>
+          {(() => {
+            const mStart = parseKmPostMeters(kmStart);
+            const mEnd = parseKmPostMeters(kmEnd);
+            const spanKm = mStart !== null && mEnd !== null ? Math.abs(mEnd - mStart) / 1000 : 0;
+            if (spanKm < 5) return null;
+            return (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-950/30 px-2.5 py-1.5 text-[11px] text-amber-200">
+                <span>⚠️ ช่วง กม. นี้ยาว {spanKm.toFixed(1)} กม. (อาจเป็นช่วงเต็มตอนควบคุม) — แนะนำแก้ให้ตรงจุดน้ำท่วมจริงก่อนกดตัดเส้น</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setKmStart("");
+                    setKmEnd("");
+                  }}
+                  className="shrink-0 rounded bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-amber-300 hover:bg-slate-800 cursor-pointer"
+                >
+                  ล้าง กม.
+                </button>
+              </div>
+            );
+          })()}
+
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2" role="group" aria-label="เลือกฝั่งถนนเบื้องต้น">
+            <span className="text-[11px] font-heading font-semibold text-slate-300">ฝั่งถนน/ทิศทาง:</span>
+            <button
+              type="button"
+              onClick={() => {
+                setDirectionCode("A_TO_B");
+                setRoadSide("LEFT");
+                setDraftReverseCoordinates?.([]);
+                setDraftReverseWaypoints?.([]);
+                setFreeEditTarget("FORWARD");
+              }}
+              className={`rounded-lg px-2.5 py-1 text-[11px] font-heading font-bold border transition cursor-pointer ${directionCode === "A_TO_B" && roadSide === "LEFT" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600"}`}
+            >
+              ขาไป A→B
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDirectionCode("B_TO_A");
+                setRoadSide("RIGHT");
+                setDraftReverseCoordinates?.([]);
+                setDraftReverseWaypoints?.([]);
+                setFreeEditTarget("FORWARD");
+              }}
+              className={`rounded-lg px-2.5 py-1 text-[11px] font-heading font-bold border transition cursor-pointer ${directionCode === "B_TO_A" && roadSide === "RIGHT" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600"}`}
+            >
+              ขากลับ B→A
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDirectionCode("BOTH");
+                setRoadSide("BOTH");
+                if (isSelectedHighwayDivided) ensureReverseFloodGeometry(draftCoordinates);
+              }}
+              className={`rounded-lg px-2.5 py-1 text-[11px] font-heading font-bold border transition cursor-pointer ${directionCode === "BOTH" && roadSide === "BOTH" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600"}`}
+            >
+              ทั้ง ๒ ฝั่ง A⇄B
+            </button>
+          </div>
+
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <button
               type="button"
@@ -381,11 +458,22 @@ export function HighwayIdentificationSection({
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
               >
                 <option value="">ไม่ผูกกับจุดน้ำท่วม</option>
-                {floodRoutes.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    ทล.{f.route_no} - {f.section_name}
-                  </option>
-                ))}
+                {floodRoutes.map((f) => {
+                  const meta = parseFloodDirectionMeta(f.direction_meta, f);
+                  const dirTag =
+                    meta.directionCode === "A_TO_B"
+                      ? "ขาไป A→B"
+                      : meta.directionCode === "B_TO_A"
+                        ? "ขากลับ B→A"
+                        : meta.directionCode === "BOTH"
+                          ? "ทั้ง ๒ ฝั่ง"
+                          : "ไม่ระบุทิศ";
+                  return (
+                    <option key={f.id} value={f.id}>
+                      ทล.{f.route_no} กม.{f.km_start}–{f.km_end} ({dirTag}) · {f.section_name}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             <div>

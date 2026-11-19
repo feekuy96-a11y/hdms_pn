@@ -1,23 +1,44 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "commit": "e4bb5d960d87126ff3b3a8af1a104b7db67560ba",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "83485963700bcf11d5bf78118facb301676b69d918fee2e45a95e7f1a2840f6c"
+    },
     "landing-page-design": {
       "source": "elayadesign/ai-design-skills",
       "sourceType": "github",
       "skillPath": "skills/landing-page-design/SKILL.md",
-      "computedHash": "e0cf363a00650a18797c3cfc086b7e32cdff56b4cb34d72978d7b60aa8ca0172"
+      "computedHash": ""
+    },
+    "leaflet": {
+      "source": "mapsnippets/leaflet-skill",
+      "commit": "185a9bdfdda776ceaf0eb6d24597d745e0dcd041",
+      "sourceType": "github",
+      "skillPath": "skills/leaflet/SKILL.md",
+      "computedHash": "adde4ab6fc4cdc1d66483fd3876e15e0e9622e46ac59119fc38ccae68c196828"
     },
     "supabase": {
       "source": "supabase/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/supabase/SKILL.md",
-      "computedHash": "af1844ade632808fc0c15cf2db87daf3b2431c5262dc8a0c3ea7d70880fadf91"
+      "computedHash": "2fbff32fd63b7d31585cacf0ed43e5bf8d05dd20d6c0c751d256cb967a00eec1"
     },
     "supabase-postgres-best-practices": {
       "source": "supabase/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/supabase-postgres-best-practices/SKILL.md",
-      "computedHash": "3e53b5ce61fc8f2c4cff98a1b566c7a577e3064e248f0a23646a4471c5dc659e"
+      "computedHash": "3eb972c2d7c818e544e35cc33ea8d7147d4d78ae08142ef40037b0fbac7a2505"
+    },
+    "tailwind-4-docs": {
+      "source": "Lombiq/Tailwind-Agent-Skills",
+      "commit": "634ec184c36e495fae1d8cf7975df7e6969e3a89",
+      "sourceType": "github",
+      "skillPath": "skills/tailwind-4-docs/SKILL.md",
+      "computedHash": "263961b82698e3defdb26dd6a1b7328044517e67a3bbe91c1b33bb2a4273f4ee"
     }
   }
 }

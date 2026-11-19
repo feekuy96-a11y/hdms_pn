@@ -12,10 +12,12 @@
 //   - a failure hint, so screens can tell the officer what to do instead of a generic error
 // No imports: it can be tested on its own.
 
+import { proxyOsrmRouteAction } from "@/app/actions/doh-actions";
+
 export type OsrmFailure = "rate_limited" | "unreachable" | "no_route";
 export interface OsrmResult {
   data: any;
-  source: "local" | "public";
+  source: "local" | "edge" | "public";
 }
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
@@ -31,6 +33,7 @@ const inflight = new Map<string, Promise<OsrmResult | null>>();
 let lastFailure: OsrmFailure | null = null;
 let lastPublicCallAt = 0;
 let localDownUntil = 0;
+let edgeDownUntil = 0;
 let publicQueue: Promise<unknown> = Promise.resolve();
 
 /** Why the most recent request failed (null after a success). */
@@ -45,6 +48,7 @@ export function resetOsrmClient() {
   lastFailure = null;
   lastPublicCallAt = 0;
   localDownUntil = 0;
+  edgeDownUntil = 0;
   publicQueue = Promise.resolve();
 }
 
@@ -128,7 +132,41 @@ async function resolveRoute(coordString: string, params: string): Promise<OsrmRe
     if (local.failure === "unreachable") localDownUntil = Date.now() + LOCAL_BREAKER_MS;
   }
 
-  // Tier 2: public OSRM, spaced and retried once.
+  // Tier 2: Supabase Edge proxy (server-side User-Agent & caching, avoids browser CORS/IP limits).
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supaKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (supaUrl && supaKey && Date.now() >= edgeDownUntil) {
+    const parsedCoords = coordString
+      .split(";")
+      .map((pair) => pair.split(",").map(Number))
+      .filter((pt): pt is [number, number] => pt.length === 2 && Number.isFinite(pt[0]) && Number.isFinite(pt[1]));
+    if (parsedCoords.length >= 2 && parsedCoords.length <= 25) {
+      const overview = params.includes("overview=simplified")
+        ? "simplified"
+        : params.includes("overview=false")
+          ? "false"
+          : "full";
+      const steps = params.includes("steps=true");
+      try {
+        const edgeRes = await proxyOsrmRouteAction({ coords: parsedCoords, overview, steps });
+        if (edgeRes?.available && edgeRes.found && edgeRes.data?.routes?.[0]) {
+          const value: OsrmResult = { data: edgeRes.data, source: "edge" };
+          remember(key, value);
+          lastFailure = null;
+          return value;
+        }
+        if (edgeRes?.available && edgeRes.found === false) {
+          lastFailure = "no_route";
+          return null;
+        }
+        edgeDownUntil = Date.now() + LOCAL_BREAKER_MS;
+      } catch {
+        edgeDownUntil = Date.now() + LOCAL_BREAKER_MS;
+      }
+    }
+  }
+
+  // Tier 3: public OSRM direct fallback, spaced and retried once.
   const result = await viaPublic(`${publicBase}/${coordString}?${params}`);
   if (result.ok) {
     const value: OsrmResult = { data: result.data, source: "public" };

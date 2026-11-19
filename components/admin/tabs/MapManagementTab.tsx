@@ -37,7 +37,9 @@ import {
   compressImageToAdaptiveBase64,
   slicePolylineByKmRange,
   detectClosedRoadConflicts,
+  detectPassabilityFloodWarnings,
   analyzeCarriagewaySeparation,
+  haversineDistanceKm,
 } from "@/lib/gis-utils";
 import {
   SAFETY_MEASURES,
@@ -202,6 +204,9 @@ export function MapManagementTab({
   const [detourRoadCondition, setDetourRoadCondition] = useState("");
   const [detourDurationMinFwd, setDetourDurationMinFwd] = useState("");
   const [detourDurationMinRev, setDetourDurationMinRev] = useState("");
+  const durationFwdManualRef = useRef(false);
+  const durationRevManualRef = useRef(false);
+  const editOriginalFloodDirRef = useRef<FloodDirectionCode>("UNKNOWN");
   const [detourStartPhotoUrl, setDetourStartPhotoUrl] = useState("");
   const [detourStartPhotoCaption, setDetourStartPhotoCaption] = useState("");
   const [detourEndPhotoUrl, setDetourEndPhotoUrl] = useState("");
@@ -364,6 +369,7 @@ export function MapManagementTab({
   const [detourDistanceMeters, setDetourDistanceMeters] = useState<{ forward: number; reverse: number }>({ forward: 0, reverse: 0 });
   const [detourDurationSeconds, setDetourDurationSeconds] = useState<{ forward: number; reverse: number }>({ forward: 0, reverse: 0 });
   const [closedRoadConflicts, setClosedRoadConflicts] = useState<string[]>([]);
+  const [passabilityWarnings, setPassabilityWarnings] = useState<string[]>([]);
 
   useEffect(() => {
     if (routeMode === "FLOOD") {
@@ -519,6 +525,7 @@ export function MapManagementTab({
       setRouteWaterLevel(flood.water_level_cm);
       setRouteStatus(flood.traffic_status);
       const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
+      editOriginalFloodDirRef.current = meta.directionCode;
       const effectiveSide = resolveEffectiveRoadSide(flood);
       setRoadSide(effectiveSide);
       setAffectedLanes(flood.affected_lanes || AFFECTED_LANES_OPTIONS[0]);
@@ -628,8 +635,11 @@ export function MapManagementTab({
         forward: fwdSec || 0,
         reverse: revSec || 0,
       });
+      durationFwdManualRef.current = Boolean(fwdSec);
+      durationRevManualRef.current = Boolean(revSec);
       setDetourDurationMinFwd(fwdSec ? String(Math.max(1, Math.round(fwdSec / 60))) : "");
       setDetourDurationMinRev(revSec ? String(Math.max(1, Math.round(revSec / 60))) : "");
+      setPassabilityWarnings([]);
       setDetourStartPhotoUrl(detour.detour_meta?.start_point_photo?.url || "");
       setDetourStartPhotoCaption(detour.detour_meta?.start_point_photo?.caption || "");
       setDetourEndPhotoUrl(detour.detour_meta?.end_point_photo?.url || "");
@@ -896,10 +906,10 @@ export function MapManagementTab({
           forward: nextFwdDurS,
           reverse: nextRevDurS,
         });
-        if (!detourDurationMinFwd.trim() && nextFwdDurS > 0) {
+        if (!durationFwdManualRef.current && nextFwdDurS > 0) {
           setDetourDurationMinFwd(String(Math.max(1, Math.round(nextFwdDurS / 60))));
         }
-        if (!detourDurationMinRev.trim() && nextRevDurS > 0) {
+        if (!durationRevManualRef.current && nextRevDurS > 0) {
           setDetourDurationMinRev(String(Math.max(1, Math.round(nextRevDurS / 60))));
         }
 
@@ -911,6 +921,19 @@ export function MapManagementTab({
           new Set(allConflicts.map((c) => `ทล.${c.routeNo} (${c.sectionName})`))
         );
         setClosedRoadConflicts(uniqueConflictMsgs);
+
+        const fwdPassWarnings = detectPassabilityFloodWarnings(forwardCoords, systemData.floodRoutes || [], "FORWARD");
+        const revPassWarnings = detourDirectionMode === "TWO_WAY" && pickedBA.coords.length >= 2
+          ? detectPassabilityFloodWarnings(pickedBA.coords, systemData.floodRoutes || [], "REVERSE")
+          : [];
+        const uniquePassMsgs = Array.from(
+          new Set(
+            [...fwdPassWarnings, ...revPassWarnings].map(
+              (w) => `ทล.${w.routeNo} กม.${w.kmStart}–${w.kmEnd} (${w.trafficStatus === "ONE_LANE" ? "ผ่านได้ ๑ ช่องทาง" : "รถเล็กผ่านไม่ได้"})`
+            )
+          )
+        );
+        setPassabilityWarnings(uniquePassMsgs);
         setDraftConflictPoints?.(
           allConflicts.map((c) => ({
             coord: c.conflictPoint,
@@ -935,25 +958,43 @@ export function MapManagementTab({
       }
 
       // FLOOD mode: Snap single or dual carriageways (A->B and B->A)
+      // Prefer real DOH PostGIS highway geometry (snapRouteAction) first so flood lines never loop around distant U-turns;
+      // fall back to Google/OSRM only if PostGIS fails, with a U-turn loop guard.
       const snapFloodDirected = async (directedPoints: [number, number][]): Promise<[number, number][] | null> => {
+        const segments = await Promise.all(
+          directedPoints.slice(1).map((point, index) => snapRouteAction(directedPoints[index], point).catch(() => null))
+        );
+        if (requestId !== routingRequest.current) return null;
+        if (segments.every((segment) => Array.isArray(segment) && segment.length >= 2)) {
+          return segments.flatMap((segment, index) => (index === 0 ? segment! : segment!.slice(1)));
+        }
+
         if (useCarriagewaySnapping || isDividedBothFlood) {
+          const directKm = haversineDistanceKm(directedPoints[0], directedPoints[directedPoints.length - 1]);
+          const acceptNonUTurn = (coords: [number, number][]) => {
+            const polyKm = calculatePolylineRoadDistanceKm(coords);
+            if (directKm > 0.05 && polyKm > Math.max(0.8, directKm * 2.5)) {
+              onToast("⚠️ พบแนวเส้นอ้อมจุดกลับรถยาวผิดปกติ — ระบบขอใช้จุดพิกัดตรงแทนเพื่อกันเส้นเลยจุดท่วม");
+              return false;
+            }
+            return true;
+          };
           const googleCarriageway = await computeGoogleRouteHybrid(directedPoints, "TRAFFIC_UNAWARE");
           if (requestId !== routingRequest.current) return null;
-          if (googleCarriageway && googleCarriageway.coords.length >= 2) return googleCarriageway.coords;
+          if (googleCarriageway && googleCarriageway.coords.length >= 2 && acceptNonUTurn(googleCarriageway.coords)) {
+            return googleCarriageway.coords;
+          }
           const osrmRes = await fetchOsrmWithFailover(
             directedPoints.map((p) => p.join(",")).join(";"),
             "overview=full&geometries=geojson"
           );
           if (requestId !== routingRequest.current) return null;
-          const osrmCoords = osrmRes?.data?.routes?.[0]?.geometry?.coordinates;
-          if (Array.isArray(osrmCoords) && osrmCoords.length >= 2) return osrmCoords as [number, number][];
+          const osrmCoords = osrmRes?.data?.routes?.[0]?.geometry?.coordinates as [number, number][] | undefined;
+          if (Array.isArray(osrmCoords) && osrmCoords.length >= 2 && acceptNonUTurn(osrmCoords)) {
+            return osrmCoords;
+          }
         }
-        const segments = await Promise.all(
-          directedPoints.slice(1).map((point, index) => snapRouteAction(directedPoints[index], point).catch(() => null))
-        );
-        if (requestId !== routingRequest.current) return null;
-        if (segments.some((segment) => !segment || segment.length < 2)) return null;
-        return segments.flatMap((segment, index) => (index === 0 ? segment! : segment!.slice(1)));
+        return null;
       };
 
       if (isDividedBothFlood) {
@@ -1172,6 +1213,9 @@ export function MapManagementTab({
     const nextFwdWps = [...draftWaypoints, midPoint];
     setDraftWaypoints(nextFwdWps);
     onToast(`เพิ่มจุดดัดแนวเส้นทางที่พิกัด ${midPoint[1].toFixed(4)}, ${midPoint[0].toFixed(4)}`);
+    if (startLat && startLon && endLat && endLon && routeMode === "DETOUR") {
+      void triggerDualRoadSnapping(startLat, startLon, endLat, endLon, nextFwdWps, draftReverseWaypoints);
+    }
   };
 
   // Undo Waypoint (supports both A -> B and B -> A)
@@ -1250,6 +1294,10 @@ export function MapManagementTab({
     setDraftReverseWaypoints?.([]);
     setDraftConflictPoints?.([]);
     setClosedRoadConflicts([]);
+    setPassabilityWarnings([]);
+    durationFwdManualRef.current = false;
+    durationRevManualRef.current = false;
+    editOriginalFloodDirRef.current = "UNKNOWN";
     setSnappingStatusText("");
     setStartLat("");
     setStartLon("");
@@ -1447,25 +1495,33 @@ export function MapManagementTab({
       }
     }
 
-    // Fallback: search raw features if no grouped branch matched
+    // Fallback: search raw features if no grouped branch matched (prefer feature whose KM span covers target range)
     if (slicedForward.length < 2) {
       let targetCoords: [number, number][] = [];
       let secKmStart: any = null;
       let secKmEnd: any = null;
+      const reqStartM = parseKmPostMeters(kmStart);
+      const reqEndM = parseKmPostMeters(kmEnd);
+      const reqMidM = reqStartM !== null && reqEndM !== null ? (reqStartM + reqEndM) / 2 : null;
       for (const layer of systemData.highwayLayers || []) {
         if (layer.geojson_data && Array.isArray(layer.geojson_data.features)) {
           for (const f of layer.geojson_data.features) {
             const props = f.properties || {};
             const fRoute = String(props.route_no || props.route_code || props.ROAD_NO || props.route || props.code || "").replace(/^ทล\.?/i, "").trim();
             if (fRoute === cleanRoute && f.geometry?.coordinates?.length >= 2) {
-              targetCoords = f.geometry.coordinates;
-              secKmStart = props.km_start || kmStart;
-              secKmEnd = props.km_end || kmEnd;
-              break;
+              const fStartM = parseKmPostMeters(props.km_start);
+              const fEndM = parseKmPostMeters(props.km_end);
+              const coversRange = reqMidM !== null && fStartM !== null && fEndM !== null &&
+                reqMidM >= Math.min(fStartM, fEndM) && reqMidM <= Math.max(fStartM, fEndM);
+              if (targetCoords.length < 2 || coversRange) {
+                targetCoords = f.geometry.coordinates;
+                secKmStart = props.km_start || kmStart;
+                secKmEnd = props.km_end || kmEnd;
+                if (coversRange) break;
+              }
             }
           }
         }
-        if (targetCoords.length >= 2) break;
       }
       if (targetCoords.length >= 2) {
         slicedForward = slicePolylineByKmRange(targetCoords, secKmStart, secKmEnd, kmStart, kmEnd, directionCode === "B_TO_A");
@@ -1790,8 +1846,17 @@ export function MapManagementTab({
           carriageway_type: "DUAL_CARRIAGEWAY",
         };
 
+        const existingForwardSiblingId =
+          routeEditId && editOriginalFloodDirRef.current === "B_TO_A"
+            ? (systemData.floodRoutes || []).find((f) => {
+                if (String(f.id) === String(routeEditId)) return false;
+                const m = parseFloodDirectionMeta(f.direction_meta, f);
+                return m.eventId === currentEventId && m.directionCode === "A_TO_B";
+              })?.id
+            : routeEditId || undefined;
+
         const forwardRes = await upsertRouteAction({
-          id: routeEditId || undefined,
+          id: existingForwardSiblingId,
           recordType: "FLOOD",
           routeNo: chosenRouteNo,
           kmStart,
@@ -1856,13 +1921,16 @@ export function MapManagementTab({
           zeroConfirmedAt: reverseWaterLevelKnown && numRevWaterLevel === 0 ? new Date().toISOString() : null,
         };
 
-        const existingReverseSiblingId = routeEditId
-          ? (systemData.floodRoutes || []).find((f) => {
-              if (String(f.id) === String(routeEditId)) return false;
-              const m = parseFloodDirectionMeta(f.direction_meta, f);
-              return m.eventId === currentEventId && m.directionCode === "B_TO_A";
-            })?.id
-          : undefined;
+        const existingReverseSiblingId =
+          routeEditId && editOriginalFloodDirRef.current === "B_TO_A"
+            ? routeEditId
+            : routeEditId
+              ? (systemData.floodRoutes || []).find((f) => {
+                  if (String(f.id) === String(routeEditId)) return false;
+                  const m = parseFloodDirectionMeta(f.direction_meta, f);
+                  return m.eventId === currentEventId && m.directionCode === "B_TO_A";
+                })?.id
+              : undefined;
 
         const res = await upsertRouteAction({
           id: existingReverseSiblingId,
@@ -2117,7 +2185,13 @@ export function MapManagementTab({
           setKmStart={setKmStart}
           kmEnd={kmEnd}
           setKmEnd={setKmEnd}
+          directionCode={directionCode}
+          setDirectionCode={setDirectionCode}
           roadSide={roadSide}
+          setRoadSide={setRoadSide}
+          isSelectedHighwayDivided={isSelectedHighwayDivided}
+          draftCoordinates={draftCoordinates}
+          ensureReverseFloodGeometry={ensureReverseFloodGeometry}
           setDraftReverseCoordinates={setDraftReverseCoordinates}
           setDraftReverseWaypoints={setDraftReverseWaypoints}
           setFreeEditTarget={setFreeEditTarget}
@@ -2211,6 +2285,7 @@ export function MapManagementTab({
           handleRestoreOriginalRoute={handleRestoreOriginalRoute}
           requestClearRoute={requestClearRoute}
           closedRoadConflicts={closedRoadConflicts}
+          passabilityWarnings={passabilityWarnings}
           detourDirectionMode={detourDirectionMode}
           detourDistanceMeters={detourDistanceMeters}
         />
@@ -2225,9 +2300,15 @@ export function MapManagementTab({
             detourRoadCondition={detourRoadCondition}
             setDetourRoadCondition={setDetourRoadCondition}
             detourDurationMinFwd={detourDurationMinFwd}
-            setDetourDurationMinFwd={setDetourDurationMinFwd}
+            setDetourDurationMinFwd={(val) => {
+              durationFwdManualRef.current = val.trim() !== "";
+              setDetourDurationMinFwd(val);
+            }}
             detourDurationMinRev={detourDurationMinRev}
-            setDetourDurationMinRev={setDetourDurationMinRev}
+            setDetourDurationMinRev={(val) => {
+              durationRevManualRef.current = val.trim() !== "";
+              setDetourDurationMinRev(val);
+            }}
             detourDirectionMode={detourDirectionMode}
             detourGoogleMapsUrlFwd={detourGoogleMapsUrlFwd}
             setDetourGoogleMapsUrlFwd={setDetourGoogleMapsUrlFwd}

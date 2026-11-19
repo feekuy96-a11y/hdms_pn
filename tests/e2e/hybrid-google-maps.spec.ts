@@ -7,6 +7,7 @@ import {
   selectRouteCornerWaypoints,
 } from "../../lib/gis-utils";
 import { resetAreaLookup, resolveArea } from "../../lib/area-lookup";
+import { fetchOsrmWithFailover, resetOsrmClient } from "../../lib/osrm-client";
 import { sampleWaypointsForGoogleMaps } from "../../lib/detour-navigation";
 
 test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
@@ -366,6 +367,85 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
       expect(krueSeArea.tambon).toBe("ตันหยงลุโละ");
       expect(krueSeArea.amphoe).toBe("เมืองปัตตานี");
       expect(krueSeArea.village).toBe("บ้านกรือเซะ");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("Edge proxy handles OSRM routing & Nominatim reverse geocode server-side without browser direct calls", async () => {
+    resetOsrmClient();
+    const originalFetch = globalThis.fetch;
+    const edgeActionsCalled: string[] = [];
+
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/functions/v1/hdms-api")) {
+        const body = JSON.parse(String(init?.body || "{}"));
+        edgeActionsCalled.push(body.action);
+        if (body.action === "reverseGeocodeGoogleAction") {
+          return new Response(JSON.stringify({ configured: false, available: false }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (body.action === "proxyReverseGeocodeAction") {
+          return new Response(
+            JSON.stringify({
+              available: true,
+              found: true,
+              address: {
+                road: "ถนนหนองจิก",
+                subdistrict: "ตำบลรูสะมิแล",
+                district: "อำเภอเมืองปัตตานี",
+                province: "จังหวัดปัตตานี",
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        if (body.action === "proxyOsrmRouteAction") {
+          return new Response(
+            JSON.stringify({
+              available: true,
+              found: true,
+              data: {
+                code: "Ok",
+                routes: [
+                  {
+                    distance: 1500,
+                    duration: 120,
+                    geometry: { type: "LineString", coordinates: [[101.24, 6.87], [101.26, 6.88]] },
+                  },
+                ],
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+      }
+      throw new Error(`Browser should not call external upstream directly: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      const area = await resolveArea(101.24, 6.87, { needRoad: true });
+      expect(area.tambon).toBe("รูสะมิแล");
+      expect(area.road).toBe("ถนนหนองจิก");
+
+      const osrmRes = await fetchOsrmWithFailover("101.24,6.87;101.26,6.88");
+      expect(osrmRes?.source).toBe("edge");
+      expect(osrmRes?.data?.routes?.[0]?.distance).toBe(1500);
+      expect(edgeActionsCalled).toContain("proxyReverseGeocodeAction");
+      expect(edgeActionsCalled).toContain("proxyOsrmRouteAction");
+
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+      const edgeSrc = fs.readFileSync(path.join(process.cwd(), "supabase/functions/hdms-api/index.ts"), "utf8");
+      expect(edgeSrc).toContain('"proxyOsrmRouteAction"');
+      expect(edgeSrc).toContain('"proxyReverseGeocodeAction"');
+      expect(edgeSrc).toContain("HDMS-Pattani-DOH/2.0");
+      const clientSrc = fs.readFileSync(path.join(process.cwd(), "lib/hdms-api.ts"), "utf8");
+      expect(clientSrc).not.toContain('case "deleteRouteAction"');
+      expect(clientSrc).not.toContain('case "setIncidentStatusAction"');
     } finally {
       globalThis.fetch = originalFetch;
     }

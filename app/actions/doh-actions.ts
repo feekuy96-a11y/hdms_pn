@@ -86,6 +86,35 @@ export async function computeGoogleDetourRouteAction(payload: {
   return invokeHdms("computeGoogleDetourRouteAction", [payload]);
 }
 
+export interface OsrmProxyRouteResult {
+  available: boolean;
+  found?: boolean;
+  status?: number;
+  data?: any;
+}
+
+export async function proxyOsrmRouteAction(payload: {
+  coords: [number, number][];
+  overview?: "full" | "simplified" | "false";
+  steps?: boolean;
+}): Promise<OsrmProxyRouteResult> {
+  return invokeHdms("proxyOsrmRouteAction", [payload]);
+}
+
+export interface ReverseGeocodeProxyResult {
+  available: boolean;
+  found?: boolean;
+  status?: number;
+  address?: Record<string, any>;
+}
+
+export async function proxyReverseGeocodeAction(
+  lon: number,
+  lat: number
+): Promise<ReverseGeocodeProxyResult> {
+  return invokeHdms("proxyReverseGeocodeAction", [lon, lat]);
+}
+
 export async function getSystemDataAction(): Promise<SystemDataPayload> {
   return invokeHdms("getSystemDataAction", []);
 }

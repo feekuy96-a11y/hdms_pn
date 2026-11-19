@@ -1,5 +1,35 @@
 ﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-127] 2026-11-19 แก้ปัญหาเชิงลึกการสร้างเส้นน้ำท่วมและทางเลี่ยงให้ตรงการใช้งานจริง (P1 & P2)
+- **ไฟล์:** `lib/gis-utils.ts`, `components/admin/tabs/HighwayIdentificationSection.tsx`, `components/admin/tabs/RouteGeometryEditorSection.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `tests/e2e/flood-form-rules.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **Step 1 — เลือกฝั่ง/ทิศทางตั้งแต่ต้น & เตือนช่วง กม. ยาวเกินจริง (`HighwayIdentificationSection.tsx`):** เพิ่มแถบเลือกฝั่งเบื้องต้น (`ขาไป A→B / ขากลับ B→A / ทั้ง ๒ ฝั่ง A⇄B`) ใน Step 1 ซิงค์กับ Step 3, ผูก `htmlFor/id` ให้ช่อง `กม. เริ่มต้น`/`กม. สิ้นสุด`, แสดงคำเตือนเมื่อช่วง กม. ยาวตั้งแต่ 5 กม. ขึ้นไปพร้อมปุ่ม `ล้าง กม.`, และแสดงช่วง กม.+ทิศทาง ใน dropdown `ผูกกับจุดน้ำท่วมอ้างอิง`
+  2. **กันเส้นน้ำท่วมอ้อม U-Turn & แก้ Fallback ช่วง กม. (`MapManagementTab.tsx`):**
+     - `snapFloodDirected` ใช้โครงข่ายจริงของกรมทางหลวง (`snapRouteAction`) เป็น Tier 1 ก่อนตกไป Google/OSRM และตรวจ U-Turn Loop Guard (`polyKm > Math.max(0.8, directKm * 2.5)`) ป้องกันลากเส้นเลยจุดกลับรถ
+     - `handleSlicePolylineFromKm` fallback จับคู่ Feature ที่ช่วง `km_start..km_end` ครอบคลุมช่วงที่กรอกก่อน ไม่หยุดที่ Feature แรกเสมอ
+     - แก้การบันทึกและเปิดแก้ไขช่วง `B_TO_A` เมื่อสลับเป็น `ท่วมทั้งสองฝั่งจราจร` ไม่ให้เขียนทับฝั่งผิด ID (`editOriginalFloodDirRef`)
+  3. **แก้ไขทางเลี่ยง 2 ทิศทางและแจ้งเตือนผ่านจุดน้ำท่วม (`MapManagementTab.tsx`, `RouteGeometryEditorSection.tsx`, `lib/gis-utils.ts`):**
+     - `handleAddMidpointWaypoint` ฝั่งขาไป `A → B` สั่งคำนวณเส้นใหม่ทันทีเหมือนฝั่ง `B → A`
+     - อัปเดตเวลาเดินทาง (นาที) อัตโนมัติเมื่อขยับจุด A/B หรือคำนวณเส้นใหม่ ยกเว้นเมื่อเจ้าหน้าที่กรอกแก้ตัวเลขเอง (`durationFwdManualRef` / `durationRevManualRef`)
+     - สกัด `detectFloodStatusConflicts` ร่วมกับ `detectClosedRoadConflicts` และเพิ่ม `detectPassabilityFloodWarnings` แจ้งเตือนสีเหลืองเมื่อทางเลี่ยงผ่านจุด `WARNING` หรือ `ONE_LANE`
+- **ตรวจแล้ว:** `npm run lint`, `npm run typecheck`, `npm run build:pages`, `PLAYWRIGHT_STATIC=1 npx playwright test tests/e2e/flood-form-rules.spec.ts tests/e2e/admin-menus.spec.ts tests/e2e/gis-dual-carriageway-save.spec.ts tests/e2e/hybrid-google-maps.spec.ts`
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function เพิ่ม → Commit & Merge เข้า `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
+### [UPDATE-126] 2026-11-19 ปรับปรุงสถาปัตยกรรมทางเลือกที่ 1 ครบวงจร: ย้าย OSRM/Geocode Proxy เข้า Edge Function (v24), ถอด Dead Mutation Code ฝั่ง Client และ Deploy Production
+- **ไฟล์:** `supabase/functions/hdms-api/index.ts`, `lib/hdms-api.ts`, `app/actions/doh-actions.ts`, `lib/osrm-client.ts`, `lib/area-lookup.ts`, `tests/e2e/hybrid-google-maps.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **Edge Function Read-Only Proxy (`supabase/functions/hdms-api/index.ts` → Deploy Production v24):** เพิ่ม Action `proxyOsrmRouteAction` และ `proxyReverseGeocodeAction` ใน `READ_ONLY_EDGE_ACTIONS` พร้อมตรวจช่วงพิกัดตัวเลขเข้มงวด (ป้องกัน CWE-918 SSRF) และกำหนด `AbortSignal.timeout` + `Cache-Control` โดยคง `verify_jwt = false` ตามเดิม
+  2. **เสริมความปลอดภัย Client Adapter (`lib/hdms-api.ts`, `app/actions/doh-actions.ts`):** ถอด dead mutation branches (`setIncidentStatusAction`, `toggleDetourStatusAction`, `deleteRouteAction`, `restoreRouteAction`) ออกจาก `executeDirectAction` บนเบราว์เซอร์ ให้เหลือเพียง read-only fallback และเพิ่ม `proxyOsrmRouteAction` / `proxyReverseGeocodeAction` ใน `READ_ONLY_ACTIONS`
+  3. **เชื่อมต่อ Edge Proxy + Circuit Breaker ฝั่ง Client (`lib/osrm-client.ts`, `lib/area-lookup.ts`):**
+     - `fetchOsrmWithFailover` เรียก Local OSRM (Tier 1) → Edge `proxyOsrmRouteAction` (Tier 2) → Public OSRM (Tier 3 fallback)
+     - `queryNominatim` เรียก Edge `proxyReverseGeocodeAction` พร้อม cooldown (`UNCONFIGURED_COOLDOWN_MS` เมื่อ upstream คืน `403`) แล้ว fallback ไป Direct Nominatim อัตโนมัติ
+  4. **E2E & Security Verification (`tests/e2e/hybrid-google-maps.spec.ts`):** เพิ่มเคสทดสอบ Edge OSRM/Nominatim Proxy และการถอด dead mutation code
+- **ตรวจแล้ว (หลังแก้ครั้งสุดท้าย):**
+  - Deploy Edge `hdms-api` v24 บน Supabase Production (`ebyobrtvisylwawxiurx`) และเทียบ byte-for-byte กับไฟล์ในเครื่อง: ตรงกัน 100%
+  - ทดสอบ Live Production: `proxyOsrmRouteAction` ตอบ `200` (`available: true, found: true, dist: 4819.8`), SSRF Attack `127.0.0.1:22` ถูกบล็อก `400 Invalid numeric value`, `getPublicSystemDataAction` ตอบ `200`, `proxyReverseGeocodeAction` ได้ `403` จาก OSM บน IP คลาวด์และ fallback ฝั่ง Client ทำงานถูกต้อง
+  - รัน `npm run lint`, `npm run typecheck`, `npm run build:pages`, และ Playwright `hybrid-google-maps.spec.ts` (9 passed) + `smoke.spec.ts` + `admin-menus.spec.ts`
+- **ลำดับ Deploy & ย้อนกลับ:** Edge Function `hdms-api` v24 Deploy บน Production แล้ว → Merge/Push โค้ดเว็บเข้า `main` เพื่อ Deploy GitHub Pages; ย้อนกลับ Edge ด้วยการ Deploy `index.ts` v23 จาก git history
+
 ### [UPDATE-125] 2026-11-19 ปรับปรุง UX/UI ครบทั้ง 4 ชุดตาม Roadmap รายเมนู (ทะเบียนเหตุการณ์, หน้าประชาชน, จัดการแผนที่, ทะเบียนทางเลี่ยง)
 - **ไฟล์:** `components/admin/tabs/IncidentRegistryTab.tsx`, `app/page.tsx`, `app/globals.css`, `components/admin/tabs/FloodSituationSection.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
 - **การแก้ไข:**
