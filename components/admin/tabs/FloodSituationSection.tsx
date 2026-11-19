@@ -375,9 +375,43 @@ export function FloodSituationSection({
                 <span className="text-[10px] text-slate-400">{side.sideHint}</span>
               </div>
               <div>
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                   <span className="text-[11px] text-slate-300 font-heading font-semibold">เส้นทางที่ได้รับผลกระทบ ({side.key === "FORWARD" ? "ขาไป" : "ขากลับ"})</span>
-                  <span className="text-[10px] text-amber-300 font-mono">เลือกแล้ว {side.parts.length} ส่วน</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        applyAffectedPartsPreset(
+                          AFFECTED_ROAD_PARTS.map((p) => p.value),
+                          side.setParts,
+                          side.waterLevel,
+                          side.waterKnown,
+                          side.setStatus
+                        )
+                      }
+                      className="text-[10px] text-sky-300 hover:text-sky-200 underline underline-offset-2 cursor-pointer"
+                    >
+                      เลือกทั้งหมด
+                    </button>
+                    {side.parts.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          applyAffectedPartsPreset(
+                            [],
+                            side.setParts,
+                            side.waterLevel,
+                            side.waterKnown,
+                            side.setStatus
+                          )
+                        }
+                        className="text-[10px] text-slate-400 hover:text-slate-200 underline underline-offset-2 cursor-pointer"
+                      >
+                        ล้าง
+                      </button>
+                    )}
+                    <span className="text-[10px] text-amber-300 font-mono">เลือกแล้ว {side.parts.length} ส่วน</span>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {AFFECTED_ROAD_PARTS.map((part) => {
@@ -573,6 +607,9 @@ export function FloodSituationSection({
             {detailedPhotos.length} / 5 ภาพ
           </span>
         </div>
+        <p className="text-[11px] text-slate-400 mb-1.5">
+          รองรับไฟล์ .jpg, .png (ระบบบีบอัดขนาดอัตโนมัติไม่เกิน 300 KB ต่อภาพ)
+        </p>
         <div className="flex flex-wrap gap-2 items-center">
           <label className={`bg-slate-900 hover:bg-slate-800 border border-dashed border-slate-700 rounded-xl p-3 flex items-center gap-2 cursor-pointer text-xs text-amber-300 ${detailedPhotos.length >= 5 ? "opacity-50 pointer-events-none" : ""}`}>
             <Camera className="w-4 h-4" />

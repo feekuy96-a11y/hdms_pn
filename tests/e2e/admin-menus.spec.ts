@@ -764,11 +764,15 @@ test("incident registry supports quick inline water level edit without modal", a
 
   await page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ }).first().click();
 
+  await expect(page.getByLabel("กรองตามสายทางหลวง")).toBeVisible();
+  await expect(page.getByLabel("กรองตามสถานะจราจร")).toBeVisible();
+
   await page.getByRole("button", { name: /แก้ไขระดับน้ำด่วน ทล\.42 กม\.103\+200/ }).click();
   const input = page.getByLabel("ระดับน้ำใหม่ (ซม.)");
   await expect(input).toBeVisible();
   await input.fill("55");
-  await expect(page.getByText(/→ .*ผ่านไม่ได้/)).toBeVisible();
+  const statusSelect = page.getByLabel("สถานะจราจรใหม่");
+  await expect(statusSelect).toHaveValue("CLOSED");
 
   await page.getByRole("button", { name: "บันทึก", exact: true }).click();
   await expect.poll(() => savedUpdates.length).toBe(1);

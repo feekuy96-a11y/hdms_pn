@@ -2294,17 +2294,32 @@ export function MapManagementTab({
 
         {/* Submit Route Button */}
         <StickyActionBar>
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={handleSubmitRoute}
-            className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-black py-3 rounded-xl text-sm shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 transition"
-          >
-            <Save className="w-4 h-4" />
-            {routeEditId
-              ? routeMode === "DETOUR" ? "บันทึกการแก้ไขทางเลี่ยง" : "บันทึกการแก้ไขเหตุการณ์"
-              : routeMode === "DETOUR" ? "บันทึกทางเลี่ยงเข้าสู่ระบบสารสนเทศ" : "บันทึกเหตุการณ์เข้าสู่ระบบสารสนเทศ"}
-          </button>
+          <div className="flex flex-1 flex-col gap-1.5 sm:flex-row sm:items-center">
+            <span
+              className={`inline-flex items-center justify-center rounded-lg px-2.5 py-1 text-[11px] font-heading font-bold whitespace-nowrap ${
+                saveAsDraft
+                  ? "border border-amber-500/40 bg-amber-950/50 text-amber-200"
+                  : "border border-emerald-500/40 bg-emerald-950/50 text-emerald-200"
+              }`}
+            >
+              {saveAsDraft ? "📝 โหมดฉบับร่าง (ยังไม่แสดงประชาชน)" : "🌐 เผยแพร่ขึ้นแผนที่ประชาชน"}
+            </span>
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={handleSubmitRoute}
+              className={`flex-1 font-heading font-black py-3 px-4 rounded-xl text-sm shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 transition cursor-pointer ${
+                saveAsDraft
+                  ? "bg-slate-700 hover:bg-slate-600 text-amber-200 border border-amber-500/50"
+                  : "bg-amber-500 hover:bg-amber-400 text-slate-950"
+              }`}
+            >
+              <Save className="w-4 h-4" />
+              {routeEditId
+                ? routeMode === "DETOUR" ? "บันทึกการแก้ไขทางเลี่ยง" : "บันทึกการแก้ไขเหตุการณ์"
+                : routeMode === "DETOUR" ? "บันทึกทางเลี่ยงเข้าสู่ระบบสารสนเทศ" : "บันทึกเหตุการณ์เข้าสู่ระบบสารสนเทศ"}
+            </button>
+          </div>
           {routeEditId && (
             <button
               type="button"

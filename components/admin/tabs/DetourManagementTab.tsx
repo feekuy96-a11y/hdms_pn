@@ -721,10 +721,23 @@ export function DetourManagementTab({
             <option value="ALL">จุดน้ำท่วมทั้งหมด</option>
             {floodList.map((f) => (
               <option key={f.id} value={f.id}>
-                ทล.{f.route_no} - {f.section_name}
+                ทล.{f.route_no} - {f.section_name} {f.is_active ? "(กำลังเกิดเหตุ)" : "(ปกติแล้ว)"}
               </option>
             ))}
           </select>
+          {(detourFilter !== "ALL" || floodFilter !== "ALL" || searchQuery.trim() !== "") && (
+            <button
+              type="button"
+              onClick={() => {
+                setDetourFilter("ALL");
+                setFloodFilter("ALL");
+                setSearchQuery("");
+              }}
+              className="min-h-10 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 px-3 text-xs text-slate-300 hover:text-white transition cursor-pointer"
+            >
+              ล้างตัวกรอง
+            </button>
+          )}
         </div>
 
         {/* Primary Action Buttons */}
@@ -1207,6 +1220,71 @@ export function DetourManagementTab({
                 <dd className="text-white mt-0.5">{viewingDetour.lat_end}, {viewingDetour.lon_end}</dd>
               </div>
             </dl>
+
+            {/* Lightweight SVG Route Shape Mini-Map Preview */}
+            {(() => {
+              const rawCoords =
+                viewingDetourDir === "REVERSE" &&
+                Array.isArray(viewingDetour.reverse_coordinates_json) &&
+                viewingDetour.reverse_coordinates_json.length >= 2
+                  ? viewingDetour.reverse_coordinates_json
+                  : viewingDetour.coordinates_json;
+              const coords = Array.isArray(rawCoords)
+                ? rawCoords.filter(
+                    (pt): pt is [number, number] =>
+                      Array.isArray(pt) &&
+                      pt.length >= 2 &&
+                      Number.isFinite(Number(pt[0])) &&
+                      Number.isFinite(Number(pt[1]))
+                  )
+                : [];
+              if (coords.length < 2) return null;
+              const lats = coords.map((c) => Number(c[0]));
+              const lons = coords.map((c) => Number(c[1]));
+              const minLat = Math.min(...lats);
+              const maxLat = Math.max(...lats);
+              const minLon = Math.min(...lons);
+              const maxLon = Math.max(...lons);
+              const spanLat = Math.max(0.0005, maxLat - minLat);
+              const spanLon = Math.max(0.0005, maxLon - minLon);
+              const W = 280;
+              const H = 88;
+              const PAD = 14;
+              const toPt = (lat: number, lon: number) => {
+                const x = PAD + ((lon - minLon) / spanLon) * (W - PAD * 2);
+                const y = H - PAD - ((lat - minLat) / spanLat) * (H - PAD * 2);
+                return [Number(x.toFixed(1)), Number(y.toFixed(1))];
+              };
+              const points = coords.map((c) => toPt(Number(c[0]), Number(c[1])));
+              const polylineStr = points.map((p) => p.join(",")).join(" ");
+              const startPt = points[0];
+              const endPt = points[points.length - 1];
+              return (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-2.5">
+                  <div className="mb-1 flex items-center justify-between text-[11px] text-slate-400">
+                    <span>พรีวิวรูปทรงแนวเส้นทาง ({viewingDetourDir === "FORWARD" ? "A → B" : "B → A"})</span>
+                    <span className="font-mono">{coords.length} จุดพิกัด</span>
+                  </div>
+                  <svg
+                    viewBox={`0 0 ${W} ${H}`}
+                    className="h-22 w-full rounded-lg bg-slate-900/90"
+                    role="img"
+                    aria-label={`แผนที่ย่อแนวเส้นทาง ${viewingDetour.route_name}`}
+                  >
+                    <polyline
+                      fill="none"
+                      stroke="#38bdf8"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      points={polylineStr}
+                    />
+                    <circle cx={startPt[0]} cy={startPt[1]} r="5" fill="#10b981" stroke="#0f172a" strokeWidth="1.5" />
+                    <circle cx={endPt[0]} cy={endPt[1]} r="5" fill="#f43f5e" stroke="#0f172a" strokeWidth="1.5" />
+                  </svg>
+                </div>
+              );
+            })()}
 
             {/* Directional Tabs for Turn-by-Turn Advice */}
             <div className="space-y-2">
