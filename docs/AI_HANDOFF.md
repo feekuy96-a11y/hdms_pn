@@ -1,6 +1,6 @@
 # AI Handoff — สถานะร่วมของโครงการ HDMS_PN
 
-> อัปเดต: 19 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (บน `origin/main` ล่าสุดผ่าน PR #49 `6e69145` รวม `UPDATE-128`/`UPDATE-129` ซ่อมฐาน 115 ตำบลด้วย Polygon จริงของ DOPA + แก้ CI OSRM Timeout และ Deploy GitHub Pages สำเร็จ; บน Supabase Production รัน migration Backfill `version 20261119070256` ครบ 22 แถวแล้ว ส่วนกิ่ง `fix/crlf-backfill-and-row` มี `UPDATE-130` แก้ CRLF ใน `scripts/backfill-flood-areas.mjs` และเตรียม migration `20261119000200` รออนุมัติรัน Production สำหรับแถว `F-6bc2ee64-1ad6-412f-bf1b-bcc2033ad844`) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`, B-023). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
+> อัปเดต: 19 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (บน `origin/main` ล่าสุดผ่าน PR #50 `7c2e6be` รวม `UPDATE-130` แก้ CRLF และรัน migration Backfill แถว `F-6bc2ee64-1ad6-412f-bf1b-bcc2033ad844` บน Production เรียบร้อยแล้ว 23/23 แถว; ดำเนินการเก็บกวาดกิ่งที่ merge/closed แล้วทั้งหมด 32 กิ่งบน origin และ 9 กิ่งบน local รวมทั้งปิด Dependabot PR #27 และลบกิ่งออก; อยู่ระหว่างเตรียม PR สำหรับ `UPDATE-131` ปรับแต่ง `.github/dependabot.yml` ป้องกันการอัปเกรดข้าม Major Version) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`, B-023). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
 
 ## ก่อนเริ่มงานทุกครั้ง
 
@@ -53,13 +53,12 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** แก้ปัญหาเชิงลึกการสร้างเส้นน้ำท่วมและทางเลี่ยง P1 & P2 (`UPDATE-127`) ต่อยอดจาก `UPDATE-126` (Edge `hdms-api` v24)
-- **Git Branch & Commit SHA:** `feat/ui-roadmap-batches`
-- **ไฟล์ที่แก้ไขแล้ว:** `lib/gis-utils.ts`, `components/admin/tabs/{HighwayIdentificationSection,RouteGeometryEditorSection,MapManagementTab}.tsx`, `tests/e2e/flood-form-rules.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md` (รวมชุดงาน `UPDATE-125`–`UPDATE-127`)
+- **งานที่กำลังทำ / เป้าหมาย:** ปรับแต่ง `.github/dependabot.yml` ป้องกันไม่ให้รวมการอัปเกรดข้าม Major Version (`UPDATE-131`)
+- **Git Branch & Commit SHA:** `chore/dependabot-ignore-major`
+- **ไฟล์ที่แก้ไขแล้ว:** `.github/dependabot.yml`, `docs/{CHANGELOG,AI_HANDOFF}.md`
 - **สิ่งที่ทำสำเร็จ:**
-  - เพิ่มเลือกฝั่งเบื้องต้นใน Step 1 ซิงค์ Step 3, เตือนช่วง กม. ยาวเกิน 5 กม., ปรับ dropdown ผูกจุดน้ำท่วมให้แสดง กม.+ทิศทาง
-  - ปรับ `snapFloodDirected` ใช้ PostGIS `snapRouteAction` เป็นหลัก + U-turn guard (≤ 2.5×), แก้ fallback ช่วง กม. และ ID ตอนสลับแก้ `B_TO_A` → `BOTH`
-  - แก้ `handleAddMidpointWaypoint` ให้ re-snap ฝั่ง `A → B` ทันที, อัปเดตเวลาเดินทางอัตโนมัติตามเส้นใหม่ และเพิ่ม Soft Warning (`WARNING`/`ONE_LANE`) ใน `RouteGeometryEditorSection`
+  - ปิด Dependabot PR #27 และลบกิ่งรีโมต `dependabot/npm_and_yarn/dependencies-534e62a8e0` ออกจาก GitHub
+  - ปรับปรุง `.github/dependabot.yml` ให้จำกัดกลุ่มการอัปเดตเฉพาะ minor/patch และเพิ่ม `ignore` สำหรับ `version-update:semver-major`
 - **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี
-- **ผลทดสอบล่าสุด:** ผ่าน R6 (`lint`, `typecheck`, `build:pages`) และ Playwright E2E (`flood-form-rules`, `admin-menus`, `gis-dual-carriageway-save`, `hybrid-google-maps`, `smoke`)
-- **ขั้นตอนถัดไป:** Commit และ Merge `feat/ui-roadmap-batches` เข้า `main` เพื่อ Deploy GitHub Pages
+- **ผลทดสอบล่าสุด:** ผ่าน R6 (`lint`, `typecheck`, `build:pages`)
+- **ขั้นตอนถัดไป:** Push กิ่ง `chore/dependabot-ignore-major`, เปิด PR และ Merge เข้า `main`
