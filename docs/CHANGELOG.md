@@ -1,5 +1,13 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน docs/archive/SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-138] 2026-11-19 ร่าง SQL Migration สำหรับ Phase 1.3 (DB Audit Log) และ Phase 1.4 (Ledger Retention 90 วัน) [B-001, B-024]
+- **ไฟล์ใหม่:** `supabase/migrations/20261119000300_admin_audit_log_and_ledger_retention.sql`
+- **รายละเอียด:**
+  1. สร้างตาราง `public.doh_admin_audit_log` (RLS เปิดและจำกัดสิทธิ์เฉพาะ `service_role`) + trigger `doh_record_admin_audit_log()` บน `doh_flood_routes`, `doh_detour_routes` และ `doh_highway_layers` (ตัดคอลัมน์อนุพันธ์ `geom`, `geojson_display` ออกและข้าม no-op update เพื่อประหยัดพื้นที่)
+  2. สร้างฟังก์ชัน `public.doh_prune_operational_ledgers(90, 90, 180)` สำหรับลบ `doh_event_detour_operations` (> 90 วัน), `doh_external_jobs` เฉพาะ `status = 'done'` (> 90 วัน) และ `doh_admin_audit_log` (> 180 วัน) พร้อมตาราง `pg_cron` รายวัน `'hdms-prune-operational-ledgers'` เวลา `20:15 UTC` (`03:15` น. เวลาไทย)
+- **สถานะ Production:** **ยังไม่ได้ apply เข้า Production DB** (ตาม `AGENTS.md R5` — รอเจ้าของระบบตรวจและรันเองใน Supabase SQL Editor)
+- **ลำดับ Deploy / แผนย้อนกลับ:** รันเฉพาะไฟล์ SQL migration ใน SQL Editor (ไม่กระทบ Edge/เว็บ); แผนย้อนกลับระบุครบที่หัวไฟล์ migration
+
 ### [UPDATE-137] 2026-11-19 บันทึกกติกาถาวรปรับโครงสร้างหน้าแอดมิน (`docs/ADMIN_ROADMAP.md`) และปิด Phase 0 ครบชุด [B-002, B-003, B-006]
 - **การอนุมัติจากเจ้าของระบบ:** อนุมัติให้บันทึกแผน Roadmap 5 เฟสและกติกาควบคุมความเสี่ยงเป็นกติกาถาวร พร้อมอนุมัติแก้ `.mcp.json` และ `.github/workflows/deploy.yml` ตาม `AGENTS.md §4`
 - **การแก้ไข:**

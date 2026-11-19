@@ -28,7 +28,7 @@
 | B-021 | กลาง | ตั้ง schedule อิสระสำหรับคิวส่ง Drive/Sheets และหน้าตรวจงานที่ `failed` | ปิด (2026-11-16) — Cron, Edge v17 และหน้า Admin deploy แล้ว; Production read + live browser ผ่าน |
 | B-022 | สูง | Apps Script Web App ที่ใช้งานจริงอาจยังเป็น source เวอร์ชันก่อน idempotency/stale-write guard | กำลังทำ (Web App ยืนยันแล้ว; เหลือเปลี่ยน Edge secret URL) |
 | B-023 | สูง | Cutover ความสัมพันธ์ Flood Event ↔ Detour หลายต่อหลายจาก legacy field | ปิด (2026-11-19, ดู UPDATE-122) |
-| B-024 | กลาง | Event–Detour operation ledger ไม่มีนโยบาย retention/archival | เปิด |
+| B-024 | กลาง | Event–Detour operation ledger ไม่มีนโยบาย retention/archival | กำลังทำ (ร่าง migration `20261119000300_admin_audit_log_and_ledger_retention.sql` แล้วใน UPDATE-138; รอเจ้าของ apply บน Production) |
 | B-025 | กลาง | ช่องฟอร์มย่อยและปุ่มลบใน `MapManagementTab` (`HighwayIdentificationSection`/`FloodSituationSection`), `IncidentRegistryTab`, `GisHighwayModals`, `DetourAdviceSection`, โมดัล `DetourManagementTab` ขาด `htmlFor`/`aria-label` และมีปุ่ม `32–34px` รวมถึง `min-h-screen` บนเดสก์ท็อป | ปิดแล้ว (2026-11-19, ดู UPDATE-134 และ UPDATE-135) — ผ่าน `check:deploy` + Playwright static `106 passed` (44 skipped) และ audit ครบทุกโมดัล |
 
 ## B-022 [สูง] Publish Apps Script source สำหรับ outbox idempotency

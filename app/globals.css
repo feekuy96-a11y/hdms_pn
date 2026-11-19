@@ -399,11 +399,11 @@
 .doh-capsule-tag {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 9999px;
+  gap: 0.45em;
+  padding: 0.27em 0.72em;
+  border-radius: 99em;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   white-space: nowrap;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
@@ -419,21 +419,21 @@
 
 /* Adaptive Zoom Sizes */
 .doh-capsule-zoom-far {
-  width: 28px;
-  height: 28px;
+  width: 1.75rem;
+  height: 1.75rem;
   padding: 0;
   justify-content: center;
-  border-radius: 9999px;
+  border-radius: 99em;
 }
 
 .doh-capsule-zoom-mid {
-  padding: 3px 8px;
-  font-size: 11px;
+  padding: 0.27em 0.72em;
+  font-size: 0.6875rem;
 }
 
 .doh-capsule-zoom-near {
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: 0.33em 0.85em;
+  font-size: 0.75rem;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.65);
 }
 
@@ -558,17 +558,20 @@
 
 /* Phase 6: route-number shield. The official Garuda artwork must be supplied and verified before use. */
 .doh-highway-sign { background: transparent; border: 0; }
-.doh-highway-shield { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 42px; height: 42px; background: #fff; color: #18243a; border: 2px solid #18243a; border-radius: 8px 8px 13px 13px; box-shadow: 0 2px 5px #0005; font-family: system-ui, sans-serif; line-height: 1.1; }
-.doh-highway-shield-title { font-size: 9px; font-weight: 800; }
-.doh-highway-shield strong { font-size: 15px; font-weight: 900; white-space: nowrap; max-width: 38px; overflow: hidden; text-overflow: ellipsis; }
+.doh-highway-shield { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 2.625rem; height: 2.625rem; background: #fff; color: #18243a; border: 2px solid #18243a; border-radius: 0.5rem 0.5rem 0.8125rem 0.8125rem; box-shadow: 0 2px 5px #0005; font-family: system-ui, sans-serif; line-height: 1.1; }
+.doh-highway-shield-title { font-size: 0.5625rem; font-weight: 800; }
+.doh-highway-shield strong { font-size: 0.9375rem; font-weight: 900; white-space: nowrap; max-width: 2.375rem; overflow: hidden; text-overflow: ellipsis; }
+
+/* Readable text container width token (ch unit) */
+.doh-readable-copy { max-width: 65ch; }
 
 /* Phase 6: tables adapt to the actual admin panel (resizable), not only screen breakpoints. */
 .doh-auto-table { container-type: inline-size; min-width: 0; }
-@container (max-width: 500px) {
+@container (max-width: 31.25rem) {
   .doh-auto-table .doh-auto-table-cards { display: block !important; }
   .doh-auto-table .doh-auto-table-desktop { display: none !important; }
 }
-@container (min-width: 501px) {
+@container (min-width: 31.3125rem) {
   .doh-auto-table .doh-auto-table-cards { display: none !important; }
   .doh-auto-table .doh-auto-table-desktop { display: block !important; }
 }
@@ -594,14 +597,14 @@
   padding-top: 0.625rem;
   border-top: 1px solid rgba(30, 41, 59, 0.8);
 }
-@container (min-width: 680px) {
+@container (min-width: 42.5rem) {
   .doh-incident-header {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
   }
 }
-@container (min-width: 860px) {
+@container (min-width: 53.75rem) {
   .doh-incident-segment {
     flex-direction: row;
     align-items: center;

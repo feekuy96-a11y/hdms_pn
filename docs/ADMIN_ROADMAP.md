@@ -55,8 +55,8 @@
 ### Phase 1: Security Depth & Ops Hardening — **ถัดไป**
 - [ ] `1.1` ยืนยันเวอร์ชัน Edge Production (`B-014`) และสกัด `pg_get_functiondef` ของ RPC จริงเก็บเป็น `docs/db-schema-snapshot.md` (`R4`)
 - [ ] `1.2` ตั้งค่า Secrets บน Supabase Dashboard (`APPS_SCRIPT_WEB_APP_URL` ปิด `B-022`, `GOOGLE_MAPS_API_KEY` ปิด `B-008`) แล้ว re-deploy Edge
-- [ ] `1.3` สร้าง migration `doh_admin_audit_log` + trigger เก็บ `before/after` บน `doh_flood_routes`, `doh_detour_routes`, `doh_highway_layers` (`B-001` ทางเลือก C)
-- [ ] `1.4` สร้าง migration + cron นโยบาย retention/archival สำหรับ `doh_event_detour_operations` และ `doh_external_jobs` ที่เสร็จแล้วเกิน 90 วัน (`B-024`)
+- [ ] `1.3` สร้าง migration `doh_admin_audit_log` + trigger เก็บ `before/after` บน `doh_flood_routes`, `doh_detour_routes`, `doh_highway_layers` (`B-001` ทางเลือก C) — *ร่างไฟล์ `supabase/migrations/20261119000300_admin_audit_log_and_ledger_retention.sql` แล้ว (UPDATE-138), รอเจ้าของ apply บน Production*
+- [ ] `1.4` สร้าง migration + cron นโยบาย retention/archival สำหรับ `doh_event_detour_operations` และ `doh_external_jobs` ที่เสร็จแล้วเกิน 90 วัน (`B-024`) — *รวมอยู่ใน `20261119000300_admin_audit_log_and_ledger_retention.sql` แล้ว (UPDATE-138), รอเจ้าของ apply บน Production*
 - [ ] `1.5` แยก `supabase/functions/hdms-api/index.ts` เป็น `_shared/{validation,google-proxy,outbox,event-detour,handlers}.ts` + basic rate-limit/size guard + Deno unit tests
 
 ### Phase 2: Data Layer & Concurrency Architecture

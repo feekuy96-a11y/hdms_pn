@@ -13,9 +13,9 @@ const LongdoGisMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="h-full min-h-[350px] w-full bg-[#0b1426] p-4" role="status" aria-live="polite">
+      <div className="h-full min-h-[22rem] w-full bg-[#0b1426] p-4" role="status" aria-live="polite">
         <span className="sr-only">กำลังโหลดแผนที่ GIS ปัตตานี</span>
-        <div aria-hidden="true" className="h-full min-h-[318px] rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <div aria-hidden="true" className="h-full min-h-[20rem] rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <div className="h-5 w-48 rounded-md bg-slate-700/70 animate-pulse motion-reduce:animate-none" />
           <div className="mt-4 h-8 w-64 rounded-xl bg-slate-800/80 animate-pulse motion-reduce:animate-none" />
           <div className="mt-6 grid h-[calc(100%-7rem)] grid-cols-3 gap-3 opacity-60">
@@ -46,13 +46,22 @@ export default function AdminPage() {
   const HIDE_EXECUTIVE_VIEW_SWITCHER = true;
   const [adminViewMode, setAdminViewMode] = useState<"console" | "executive">("console");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [mobileActivePane, setMobileActivePane] = useState<"form" | "map">("form");
   const [workspacePaneWidth, setWorkspacePaneWidth] = useState<number | null>(null);
   const workspaceDrag = useRef<{ startX: number; startWidth: number } | null>(null);
+  const resizeRafRef = useRef<number | null>(null);
   const workspacePaneRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const savedMobileScrollYRef = useRef<number | null>(null);
   const prevAdminPickModeRef = useRef<string | null>(null);
   const clampWorkspaceWidth = (width: number) => Math.max(440, Math.min(width, window.innerWidth - 350));
+  const scheduleMapResize = useCallback(() => {
+    if (resizeRafRef.current !== null) return;
+    resizeRafRef.current = window.requestAnimationFrame(() => {
+      resizeRafRef.current = null;
+      window.dispatchEvent(new Event("resize"));
+    });
+  }, []);
   const startWorkspaceDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (isSidebarCollapsed) return;
     workspaceDrag.current = { startX: event.clientX, startWidth: workspacePaneRef.current?.getBoundingClientRect().width || 650 };
@@ -61,7 +70,7 @@ export default function AdminPage() {
   const moveWorkspaceDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!workspaceDrag.current) return;
     setWorkspacePaneWidth(clampWorkspaceWidth(workspaceDrag.current.startWidth + event.clientX - workspaceDrag.current.startX));
-    window.dispatchEvent(new Event("resize"));
+    scheduleMapResize();
   };
   const stopWorkspaceDrag = () => {
     workspaceDrag.current = null;
@@ -125,14 +134,21 @@ export default function AdminPage() {
 
     if (!prevMode && adminPickMode) {
       savedMobileScrollYRef.current = window.scrollY;
-      mapContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setMobileActivePane("map");
+      window.setTimeout(() => {
+        window.dispatchEvent(new Event("resize"));
+        mapContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 120);
       return;
     }
 
-    if (prevMode && !adminPickMode && savedMobileScrollYRef.current !== null) {
-      const targetY = savedMobileScrollYRef.current;
-      savedMobileScrollYRef.current = null;
-      window.scrollTo({ top: targetY, behavior: "smooth" });
+    if (prevMode && !adminPickMode) {
+      setMobileActivePane("form");
+      if (savedMobileScrollYRef.current !== null) {
+        const targetY = savedMobileScrollYRef.current;
+        savedMobileScrollYRef.current = null;
+        window.setTimeout(() => window.scrollTo({ top: targetY, behavior: "smooth" }), 80);
+      }
     }
   }, [adminPickMode]);
 
@@ -199,7 +215,7 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col bg-slate-950 text-slate-100 font-body">
+    <div className="min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col bg-slate-950 text-slate-100 font-body">
       {/* Official Thai Government Protected Top Header */}
       <header className="bg-[#0f2347] border-b-2 border-amber-500 sticky top-0 z-50 min-h-16 px-3 sm:px-5 py-2 lg:py-0 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 shadow-xl">
         <div className="flex items-center gap-2.5 min-w-0 flex-1 lg:flex-none">
@@ -207,7 +223,7 @@ export default function AdminPage() {
             href="/"
             aria-label="หน้าประชาชน"
             title="กลับหน้าประชาชน"
-            className="min-h-10 min-w-10 flex items-center justify-center gap-1.5 text-xs text-amber-300 hover:text-white bg-slate-900/90 px-2.5 py-2 rounded-lg border border-slate-700 transition font-heading font-bold shrink-0"
+            className="min-h-[2.5rem] min-w-[2.5rem] flex items-center justify-center gap-[0.4em] text-[0.75rem] text-amber-300 hover:text-white bg-slate-900/90 px-[0.8em] py-[0.5em] rounded-lg border border-slate-700 transition font-heading font-bold shrink-0"
           >
             <ArrowLeft className="w-4 h-4" aria-hidden="true" /> <span className="hidden sm:inline">หน้าประชาชน</span>
           </Link>
@@ -219,20 +235,20 @@ export default function AdminPage() {
                 className="w-8 h-8 rounded-lg object-contain shadow shrink-0 bg-slate-900 p-0.5 border border-slate-700"
               />
             ) : (
-              <span className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-heading font-black text-xs shadow shrink-0">
+              <span className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-heading font-black text-[0.75rem] shadow shrink-0">
                 ขท.
               </span>
             )}
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="bg-amber-400 text-slate-950 text-[10px] font-heading font-black px-1.5 py-0.2 rounded uppercase shrink-0">
+              <div className="flex items-center gap-[0.45em]">
+                <span className="bg-amber-400 text-slate-950 text-[0.75rem] font-heading font-black px-[0.5em] py-[0.1em] rounded uppercase shrink-0">
                   ส่วนราชการ
                 </span>
-                <span className="text-[11px] text-amber-300 font-heading font-medium hidden md:inline truncate">
+                <span className="text-[0.75rem] text-amber-300 font-heading font-medium hidden md:inline truncate">
                   {systemData.systemSettings?.org || "แขวงทางหลวงปัตตานี กรมทางหลวง"}
                 </span>
               </div>
-              <h1 className="font-heading text-xs sm:text-sm font-bold text-white whitespace-nowrap truncate">
+              <h1 className="font-heading text-[0.75rem] sm:text-[0.875rem] font-bold text-white whitespace-nowrap truncate">
                 {systemData.systemSettings?.name || "ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย"}
               </h1>
             </div>
@@ -269,14 +285,20 @@ export default function AdminPage() {
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {isError && <span role="status" className="rounded-lg border border-red-700/70 bg-red-950/80 px-2 py-1 text-[10px] text-red-200">โหลดข้อมูลฐานข้อมูลไม่สำเร็จ</span>}
+        <div className="flex items-center gap-[0.45em] sm:gap-[0.55em] shrink-0">
+          {isError && <span role="status" className="rounded-lg border border-red-700/70 bg-red-950/80 px-[0.6em] py-[0.25em] text-[0.75rem] text-red-200">โหลดข้อมูลฐานข้อมูลไม่สำเร็จ</span>}
           <button
             type="button"
-            onClick={() => mapContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            onClick={() => {
+              setMobileActivePane("map");
+              window.setTimeout(() => {
+                window.dispatchEvent(new Event("resize"));
+                mapContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }, 120);
+            }}
             aria-label="เลื่อนลงไปดูแผนที่ GIS"
-            title="เลื่อนไปดูแผนที่ GIS"
-            className="lg:hidden min-h-10 px-2.5 py-2 rounded-lg border border-slate-700 bg-slate-900/90 text-xs font-heading font-bold text-sky-300 hover:text-white hover:border-sky-500 flex items-center gap-1 shrink-0 transition"
+            title="สลับไปดูแผนที่ GIS"
+            className="lg:hidden min-h-[2.5rem] px-[0.8em] py-[0.5em] rounded-lg border border-slate-700 bg-slate-900/90 text-[0.75rem] font-heading font-bold text-sky-300 hover:text-white hover:border-sky-500 flex items-center gap-[0.35em] shrink-0 transition"
           >
             <MapPin className="w-3.5 h-3.5" aria-hidden="true" />
             <span>ดูแผนที่</span>
@@ -289,12 +311,49 @@ export default function AdminPage() {
             }}
             aria-label="รีเฟรชข้อมูล"
             title="รีเฟรชข้อมูล"
-            className="min-h-10 min-w-10 flex items-center justify-center rounded-lg text-slate-300 hover:text-amber-400 hover:bg-slate-900/70 shrink-0 transition"
+            className="min-h-[2.5rem] min-w-[2.5rem] flex items-center justify-center rounded-lg text-slate-300 hover:text-amber-400 hover:bg-slate-900/70 shrink-0 transition"
           >
             <RotateCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} aria-hidden="true" />
           </button>
         </div>
       </header>
+
+      {/* Mobile / Tablet (< lg) Sticky Segmented Switch: Form vs GIS Map */}
+      {adminViewMode === "console" && (
+        <div
+          role="group"
+          aria-label="สลับมุมมองฟอร์มและแผนที่บนมือถือ"
+          className="lg:hidden sticky top-16 z-40 grid grid-cols-2 gap-[0.5em] border-b border-slate-800 bg-slate-900/95 px-3 py-2 backdrop-blur"
+        >
+          <button
+            type="button"
+            aria-pressed={mobileActivePane === "form"}
+            onClick={() => setMobileActivePane("form")}
+            className={`min-h-[2.5rem] rounded-lg border px-[0.85em] py-[0.45em] text-[0.8125rem] font-heading font-bold transition ${
+              mobileActivePane === "form"
+                ? "border-amber-500 bg-amber-500 text-slate-950"
+                : "border-slate-700 bg-slate-800 text-slate-200 hover:text-white"
+            }`}
+          >
+            ฟอร์มข้อมูล
+          </button>
+          <button
+            type="button"
+            aria-pressed={mobileActivePane === "map"}
+            onClick={() => {
+              setMobileActivePane("map");
+              window.setTimeout(() => window.dispatchEvent(new Event("resize")), 120);
+            }}
+            className={`min-h-[2.5rem] rounded-lg border px-[0.85em] py-[0.45em] text-[0.8125rem] font-heading font-bold transition ${
+              mobileActivePane === "map"
+                ? "border-sky-400 bg-sky-500 text-slate-950"
+                : "border-slate-700 bg-slate-800 text-slate-200 hover:text-white"
+            }`}
+          >
+            แผนที่ GIS
+          </button>
+        </div>
+      )}
 
       {/* Main Content Area: Executive Dashboard (ภาพที่ 2) vs Admin Console + Map */}
       {adminViewMode === "executive" ? (
@@ -310,11 +369,13 @@ export default function AdminPage() {
           {/* Left: Full Government Administrative Console (ฝั่งซ้ายมือ - รองรับการพับ/เปิด) */}
           <div
             ref={workspacePaneRef}
-            style={!isSidebarCollapsed && workspacePaneWidth !== null ? { width: `${workspacePaneWidth}px`, maxWidth: "calc(100vw - 350px)" } : undefined}
-            className={`transition-all duration-300 ease-in-out border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0 flex flex-col overflow-hidden ${
+            style={!isSidebarCollapsed && workspacePaneWidth !== null ? { width: `${workspacePaneWidth}px`, maxWidth: "calc(100vw - 22rem)" } : undefined}
+            className={`transition-all duration-300 ease-in-out border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0 flex-col overflow-hidden ${
+              mobileActivePane === "map" ? "hidden lg:flex" : "flex"
+            } ${
               isSidebarCollapsed
-                ? "w-full lg:w-[72px]"
-                : "w-full lg:w-[56vw] xl:w-[clamp(720px,50vw,1040px)] min-h-[72vh] lg:min-h-0"
+                ? "w-full lg:w-[4.5rem]"
+                : "w-full lg:w-[56vw] xl:w-[clamp(45rem,50vw,65rem)] min-h-[72dvh] lg:min-h-0"
             }`}
           >
             <AdminConsole
@@ -381,22 +442,28 @@ export default function AdminPage() {
           ><span aria-hidden="true" className="h-12 w-0.5 rounded-full bg-slate-500" /></div>}
 
           {/* Right: Interactive GIS Map */}
-          <div ref={mapContainerRef} className="h-[44vh] min-h-[360px] lg:h-auto lg:min-h-0 lg:flex-1 relative scroll-mt-16">
+          <div
+            ref={mapContainerRef}
+            className={`${
+              mobileActivePane === "form" ? "hidden lg:block" : "block"
+            } h-[calc(100dvh-8.5rem)] min-h-[22.5rem] lg:h-auto lg:min-h-0 lg:flex-1 relative scroll-mt-16`}
+          >
             {/* Mobile Jump Back To Form Button */}
             <div className="lg:hidden absolute bottom-3 left-3 z-[450]">
               <button
                 type="button"
                 onClick={() => {
+                  setMobileActivePane("form");
                   if (savedMobileScrollYRef.current !== null) {
                     const y = savedMobileScrollYRef.current;
                     savedMobileScrollYRef.current = null;
-                    window.scrollTo({ top: y, behavior: "smooth" });
+                    window.setTimeout(() => window.scrollTo({ top: y, behavior: "smooth" }), 80);
                   } else {
-                    workspacePaneRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    window.setTimeout(() => workspacePaneRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
                   }
                 }}
                 aria-label="กลับไปส่วนกรอกฟอร์ม"
-                className="min-h-10 rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-2 text-xs font-heading font-bold text-amber-300 shadow-xl backdrop-blur hover:bg-slate-800 hover:text-white transition"
+                className="min-h-[2.5rem] rounded-xl border border-slate-700 bg-slate-900/95 px-[0.9em] py-[0.5em] text-[0.75rem] font-heading font-bold text-amber-300 shadow-xl backdrop-blur hover:bg-slate-800 hover:text-white transition"
               >
                 ↑ กลับไปฟอร์ม
               </button>
@@ -412,7 +479,7 @@ export default function AdminPage() {
                     window.dispatchEvent(new Event("resize"));
                   }, 350);
                 }}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-2 text-xs font-heading font-bold text-slate-200 shadow-xl backdrop-blur hover:bg-slate-800 hover:text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                className="min-h-[2.5rem] flex items-center gap-[0.45em] rounded-xl border border-slate-700 bg-slate-900/95 px-[0.9em] py-[0.5em] text-[0.75rem] font-heading font-bold text-slate-200 shadow-xl backdrop-blur hover:bg-slate-800 hover:text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                 title={isSidebarCollapsed ? "เปิดแผงควบคุม (แสดงฟอร์ม)" : "พับแผงควบคุม (ขยายแผนที่เต็มจอ)"}
                 aria-label={isSidebarCollapsed ? "เปิดแผงควบคุม" : "พับแผงควบคุม"}
               >
