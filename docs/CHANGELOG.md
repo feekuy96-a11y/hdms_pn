@@ -1,5 +1,22 @@
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-131] 2026-11-19 ปิด Dependabot PR #27, ลบกิ่งเก่า และปรับแต่ง `.github/dependabot.yml` ป้องกันการอัปเกรดข้าม Major Version
+- **ไฟล์:** `.github/dependabot.yml`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **ปิด Dependabot PR #27 และลบกิ่งรีโมต:**
+     - ปิด PR #27 (`dependabot/npm_and_yarn/dependencies-534e62a8e0`) บน GitHub เนื่องจากรวมการอัปเกรดข้าม Major version 3 ตัวพร้อมกัน (`tailwindcss 4.x`, `eslint 10.x`, `typescript 7.x`) ซึ่งทำลายความเข้ากันได้กับ Next.js 16/React 19 และทำให้ CI `lint` ล้มเหลว
+     - ลบกิ่งรีโมต `origin/dependabot/npm_and_yarn/dependencies-534e62a8e0` ออกจาก GitHub
+  2. **ปรับแต่งการตั้งค่า Dependabot (`.github/dependabot.yml`):**
+     - กำหนด `update-types: ["minor", "patch"]` ภายในกลุ่ม `dependencies`
+     - เพิ่มบล็อก `ignore` ทั่วโลกสำหรับทุกแพ็กเกจ: `update-types: ["version-update:semver-major"]` ป้องกันไม่ให้ Dependabot มัดรวมการอัปเกรด Major version เข้ามาสร้างปัญหาในอนาคต โดยยังคงให้ความสำคัญกับการอัปเดตช่องโหว่ความปลอดภัย (Security updates)
+- **ตรวจแล้ว:**
+  - `git branch -a` — เหลือเฉพาะ `main` และ `origin/main` (กิ่งขยะและ PR ที่ค้างถูกเก็บกวาดครบ 100%)
+  - `.github/dependabot.yml` — ตรวจสอบโครงสร้าง YAML ถูกต้องตามสเปกทางการของ GitHub Dependabot v2
+  - `npm run lint` (`--max-warnings=0`), `npm run typecheck`, `npm run build:pages` — ผ่าน
+- **ลำดับ Deploy & ย้อนกลับ:**
+  - ไม่มีงาน SQL / DB / Edge Function
+  - เปิด PR จาก `chore/dependabot-ignore-major` เข้า `main` (ย้อนกลับด้วย `git revert`)
+
 ### [UPDATE-130] 2026-11-19 แก้ปัญหา CRLF ใน `scripts/backfill-flood-areas.mjs` และเพิ่ม Migration Backfill แถว `F-6bc2ee64-1ad6-412f-bf1b-bcc2033ad844`
 - **ไฟล์:** `scripts/backfill-flood-areas.mjs`, `supabase/migrations/20261119000200_backfill_flood_route_f6bc2ee64.sql`, `docs/{CHANGELOG,AI_HANDOFF}.md`
 - **การแก้ไข:**
