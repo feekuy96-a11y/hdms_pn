@@ -87,6 +87,9 @@ export function IncidentRegistryTab({
   const [newTrafficStatus, setNewTrafficStatus] = useState<FloodRoute["traffic_status"]>("WARNING");
   const [updateNote, setUpdateNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
+  const [inlineWaterLevel, setInlineWaterLevel] = useState<string>("");
+  const [inlineSavingId, setInlineSavingId] = useState<string | null>(null);
   const [selectedIncidentIds, setSelectedIncidentIds] = useState<Set<string>>(() => new Set());
   const [exportScope, setExportScope] = useState<"FILTERED" | "ALL" | "SELECTED">("FILTERED");
 
@@ -414,40 +417,46 @@ export function IncidentRegistryTab({
     }
   };
 
+  const submitWaterLevelUpdate = async (
+    flood: FloodRoute,
+    waterLevelCm: number,
+    trafficStatus: FloodRoute["traffic_status"],
+    remark?: string
+  ) => {
+    const effectiveSide = resolveEffectiveRoadSide(flood);
+    const updatedMeta = {
+      ...(flood.direction_meta && typeof flood.direction_meta === "object" ? flood.direction_meta : {}),
+      trafficStatusDetail: mapTrafficStatusToDetail(trafficStatus),
+      status_verified: true,
+      waterLevelKnown: true,
+      water_level_known: true,
+      zeroConfirmedAt: waterLevelCm === 0 ? new Date().toISOString() : null,
+      updatedAt: new Date().toISOString(),
+    };
+
+    return saveTimelineUpdateAction({
+      floodId: flood.id,
+      waterLevelCm,
+      trafficStatus,
+      latitude: flood.lat_start,
+      longitude: flood.lon_start,
+      photoUrl: flood.latest_photo_url || "",
+      reporterName: flood.reporter_name || "เจ้าหน้าที่ศูนย์ฯ 24 ชม.",
+      remark: remark || `อัปเดตระดับน้ำเป็น ${waterLevelCm} ซม. (${getTrafficPresentation(trafficStatus, waterLevelCm).label})`,
+      roadSide: effectiveSide,
+      affectedLanes: flood.affected_lanes,
+      affectedShoulder: flood.affected_shoulder,
+      directionMeta: updatedMeta,
+    });
+  };
+
   const handleSubmitQuickUpdate = async () => {
     if (!updateModalIncident) return;
     setIsSubmitting(true);
     try {
       const flood = updateModalIncident;
-      // Use the traffic status confirmed/adjusted by the officer in the dropdown.
       const trafficStatus = newTrafficStatus || flood.traffic_status;
-
-      const effectiveSide = resolveEffectiveRoadSide(flood);
-      const updatedMeta = {
-        ...(flood.direction_meta && typeof flood.direction_meta === "object" ? flood.direction_meta : {}),
-        trafficStatusDetail: mapTrafficStatusToDetail(trafficStatus),
-        status_verified: true,
-        waterLevelKnown: true,
-        water_level_known: true,
-        zeroConfirmedAt: newWaterLevel === 0 ? new Date().toISOString() : null,
-        updatedAt: new Date().toISOString(),
-      };
-
-      const res = await saveTimelineUpdateAction({
-        floodId: flood.id,
-        waterLevelCm: newWaterLevel,
-        trafficStatus,
-        latitude: flood.lat_start,
-        longitude: flood.lon_start,
-        photoUrl: flood.latest_photo_url || "",
-        reporterName: flood.reporter_name || "เจ้าหน้าที่ศูนย์ฯ 24 ชม.",
-        remark: updateNote || `อัปเดตระดับน้ำเป็น ${newWaterLevel} ซม. (${getTrafficPresentation(trafficStatus, newWaterLevel).label})`,
-        roadSide: effectiveSide,
-        affectedLanes: flood.affected_lanes,
-        affectedShoulder: flood.affected_shoulder,
-        directionMeta: updatedMeta,
-      });
-
+      const res = await submitWaterLevelUpdate(flood, newWaterLevel, trafficStatus, updateNote || undefined);
       if (res.success) {
         onDataRefresh(res.systemData);
         showSuccessModal("อัปเดตระดับน้ำสำเร็จ", `ระดับน้ำ ทล.${flood.route_no} เป็น ${newWaterLevel} ซม.`);
@@ -458,6 +467,31 @@ export function IncidentRegistryTab({
       onToast("เกิดข้อผิดพลาด: " + e.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSaveInlineWaterLevel = async (flood: FloodRoute) => {
+    const parsed = Number(inlineWaterLevel);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 500) {
+      onToast("กรุณาระบุระดับน้ำเป็นตัวเลข 0–500 ซม.");
+      return;
+    }
+    const nextLevel = Math.round(parsed);
+    const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
+    const nextStatus = deriveTrafficStatusFromWaterLevel(nextLevel, meta.affectedParts) || flood.traffic_status;
+
+    setInlineSavingId(flood.id);
+    try {
+      const res = await submitWaterLevelUpdate(flood, nextLevel, nextStatus);
+      if (res.success) {
+        onDataRefresh(res.systemData);
+        setInlineEditId(null);
+        onToast(`บันทึกระดับน้ำ ทล.${flood.route_no} เป็น ${nextLevel} ซม. สำเร็จ`);
+      }
+    } catch (e: any) {
+      onToast("เกิดข้อผิดพลาด: " + (e?.message || "ไม่สามารถบันทึกได้"));
+    } finally {
+      setInlineSavingId(null);
     }
   };
 
@@ -773,15 +807,86 @@ export function IncidentRegistryTab({
 
                             {/* Details Row: Level, Affected routes/parts, Photos */}
                             <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
-                              <span className="whitespace-nowrap">
-                                ระดับน้ำ:{" "}
-                                <strong className="text-white font-mono text-sm">
-                                  {meta.waterLevelKnown === false ? "ยังไม่ระบุ" : `${r.water_level_cm} ซม.`}
-                                </strong>
-                                {r.water_level_cm === 0 && meta.waterLevelKnown !== false && (
-                                  <span className="ml-1.5 text-[10px] text-emerald-400 font-bold">(ซ่อนเส้นบนแผนที่ปัจจุบัน · เก็บประวัติ)</span>
-                                )}
-                              </span>
+                              {inlineEditId === r.id ? (
+                                <form
+                                  onSubmit={(e) => {
+                                    e.preventDefault();
+                                    void handleSaveInlineWaterLevel(r);
+                                  }}
+                                  className="inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-amber-500/60 bg-slate-900/95 px-2 py-1"
+                                >
+                                  <label htmlFor={`inline-water-${r.id}`} className="text-[11px] font-semibold text-amber-300">
+                                    ระดับน้ำ (ซม.):
+                                  </label>
+                                  <input
+                                    id={`inline-water-${r.id}`}
+                                    type="number"
+                                    min={0}
+                                    max={500}
+                                    autoFocus
+                                    value={inlineWaterLevel}
+                                    onChange={(e) => setInlineWaterLevel(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Escape") {
+                                        e.preventDefault();
+                                        setInlineEditId(null);
+                                      }
+                                    }}
+                                    aria-label="ระดับน้ำใหม่ (ซม.)"
+                                    className="h-7 w-16 rounded border border-slate-600 bg-slate-950 px-1.5 text-center font-mono text-xs font-bold text-white focus:border-amber-400 focus:outline-none"
+                                  />
+                                  {(() => {
+                                    const previewLevel = Number(inlineWaterLevel);
+                                    if (!Number.isFinite(previewLevel) || previewLevel < 0) return null;
+                                    const previewStatus = deriveTrafficStatusFromWaterLevel(Math.round(previewLevel), meta.affectedParts) || r.traffic_status;
+                                    const previewPres = getTrafficPresentation(previewStatus, Math.round(previewLevel));
+                                    return (
+                                      <span className="text-[10px] text-slate-300" title="สถานะจราจรอัตโนมัติ">
+                                        → {previewPres.icon} {previewPres.label}
+                                      </span>
+                                    );
+                                  })()}
+                                  <button
+                                    type="submit"
+                                    disabled={inlineSavingId === r.id}
+                                    className="h-7 rounded bg-emerald-500 hover:bg-emerald-400 px-2 text-[11px] font-bold text-slate-950 transition disabled:opacity-50 cursor-pointer"
+                                  >
+                                    {inlineSavingId === r.id ? "กำลังบันทึก..." : "บันทึก"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setInlineEditId(null)}
+                                    className="h-7 rounded border border-slate-700 bg-slate-800 hover:bg-slate-700 px-2 text-[11px] text-slate-200 transition cursor-pointer"
+                                  >
+                                    ยกเลิก
+                                  </button>
+                                </form>
+                              ) : (
+                                <span className="inline-flex flex-wrap items-center gap-1.5 whitespace-nowrap">
+                                  <span>
+                                    ระดับน้ำ:{" "}
+                                    <strong className="text-white font-mono text-sm">
+                                      {meta.waterLevelKnown === false ? "ยังไม่ระบุ" : `${r.water_level_cm} ซม.`}
+                                    </strong>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setInlineEditId(r.id);
+                                      setInlineWaterLevel(String(r.water_level_cm ?? 0));
+                                    }}
+                                    aria-label={`แก้ไขระดับน้ำด่วน ทล.${r.route_no} กม.${r.km_start}`}
+                                    title="แก้ไขระดับน้ำแบบด่วนทันที"
+                                    className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900/90 hover:border-amber-400/70 hover:text-amber-300 px-1.5 py-0.5 text-[11px] text-slate-300 transition cursor-pointer"
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                    <span>แก้ตัวเลข</span>
+                                  </button>
+                                  {r.water_level_cm === 0 && meta.waterLevelKnown !== false && (
+                                    <span className="text-[10px] text-emerald-400 font-bold">(ซ่อนเส้นบนแผนที่ปัจจุบัน · เก็บประวัติ)</span>
+                                  )}
+                                </span>
+                              )}
 
                               <span className="text-slate-400">
                                 เส้นทางที่ได้รับผลกระทบ:{" "}

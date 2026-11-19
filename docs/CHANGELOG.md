@@ -1,5 +1,16 @@
 ﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-124] 2026-11-19 ปรับปรุง UX/UI ทั้งหน้าประชาชนและแอดมิน: ลดช่องกรอกซ้ำซ้อน, จัดลำดับปุ่ม, เพิ่ม Contrast และแยกชื่อหมุดแผนที่
+- **ไฟล์:** `app/page.tsx`, `components/map/LongdoGisMap.tsx`, `components/admin/tabs/HighwayIdentificationSection.tsx`, `components/admin/tabs/RouteGeometryEditorSection.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/CHANGELOG.md`
+- **การแก้ไข:**
+  1. **แอดมิน — ขจัดช่องกรอกที่มีความหมายซ้ำซ้อนกัน (`HighwayIdentificationSection.tsx`):** แยกหน้าที่ระหว่าง *"ชื่อตอนสายทางหลวง (ตามบัญชีทางหลวง) \*"* (สำหรับชื่อตอนทางหลวง) กับ *"จุดสังเกตหน้างาน / หมู่บ้าน / ตำบล–อำเภอ"* (สำหรับระบุจุดเกิดเหตุและตำบล/อำเภอ) และรวมปุ่มดึงตำแหน่ง/ตำบล-อำเภอจากพิกัดไว้ในจุดเดียว ไม่ให้เจ้าหน้าที่สับสนว่าต้องกรอกตำบล/อำเภอที่ช่องไหน
+  2. **แอดมิน — จัดลำดับความสำคัญปุ่มวาดเส้น (`RouteGeometryEditorSection.tsx`):** เน้นขั้นตอนหลัก *"สร้างแนวเส้นอัตโนมัติ (แนะนำ)"* (`คำนวณเส้นเกาะถนน`) ให้อยู่ในแถบไฮไลต์ชัดเจน และจัดกลุ่มเครื่องมือดัดเส้น/ย้อนกลับ/ล้างข้อมูลไว้ในกรอบรองที่เป็นสัดส่วน โดยคงตำแหน่งและการมองเห็นของปุ่มทั้งหมดไว้ครบถ้วนตามสัญญา E2E (R7)
+  3. **ประชาชน — แยกชื่อเข้าถึงได้ของหมุดแผนที่ (`LongdoGisMap.tsx`):** เพิ่ม `alt`, `title`, และ `aria-label` ที่ระบุหมายเลขทางหลวง ชื่อตอน หลัก กม. และสถานะจราจร ให้กับหมุดน้ำท่วมทั้งแบบแยกช่วงและแบบรวมเหตุการณ์
+  4. **ประชาชน — ปรับ Contrast และขนาดปุ่มบนมือถือ (`app/page.tsx`):** เพิ่มขนาดปุ่ม `"ดูตำแหน่งบนแผนที่"` ในโมดัลรายละเอียดเป็น `min-h-11` (44px) และปรับข้อความรอง `"ข้อควรทราบก่อนนำทาง"` เป็น `text-slate-300` เพื่อให้อ่านง่ายกลางแจ้ง
+  5. **แอดมิน — เพิ่ม Quick Inline Edit ระดับน้ำ (`IncidentRegistryTab.tsx`, `tests/e2e/admin-menus.spec.ts`):** เพิ่มปุ่ม `"แก้ตัวเลข"` ข้างระดับน้ำในแถวรายการเหตุการณ์ เพื่อแก้ไขตัวเลข 0–500 ซม. พร้อมแสดงตัวอย่างสถานะจราจรอัตโนมัติ (ตาม `deriveTrafficStatusFromWaterLevel`) และกดบันทึกทันที (รองรับ Enter/Escape) โดยไม่ต้องเปิดหน้าต่างใหม่ พร้อมสกัด helper `submitWaterLevelUpdate` ร่วมกับโมดัลอัปเดตด่วนและเพิ่มเทสต์ E2E รองรับ
+- **ตรวจแล้ว:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` ผ่านครบ; รัน E2E (`smoke.spec.ts`, `public-route-sheet.spec.ts`, `flood-form-rules.spec.ts`, `compact-card-detour-accordion.spec.ts`, `admin-menus.spec.ts`) ผ่านทุกข้อ (35 passed, 0 failed)
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Merge กิ่ง `fix/ui-p1-p2-accessibility-and-layout` เข้า `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
 ### [UPDATE-123] 2026-11-19 ปรับสีเส้นทางเลี่ยง 2 ทิศทางให้ตรงสไตล์ที่ตั้งไว้ พร้อมแยกหมุด A→B / B→A และปลดล็อกดัดเส้นอิสระ
 - **ไฟล์:** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/RouteGeometryEditorSection.tsx`, `app/admin/page.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF,UI_CONTRACT}.md`
 - **การแก้ไข:**

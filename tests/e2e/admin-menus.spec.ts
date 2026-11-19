@@ -696,3 +696,83 @@ test("two-way detour supports separate B->A pins and freeform endpoint/vertex cu
   expect(savedPayloads[0].reverseCoordinates[0][0]).toBeCloseTo(101.31, 3);
   expect(savedPayloads[0].reverseCoordinates[3][0]).toBeCloseTo(101.20, 3);
 });
+
+
+test("incident registry supports quick inline water level edit without modal", async ({ page }) => {
+  test.skip((page.viewportSize()?.width || 1280) < 1024, "Admin console is desktop-first");
+
+  let currentLevel = 25;
+  let currentStatus = "LIGHT_VEHICLES_ONLY";
+  const savedUpdates: any[] = [];
+
+  const buildSystemData = () => ({
+    updatedAt: "2026-11-19T09:00:00.000Z",
+    floodRoutes: [
+      {
+        id: "F-INLINE-1",
+        route_no: "42",
+        section_name: "ดอนยาง - บ้านดี",
+        km_start: "103+200",
+        km_end: "104+000",
+        lat_start: 6.86,
+        lon_start: 101.24,
+        lat_end: 6.865,
+        lon_end: 101.25,
+        coordinates_json: [[101.24, 6.86], [101.25, 6.865]],
+        water_level_cm: currentLevel,
+        traffic_status: currentStatus,
+        latest_photo_url: "",
+        is_active: true,
+        updated_at: "2026-11-19T09:00:00.000Z",
+        direction_meta: { waterLevelKnown: true, water_level_known: true },
+      },
+    ],
+    detourRoutes: [],
+    timelineUpdates: [],
+    mitigationProjects: [],
+    highwayLayers: [],
+    offices: [],
+    mapStyles: null,
+    systemSettings: { name: "ระบบทดสอบ", org: "ขท.ปัตตานี", desc: "", phone: "073-336051" },
+  });
+
+  await page.route("**/functions/v1/hdms-api", async (route) => {
+    const req = route.request();
+    const postData = req.postDataJSON?.() || {};
+    if (postData.action === "saveTimelineUpdateAction") {
+      const arg = postData.args?.[0] || {};
+      savedUpdates.push(arg);
+      currentLevel = arg.waterLevelCm;
+      currentStatus = arg.trafficStatus;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, systemData: buildSystemData() }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(buildSystemData()),
+    });
+  });
+
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "รายการเหตุการณ์");
+
+  await page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ }).first().click();
+
+  await page.getByRole("button", { name: /แก้ไขระดับน้ำด่วน ทล\.42 กม\.103\+200/ }).click();
+  const input = page.getByLabel("ระดับน้ำใหม่ (ซม.)");
+  await expect(input).toBeVisible();
+  await input.fill("55");
+  await expect(page.getByText(/→ .*ผ่านไม่ได้/)).toBeVisible();
+
+  await page.getByRole("button", { name: "บันทึก", exact: true }).click();
+  await expect.poll(() => savedUpdates.length).toBe(1);
+  expect(savedUpdates[0].waterLevelCm).toBe(55);
+  expect(savedUpdates[0].trafficStatus).toBe("CLOSED");
+  await expect(page.getByText("55 ซม.", { exact: true })).toBeVisible();
+});

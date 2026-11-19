@@ -505,50 +505,59 @@ export function RouteGeometryEditorSection({
         </label>
       )}
       <div className="space-y-4 border-t border-slate-800 pt-4">
-        <ActionButton
-          variant="primary"
-          className="w-full sm:w-auto"
-          onClick={() => triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints, draftReverseWaypoints)}
-        >
-          <Wand2 className="h-3.5 w-3.5" /> คำนวณเส้นเกาะถนน
-        </ActionButton>
+        <div className="flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-amber-950/20 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold text-amber-300">สร้างแนวเส้นอัตโนมัติ (แนะนำ)</p>
+            <p className="text-[11px] text-slate-300">คำนวณเส้นทางเกาะแนวถนนจริงจากจุดเริ่มต้น (A) ไปปลายทาง (B)</p>
+          </div>
+          <ActionButton
+            variant="primary"
+            className="w-full shrink-0 sm:w-auto"
+            onClick={() => triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints, draftReverseWaypoints)}
+          >
+            <Wand2 className="h-3.5 w-3.5" /> คำนวณเส้นเกาะถนน
+          </ActionButton>
+        </div>
 
         {!freeEditEnabled && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <ToolGroup label={supportsTwoWayLineEdit ? `ดัดแนวเส้น (${activeEditTarget === "REVERSE" ? "ขากลับ B → A" : "ขาไป A → B"})` : "ดัดแนวเส้น"}>
-              <ActionButton variant="secondary" className="text-amber-300" onClick={handleAddMidpointWaypoint}>
-                <Plus className="h-3.5 w-3.5" /> แตะจุดกลางเส้นเพื่อเพิ่มจุด
-              </ActionButton>
-              {(() => {
-                const pickTargetMode = activeEditTarget === "REVERSE" ? "ADD_REVERSE_WAYPOINT" : "ADD_WAYPOINT";
-                const isPicking = adminPickMode === pickTargetMode;
-                return (
-                  <ActionButton
-                    variant="pick"
-                    active={isPicking}
-                    onClick={() => setAdminPickMode(isPicking ? null : pickTargetMode)}
-                  >
-                    {isPicking
-                      ? (forceStraightThrough && routeMode === "DETOUR" ? "คลิกกึ่งกลางแยก..." : "คลิกถนนเพื่อดัด...")
-                      : (forceStraightThrough && routeMode === "DETOUR" ? "+ เพิ่มจุดผ่านแยกตรง" : "+ เพิ่มจุดดัดเส้น")}
-                  </ActionButton>
-                );
-              })()}
-            </ToolGroup>
-
-            <ToolGroup label="ย้อนกลับหรือล้าง">
-              <ActionButton variant="secondary" onClick={handleUndoWaypoint}>
-                <Undo2 className="h-3.5 w-3.5" /> ย้อนกลับ
-              </ActionButton>
-              {(originalRouteCoordsRef.current.length >= 2 || originalReverseRouteCoordsRef.current.length >= 2) && (
-                <ActionButton variant="secondary" className="text-sky-300" onClick={handleRestoreOriginalRoute}>
-                  คืนค่าแนวเดิม
+          <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-3.5 space-y-3">
+            <p className="text-[11px] font-semibold text-slate-400">เครื่องมือปรับแต่งจุดดัดเส้นและล้างข้อมูล (ทางเลือกเพิ่มเติม)</p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <ToolGroup label={supportsTwoWayLineEdit ? `ดัดแนวเส้น (${activeEditTarget === "REVERSE" ? "ขากลับ B → A" : "ขาไป A → B"})` : "ดัดแนวเส้น"}>
+                <ActionButton variant="secondary" className="text-amber-300" onClick={handleAddMidpointWaypoint}>
+                  <Plus className="h-3.5 w-3.5" /> แตะจุดกลางเส้นเพื่อเพิ่มจุด
                 </ActionButton>
-              )}
-              <ActionButton variant="danger" onClick={requestClearRoute}>
-                ล้างข้อมูลทั้งหมด
-              </ActionButton>
-            </ToolGroup>
+                {(() => {
+                  const pickTargetMode = activeEditTarget === "REVERSE" ? "ADD_REVERSE_WAYPOINT" : "ADD_WAYPOINT";
+                  const isPicking = adminPickMode === pickTargetMode;
+                  return (
+                    <ActionButton
+                      variant="pick"
+                      active={isPicking}
+                      onClick={() => setAdminPickMode(isPicking ? null : pickTargetMode)}
+                    >
+                      {isPicking
+                        ? (forceStraightThrough && routeMode === "DETOUR" ? "คลิกกึ่งกลางแยก..." : "คลิกถนนเพื่อดัด...")
+                        : (forceStraightThrough && routeMode === "DETOUR" ? "+ เพิ่มจุดผ่านแยกตรง" : "+ เพิ่มจุดดัดเส้น")}
+                    </ActionButton>
+                  );
+                })()}
+              </ToolGroup>
+
+              <ToolGroup label="ย้อนกลับหรือล้าง">
+                <ActionButton variant="secondary" onClick={handleUndoWaypoint}>
+                  <Undo2 className="h-3.5 w-3.5" /> ย้อนกลับ
+                </ActionButton>
+                {(originalRouteCoordsRef.current.length >= 2 || originalReverseRouteCoordsRef.current.length >= 2) && (
+                  <ActionButton variant="secondary" className="text-sky-300" onClick={handleRestoreOriginalRoute}>
+                    คืนค่าแนวเดิม
+                  </ActionButton>
+                )}
+                <ActionButton variant="danger" onClick={requestClearRoute}>
+                  ล้างข้อมูลทั้งหมด
+                </ActionButton>
+              </ToolGroup>
+            </div>
           </div>
         )}
       </div>

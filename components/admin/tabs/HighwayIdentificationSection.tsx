@@ -11,7 +11,6 @@ import {
   Layers,
   MapPin,
   RotateCw,
-  Navigation,
 } from "lucide-react";
 import { DETOUR_DIRECTION_MODES, DetourDirectionModeType, RoadSideType } from "@/lib/constants";
 import { groupFloodRoutesIntoEvents, generateNextEventCode } from "@/lib/flood-event-schema";
@@ -184,24 +183,30 @@ export function HighwayIdentificationSection({
           )}
 
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs text-slate-300">หมู่บ้าน / จุดสังเกตหน้างาน</label>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+              <label className="text-xs font-medium text-slate-200">จุดสังเกตหน้างาน / หมู่บ้าน / ตำบล–อำเภอ</label>
               <button
                 type="button"
-                onClick={handleFetchLocationFromCoords}
-                disabled={isFetchingAddress}
-                className="text-[10px] text-sky-400 hover:text-sky-300 flex items-center gap-1 font-heading cursor-pointer disabled:opacity-50"
-                title="ดึงชื่อหมู่บ้านและตำบลจากพิกัด"
+                onClick={async () => {
+                  await handleFetchLocationFromCoords();
+                  if (startLon && startLat) {
+                    await handleAutoGeocode(Number(startLon), Number(startLat), "START");
+                    if (endLon && endLat) await handleAutoGeocode(Number(endLon), Number(endLat), "END");
+                  }
+                }}
+                disabled={isFetchingAddress || isGeocoding}
+                className="text-[11px] text-sky-300 hover:text-sky-200 bg-sky-950/60 border border-sky-800/80 px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-heading cursor-pointer disabled:opacity-50 transition"
+                title="ดึงชื่อหมู่บ้าน ตำบล และอำเภอจากพิกัดจุดเริ่มต้น"
               >
-                {isFetchingAddress ? <RotateCw className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3" />}
-                <span>{isFetchingAddress ? "กำลังดึง..." : "📍 ดึงจากพิกัด"}</span>
+                {isFetchingAddress || isGeocoding ? <RotateCw className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3" />}
+                <span>{isFetchingAddress || isGeocoding ? "กำลังดึงพิกัด..." : "📍 ดึงตำแหน่ง-ตำบล/อำเภอจากพิกัด"}</span>
               </button>
             </div>
             <input
               type="text"
               value={villageOrLandmark}
               onChange={(e) => setVillageOrLandmark(e.target.value)}
-              placeholder="เช่น บ.ดอนยาง ม.2 ต.ดอนยาง อ.หนองจิก"
+              placeholder="เช่น หน้า รร.บ้านดอนยาง ม.2 ต.ดอนยาง อ.หนองจิก"
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
             />
           </div>
@@ -416,29 +421,15 @@ export function HighwayIdentificationSection({
         </div>
       )}
 
-      {/* Section Name & Auto-Geocoding Button */}
+      {/* Highway Section Name (Distinct from Landmark/Subdistrict) */}
       {routeMode === "FLOOD" && (
         <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs text-slate-300">ชื่อตอนควบคุม / บริเวณพื้นที่ *</label>
-            <button
-              type="button"
-              disabled={isGeocoding}
-              onClick={async () => {
-                await handleAutoGeocode(Number(startLon), Number(startLat), "START");
-                if (endLon && endLat) await handleAutoGeocode(Number(endLon), Number(endLat), "END");
-              }}
-              className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1 bg-sky-950/60 border border-sky-800 px-2 py-0.5 rounded-lg font-heading transition"
-            >
-              <Navigation className="w-3 h-3" />
-              {isGeocoding ? "กำลังระบุพื้นที่..." : "ดึงตำบล/อำเภออัตโนมัติ"}
-            </button>
-          </div>
+          <label className="text-xs font-medium text-slate-200 block mb-1">ชื่อตอนสายทางหลวง (ตามบัญชีทางหลวง) *</label>
           <input
             type="text"
             value={sectionName}
             onChange={(e) => { sectionNameManuallyEditedRef.current = true; setSectionName(e.target.value); }}
-            placeholder="เช่น ตอน ดอนยาง - บานา (ต.ดอนยาง อ.หนองจิก)"
+            placeholder="เช่น ตอน ดอนยาง - บ้านดี (ระบบเติมให้อัตโนมัติเมื่อเลือกสายทาง)"
             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
           />
         </div>
