@@ -1,4 +1,4 @@
-﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
+# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
 ### [UPDATE-129] 2026-11-19 ซ่อมฐานข้อมูล 115 ตำบล 12 อำเภอ จ.ปัตตานี ด้วยขอบเขตรูปหลายเหลี่ยม DOPA จริง, สร้างสคริปต์ Backfill และแก้ปัญหา CI Timeout ของ OSRM Heading Constraint
 - **ไฟล์:** `lib/gis-data.ts`, `lib/area-lookup.ts`, `lib/osrm-client.ts`, `scripts/backfill-flood-areas.mjs`, `supabase/migrations/20261119000100_backfill_flood_routes_district_subdistrict.sql`, `docs/{CHANGELOG,AI_HANDOFF}.md`
@@ -11,14 +11,14 @@
   3. **แก้ปัญหา CI Timeout ของ OSRM Heading Constraint (`lib/osrm-client.ts`):**
      - ปรับให้ `fetchOsrmWithFailover` ข้าม Tier 2 (Edge proxy) ไปยัง Tier 3 (OSRM direct) ทันทีเมื่อคำขอมี query params เฉพาะทางอย่าง `continue_straight` หรือ `bearings` เพื่อรักษาเงื่อนไขการบังคับตรงผ่านแยก และแก้ปัญหา Playwright E2E (`admin-menus.spec.ts:115`) รอนานจน Timeout บน GitHub Actions CI เมื่อมีการตั้งค่า `NEXT_PUBLIC_SUPABASE_URL`
   4. **One-Off Dry-Run & SQL Backfill (`scripts/backfill-flood-areas.mjs`, `supabase/migrations/20261119000100_backfill_flood_routes_district_subdistrict.sql`):**
-     - สร้างสคริปต์ read-only (`--dry-run` และ `--sql`) และ migration แบบ idempotent สำหรับ Backfill `district`/`subdistrict` ใน `public.doh_flood_routes` ทั้ง 22 แถว (19 แถวใช้งาน + 3 แถว `deleted_at IS NOT NULL`) โดยคงค่า `updated_at` เดิมไว้เพื่อไม่ให้ทริกเกอร์ `doh_enqueue_external_report()` ส่งรายงานซ้ำและไม่เปลี่ยนเวลา `"อัปเดตล่าสุด"` พร้อม Rollback SQL ในหัวไฟล์ (**ยังไม่ได้รันบน Production** ตามกฎ R5 รอเจ้าของตรวจสอบตาราง Dry-Run ก่อนอนุมัติ)
-- **ตรวจแล้ว (หลังแก้ครั้งสุดท้ายบนชุดไฟล์เดียวกันก่อนสลับกิ่ง):**
-  - `node scripts/backfill-flood-areas.mjs` — ผ่าน (อ่าน 19 active rows ผ่าน Edge read-only, 19/19 match `[polygon]` จริง)
+     - สร้างสคริปต์ read-only (`--dry-run` และ `--sql`) และ migration แบบ idempotent สำหรับ Backfill `district`/`subdistrict` ใน `public.doh_flood_routes` ทั้ง 22 แถว (19 แถวใช้งาน + 3 แถว `deleted_at IS NOT NULL`) โดยคงค่า `updated_at` เดิมไว้เพื่อไม่ให้ทริกเกอร์ `doh_enqueue_external_report()` ส่งรายงานซ้ำและไม่เปลี่ยนเวลา `"อัปเดตล่าสุด"` พร้อม Rollback SQL ในหัวไฟล์
+- **ตรวจแล้ว (รวมหลังรันบน Production ตามอนุมัติเจ้าของ):**
+  - **Production Migration (`ebyobrtvisylwawxiurx`):** Apply `backfill_flood_routes_district_subdistrict` (`version 20261119070256`) สำเร็จ · ตรวจ `public.doh_flood_routes` (`total_rows = 22`, `empty_district = 0`, `empty_subdistrict = 0`), `public.doh_external_jobs` คงที่ `94` แถว (ไม่สร้าง job ซ้ำ) และ `node scripts/backfill-flood-areas.mjs` คืน `0 active rows with blank district/subdistrict`
   - `npm run lint` (`--max-warnings=0`), `npm run typecheck`, `npm run build:pages` (6/6 static pages) — ผ่าน
   - Playwright E2E: `hybrid-google-maps.spec.ts` (18 passed), `flood-form-rules.spec.ts` (24 passed), `admin-menus.spec.ts` (16 passed, 20 skipped) — ผ่านครบ
 - **ลำดับ Deploy & ย้อนกลับ:**
-  1. รอเจ้าของตรวจ Dry-Run 22 แถวและอนุมัติรัน `20261119000100_backfill_flood_routes_district_subdistrict.sql` บน Production (ย้อนกลับด้วย `UPDATE public.doh_flood_routes SET district = '', subdistrict = '' WHERE id IN (...)`)
-  2. Commit และ Push กิ่ง `feat/fix-coordinates-and-detour-advice` ขึ้น GitHub แล้วสร้าง/Merge PR เข้า `main` เพื่อ Deploy เว็บ Static Pages (ย้อนกลับด้วย `git revert`)
+  1. SQL/DB รันบน Production แล้ว (`version 20261119070256`; ย้อนกลับด้วย `UPDATE public.doh_flood_routes SET district = '', subdistrict = '' WHERE id IN (...)` ในหัวไฟล์ migration)
+  2. Push กิ่ง `feat/fix-coordinates-and-detour-advice` และ Merge PR #49 เข้า `main` เพื่อ Deploy เว็บ Static Pages (ย้อนกลับด้วย `git revert`)
 
 ### [UPDATE-128] 2026-11-19 แก้ปัญหาพิกัดพื้นที่ไม่ตรงกับแผนที่ และปรับปรุงเอนจินคำบรรยายทางเลี่ยงให้แม่นยำตามเส้นถนนจริง
 - **ไฟล์:** `lib/gis-data.ts`, `lib/area-lookup.ts`, `lib/gis-utils.ts`, `components/admin/tabs/MapManagementTab.tsx`, `db/default-data.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
