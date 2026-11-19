@@ -133,9 +133,12 @@ async function resolveRoute(coordString: string, params: string): Promise<OsrmRe
   }
 
   // Tier 2: Supabase Edge proxy (server-side User-Agent & caching, avoids browser CORS/IP limits).
+  // Only route standard requests through Edge proxy. Custom OSRM parameters like continue_straight
+  // or bearings are not handled by Edge proxy and must bypass Tier 2 to preserve heading constraints.
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supaKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (supaUrl && supaKey && Date.now() >= edgeDownUntil) {
+  const hasCustomOsrmParams = params.includes("continue_straight") || params.includes("bearings");
+  if (!hasCustomOsrmParams && supaUrl && supaKey && Date.now() >= edgeDownUntil) {
     const parsedCoords = coordString
       .split(";")
       .map((pair) => pair.split(",").map(Number))
