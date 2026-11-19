@@ -1,5 +1,15 @@
 ﻿# CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน SUPPLEMENTAL_RULES.md)
 
+### [UPDATE-125] 2026-11-19 ปรับปรุง UX/UI ครบทั้ง 4 ชุดตาม Roadmap รายเมนู (ทะเบียนเหตุการณ์, หน้าประชาชน, จัดการแผนที่, ทะเบียนทางเลี่ยง)
+- **ไฟล์:** `components/admin/tabs/IncidentRegistryTab.tsx`, `app/page.tsx`, `app/globals.css`, `components/admin/tabs/FloodSituationSection.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **ชุดที่ 3 (ทะเบียนเหตุการณ์ `IncidentRegistryTab.tsx`):** เพิ่มตัวกรองสายทางหลวง (`ทล.xx`) และตัวกรองสถานะจราจร 5 ค่า พร้อมปุ่ม `ล้างตัวกรอง`, เพิ่มตัวเลือกเปลี่ยนสถานะจราจรด่วน (`Quick Status Override`) คู่กับช่องแก้ไขระดับน้ำแบบ inline (ยังคำนวณสถานะแนะนำอัตโนมัติเมื่อพิมพ์ระดับน้ำ), และแสดงจำนวนช่วงย่อย (`N ช่วง`) บนปุ่มพับ/กางเหตุการณ์หลัก
+  2. **ชุดที่ 1 (หน้าประชาชน `app/page.tsx`, `app/globals.css`):** เพิ่มปุ่ม `ล้างตัวกรอง` บนแถบค้นหาฝั่งเดสก์ท็อปเมื่อมีตัวกรองใช้งานอยู่, เพิ่มเงาจาง (Gradient Scroll Hint) ด้านขวาของแถบชิปเลือกสายทาง, และขยายขนาดปุ่มปิดป๊อปอัปแผนที่บนมือถือ (`.leaflet-popup-close-button`) เป็น `44×44px` ตามเกณฑ์ `UI_CONTRACT.md`
+  3. **ชุดที่ 2 (จัดการแผนที่ `FloodSituationSection.tsx`, `MapManagementTab.tsx`):** เพิ่มปุ่มลัด `เลือกทั้งหมด` / `ล้าง` สำหรับส่วนของถนนที่ถูกน้ำท่วมทั้งทางหลวง 1 คันทางและ 2 คันทาง, เพิ่มคำแนะนำไฟล์รูปถ่ายหน้างาน (`.jpg, .png`, บีบอัด ≤ 300 KB), และเพิ่มป้ายสถานะโหมดชัดเจน (`โหมดฉบับร่าง` vs `เผยแพร่ขึ้นแผนที่ประชาชน`) พร้อมปรับสีปุ่มบันทึกใน `StickyActionBar` ให้แยกจากโหมดเผยแพร่จริงชัดเจน
+  4. **ชุดที่ 4 (ทะเบียนทางเลี่ยง `DetourManagementTab.tsx`):** แสดงสถานะ `(กำลังเกิดเหตุ)` / `(ปกติแล้ว)` ในตัวกรองเหตุการณ์น้ำท่วม, เพิ่มปุ่ม `ล้างตัวกรอง`, และเพิ่มแผนที่ SVG พรีวิวรูปทรงแนวเส้นทางย่อ (Start `A` → End `B`) ในหน้าต่างรายละเอียดทางเลี่ยง
+- **ตรวจแล้ว:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (6/6 routes) ผ่านครบ; `PLAYWRIGHT_STATIC=1 npx playwright test tests/e2e/admin-menus.spec.ts:701` และ `smoke.spec.ts` ผ่าน
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Merge กิ่ง `feat/ui-roadmap-batches` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
 ### [UPDATE-124] 2026-11-19 ปรับปรุง UX/UI ทั้งหน้าประชาชนและแอดมิน: ลดช่องกรอกซ้ำซ้อน, จัดลำดับปุ่ม, เพิ่ม Contrast และแยกชื่อหมุดแผนที่
 - **ไฟล์:** `app/page.tsx`, `components/map/LongdoGisMap.tsx`, `components/admin/tabs/HighwayIdentificationSection.tsx`, `components/admin/tabs/RouteGeometryEditorSection.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/CHANGELOG.md`
 - **การแก้ไข:**
