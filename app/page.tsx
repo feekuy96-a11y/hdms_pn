@@ -854,38 +854,56 @@ export default function HomePage() {
             </div>
 
             {/* Search Input Box */}
-            <div className="relative">
-              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ค้นหาสายทาง (ทล.43, ทล.42, ทล.418) หรือชื่อจุด/อำเภอ..."
-                aria-label="ค้นหาหมายเลขทางหลวงหรือพื้นที่"
-                className="min-h-11 w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-sm text-white placeholder-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="ค้นหาสายทาง (ทล.43, ทล.42, ทล.418) หรือชื่อจุด/อำเภอ..."
+                  aria-label="ค้นหาหมายเลขทางหลวงหรือพื้นที่"
+                  className="min-h-11 w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-sm text-white placeholder-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                />
+              </div>
+              {(searchQuery || selectedRouteFilter !== "ALL") && ((sidebarTab === "FLOOD" ? filteredFloods.length : filteredDetours.length) > 0) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedRouteFilter("ALL");
+                    setSelectedStatusFilter("ALL");
+                  }}
+                  className="min-h-11 shrink-0 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 px-3 text-xs font-bold text-amber-300 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer"
+                >
+                  ล้างตัวกรอง
+                </button>
+              )}
             </div>
 
             {/* Route Quick Filter Chips (Available for both floods and detours) */}
             {routeChips.length > 1 && (
-              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px]">
-                {routeChips.map((chip) => {
-                  const isActive = selectedRouteFilter === chip.id;
-                  return (
-                    <button
-                      key={chip.id}
-                      type="button"
-                      onClick={() => setSelectedRouteFilter(chip.id)}
-                      aria-pressed={isActive}
-                      className={`min-h-11 px-3 py-1 rounded-lg font-heading font-bold whitespace-nowrap transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${isActive
-                        ? "bg-amber-500 text-slate-950 shadow-md"
-                        : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
-                        }`}
-                    >
-                      {chip.label}
-                    </button>
-                  );
-                })}
+              <div className="relative">
+                <div className="flex gap-1.5 overflow-x-auto pb-1 pr-6 scrollbar-none text-[11px]">
+                  {routeChips.map((chip) => {
+                    const isActive = selectedRouteFilter === chip.id;
+                    return (
+                      <button
+                        key={chip.id}
+                        type="button"
+                        onClick={() => setSelectedRouteFilter(chip.id)}
+                        aria-pressed={isActive}
+                        className={`min-h-11 px-3 py-1 rounded-lg font-heading font-bold whitespace-nowrap transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${isActive
+                          ? "bg-amber-500 text-slate-950 shadow-md"
+                          : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
+                          }`}
+                      >
+                        {chip.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-7 bg-gradient-to-l from-slate-950 via-slate-950/75 to-transparent" />
               </div>
             )}
           </div>
