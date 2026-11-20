@@ -82,14 +82,14 @@ export function OfflineSyncStatus({ onSyncComplete }: { onSyncComplete?: () => v
   };
 
   return (
-    <div className="flex items-center gap-2 text-[11px] font-heading">
+    <div className="flex items-center gap-[0.667em] text-[0.75rem] font-heading">
       {isOnline ? (
-        <span className="flex items-center gap-1.5 text-emerald-400 bg-emerald-950/60 border border-emerald-500/40 px-2.5 py-1 rounded-lg">
+        <span className="flex items-center gap-[0.5em] text-emerald-400 bg-emerald-950/60 border border-emerald-500/40 px-[0.833em] py-[0.333em] rounded-lg">
           <Wifi className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">เชื่อมต่ออินเทอร์เน็ต</span>
         </span>
       ) : (
-        <span className="flex items-center gap-1.5 text-amber-300 bg-amber-950/60 border border-amber-500/40 px-2.5 py-1 rounded-lg animate-pulse">
+        <span className="flex items-center gap-[0.5em] text-amber-300 bg-amber-950/60 border border-amber-500/40 px-[0.833em] py-[0.333em] rounded-lg animate-pulse">
           <WifiOff className="w-3.5 h-3.5" />
           <span>โหมดออฟไลน์ (เก็บบนเครื่อง)</span>
         </span>
@@ -100,7 +100,7 @@ export function OfflineSyncStatus({ onSyncComplete }: { onSyncComplete?: () => v
           type="button"
           onClick={triggerSync}
           disabled={!isOnline || isSyncing}
-          className="flex items-center gap-1.5 bg-amber-500 text-slate-950 font-bold px-2.5 py-1 rounded-lg shadow hover:bg-amber-400 disabled:opacity-50"
+          className="flex items-center gap-[0.5em] bg-amber-500 text-slate-950 font-bold px-[0.833em] py-[0.333em] rounded-lg shadow hover:bg-amber-400 disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
           <span>ซิงค์ค้างส่ง ({pendingCount})</span>

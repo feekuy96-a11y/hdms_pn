@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
@@ -151,7 +151,7 @@ function SituationSummary({
   const visible = SUMMARY_ITEMS.filter((item) => counts[item.color] > 0);
   if (visible.length === 0) return <p className="text-xs text-slate-300">ยังไม่มีจุดเฝ้าระวังที่รายงานในขณะนี้</p>;
   return (
-    <ul aria-label="สรุปสถานการณ์ทุกจุด" className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-200">
+    <ul aria-label="สรุปสถานการณ์ทุกจุด" className="grid grid-cols-2 gap-1.5 text-xs text-slate-200 lg:grid-cols-3">
       {visible.map((item) => (
         <li key={item.color}>
           {onFilter ? (
@@ -159,7 +159,7 @@ function SituationSummary({
               type="button"
               aria-pressed={activeFilter === item.color}
               onClick={() => onFilter(item.color)}
-              className={`inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${activeFilter === item.color ? "bg-slate-700/90 ring-1 ring-amber-400/70" : "hover:bg-slate-800/80"
+              className={`inline-flex min-h-11 w-full items-center gap-1.5 rounded-md px-[0.667em] py-[0.333em] text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${activeFilter === item.color ? "bg-slate-700/90 ring-1 ring-amber-400/70" : "hover:bg-slate-800/80"
                 }`}
             >
               <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${item.dot}`} />
@@ -268,7 +268,7 @@ function FloodCard({
           <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-heading text-sm font-bold leading-snug text-white">
             {routeLabel} · {sectionLabel}
           </span>
-          <span className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold leading-tight ${STATUS_CHIP[status.color]}`}>
+          <span className={`inline-flex shrink-0 items-center gap-[0.333em] rounded-md border px-[0.667em] py-[0.167em] text-[0.75rem]/[1.1rem] font-semibold ${STATUS_CHIP[status.color]}`}>
             <span aria-hidden="true">{status.icon}</span>
             <span>{status.label}</span>
           </span>
@@ -490,23 +490,37 @@ export default function HomePage() {
     }
   }, [selectedFlood]);
 
-  // One highway filter for floods and detours. Keep standalone detours visible with "ทั้งหมด".
-  const routeChips = React.useMemo(() => {
-    const labels = new Map<string, string>();
+  const floodRouteChips = useMemo(() => {
+    const counts = new Map<string, number>();
     for (const flood of systemData.floodRoutes || []) {
-      if (!flood.is_active || !flood.route_no) continue;
-      const number = flood.route_no.replace(/^(?:ทล|ปน)\.?\s*/i, "").trim();
-      if (number) labels.set(number, /^(?:ปน)\.?/i.test(flood.route_no) ? `ปน.${number}` : `ทล.${number}`);
+      if (!flood.is_active || !flood.route_no || /^(?:ปน)\.?/i.test(flood.route_no)) continue;
+      const number = flood.route_no.replace(/^ทล\.?\s*/i, "").trim();
+      if (number) counts.set(number, (counts.get(number) || 0) + 1);
     }
+    const sorted = [...counts.keys()].sort((a, b) => a.localeCompare(b, "th", { numeric: true }));
+    return [{ id: "ALL", label: "ทุกสายทาง", count: (systemData.floodRoutes || []).filter((route) => route.is_active).length }, ...sorted.map((id) => ({ id, label: `ทล.${id}`, count: counts.get(id) || 0 }))];
+  }, [systemData.floodRoutes]);
+
+  const detourRouteChips = useMemo(() => {
+    const counts = new Map<string, { label: string; count: number }>();
     for (const detour of systemData.detourRoutes || []) {
       if (!detour.is_active) continue;
-      for (const match of `${detour.route_name || ""} ${detour.description || ""}`.matchAll(/(ทล|ปน)\.?\s*(\d{1,5})/gi)) {
-        if (!labels.has(match[2])) labels.set(match[2], `${match[1]}.${match[2]}`);
+      const linked = getLinkedEventsForDetour(detour, systemData);
+      const labels = linked.length > 0
+        ? linked.map((event) => ({ id: event.routeNo, label: `ทล.${event.routeNo}` }))
+        : [...`${detour.route_name || ""} ${detour.description || ""}`.matchAll(/(ปน\.(?:ถ\.)?\s*\d{1,5})/gi)].map((match) => ({ id: match[1].replace(/\s+/g, ""), label: match[1].replace(/\s+/g, "") }));
+      for (const item of labels) {
+        const current = counts.get(item.id);
+        counts.set(item.id, { label: item.label, count: (current?.count || 0) + 1 });
       }
     }
-    const sorted = [...labels.keys()].sort((a, b) => a.localeCompare(b, "th", { numeric: true }));
-    return [{ id: "ALL", label: "ทุกสายทาง" }, ...sorted.map((id) => ({ id, label: labels.get(id) || id }))];
+    const sorted = [...counts.entries()].sort(([a], [b]) => a.localeCompare(b, "th", { numeric: true }));
+    return [{ id: "ALL", label: "ทุกสายทาง", count: (systemData.detourRoutes || []).filter((route) => route.is_active).length }, ...sorted.map(([id, item]) => ({ id, ...item }))];
   }, [systemData.floodRoutes, systemData.detourRoutes]);
+  const routeChips = sidebarTab === "FLOOD" ? floodRouteChips : detourRouteChips;
+  useEffect(() => {
+    if (!routeChips.some((chip) => chip.id === selectedRouteFilter)) setSelectedRouteFilter("ALL");
+  }, [routeChips, selectedRouteFilter]);
 
   // Filtered flood routes for citizens/users
   const filteredFloods = (systemData.floodRoutes || []).filter((r) => {
@@ -607,9 +621,15 @@ export default function HomePage() {
       .join(" ");
     const matchesText = `${route.route_name} ${route.description || ""} ${linkedEventsText}`.toLocaleLowerCase().includes(query) ||
       detourHighwayIds.some((id) => id.includes(normalizedQuery));
-    const matchesHighway = selectedRouteFilter === "ALL" || detourHighwayIds.includes(selectedRouteFilter);
+    const standaloneLocalIds = getLinkedEventsForDetour(route, systemData).length === 0
+      ? [...`${route.route_name || ""} ${route.description || ""}`.matchAll(/(ปน\.(?:ถ\.)?\s*\d{1,5})/gi)].map((match) => match[1].replace(/\s+/g, ""))
+      : [];
+    const matchesHighway = selectedRouteFilter === "ALL" || detourHighwayIds.includes(selectedRouteFilter) || standaloneLocalIds.includes(selectedRouteFilter);
     return matchesText && matchesHighway;
   });
+  const highlightFloodIds = filteredFloods.map((route) => route.id);
+  const highlightDetourIds = filteredDetours.map((route) => route.id);
+  const activeRouteChip = routeChips.find((chip) => chip.id === selectedRouteFilter);
   const selectedFloodDetourEntries = React.useMemo(
     () => getLinkedDetoursForFlood(selectedFlood, systemData),
     [selectedFlood, systemData]
@@ -712,7 +732,7 @@ export default function HomePage() {
               <strong className="min-w-0 flex-1 font-heading text-sm leading-snug font-bold break-words [overflow-wrap:anywhere] group-hover:text-amber-200">
                 {route.route_name}
               </strong>
-              <span className="shrink-0 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-200">
+              <span className="shrink-0 rounded-md border border-amber-500/40 bg-amber-500/10 px-[0.667em] py-[0.333em] text-[0.75rem]/[1.1rem] font-semibold text-amber-200">
                 {detourDirectionBadge(route.direction_mode)}
               </span>
             </span>
@@ -736,7 +756,7 @@ export default function HomePage() {
 
 
   return (
-    <div className="doh-readable min-h-screen flex flex-col bg-slate-950 text-slate-100 font-body">
+    <div className="doh-readable min-h-dvh flex flex-col bg-slate-950 text-slate-100 font-body">
       {/* =================================================================== */}
       {/* 1. TOP NAVBAR (Official DOH Brand + Status + Hotline)               */}
       {/* =================================================================== */}
@@ -755,13 +775,13 @@ export default function HomePage() {
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="truncate font-heading font-black text-amber-400 text-[13px] sm:text-sm tracking-wide">
+              <span className="truncate font-heading font-black text-amber-400 text-[0.8125rem] sm:text-sm tracking-wide">
                 {systemData.systemSettings?.name || "ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย"}
               </span>
-              <span className="hidden md:inline-block shrink-0 bg-amber-400 text-slate-950 text-[10px] font-heading font-extrabold px-1.5 py-0.2 rounded">
+              <span className="hidden md:inline-block shrink-0 bg-amber-400 text-slate-950 text-[0.75rem]/[1.1rem] font-heading font-extrabold px-[0.5em] rounded">
                 ศูนย์ปฏิบัติการฉุกเฉิน 24 ชม.
               </span>
-              <span className="text-[10px] bg-emerald-950/80 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-bold hidden md:inline-flex items-center gap-1">
+              <span className="text-[0.75rem]/[1.1rem] bg-emerald-950/80 text-emerald-400 border border-emerald-800 px-[0.667em] py-[0.167em] rounded font-bold hidden md:inline-flex items-center gap-[0.333em]">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse motion-reduce:animate-none"></span> <span className="tracking-wide">LIVE</span>
               </span>
             </div>
@@ -788,13 +808,13 @@ export default function HomePage() {
       {/* =================================================================== */}
       {/* 2. MAIN LAYOUT: GIS MAP + COLLAPSIBLE SIDEBAR + DETAIL DOSSIER     */}
       {/* =================================================================== */}
-      <div className="flex flex-col lg:flex-row relative lg:overflow-hidden" style={{ height: "calc(100dvh - 64px)", minHeight: 450 }}>
+      <div className="flex flex-col lg:flex-row relative lg:overflow-hidden" style={{ height: "calc(100dvh - 4rem)", minHeight: "28.125rem" }}>
         {/* ================================================================= */}
         {/* A. LEFT SIDEBAR: ROUTE LIST (DESKTOP COLLAPSIBLE)                 */}
         {/* ================================================================= */}
         <div
           className={`${isSidebarCollapsed ? "hidden" : "hidden lg:flex"
-            } order-2 lg:order-1 w-full lg:w-[410px] xl:w-[440px] bg-[#0c1527] border-t lg:border-t-0 lg:border-r border-slate-800 flex-col shrink-0 z-20 lg:h-full overflow-hidden transition-all duration-300`}
+            } order-2 lg:order-1 w-full lg:w-[min(35%,25.625rem)] xl:w-[min(35%,27.5rem)] bg-[#0c1527] border-t lg:border-t-0 lg:border-r border-slate-800 flex-col shrink-0 z-20 lg:h-full overflow-hidden transition-all duration-300`}
         >
           {/* Sidebar Header & Search */}
           <div className="p-3.5 bg-[#091122] border-b border-slate-800 space-y-2.5 shrink-0">
@@ -884,7 +904,7 @@ export default function HomePage() {
             {/* Route Quick Filter Chips (Available for both floods and detours) */}
             {routeChips.length > 1 && (
               <div className="relative">
-                <div className="flex gap-1.5 overflow-x-auto pb-1 pr-6 scrollbar-none text-[11px]">
+                <div className="flex gap-1.5 overflow-x-auto pb-1 pr-6 scrollbar-none text-[0.75rem]/[1.1rem]">
                   {routeChips.map((chip) => {
                     const isActive = selectedRouteFilter === chip.id;
                     return (
@@ -898,7 +918,7 @@ export default function HomePage() {
                           : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
                           }`}
                       >
-                        {chip.label}
+                        {chip.label} <span aria-hidden="true">({chip.count})</span>
                       </button>
                     );
                   })}
@@ -981,17 +1001,17 @@ export default function HomePage() {
 
           {/* Sidebar Bottom Footer: Call Contact */}
           <div className="p-3 bg-[#091122] border-t border-slate-800 text-xs flex items-center justify-between text-slate-400 shrink-0">
-            <span className="text-[11px] flex items-center gap-1.5">
+            <span className="text-[0.75rem]/[1.1rem] flex items-center gap-1.5">
               <Phone className="w-3.5 h-3.5 text-amber-400" /> ติดต่อศูนย์ความปลอดภัย: 073-336-000
             </span>
-            {adminUrl && <a href={adminUrl} className="text-[11px] text-amber-400 underline underline-offset-2">สำหรับเจ้าหน้าที่</a>}
+            {adminUrl && <a href={adminUrl} className="text-[0.75rem]/[1.1rem] text-amber-400 underline underline-offset-2">สำหรับเจ้าหน้าที่</a>}
           </div>
         </div>
 
         {/* ================================================================= */}
         {/* B. MAIN GIS MAP VIEWPORT                                          */}
         {/* ================================================================= */}
-        <div className="order-1 lg:order-2 relative h-[calc(100dvh-64px)] lg:h-full flex-1 w-full overflow-hidden bg-[#0b1426]">
+        <div className="order-1 lg:order-2 relative h-[calc(100dvh-4rem)] lg:h-full flex-1 w-full overflow-hidden bg-[#0b1426]">
           {isPending && (
             <div role="status" aria-live="polite" className="absolute left-1/2 top-4 z-[600] -translate-x-1/2 rounded-xl border border-slate-700 bg-slate-950/95 px-4 py-3 text-sm text-white shadow-xl">
               กำลังโหลดข้อมูลสถานการณ์ล่าสุด…
@@ -1018,6 +1038,8 @@ export default function HomePage() {
             publicMode
             isSidebarCollapsed={isSidebarCollapsed}
             systemData={systemData}
+            highlightFloodIds={highlightFloodIds}
+            highlightDetourIds={highlightDetourIds}
             selectedFloodId={selectedFloodId}
             onSelectFlood={(id) => {
               const flood = systemData.floodRoutes.find((r) => r.id === id);
@@ -1039,6 +1061,12 @@ export default function HomePage() {
             focusCoordinates={focusCoordinates}
             className="h-full w-full"
           />
+          {selectedRouteFilter !== "ALL" && activeRouteChip && (
+            <div className="pointer-events-auto absolute right-3 top-3 z-[400] flex items-center gap-2 rounded-lg border border-amber-400/60 bg-slate-950/95 px-3 py-2 text-xs font-semibold text-amber-100 shadow-lg">
+              <span>กำลังกรอง: {activeRouteChip.label}</span>
+              <button type="button" onClick={() => setSelectedRouteFilter("ALL")} className="min-h-8 rounded px-[0.667em] py-[0.333em] text-amber-300 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">ล้าง</button>
+            </div>
+          )}
 
           {/* =============================================================== */}
           {/* C. MOBILE FLOATING ACTION BAR & BOTTOM SHEET DRAWER             */}
@@ -1071,7 +1099,7 @@ export default function HomePage() {
                 aria-modal="true"
                 aria-label="รายการสายทางและจุดเฝ้าระวัง"
                 onClick={(event) => event.stopPropagation()}
-                className={`flex w-full flex-col overflow-hidden rounded-t-3xl border-t border-amber-500/60 bg-[#0c1527] text-slate-100 shadow-2xl transition-[height] duration-200 motion-reduce:transition-none ${mobileDrawerStage === "full" ? "h-[95dvh]" : mobileDrawerStage === "peek" ? "h-[235px]" : "h-[78dvh]"
+                className={`flex w-full flex-col overflow-hidden rounded-t-3xl border-t border-amber-500/60 bg-[#0c1527] text-slate-100 shadow-2xl transition-[height] duration-200 motion-reduce:transition-none ${mobileDrawerStage === "full" ? "h-[95dvh]" : mobileDrawerStage === "peek" ? "h-[14.6875rem]" : "h-[78dvh]"
                   }`}
               >
                 <div className="shrink-0 border-b border-slate-800 bg-[#0c1527] px-3 pb-3 pt-2.5">
@@ -1226,7 +1254,7 @@ export default function HomePage() {
                     role="dialog"
                     aria-modal="true"
                     aria-label={`รายละเอียดจุดน้ำท่วม ${selectedFlood.section_name}`}
-                    className="relative max-h-[94dvh] w-full overflow-y-auto overscroll-contain rounded-t-3xl border border-slate-700/80 bg-[#081120] text-slate-100 shadow-2xl sm:max-h-[92vh] sm:max-w-[920px] sm:rounded-3xl"
+                    className="relative max-h-[94dvh] w-full overflow-y-auto overscroll-contain rounded-t-3xl border border-slate-700/80 bg-[#081120] text-slate-100 shadow-2xl sm:max-h-[92dvh] sm:max-w-[57.5rem] sm:rounded-3xl"
                   >
                     {/* Header: Route Badge, Section Title, KM Range, Area, Traffic Status, Close */}
                     <div className="sticky top-0 z-20 border-b border-slate-800/90 bg-[#0c182e] px-4 py-3.5 sm:px-6 shadow-md">
@@ -1260,7 +1288,7 @@ export default function HomePage() {
                           type="button"
                           onClick={() => setShowDossier(false)}
                           aria-label="ปิดรายละเอียด"
-                          className="grid min-h-[44px] min-w-[44px] sm:min-h-10 sm:min-w-10 shrink-0 place-items-center rounded-lg bg-slate-800/90 p-2 text-slate-300 transition hover:bg-slate-700 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer"
+                          className="grid min-h-[2.75rem] min-w-[2.75rem] sm:min-h-10 sm:min-w-10 shrink-0 place-items-center rounded-lg bg-slate-800/90 p-2 text-slate-300 transition hover:bg-slate-700 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer"
                           title="ปิดหน้าต่างรายละเอียด"
                         >
                           <X className="w-5 h-5" />
@@ -1346,7 +1374,7 @@ export default function HomePage() {
                               <span className="font-heading font-bold text-sky-200">
                                 📊 ช่วงในเหตุการณ์นี้ ({siblingSegments.length} ช่วง)
                               </span>
-                              <span className="text-[11px] text-slate-400">แตะเพื่อสลับดูข้อมูล</span>
+                              <span className="text-[0.75rem]/[1.1rem] text-slate-400">แตะเพื่อสลับดูข้อมูล</span>
                             </div>
                             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                               {siblingSegments.map((s) => {
@@ -1367,9 +1395,9 @@ export default function HomePage() {
                                   >
                                     <div className="flex items-center justify-between gap-1.5 text-xs">
                                       <span className="font-semibold text-amber-300">กม.{s.km_start}–{s.km_end}</span>
-                                      <span className="text-[11px] font-mono font-bold text-white">{s.water_level_cm} ซม.</span>
+                                      <span className="text-[0.75rem]/[1.1rem] font-mono font-bold text-white">{s.water_level_cm} ซม.</span>
                                     </div>
-                                    <span className="text-[11px] text-slate-300">{pres.icon} {pres.label}</span>
+                                    <span className="text-[0.75rem]/[1.1rem] text-slate-300">{pres.icon} {pres.label}</span>
                                   </button>
                                 );
                               })}
@@ -1476,7 +1504,7 @@ export default function HomePage() {
                                             </span>
                                           )}
                                           {!isExpanded && (
-                                            <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-slate-300">
+                                            <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[0.75rem]/[1.1rem] text-slate-300">
                                               <span className="inline-flex items-center gap-1 font-medium text-amber-200">
                                                 <Route aria-hidden="true" className="h-3 w-3 shrink-0" />
                                                 {timeline.totalDistanceKm > 0 ? `${timeline.totalDistanceFormatted} กม.` : "ไม่ระบุระยะทาง"}
@@ -1518,7 +1546,7 @@ export default function HomePage() {
                                           <DirectionSwitch
                                             size="sm"
                                             fullWidth
-                                            className="flex-1 min-w-[200px]"
+                                            className="flex-1 min-w-[min(100%,12.5rem)]"
                                             ariaLabel={`ทิศทางของเส้นทางนี้ ${route.route_name}`}
                                             value={effectiveDirection}
                                             onChange={(nextDir) => setDetourDirectionById((prev) => ({ ...prev, [route.id]: nextDir }))}
@@ -1571,7 +1599,7 @@ export default function HomePage() {
                                           <div className="rounded-xl border border-slate-700/80 bg-[#0d1930] px-3 py-2 flex items-center gap-2.5">
                                             <Route aria-hidden="true" className="h-5 w-5 shrink-0 text-slate-300" />
                                             <div className="min-w-0">
-                                              <div className="text-[11px] text-slate-400">ระยะทางรวม</div>
+                                              <div className="text-[0.75rem]/[1.1rem] text-slate-400">ระยะทางรวม</div>
                                               <div className="font-heading text-sm font-bold text-white">
                                                 {timeline.totalDistanceKm > 0 ? `${timeline.totalDistanceFormatted} กม.` : "ไม่ระบุ"}
                                               </div>
@@ -1580,7 +1608,7 @@ export default function HomePage() {
                                           <div className="rounded-xl border border-slate-700/80 bg-[#0d1930] px-3 py-2 flex items-center gap-2.5">
                                             <Clock aria-hidden="true" className="h-5 w-5 shrink-0 text-slate-300" />
                                             <div className="min-w-0">
-                                              <div className="text-[11px] text-slate-400">เวลาโดยประมาณ</div>
+                                              <div className="text-[0.75rem]/[1.1rem] text-slate-400">เวลาโดยประมาณ</div>
                                               <div className="font-heading text-xs sm:text-sm font-bold text-white break-words">
                                                 {timeline.estimatedDurationText}
                                               </div>
@@ -1605,7 +1633,7 @@ export default function HomePage() {
                                         </a>
                                       ) : (
                                         <span
-                                          className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/90 px-2.5 py-2 font-heading text-[11px] sm:text-xs text-slate-300 text-center leading-tight"
+                                          className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/90 px-[0.833em] py-[0.667em] font-heading text-[0.75rem]/[1.1rem] text-slate-300 text-center leading-tight"
                                           title={detourNav?.warning || "ยังไม่ยืนยันนำทางอัตโนมัติ"}
                                         >
                                           <Navigation aria-hidden="true" className="h-4 w-4 shrink-0 opacity-60" />
@@ -1691,7 +1719,7 @@ export default function HomePage() {
                                 <Droplets aria-hidden="true" className="h-4 w-4 text-sky-300" />
                                 <span>ระดับน้ำปัจจุบัน</span>
                               </span>
-                              <span className={`px-2 py-0.5 rounded-md text-[11px] font-heading font-bold ${selectedFlood.trend === "RISING"
+                              <span className={`px-[0.667em] py-[0.167em] rounded-md text-[0.75rem]/[1.1rem] font-heading font-bold ${selectedFlood.trend === "RISING"
                                 ? "bg-rose-950/90 text-rose-300 border border-rose-700/80"
                                 : selectedFlood.trend === "FALLING"
                                   ? "bg-emerald-950/90 text-emerald-300 border border-emerald-700/80"
@@ -1851,7 +1879,7 @@ export default function HomePage() {
                     <img
                       src={active.dataUrl}
                       alt={`ภาพสถานการณ์ขนาดเต็ม ${selectedFlood.section_name}`}
-                      className="max-h-[90vh] max-w-[92vw] rounded-2xl object-contain shadow-2xl"
+                      className="max-h-[90dvh] max-w-[92vw] rounded-2xl object-contain shadow-2xl"
                       onClick={(e) => e.stopPropagation()}
                     />
                   </div>
@@ -1876,7 +1904,7 @@ export default function HomePage() {
                 role="dialog"
                 aria-modal="true"
                 aria-label={`คำแนะนำเส้นทางเลี่ยง ${viewingDetourModal.route_name}`}
-                className="relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[28px] border border-sky-950 bg-[#081120] text-slate-100 shadow-2xl sm:max-h-[88vh] sm:max-w-[490px] sm:rounded-[28px]"
+                className="relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[1.75rem] border border-sky-950 bg-[#081120] text-slate-100 shadow-2xl sm:max-h-[88dvh] sm:max-w-[30.625rem] sm:rounded-[1.75rem]"
               >
                 {/* 1. Top Header Bar */}
                 <div className="sticky top-0 z-20 border-b border-slate-800/80 bg-[#0c182e] px-4 pb-3 pt-2.5 shadow-md">
@@ -1896,7 +1924,7 @@ export default function HomePage() {
                         ref={detourCloseRef}
                         type="button"
                         onClick={closeDetourDetails}
-                        className="grid min-h-[44px] min-w-[44px] sm:min-h-9 sm:min-w-9 sm:h-9 sm:w-9 place-items-center rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
+                        className="grid min-h-[2.75rem] min-w-[2.75rem] sm:min-h-9 sm:min-w-9 sm:h-9 sm:w-9 place-items-center rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
                         aria-label="ปิดหน้าต่างคำแนะนำทางเลี่ยง"
                       >
                         <X className="w-5 h-5" />
@@ -2174,7 +2202,7 @@ export default function HomePage() {
                                   <div className="font-heading text-xs sm:text-sm font-bold text-white leading-tight truncate">
                                     นำทางด้วย Google Maps
                                   </div>
-                                  <div className="text-[10px] sm:text-[11px] font-medium text-emerald-100 leading-tight mt-0.5 truncate">
+                                  <div className="text-[0.75rem]/[1.1rem] font-medium text-emerald-100 mt-0.5 truncate">
                                     {modalDetourDirection === "FORWARD" ? "(ขาไป A ➔ B)" : "(ขากลับ B ➔ A)"}
                                   </div>
                                 </div>

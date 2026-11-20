@@ -1,6 +1,6 @@
 # AI Handoff — สถานะร่วมของโครงการ HDMS_PN
 
-> อัปเดต: 19 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` (ฐานล่าสุดก่อนรอบนี้คือ `0be5f8c` รวม `B-025` / `UPDATE-134`–`136` ครบถ้วน; รอบนี้ปิด **Phase 0 (`UPDATE-137`)** และบันทึกกติกาถาวรปรับโครงสร้างหน้าแอดมิน 5 เฟสไว้ที่ `docs/ADMIN_ROADMAP.md`) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`, B-023). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
+> อัปเดต: 19 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` @ `ce105ab` (หลัง `UPDATE-137` มี `UPDATE-138`–`141`, ยืนยัน Edge Production และสกัด RPC snapshot ใน `docs/db-schema-snapshot.md`, จึงปิด B-014 แล้ว) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`, B-023). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
 
 ## ก่อนเริ่มงานทุกครั้ง
 
@@ -19,7 +19,7 @@
 
 - สถานะจราจร 5 ค่าใช้ `lib/traffic-presentation.ts` (`getTrafficPresentation`, `TRAFFIC_STATUS_OPTIONS`, `formatRelativeUpdateTime`) เป็นแหล่งความจริงเดียวทั้งหน้าประชาชน แผนที่ (`LongdoGisMap.tsx`) และแอดมิน (R1)
 - การ์ดทะเบียนเหตุการณ์แอดมิน (`IncidentRegistryTab.tsx`) และฟอร์มมาตรฐาน (`MapManagementTab.tsx`) ซ่อนรหัส `FL-...` จาก UI ปกติ, ใช้ CSS Container Queries (`.doh-incident-container`) รองรับการย่อขยายแผงซ้าย, ตัดตัวเลือก `"รอตรวจสอบสถานะ"` ออกจาก dropdown (บันทึกแล้วถือว่าตรวจสอบแล้ว `status_verified: true`), และแสดงป้าย `"⚠️ ข้อมูลไม่ครบ"` จาก `getFloodCompletenessIssues()` เฉพาะเมื่อข้อมูลขาด
-- หน้าประชาชน: แท็บน้ำท่วม/ทางเลี่ยงและตัวกรองสถานะกรอง **เฉพาะรายการ**; แผนที่คงแสดงเส้นน้ำท่วมและทางเลี่ยงที่เปิดใช้งานทั้งหมด จนผู้ใช้ปิด layer เอง
+- หน้าประชาชน: ชิปสายทางแยกตามแท็บ (น้ำท่วมใช้ `ทล.` ของเหตุ active; ทางเลี่ยงใช้สายที่ผูกเหตุหรือ `ปน.`/`ปน.ถ.` ของทางเลี่ยงอิสระ). ตัวกรองคงแสดงทุกเส้นบนแผนที่ แต่เส้นที่ไม่ตรงลด opacity เหลือ 25% และมีป้ายล้างตัวกรอง เพื่อไม่ซ่อนข้อมูลความปลอดภัย
 - การ fallback ของหน้าประชาชนต้องเรียกได้เฉพาะ `doh_get_public_system_data_display_rpc()`; หาก wrapper หรือ Edge ใช้ไม่ได้ต้องแสดง Error/Retry ห้าม fallback ไป `getSystemDataAction()` หรือ RPC ฝั่ง Admin
 - คำอธิบายสัญลักษณ์แผนที่เริ่มแบบพับ; ไอคอนน้ำท่วมใช้สีพื้นตามสีเส้นและคลื่นสีขาวตรงกันทั้งแผนที่และทะเบียนแอดมิน; ทางเลี่ยงใช้สีตามเส้นจาก map style
 - `/admin` ต้องเรียก `getSystemDataAction()` เพื่อให้เห็นรายการ inactive/Draft ที่ต้องเปิดกลับได้; หน้าประชาชนใช้ข้อมูล public เท่านั้น
@@ -37,6 +37,8 @@
 
 ## งานค้างที่มีหลักฐาน
 
+- UPDATE-144 (2026-11-20): ปิด Roadmap 3.2 จาก source `origin/main` @ `ce105ab`; 4.2 แยก coverage ที่มีแล้วจาก flake/1280px/draft recovery และ regression ที่ยังรอ โดยยังไม่ได้รัน tests รอบนี้; พักงาน auth/login 4.3 ตามคำสั่งเจ้าของ
+
 1. เก็บ Chrome Performance trace/Task Manager จากเครื่องเจ้าหน้าที่จริงเมื่อแก้เส้นที่มีปัญหา RAM/CPU; อย่าลด `MAX_VERTEX_HANDLES` หรือเพิ่ม Web Worker โดยไม่มี measurement (B-005, KI-012)
 2. Apps Script outbox: ต้องยืนยันว่า Edge secret ชี้ไป URL `/exec` ของ Apps Script รุ่นมี idempotency แล้วจึง deploy Edge v18 ใหม่ (B-022)
 3. OSRM สาธารณะไม่มี SLA (B-008); เพิ่ม Google Routes v2 (`computeRoutes`) และ Geocoding v4 proxy เป็น Tier 1 ใน Edge `hdms-api` แล้ว (เปิดใช้เมื่อตั้ง `GOOGLE_MAPS_API_KEY` ใน Supabase Edge Secrets; มิฉะนั้นตัดวงจรอัตโนมัติไป OSRM/Nominatim/local) และคง `server/routing-service.mjs` / Docker/OSRM local ไว้เป็นทางเลือก LAN ห้ามลบเป็น cleanup
@@ -53,15 +55,13 @@
 
 > **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
 
-- **งานที่กำลังทำ / เป้าหมาย:** บันทึกกติกาถาวรปรับโครงสร้างหน้าแอดมิน (`docs/ADMIN_ROADMAP.md`) และปิด **Phase 0 (`UPDATE-137`)** ครบชุด (`B-002` ล็อก `.mcp.json` read-only, `B-003` ผูก `deploy.yml` รอ `CI` ด้วย `workflow_run`, `B-006` ย้าย `SUPPLEMENTAL_RULES.md` ไป `docs/archive/`, ซิงก์ `PRODUCTION.md` และเอกสารอ้างอิงทั้งหมด)
-- **Git Branch & Commit SHA:** `main` (ฐาน `origin/main` ก่อน push รอบนี้คือ `0be5f8c` ซึ่งรวม `UPDATE-136` แล้ว)
-- **ไฟล์ที่แก้ไขแล้ว (รอบ `UPDATE-137`):** `docs/ADMIN_ROADMAP.md` (ใหม่), `.mcp.json`, `.github/workflows/deploy.yml`, `PRODUCTION.md`, `AGENTS.md`, `GEMINI.md`, `CLAUDE.md`, `.cursorrules`, `.windsurfrules`, `docs/{ARCHITECTURE,PLAYBOOKS,BACKLOG,KNOWN_ISSUES,AI_HANDOFF,CHANGELOG}.md`, `docs/archive/SUPPLEMENTAL_RULES.md` (ย้ายจากรากรีโป)
+- **งานที่กำลังทำ / เป้าหมาย:** ซิงก์เอกสารสถานะหลังยืนยัน Production Edge และปิด B-014 ตาม `docs/db-schema-snapshot.md`
+- **Git Branch & Commit SHA:** `main` @ `ce105ab` (ฐานอ้างอิงของเอกสารรอบนี้)
+- **ไฟล์ที่แก้ไขแล้ว (รอบ UPDATE-142):** `docs/{AI_HANDOFF,BACKLOG,KNOWN_ISSUES,ADMIN_ROADMAP,CHANGELOG}.md`
 - **สิ่งที่ทำสำเร็จ:**
-  - บันทึกแผนปรับโครงสร้างหน้าแอดมิน 5 เฟสและกติกาควบคุมความเสี่ยงเป็นเอกสารหลักถาวร (`docs/ADMIN_ROADMAP.md`) พร้อมอ้างอิงจาก `AGENTS.md` และไฟล์ตัวชี้ทุกตัว
-  - ปิด `B-002`: ล็อก `.mcp.json` ด้วย `read_only=true` และจำกัดเฉพาะฟีเจอร์อ่าน (`docs,database,debugging,development`)
-  - ปิด `B-003`: ปรับ `.github/workflows/deploy.yml` ให้รอ `CI` ผ่านผ่าน `workflow_run` (`head_sha`) พร้อมคง `workflow_dispatch` และไม่รัน Playwright ซ้ำซ้อน
-  - ปิด `B-006`: ย้าย `SUPPLEMENTAL_RULES.md` ไป `docs/archive/SUPPLEMENTAL_RULES.md` และอัปเดตลิงก์ครบทุกไฟล์
-  - ซิงก์ `PRODUCTION.md` ให้ตรงกับสถานะจริง (`B-001` ยอมรับความเสี่ยงชั่วคราว, `npm run check:deploy`, `PLAYWRIGHT_STATIC=1`)
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** ไม่มี (พร้อมเข้าสู่ **Phase 1** ตาม `docs/ADMIN_ROADMAP.md`)
-- **ผลทดสอบล่าสุด:** `npm run check:deploy` (`eslint --max-warnings=0`, `tsc --noEmit`, `build:pages` 6/6) + ตรวจไวยากรณ์ JSON/YAML ของ `.mcp.json` และ `.github/workflows/deploy.yml` ผ่าน
-- **ขั้นตอนถัดไป:** เริ่ม **Phase 1** ใน `docs/ADMIN_ROADMAP.md` (ยืนยัน Edge Production `B-014` + สกัด RPC snapshot, ตั้ง secrets `B-022`/`B-008`, ร่าง migration DB Audit Trail `doh_admin_audit_log` และ Ledger Retention `B-024`)
+  - ปิด `B-014`: Production `hdms-api` เป็น v24, `verify_jwt: false`, สถานะ ACTIVE และสกัดนิยาม RPC ที่ใช้งานจริงจาก Production แบบ read-only ไว้แล้วใน `docs/db-schema-snapshot.md`
+  - ปรับ migration DB Audit Log และ retention 90 วันให้บันทึก `layer_id`, เก็บ JWT subject แทน `current_user` ของ `SECURITY DEFINER`, เพิ่ม retention preflight และ partial index สำหรับ completed jobs (`UPDATE-143`); ยังไม่ได้ apply Production
+  - Phase 2.1 ลด admin refetch payload จาก 458.2 KB เหลือ 165.2 KB เมื่อใช้ Edge ที่รองรับ (`UPDATE-140`); Phase 2.4 เพิ่ม Draft Auto-Save (`UPDATE-141`)
+- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** เจ้าของต้องตั้ง Edge secrets สำหรับ B-022/B-008 และอนุมัติการ apply migration ของ B-001/B-024 ก่อนการเปลี่ยน Production
+- **ผลทดสอบล่าสุด:** รอบเอกสารนี้ตรวจ cross-reference กับ `origin/main` @ `ce105ab` และ `docs/db-schema-snapshot.md`; ไม่ได้รัน build หรือ E2E เพราะไม่มีโค้ดหรือ test เปลี่ยน
+- **ขั้นตอนถัดไป:** ตั้ง `APPS_SCRIPT_WEB_APP_URL` และ `GOOGLE_MAPS_API_KEY` ใน Supabase Edge Secrets; หลัง apply migration ให้ตรวจผล `doh_preview_operational_ledger_prune(90, 90, 180)` แล้วให้เจ้าของเปิด cron job ที่สร้างแบบ inactive; จากนั้นทำ Phase 1.5 แยกโมดูล Edge Function พร้อม validation/rate-limit/size guard และ Deno tests

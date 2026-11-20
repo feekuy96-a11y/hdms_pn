@@ -47,6 +47,8 @@ import {
 
 export { isFloodLineVisibleOnCurrentMap } from "./longdo-map-popups";
 
+const EMPTY_IDS: string[] = [];
+
 interface LongdoGisMapProps {
   systemData: SystemDataPayload;
   selectedFloodId: string;
@@ -78,6 +80,9 @@ interface LongdoGisMapProps {
   className?: string;
   publicMode?: boolean;
   isSidebarCollapsed?: boolean;
+  /** Public-list filter: keep non-matching safety routes visible but de-emphasized. */
+  highlightFloodIds?: string[];
+  highlightDetourIds?: string[];
 }
 
 export function LongdoGisMap({
@@ -110,6 +115,8 @@ export function LongdoGisMap({
   className = "h-full w-full",
   publicMode = false,
   isSidebarCollapsed = false,
+  highlightFloodIds = EMPTY_IDS,
+  highlightDetourIds = EMPTY_IDS,
 }: LongdoGisMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
@@ -125,8 +132,8 @@ export function LongdoGisMap({
   const revDraftLineRef = useRef<any>(null);
   const vertexGroupRef = useRef<any>(null);
   const officeGroupRef = useRef<any>(null);
-  const floodLinesRef = useRef<Record<string, FloodLineEntry>>({});
-  const detourLinesRef = useRef<AnimatedLineEntry[]>([]);
+  const floodLinesRef = useRef<Record<string, FloodLineEntry & { baseOpacity: number; filterOpacity: number }>>({});
+  const detourLinesRef = useRef<Array<AnimatedLineEntry & { id: string; filterOpacity: number }>>([]);
   const userLocationMarkerRef = useRef<any>(null);
   const baseLayersRef = useRef<Record<string, any>>({});
   const currentBaseKeyRef = useRef<string>("longdo");
@@ -885,7 +892,8 @@ export function LongdoGisMap({
       if (dirMode !== "REVERSE_ONLY" && fwdCoords.length >= 2) {
         const latLngs = fwdCoords.map(toLeafletLatLng);
         const forwardWeight = detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight;
-        addLineCasing(L, group, latLngs, detourStyle || {}, forwardWeight, renderer);
+        const casing = addLineCasing(L, group, latLngs, detourStyle || {}, forwardWeight, renderer);
+        if (casing) { casing.__dohFilterId = detour.id; casing.__dohBaseOpacity = detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity; }
         const polyline = L.polyline(latLngs as any, {
           color: dColor,
           weight: forwardWeight,
@@ -894,10 +902,13 @@ export function LongdoGisMap({
           className,
           renderer,
         }).addTo(group);
+        polyline.__dohFilterId = detour.id;
         detourLinesRef.current.push({
+          id: detour.id,
           line: polyline,
           baseWeight: detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight,
           baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
+          filterOpacity: 1,
         });
         const detourPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
         polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), detourPopupOpts);
@@ -914,6 +925,7 @@ export function LongdoGisMap({
           iconAnchor: [15, 15],
         });
         const detourMarker = L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), detourPopupOpts).addTo(group);
+        detourMarker.__dohFilterId = detour.id;
         detourMarker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           detourMarker.openPopup();
@@ -927,7 +939,8 @@ export function LongdoGisMap({
           const revLatLngs = effectiveRev.map(toLeafletLatLng);
           const revColor = dColor;
           const reverseWeight = detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight;
-          addLineCasing(L, group, revLatLngs, detourStyle || {}, reverseWeight, renderer);
+          const casing = addLineCasing(L, group, revLatLngs, detourStyle || {}, reverseWeight, renderer);
+          if (casing) { casing.__dohFilterId = detour.id; casing.__dohBaseOpacity = detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity; }
           const revPolyline = L.polyline(revLatLngs as any, {
             color: revColor,
             weight: reverseWeight,
@@ -936,10 +949,13 @@ export function LongdoGisMap({
             className,
             renderer,
           }).addTo(group);
+          revPolyline.__dohFilterId = detour.id;
           detourLinesRef.current.push({
+            id: detour.id,
             line: revPolyline,
             baseWeight: reverseWeight,
             baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
+            filterOpacity: 1,
           });
           const revPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
           revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), revPopupOpts);
@@ -972,6 +988,7 @@ export function LongdoGisMap({
             getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
           )
           .addTo(group);
+        startMarker.__dohFilterId = detour.id;
         startMarker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           startMarker.openPopup();
@@ -992,6 +1009,7 @@ export function LongdoGisMap({
             getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
           )
           .addTo(group);
+        endMarker.__dohFilterId = detour.id;
         endMarker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           endMarker.openPopup();
@@ -1041,6 +1059,7 @@ export function LongdoGisMap({
         const selectedWeight = fBaseWeight + (flood.id === selectedFloodIdRef.current ? 1.5 : 0);
         const latLngs = coords.map(toLeafletLatLng);
         const casing = addLineCasing(L, group, latLngs, floodStyle || {}, selectedWeight, renderer);
+        if (casing) { casing.__dohFilterId = flood.id; casing.__dohBaseOpacity = fOpacity; }
         const polyline = L.polyline(coords.map(toLeafletLatLng) as any, {
           color: fColor,
           weight: selectedWeight,
@@ -1049,9 +1068,12 @@ export function LongdoGisMap({
           className,
           renderer,
         }).addTo(group);
+        polyline.__dohFilterId = flood.id;
         floodLinesRef.current[flood.id] = {
           line: polyline,
           baseWeight: fBaseWeight,
+          baseOpacity: fOpacity,
+          filterOpacity: 1,
           casing,
           baseBorderWidth: Number(floodStyle?.borderWidth) || 0,
         };
@@ -1108,6 +1130,7 @@ export function LongdoGisMap({
           alt: clusterAriaLabel,
           title: clusterAriaLabel,
         }).addTo(group);
+        marker.__dohFilterIds = ev.segments.map((segment) => segment.id);
         marker.getElement()?.setAttribute("aria-label", clusterAriaLabel);
         marker.bindPopup(() => buildFloodPopupHtml(primarySeg, countDetoursForFlood(primarySeg)), floodPopupOpts);
         marker.on("click", (e: any) => {
@@ -1275,6 +1298,7 @@ export function LongdoGisMap({
             alt: markerAriaLabel,
             title: markerAriaLabel,
           }).addTo(group);
+          marker.__dohFilterId = item.flood.id;
           marker.getElement()?.setAttribute("aria-label", markerAriaLabel);
 
           marker.bindPopup(() => buildFloodPopupHtml(item.flood, countDetoursForFlood(item.flood)), floodPopupOpts);
@@ -1321,9 +1345,9 @@ export function LongdoGisMap({
         const speed = entry.animation === "blink" ? 1.8 : entry.animation === "pulse" ? 0.7 : 1.2;
         const wave = (Math.sin(phase * speed * 0.35) + 1) / 2;
         if (entry.animation === "pulse") {
-          entry.line.setStyle({ opacity: Math.max(0.35, entry.baseOpacity * (0.62 + wave * 0.38)), weight: entry.baseWeight + wave * 0.8 });
+          entry.line.setStyle({ opacity: Math.max(0.35 * entry.filterOpacity, entry.baseOpacity * entry.filterOpacity * (0.62 + wave * 0.38)), weight: entry.baseWeight + wave * 0.8 });
         } else if (entry.animation === "blink") {
-          entry.line.setStyle({ opacity: wave > 0.45 ? entry.baseOpacity : Math.max(0.25, entry.baseOpacity * 0.42) });
+          entry.line.setStyle({ opacity: wave > 0.45 ? entry.baseOpacity * entry.filterOpacity : Math.max(0.25 * entry.filterOpacity, entry.baseOpacity * entry.filterOpacity * 0.42) });
         } else {
           // Chaser/arrows move the existing dash pattern; Canvas supports dashOffset
           // while avoiding a new DOM/SVG element per route.
@@ -1335,7 +1359,7 @@ export function LongdoGisMap({
     const timer = window.setInterval(tick, 140);
     return () => {
       window.clearInterval(timer);
-      entries.forEach((entry) => entry.line.setStyle({ opacity: entry.baseOpacity, weight: entry.baseWeight, dashOffset: "0" }));
+      entries.forEach((entry) => entry.line.setStyle({ opacity: entry.baseOpacity * entry.filterOpacity, weight: entry.baseWeight, dashOffset: "0" }));
     };
   }, [mapReady, allowLineAnimation, mapStyles, systemData.floodRoutes, systemData.detourRoutes, showFloodLayer, showDetourLayer]);
 
@@ -1347,6 +1371,36 @@ export function LongdoGisMap({
       entry.casing?.setStyle({ weight: entry.baseWeight + selectedDelta + (entry.baseBorderWidth || 0) * 2 });
     });
   }, [selectedFloodId, mapReady, systemData.floodRoutes, showFloodLayer, mapStyles]);
+
+  // Public filters reuse the existing Canvas paths. Non-matching routes remain
+  // visible at 25% opacity so a traveler can still notice nearby safety data.
+  useEffect(() => {
+    if (!publicMode) return;
+    const floodMatches = new Set(highlightFloodIds);
+    const detourMatches = new Set(highlightDetourIds);
+    Object.entries(floodLinesRef.current).forEach(([id, entry]) => {
+      entry.filterOpacity = floodMatches.has(id) ? 1 : 0.25;
+      entry.line.setStyle({ opacity: entry.baseOpacity * entry.filterOpacity });
+    });
+    detourLinesRef.current.forEach((entry) => {
+      entry.filterOpacity = detourMatches.has(entry.id) ? 1 : 0.25;
+      entry.line.setStyle({ opacity: entry.baseOpacity * entry.filterOpacity });
+    });
+    const applyGroupOpacity = (group: any, matches: Set<string>) => group?.eachLayer?.((layer: any) => {
+      const ids = layer.__dohFilterIds || (layer.__dohFilterId ? [layer.__dohFilterId] : null);
+      if (!ids) return;
+      const baseOpacity = Number.isFinite(layer.__dohBaseOpacity) ? layer.__dohBaseOpacity : 1;
+      const opacity = baseOpacity * (ids.some((id: string) => matches.has(id)) ? 1 : 0.25);
+      if (layer.setStyle) layer.setStyle({ opacity });
+      const element = layer.getElement?.();
+      if (element) {
+        element.style.opacity = String(opacity);
+        element.dataset.filterOpacity = String(opacity);
+      }
+    });
+    applyGroupOpacity(floodGroupRef.current, floodMatches);
+    applyGroupOpacity(detourGroupRef.current, detourMatches);
+  }, [publicMode, highlightFloodIds, highlightDetourIds, mapReady, systemData.floodRoutes, systemData.detourRoutes]);
 
   // 4f. Admin draft route (A->B and B->A), conflict alerts, imported-GIS preview and draggable markers.
   useEffect(() => {
@@ -1849,7 +1903,7 @@ export function LongdoGisMap({
   }, [mapReady, systemData.offices, showOffices, publicMode, editableOfficeId]);
 
   return (
-    <div className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full min-h-[450px]`} style={{ minHeight: 450 }}>
+    <div data-public-filter-counts={`flood:${highlightFloodIds.length};detour:${highlightDetourIds.length}`} className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full min-h-[450px]`} style={{ minHeight: 450 }}>
       <div
         ref={mapContainerRef}
         className="w-full h-full min-h-[350px] bg-[#0b1426] relative z-0"

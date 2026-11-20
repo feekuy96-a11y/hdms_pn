@@ -188,9 +188,12 @@ export function getResponsivePopupOptions(
   return {
     maxWidth,
     minWidth,
+    keepInView: isMobile,
     ...(className ? { className } : {}),
-    autoPanPaddingTopLeft: L?.point ? L.point(12, isMobile ? 16 : 56) : [12, isMobile ? 16 : 56],
-    autoPanPaddingBottomRight: L?.point ? L.point(12, isMobile ? 112 : 24) : [12, isMobile ? 112 : 24],
+    // Leaflet positions overlays in map pixels. Reserve the popup frame and its
+    // mobile close target so a near-edge detour marker can pan fully into view.
+    autoPanPaddingTopLeft: L?.point ? L.point(isMobile ? 24 : 12, isMobile ? 16 : 56) : [isMobile ? 24 : 12, isMobile ? 16 : 56],
+    autoPanPaddingBottomRight: L?.point ? L.point(isMobile ? 24 : 12, isMobile ? 112 : 24) : [isMobile ? 24 : 12, isMobile ? 112 : 24],
   };
 }
 
@@ -199,25 +202,25 @@ export function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color:
   const name = routeNameOf(props);
   const lengthKm = props.length_km || "";
   return `
-    <div class="w-[min(296px,calc(100vw-36px))] max-w-full text-xs p-2.5 sm:p-3 pr-8 font-body bg-slate-950 text-white rounded-xl" style="border-top: 3px solid ${color}">
-      <div class="flex items-center justify-between pb-1.5 border-b border-slate-800 gap-2">
+    <div class="w-[min(18.5rem,calc(100vw-2.25rem))] max-w-full text-xs p-[0.833em] sm:p-[1em] pr-8 font-body bg-slate-950 text-white rounded-xl" style="border-top: 3px solid ${color}">
+      <div class="flex items-center justify-between pb-1.5 border-b border-slate-800 gap-[0.667em]">
         <span class="text-white text-sm sm:text-base font-bold font-heading tracking-wide break-words">
           ${code ? `ทล.${escapeHtml(code)} ` : ""}${escapeHtml(name)}
         </span>
       </div>
       <div class="mt-2">
-        ${props.km_start !== undefined && props.km_start !== null && String(props.km_start).trim() !== "" ? `<p class="text-amber-300 text-[11px] mt-0.5 font-mono">ระหว่าง กม.${escapeHtml(formatKmPost(props.km_start))}${props.km_end !== undefined && props.km_end !== null && String(props.km_end).trim() !== "" ? ` ถึง กม.${escapeHtml(formatKmPost(props.km_end))}` : ""}</p>` : ""}
+        ${props.km_start !== undefined && props.km_start !== null && String(props.km_start).trim() !== "" ? `<p class="text-amber-300 text-[0.75rem] mt-0.5 font-mono">ระหว่าง กม.${escapeHtml(formatKmPost(props.km_start))}${props.km_end !== undefined && props.km_end !== null && String(props.km_end).trim() !== "" ? ` ถึง กม.${escapeHtml(formatKmPost(props.km_end))}` : ""}</p>` : ""}
       </div>
-      <div class="grid grid-cols-2 gap-1.5 mt-2.5 pt-2 border-t border-slate-800 text-[11px]">
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
-          <span class="text-slate-400 block text-[10px]">ระยะทาง</span>
+      <div class="grid grid-cols-2 gap-[0.5em] mt-2.5 pt-2 border-t border-slate-800 text-[0.75rem]">
+        <div class="bg-slate-900/90 p-[0.5em] rounded-lg border border-slate-800">
+          <span class="text-slate-400 block text-[0.75rem]">ระยะทาง</span>
           <strong class="text-amber-400 font-mono">${lengthKm ? `${escapeHtml(lengthKm)} กม.` : "ตามโครงข่าย"}</strong>
         </div>
-        <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800">
-          <span class="text-slate-400 block text-[10px]">ช่องจราจร</span>
-          <strong class="text-sky-400 font-mono text-[10px]">${escapeHtml(props.lanes || "๔ ช่องจราจร")}</strong>
+        <div class="bg-slate-900/90 p-[0.5em] rounded-lg border border-slate-800">
+          <span class="text-slate-400 block text-[0.75rem]">ช่องจราจร</span>
+          <strong class="text-sky-400 font-mono text-[0.75rem]">${escapeHtml(props.lanes || "๔ ช่องจราจร")}</strong>
         </div>
-        <div class="col-span-2 mt-0.5 rounded-lg border border-slate-700 bg-slate-900/90 px-2 py-1.5 text-center text-[10px] font-semibold text-amber-300">
+        <div class="col-span-2 mt-0.5 rounded-lg border border-slate-700 bg-slate-900/90 px-[0.667em] py-[0.5em] text-center text-[0.75rem] font-semibold text-amber-300">
           ${featureIsMain ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"}
         </div>
       </div>
@@ -227,7 +230,7 @@ export function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color:
 
 export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePresentation): string {
   if (!presentation.steps.length) {
-    return `<div class="rounded-xl border border-slate-800 bg-[#0d1b36] p-3 text-xs text-slate-300 text-center">ไม่มีข้อมูลขั้นตอนการเดินทางสำหรับทิศทางนี้</div>`;
+    return `<div class="rounded-xl border border-slate-800 bg-[#0d1b36] p-[1em] text-xs text-slate-300 text-center">ไม่มีข้อมูลขั้นตอนการเดินทางสำหรับทิศทางนี้</div>`;
   }
 
   const stepsHtml = presentation.steps
@@ -246,18 +249,18 @@ export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePrese
             : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
 
       return `
-      <div class="relative flex items-start gap-3">
-        ${!isLast ? `<div class="absolute left-[11px] top-6 bottom-[-8px] w-0.5 bg-slate-600/80" aria-hidden="true"></div>` : ""}
+      <div class="relative flex items-start gap-[1em]">
+        ${!isLast ? `<div class="absolute left-[0.6875rem] top-6 bottom-[-8px] w-0.5 bg-slate-600/80" aria-hidden="true"></div>` : ""}
         <div class="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#f59e0b] text-slate-950 text-xs font-black shadow" aria-hidden="true">
           ${step.stepNumber}
         </div>
-        <div class="flex-1 min-w-0 rounded-xl border border-slate-800 bg-[#0d1b36] p-2.5 shadow-sm">
-          <div class="flex items-center justify-between gap-1.5">
-            <div class="flex items-center gap-1.5 min-w-0">
+        <div class="flex-1 min-w-0 rounded-xl border border-slate-800 bg-[#0d1b36] p-[0.833em] shadow-sm">
+          <div class="flex items-center justify-between gap-[0.5em]">
+            <div class="flex items-center gap-[0.5em] min-w-0">
               ${iconSvg}
               <span class="font-bold text-[#fbbf24] text-xs font-heading truncate">${escapeHtml(step.title)}</span>
             </div>
-            <span class="shrink-0 rounded-full border border-slate-700 bg-slate-900/90 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+            <span class="shrink-0 rounded-full border border-slate-700 bg-slate-900/90 px-[0.667em] py-[0.167em] text-[0.75rem] font-medium text-slate-300">
               ${escapeHtml(step.badge)}
             </span>
           </div>
@@ -275,24 +278,24 @@ export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePrese
       <div class="space-y-2.5">
         ${stepsHtml}
       </div>
-      <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800/80 bg-[#0d1b36] px-3 py-2 text-xs">
-        <div class="flex items-center gap-1.5 text-slate-300">
+      <div class="flex flex-wrap items-center justify-between gap-[0.667em] rounded-xl border border-slate-800/80 bg-[#0d1b36] px-[1em] py-[0.667em] text-xs">
+        <div class="flex items-center gap-[0.5em] text-slate-300">
           <span class="text-sm" aria-hidden="true">🛣</span>
           <span>ระยะทางรวม</span>
           <strong class="font-bold text-white text-xs">${escapeHtml(presentation.totalDistanceFormatted)} กม.</strong>
         </div>
         <span class="text-slate-600 hidden sm:inline" aria-hidden="true">|</span>
-        <div class="flex items-center gap-1.5 text-slate-300">
+        <div class="flex items-center gap-[0.5em] text-slate-300">
           <span class="text-sm" aria-hidden="true">⏱</span>
           <strong class="font-bold text-white text-xs">${escapeHtml(presentation.estimatedDurationText)}</strong>
         </div>
       </div>
-      <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-2 text-xs">
-        <div class="flex items-center gap-1.5 font-bold text-white text-xs">
+      <div class="flex flex-wrap items-center justify-between gap-[0.667em] border-t border-slate-800/80 pt-2 text-xs">
+        <div class="flex items-center gap-[0.5em] font-bold text-white text-xs">
           <span class="text-sm" aria-hidden="true">🛣</span>
           <span>สภาพเส้นทาง</span>
         </div>
-        <span class="rounded-full border border-emerald-500/80 bg-emerald-950/80 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300 flex items-center gap-1">
+        <span class="rounded-full border border-emerald-500/80 bg-emerald-950/80 px-[0.833em] py-[0.167em] text-[0.75rem] font-medium text-emerald-300 flex items-center gap-[0.333em]">
           <span class="text-xs" aria-hidden="true">✔</span>
           <span>${escapeHtml(presentation.roadCondition)}</span>
         </span>
@@ -355,34 +358,34 @@ export function buildDetourPopupHtml(
         .join(" · ")
     : (detour.flood_id_ref ? "เชื่อมโยงจุดน้ำท่วม" : "ทางเลี่ยงอิสระ (โครงข่ายทางหลวง)");
 
-  const activeBtnClass = "min-h-[40px] sm:min-h-[38px] py-1.5 px-2.5 text-xs font-black rounded-lg transition cursor-pointer flex items-center justify-center gap-1 bg-[#f59e0b] text-slate-950 shadow-sm";
-  const inactiveBtnClass = "min-h-[40px] sm:min-h-[38px] py-1.5 px-2.5 text-xs font-semibold rounded-lg transition cursor-pointer flex items-center justify-center gap-1 text-slate-300 hover:bg-slate-800/70 hover:text-white";
+  const activeBtnClass = "min-h-[2.5rem] sm:min-h-[2.375rem] py-[0.5em] px-[0.833em] text-xs font-black rounded-lg transition cursor-pointer flex items-center justify-center gap-[0.333em] bg-[#f59e0b] text-slate-950 shadow-sm";
+  const inactiveBtnClass = "min-h-[2.5rem] sm:min-h-[2.375rem] py-[0.5em] px-[0.833em] text-xs font-semibold rounded-lg transition cursor-pointer flex items-center justify-center gap-[0.333em] text-slate-300 hover:bg-slate-800/70 hover:text-white";
 
   return `
-    <div class="doh-detour-popup text-xs p-2.5 sm:p-3.5 w-[min(324px,calc(100vw-32px))] sm:w-[380px] max-w-full max-h-[min(54dvh,350px)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl select-text">
-      <div class="flex items-center justify-between gap-2 pb-2 sm:pb-2.5 pr-9 border-b border-slate-800/80">
-        <div class="flex items-center gap-2 min-w-0">
+    <div class="doh-detour-popup text-xs p-[0.833em] sm:p-[1.167em] w-[min(20.25rem,calc(100vw-2rem))] sm:w-[23.75rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl select-text">
+      <div class="flex items-center justify-between gap-[0.667em] pb-2 sm:pb-2.5 pr-9 border-b border-slate-800/80">
+        <div class="flex items-center gap-[0.667em] min-w-0">
           <span style="color:${color}" class="text-base sm:text-lg font-black shrink-0 leading-none" aria-hidden="true">↔</span>
           <h4 class="font-bold text-white text-sm sm:text-base font-heading leading-tight truncate">เส้นทางเลี่ยง</h4>
         </div>
-        <span class="rounded-full bg-amber-500/10 border border-amber-500/40 px-2 py-0.5 text-[11px] font-bold text-amber-300 whitespace-nowrap shrink-0">
+        <span class="rounded-full bg-amber-500/10 border border-amber-500/40 px-[0.667em] py-[0.167em] text-[0.75rem] font-bold text-amber-300 whitespace-nowrap shrink-0">
           ${escapeHtml(detourDirectionDetailedBadge(dirMode))}
         </span>
       </div>
 
-      <div class="mt-2 sm:mt-2.5 rounded-xl sm:rounded-2xl border border-sky-800/80 bg-[#0e2146] p-2.5 sm:p-3 flex items-start gap-2 sm:gap-2.5 shadow-sm">
+      <div class="mt-2 sm:mt-2.5 rounded-xl sm:rounded-2xl border border-sky-800/80 bg-[#0e2146] p-[0.833em] sm:p-[1em] flex items-start gap-[0.667em] sm:gap-[0.833em] shadow-sm">
         <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-md" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
         </div>
         <div class="min-w-0 flex-1">
           <h5 class="font-bold text-white text-xs sm:text-sm font-heading leading-snug break-words [overflow-wrap:anywhere]">${escapeHtml(detour.route_name)}</h5>
-          <p class="text-[11px] text-sky-200/80 mt-0.5 break-words [overflow-wrap:anywhere]">${escapeHtml(scopeText)}</p>
+          <p class="text-[0.75rem] text-sky-200/80 mt-0.5 break-words [overflow-wrap:anywhere]">${escapeHtml(scopeText)}</p>
         </div>
       </div>
 
       <div class="mt-2 sm:mt-2.5">
         <div class="text-xs font-bold text-slate-200 mb-1.5">เลือกทิศทางการเดินทาง</div>
-        <div role="group" aria-label="เลือกทิศทางการเดินทาง" class="grid grid-cols-2 gap-1 rounded-xl border border-slate-700/80 bg-[#060d1b] p-1">
+        <div role="group" aria-label="เลือกทิศทางการเดินทาง" class="grid grid-cols-2 gap-[0.333em] rounded-xl border border-slate-700/80 bg-[#060d1b] p-[0.333em]">
           <button
             type="button"
             id="detour-btn-fwd-${safeId}"
@@ -406,11 +409,11 @@ export function buildDetourPopupHtml(
             <span>ขากลับ (B → A)</span>
           </button>
         </div>
-        ${recorded ? "" : `<p class="mt-1.5 text-[11px] text-amber-300" role="status">⚠️ ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>`}
+        ${recorded ? "" : `<p class="mt-1.5 text-[0.75rem] text-amber-300" role="status">⚠️ ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>`}
       </div>
 
       <div class="mt-2 sm:mt-3">
-        <div class="flex items-center gap-1.5 mb-1.5 sm:mb-2">
+        <div class="flex items-center gap-[0.5em] mb-1.5 sm:mb-2">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19V9a4 4 0 0 1 4-4h9"/><path d="m15 2 3 3-3 3"/><path d="M9 19h10"/><path d="m16 16 3 3-3 3"/></svg>
           <span class="font-bold text-white text-xs font-heading">คำแนะนำเส้นทาง</span>
         </div>
@@ -422,21 +425,21 @@ export function buildDetourPopupHtml(
         </div>
       </div>
 
-      <div class="mt-2.5 sm:mt-3.5 pt-2 sm:pt-2.5 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+      <div class="mt-2.5 sm:mt-3.5 pt-2 sm:pt-2.5 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center gap-[0.5em] sm:gap-[0.667em]">
         <button
           type="button"
           id="detour-nav-btn-${safeId}"
           ${recorded ? "" : "disabled aria-disabled=\"true\" title=\"รอเจ้าหน้าที่ตรวจสอบทิศทางเดินรถ\""}
           onclick="window.__openDetourGoogleMaps && window.__openDetourGoogleMaps('${safeId}', window.__getDetourCurrentDir ? window.__getDetourCurrentDir('${safeId}') : '${defaultDir}')"
-          class="doh-detour-nav-btn w-full sm:w-auto flex-1 min-h-[44px] py-2 px-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-xl flex items-center justify-between shadow transition cursor-pointer border border-emerald-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
+          class="doh-detour-nav-btn w-full sm:w-auto flex-1 min-h-[2.75rem] py-[0.667em] px-[1em] bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-xl flex items-center justify-between shadow transition cursor-pointer border border-emerald-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          <div class="flex items-center gap-2 min-w-0">
+          <div class="flex items-center gap-[0.667em] min-w-0">
             <div class="w-6 h-6 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm" aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="#059669"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
             </div>
             <div class="text-left min-w-0">
               <div class="font-bold text-xs leading-tight truncate">นำทางด้วย Google Maps</div>
-              <div id="detour-nav-subtext-${safeId}" class="text-[11px] sm:text-[10px] text-emerald-100 font-medium leading-tight mt-0.5 truncate">
+              <div id="detour-nav-subtext-${safeId}" class="text-[0.75rem] sm:text-[0.75rem] text-emerald-100 font-medium leading-tight mt-0.5 truncate">
                 ${isRev ? "(ขากลับ B ➔ A)" : "(ขาไป A ➔ B)"}
               </div>
             </div>
@@ -447,7 +450,7 @@ export function buildDetourPopupHtml(
         <button
           type="button"
           onclick="window.__openDetourModal && window.__openDetourModal('${escapeHtml(detour.id)}')"
-          class="doh-detour-detail-btn w-full sm:w-auto min-h-[44px] py-2 px-3 bg-[#13203c] hover:bg-[#1a2b50] border border-sky-800/80 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow transition cursor-pointer shrink-0"
+          class="doh-detour-detail-btn w-full sm:w-auto min-h-[2.75rem] py-[0.667em] px-[1em] bg-[#13203c] hover:bg-[#1a2b50] border border-sky-800/80 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-[0.5em] shadow transition cursor-pointer shrink-0"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
           <span>ดูตำแหน่งบนแผนที่</span>
@@ -476,9 +479,9 @@ export function buildDetourPointPhotoPopupHtml(
   const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${Number(lat).toFixed(6)},${Number(lon).toFixed(6)}&travelmode=driving`;
 
   return `
-    <div class="doh-detour-point-photo-popup text-xs p-2.5 sm:p-3.5 w-[min(324px,calc(100vw-32px))] sm:w-[340px] max-w-full max-h-[min(54dvh,350px)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl select-text space-y-2 sm:space-y-2.5">
-      <div class="flex items-center justify-between gap-2 pb-2 pr-9 border-b border-slate-800/80">
-        <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-heading font-bold ${
+    <div class="doh-detour-point-photo-popup text-xs p-[0.833em] sm:p-[1.167em] w-[min(20.25rem,calc(100vw-2rem))] sm:w-[21.25rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl select-text space-y-2 sm:space-y-2.5">
+      <div class="flex items-center justify-between gap-[0.667em] pb-2 pr-9 border-b border-slate-800/80">
+        <span class="inline-flex items-center gap-[0.5em] rounded-full px-[0.833em] py-[0.167em] text-[0.75rem] font-heading font-bold ${
           isStart
             ? "bg-emerald-950/90 border border-emerald-500/60 text-emerald-300"
             : "bg-sky-950/90 border border-sky-500/60 text-sky-300"
@@ -498,23 +501,23 @@ export function buildDetourPointPhotoPopupHtml(
           onclick="window.__openDetourPointPhoto && window.__openDetourPointPhoto(this.src, this.alt)"
           class="w-full h-32 sm:h-44 object-cover cursor-zoom-in hover:opacity-95 transition"
         />
-        <span class="pointer-events-none absolute bottom-2 right-2 rounded-lg bg-slate-950/85 border border-slate-700 px-2 py-0.5 text-[10px] text-slate-200">
+        <span class="pointer-events-none absolute bottom-2 right-2 rounded-lg bg-slate-950/85 border border-slate-700 px-[0.667em] py-[0.167em] text-[0.75rem] text-slate-200">
           แตะที่ภาพเพื่อขยายเต็มจอ
         </span>
       </div>
-      <div class="grid grid-cols-2 gap-1.5 sm:gap-2 pt-1">
+      <div class="grid grid-cols-2 gap-[0.5em] sm:gap-[0.667em] pt-1">
         <a
           href="${escapeHtml(navUrl)}"
           target="_blank"
           rel="noopener noreferrer"
-          class="min-h-[44px] sm:min-h-[40px] px-2 sm:px-2.5 py-1.5 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-heading font-black text-xs flex items-center justify-center gap-1 text-center shadow transition"
+          class="min-h-[2.75rem] sm:min-h-[2.5rem] px-[0.667em] sm:px-[0.833em] py-[0.5em] rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-heading font-black text-xs flex items-center justify-center gap-[0.333em] text-center shadow transition"
         >
           <span>🧭 นำทางไปจุดนี้</span>
         </a>
         <button
           type="button"
           onclick="window.__openDetourModal && window.__openDetourModal('${escapeHtml(detour.id)}')"
-          class="min-h-[44px] sm:min-h-[40px] px-2 sm:px-2.5 py-1.5 rounded-xl border border-slate-700 bg-[#13203c] hover:bg-[#1a2b50] text-white font-heading font-bold text-xs flex items-center justify-center gap-1 text-center transition cursor-pointer"
+          class="min-h-[2.75rem] sm:min-h-[2.5rem] px-[0.667em] sm:px-[0.833em] py-[0.5em] rounded-xl border border-slate-700 bg-[#13203c] hover:bg-[#1a2b50] text-white font-heading font-bold text-xs flex items-center justify-center gap-[0.333em] text-center transition cursor-pointer"
         >
           <span>ดูคำแนะนำทางเลี่ยง</span>
         </button>
@@ -591,17 +594,17 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0):
   const safeId = escapeHtml(flood.id);
 
   return `
-    <div class="w-[min(324px,calc(100vw-32px))] sm:w-[340px] max-w-full max-h-[min(54dvh,350px)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain p-2.5 sm:p-3.5 font-body text-slate-100 bg-[#081120]">
-      <div class="flex items-start justify-between gap-2 pr-9">
-        <div class="flex min-w-0 items-center gap-1.5 sm:gap-2 flex-wrap">
-          <span class="shrink-0 rounded-lg bg-[#f59e0b] px-2 py-0.5 font-heading text-xs font-black text-slate-950 shadow">
+    <div class="w-[min(20.25rem,calc(100vw-2rem))] sm:w-[21.25rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain p-[0.833em] sm:p-[1.167em] font-body text-slate-100 bg-[#081120]">
+      <div class="flex items-start justify-between gap-[0.667em] pr-9">
+        <div class="flex min-w-0 items-center gap-[0.5em] sm:gap-[0.667em] flex-wrap">
+          <span class="shrink-0 rounded-lg bg-[#f59e0b] px-[0.667em] py-[0.167em] font-heading text-xs font-black text-slate-950 shadow">
             ${escapeHtml(routeBadge)}
           </span>
           <span class="min-w-0 font-heading text-xs sm:text-sm font-bold leading-snug text-white break-words">
             ${escapeHtml(flood.section_name)}
           </span>
         </div>
-        <span class="shrink-0 rounded-lg px-2 py-0.5 font-heading text-[11px] font-bold whitespace-nowrap ${statusInfo.badgeClass}">
+        <span class="shrink-0 rounded-lg px-[0.667em] py-[0.167em] font-heading text-[0.75rem] font-bold whitespace-nowrap ${statusInfo.badgeClass}">
           ${escapeHtml(statusInfo.label)}
         </span>
       </div>
@@ -611,22 +614,22 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0):
       </div>
 
       ${areaLine ? `
-        <div class="mt-1.5 sm:mt-2 flex items-center gap-1.5 rounded-xl border border-slate-700/75 bg-[#0e1b33] px-2.5 py-1.5 text-xs text-slate-200">
+        <div class="mt-1.5 sm:mt-2 flex items-center gap-[0.5em] rounded-xl border border-slate-700/75 bg-[#0e1b33] px-[0.833em] py-[0.5em] text-xs text-slate-200">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
           <span class="min-w-0 break-words">${escapeHtml(areaLine)}</span>
         </div>
       ` : ""}
 
-      <div class="mt-2 sm:mt-2.5 rounded-xl border border-slate-700/80 bg-[#0d1930] px-2.5 py-1.5 sm:px-3 sm:py-2 space-y-1.5">
-        <div class="flex items-center justify-between gap-2">
-          <span class="inline-flex items-center gap-1.5 text-xs text-slate-300">
+      <div class="mt-2 sm:mt-2.5 rounded-xl border border-slate-700/80 bg-[#0d1930] px-[0.833em] py-[0.5em] sm:px-[1em] sm:py-[0.667em] space-y-1.5">
+        <div class="flex items-center justify-between gap-[0.667em]">
+          <span class="inline-flex items-center gap-[0.5em] text-xs text-slate-300">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></svg>
             <span>ระดับน้ำล่าสุด</span>
           </span>
           <strong class="font-mono text-sm sm:text-base font-black text-[#f59e0b]">${escapeHtml(levelDisplay)}</strong>
         </div>
         ${lanesText ? `
-          <div class="flex items-start gap-1.5 border-t border-slate-800/80 pt-1.5 text-xs text-slate-200">
+          <div class="flex items-start gap-[0.5em] border-t border-slate-800/80 pt-1.5 text-xs text-slate-200">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mt-0.5 shrink-0" aria-hidden="true"><path d="M4 19L8 5"/><path d="M20 19L16 5"/><path d="M12 19v-2"/><path d="M12 13v-2"/><path d="M12 7V5"/></svg>
             <span class="min-w-0 break-words">ช่องจราจร: <strong class="font-semibold text-white">${escapeHtml(lanesText)}</strong></span>
           </div>
@@ -639,8 +642,8 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0):
         </div>
       ` : ""}
 
-      <div class="mt-2 sm:mt-2.5 flex items-center justify-between gap-2 text-[11px] text-slate-400">
-        <span class="inline-flex items-center gap-1 min-w-0 truncate">
+      <div class="mt-2 sm:mt-2.5 flex items-center justify-between gap-[0.667em] text-[0.75rem] text-slate-400">
+        <span class="inline-flex items-center gap-[0.333em] min-w-0 truncate">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           <span class="truncate">${escapeHtml(relativeUpdate)}</span>
         </span>
@@ -648,25 +651,25 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0):
           <button
             type="button"
             onclick="window.__openFloodDetourDossier && window.__openFloodDetourDossier('${safeId}')"
-            class="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-400/60 bg-amber-500/15 px-2.5 py-1 text-[11px] font-bold text-amber-300 hover:bg-amber-500/25 transition cursor-pointer"
+            class="inline-flex shrink-0 items-center gap-[0.333em] rounded-full border border-amber-400/60 bg-amber-500/15 px-[0.833em] py-[0.333em] text-[0.75rem] font-bold text-amber-300 hover:bg-amber-500/25 transition cursor-pointer"
           >
             <span>ทางเลี่ยง ${detourCount} สาย ›</span>
           </button>
         ` : `<span class="shrink-0 text-slate-500">ไม่มีทางเลี่ยง</span>`}
       </div>
 
-      <div class="mt-2 sm:mt-2.5 grid grid-cols-2 gap-1.5 sm:gap-2">
+      <div class="mt-2 sm:mt-2.5 grid grid-cols-2 gap-[0.5em] sm:gap-[0.667em]">
         <button
           type="button"
           onclick="window.__openFloodDossier && window.__openFloodDossier('${safeId}')"
-          class="min-h-[44px] sm:min-h-10 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] px-2 sm:px-3 py-2 font-heading text-xs font-black text-slate-950 shadow transition cursor-pointer flex items-center justify-center gap-1 text-center leading-tight"
+          class="min-h-[2.75rem] sm:min-h-10 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] px-[0.667em] sm:px-[1em] py-[0.667em] font-heading text-xs font-black text-slate-950 shadow transition cursor-pointer flex items-center justify-center gap-[0.333em] text-center leading-tight"
         >
           <span>ดูรายละเอียด</span>
         </button>
         <button
           type="button"
           onclick="window.__focusFloodOnMap && window.__focusFloodOnMap('${safeId}')"
-          class="min-h-[44px] sm:min-h-10 rounded-xl border border-slate-700 bg-[#13203c] hover:bg-[#1a2b50] px-2 sm:px-3 py-2 font-heading text-xs font-bold text-white shadow transition cursor-pointer flex items-center justify-center gap-1 text-center leading-tight"
+          class="min-h-[2.75rem] sm:min-h-10 rounded-xl border border-slate-700 bg-[#13203c] hover:bg-[#1a2b50] px-[0.667em] sm:px-[1em] py-[0.667em] font-heading text-xs font-bold text-white shadow transition cursor-pointer flex items-center justify-center gap-[0.333em] text-center leading-tight"
         >
           <span>ดูตำแหน่งบนแผนที่</span>
         </button>
@@ -678,19 +681,19 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0):
 export function buildOfficePopupHtml(office: DohOfficeLocation): string {
   const isHq = office.type === "HEADQUARTERS";
   return `
-    <div class="w-[min(280px,calc(100vw-36px))] max-w-full text-xs p-2.5 pr-8 font-body text-slate-100">
-      <div class="flex items-center gap-1.5 mb-1">
-        <span class="bg-amber-400 text-slate-950 text-[10px] font-bold px-1.5 py-0.2 rounded font-heading">
+    <div class="w-[min(17.5rem,calc(100vw-2.25rem))] max-w-full text-xs p-[0.833em] pr-8 font-body text-slate-100">
+      <div class="flex items-center gap-[0.5em] mb-1">
+        <span class="bg-amber-400 text-slate-950 text-[0.75rem] font-bold px-[0.5em] py-[0.067em] rounded font-heading">
           ${isHq ? "สำนักงานใหญ่" : "หมวดทางหลวง"}
         </span>
       </div>
       <h4 class="font-bold text-white text-sm font-heading break-words">${escapeHtml(office.name)}</h4>
-      <p class="text-slate-300 text-[11px] mt-1 break-words">${escapeHtml(office.address)}</p>
-      <div class="mt-2 pt-1.5 border-t border-slate-700 flex items-center justify-between gap-2">
-        <a href="tel:${String(office.phone ?? "").replace(/[^0-9]/g, "")}" class="text-amber-300 hover:underline font-bold text-xs flex items-center gap-1 min-h-[36px]">
+      <p class="text-slate-300 text-[0.75rem] mt-1 break-words">${escapeHtml(office.address)}</p>
+      <div class="mt-2 pt-1.5 border-t border-slate-700 flex items-center justify-between gap-[0.667em]">
+        <a href="tel:${String(office.phone ?? "").replace(/[^0-9]/g, "")}" class="text-amber-300 hover:underline font-bold text-xs flex items-center gap-[0.333em] min-h-[2.25rem]">
           📞 ${escapeHtml(office.phone)}
         </a>
-        <a href="https://www.google.com/maps/dir/?api=1&destination=${office.lat},${office.lon}" target="_blank" rel="noopener noreferrer" class="bg-amber-500 text-slate-950 px-2.5 py-1.5 rounded-lg text-xs font-bold hover:bg-amber-400 shrink-0">
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${office.lat},${office.lon}" target="_blank" rel="noopener noreferrer" class="bg-amber-500 text-slate-950 px-[0.833em] py-[0.5em] rounded-lg text-xs font-bold hover:bg-amber-400 shrink-0">
           นำทาง
         </a>
       </div>

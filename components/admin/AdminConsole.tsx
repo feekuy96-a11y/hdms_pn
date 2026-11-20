@@ -292,8 +292,8 @@ export function AdminConsole({
       {/* 1. LEFT AUTHENTIC SIDEBAR (Matching reference site)                   */}
       {/* ===================================================================== */}
       <aside
-        className={`relative hidden shrink-0 flex-col text-white lg:flex ${isPaneCollapsed || isSidebarCollapsed ? "w-[72px] transition-[width] duration-200" : ""}`}
-        style={{ background: "#071B3D", width: isPaneCollapsed || isSidebarCollapsed ? 72 : sidebarWidth }}
+        className={`relative hidden shrink-0 flex-col text-white lg:flex ${isPaneCollapsed || isSidebarCollapsed ? "w-[4.5rem] transition-[width] duration-200" : ""}`}
+        style={{ background: "#071B3D", width: isPaneCollapsed || isSidebarCollapsed ? "4.5rem" : sidebarWidth }}
       >
         {/* Sidebar Header Brand */}
         <div className="flex h-16 items-center border-b border-white/10 gap-3 px-4">
@@ -311,7 +311,7 @@ export function AdminConsole({
           {!isPaneCollapsed && !isSidebarCollapsed && (
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-white">แขวงทางหลวงปัตตานี</p>
-              <p className="text-[11px] text-yellow-300 font-mono">Admin Console</p>
+              <p className="font-mono text-[0.75rem] text-yellow-300">Admin Console</p>
             </div>
           )}
         </div>
@@ -349,7 +349,7 @@ export function AdminConsole({
                           onTogglePaneCollapse();
                         }
                       }}
-                      className={`w-full flex items-center rounded-xl p-2.5 text-left transition ${isActive
+                      className={`flex w-full items-center rounded-xl p-[0.833em] text-left transition ${isActive
                           ? "bg-amber-500 text-slate-950 font-bold shadow-md"
                           : "text-slate-300 hover:bg-white/10 hover:text-white"
                         }`}
@@ -361,7 +361,7 @@ export function AdminConsole({
                             <p className="truncate text-xs font-heading font-bold">{item.label}</p>
                             {item.badge !== undefined && item.badge > 0 && (
                               <span
-                                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${isActive ? "bg-slate-950 text-white" : "bg-red-600 text-white"
+                                className={`ml-[0.333em] rounded-full px-[0.5em] py-[0.067em] font-mono text-[0.75rem] ${isActive ? "bg-slate-950 text-white" : "bg-red-600 text-white"
                                   }`}
                               >
                                 {item.badge}
@@ -369,7 +369,7 @@ export function AdminConsole({
                             )}
                           </div>
                           <p
-                            className={`truncate text-[10px] ${isActive ? "text-slate-800" : "text-slate-400"
+                            className={`truncate text-[0.75rem] ${isActive ? "text-slate-800" : "text-slate-400"
                               }`}
                           >
                             {item.subLabel}
@@ -411,7 +411,7 @@ export function AdminConsole({
             ) : (
               <div className="flex items-center gap-2">
                 <ChevronLeft className="w-4 h-4" />
-                <span className="text-[11px]">ย่อแถบเมนูข้าง</span>
+                <span className="text-[0.75rem]">ย่อแถบเมนูข้าง</span>
               </div>
             )}
           </button>

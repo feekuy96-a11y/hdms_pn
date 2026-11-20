@@ -27,7 +27,7 @@
 | **State & Prop-Drilling** | `app/admin/page.tsx` ถือ `useState` > 20 ตัวส่งผ่าน `AdminConsole.tsx` (620 บรรทัด) ↔ แผนที่; ยิง `window.dispatchEvent(new Event("resize"))` ทุกพิกเซลใน `moveWorkspaceDrag`; import `ExecutiveDashboard` ทั้งที่ตั้ง `HIDE_EXECUTIVE_VIEW_SWITCHER = true` และ import `createClient` โดยไม่ใช้ | แผนที่และแผงฟอร์มผูกแน่น (tight coupling), เกิด layout thrashing ตอนลากแบ่งแผง, JS bundle โตเกินจำเป็น |
 | **Data Fetching & Concurrency** | Query เดียว `["dohAdminSystemData"]` โหลด full-res GIS layers ทั้งหมด (~375.6 KB+) ด้วย `staleTime: 0` และ `refetch()` ทั้งก้อนหลังแก้ 1 ฟิลด์; Optimistic locking (`expectedVersion`) มีเฉพาะ `doh_flood_events` ↔ `doh_event_detour_links` ยังไม่มีบน `doh_flood_routes`, `doh_detour_routes`, `doh_highway_layers` | เปลืองแบนด์วิดท์บนเน็ตมือถือภาคสนาม; เจ้าหน้าที่ 2 เครื่องแก้จุดเดียวกันพร้อมกันจะเขียนทับกันเงียบ ๆ (Silent Last-Write-Wins) |
 | **Security & Governance** | `supabase/functions/hdms-api/index.ts` (1,035 บรรทัด) ใช้ `service_role` ทุก mutation (`verify_jwt = false`, `B-001` ยอมรับความเสี่ยงชั่วคราว); ยังขาด DB Audit Trail และ Rate-limit guard | หากเกิดการแก้ผิดพลาดหรือถูกรบกวน API จะตรวจสอบย้อนหลังและกู้ค่าเดิมได้ยาก |
-| **External Dependencies & Drift** | ค้างยืนยัน Edge Production (`B-014`), ตั้ง secret `APPS_SCRIPT_WEB_APP_URL` (`B-022`), `GOOGLE_MAPS_API_KEY` (`B-008`), และนโยบายเก็บล้าง `doh_event_detour_operations` (`B-024`) | เสี่ยงสร้างไฟล์ Drive ซ้ำเมื่อ timeout, พึ่ง OSRM สาธารณะที่ไม่มี SLA, ตาราง ledger โตไม่จำกัด |
+| **External Dependencies & Drift** | ยืนยัน Edge Production v24 และบันทึก RPC snapshot แล้ว (ปิด `B-014`); เหลือตั้ง secret `APPS_SCRIPT_WEB_APP_URL` (`B-022`), `GOOGLE_MAPS_API_KEY` (`B-008`), และนโยบายเก็บล้าง `doh_event_detour_operations` (`B-024`) | เสี่ยงสร้างไฟล์ Drive ซ้ำเมื่อ timeout, พึ่ง OSRM สาธารณะที่ไม่มี SLA, ตาราง ledger โตไม่จำกัด |
 | **CI/CD & Test Stability** | พบ E2E timing flake ใน `admin-dialog-keyboard.spec.ts:88` และ `public-route-sheet.spec.ts:224`; ช่องว่าง test `B-011` (แก้จุดอิสระ/ตัด-เชื่อมเส้น, แถบไอคอน 1280px, conflict 409) | เสี่ยง CI แดงเป็นช่วง ๆ และยังขาด regression coverage สำหรับงานแก้แนวเส้นลึก |
 
 ---
@@ -52,8 +52,8 @@
 - [x] `0.3` ปรับ `.github/workflows/deploy.yml` ให้รอ `CI` ผ่านด้วย `workflow_run` พร้อมคง `workflow_dispatch` สำหรับฉุกเฉิน และตัดการรัน Playwright ซ้ำ (`B-003`)
 - [x] `0.4` ซิงก์ `PRODUCTION.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/AI_HANDOFF.md` ให้ตรงโค้ดจริง และย้าย `SUPPLEMENTAL_RULES.md` ไป `docs/archive/SUPPLEMENTAL_RULES.md` (`B-006`)
 
-### Phase 1: Security Depth & Ops Hardening — **ถัดไป**
-- [ ] `1.1` ยืนยันเวอร์ชัน Edge Production (`B-014`) และสกัด `pg_get_functiondef` ของ RPC จริงเก็บเป็น `docs/db-schema-snapshot.md` (`R4`)
+### Phase 1: Security Depth & Ops Hardening — **กำลังดำเนินการ**
+- [x] `1.1` ยืนยัน Edge Production (`hdms-api` v24, ACTIVE) และสกัด `pg_get_functiondef` ของ RPC จริงเก็บใน `docs/db-schema-snapshot.md` (`R4`, ปิด B-014)
 - [ ] `1.2` ตั้งค่า Secrets บน Supabase Dashboard (`APPS_SCRIPT_WEB_APP_URL` ปิด `B-022`, `GOOGLE_MAPS_API_KEY` ปิด `B-008`) แล้ว re-deploy Edge
 - [ ] `1.3` สร้าง migration `doh_admin_audit_log` + trigger เก็บ `before/after` บน `doh_flood_routes`, `doh_detour_routes`, `doh_highway_layers` (`B-001` ทางเลือก C) — *ร่างไฟล์ `supabase/migrations/20261119000300_admin_audit_log_and_ledger_retention.sql` แล้ว (UPDATE-138), รอเจ้าของ apply บน Production*
 - [ ] `1.4` สร้าง migration + cron นโยบาย retention/archival สำหรับ `doh_event_detour_operations` และ `doh_external_jobs` ที่เสร็จแล้วเกิน 90 วัน (`B-024`) — *รวมอยู่ใน `20261119000300_admin_audit_log_and_ledger_retention.sql` แล้ว (UPDATE-138), รอเจ้าของ apply บน Production*
@@ -67,12 +67,19 @@
 
 ### Phase 3: Frontend State & Modular Refactoring
 - [ ] `3.1` แยก State 20+ ตัวจาก `app/admin/page.tsx` เป็น Scoped Contexts/Hooks (`MapInteractionContext`, `AdminLayoutState`, `useToastQueue`)
-- [ ] `3.2` แก้ `resize` storm ใน `moveWorkspaceDrag` ด้วย `requestAnimationFrame` (*ทำแล้วใน UPDATE-139*), ย้าย `ExecutiveDashboard` เป็น `next/dynamic`, ลบ unused import `createClient`
+- [x] `3.2` แก้ `resize` storm ด้วย `scheduleMapResize`/`requestAnimationFrame`, ย้าย `ExecutiveDashboard` เป็น `next/dynamic` และลบ import `createClient` แล้ว — ตรวจ source `app/admin/page.tsx` บน `origin/main` @ `ce105ab`; ไม่ใช่ผลวัด performance รอบใหม่
 - [ ] `3.3` แตกไฟล์ > 1,200 บรรทัด (`MapManagementTab`, `DetourManagementTab`, `IncidentRegistryTab`, `EventDetourLinkModal`) ให้แต่ละไฟล์ ≤ ~800 บรรทัด โดยคง DOM/E2E selector ครบ 100% (`R7`)
 - [ ] `3.4` ปรับปุ่มปฏิบัติการหลักที่ยัง `< 40px` (`พับแผง` และชั้นฐาน `ui.tsx`/`page.tsx` *ทำแล้วใน UPDATE-139*; เหลือปุ่ม `เส้นน้ำท่วม`/`ทางเลี่ยง`, Combobox `หมายเลขทางหลวง`, `วิเคราะห์คำแนะนำ`) และเพิ่ม Sticky Switch "ฟอร์ม / แผนที่" สำหรับ `< lg` (*ทำแล้วใน UPDATE-139*)
 
 ### Phase 4: Field Observability, E2E Stability & Auth Readiness
 - [ ] `4.1` เพิ่ม `?debugPerf=1` telemetry mode เก็บตัวเลข canvas/handles/API/memory บนเครื่องเจ้าหน้าที่จริง (`B-005` / `KI-012`)
-- [ ] `4.2` แก้ E2E timing flake (`admin-dialog-keyboard.spec.ts:88`, `public-route-sheet.spec.ts:224`) และเพิ่ม test ปิด `B-011` (แก้จุดอิสระ, แถบไอคอน 1280px, conflict 409, draft recovery)
-- [ ] `4.3` เตรียม Auth-Ready Switch (`REQUIRE_ADMIN_AUTH` env flag + `_shared/auth.ts` + `app/login/page.tsx`) สำหรับเปิดใช้เมื่อเจ้าของระบบเปลี่ยนนโยบาย `B-001`
+- [ ] `4.2` E2E stability และ coverage (`B-011`) — มี source tests บางส่วนแล้ว แต่ยังไม่ปิดทั้งรายการ:
+  - [x] ปรับ public detour popup เป็น `focus()` + `press("Enter")` ใน `tests/e2e/public-route-sheet.spec.ts` (commit `ce105ab`); ยังไม่ยืนยันความเสถียรจากการรันซ้ำในรอบนี้
+  - [ ] ตรวจและแก้ timing flake ของ `tests/e2e/admin-dialog-keyboard.spec.ts` พร้อมหลักฐานการรัน
+  - [x] มี coverage เพิ่ม/ลบ/ตัด/เชื่อมจุดและ undo/redo ใน `tests/e2e/gis-geometry-operations.spec.ts`; การบันทึกและ error อยู่ใน `gis-geometry-save.spec.ts` (ตรวจ source เท่านั้น)
+  - [x] มี coverage 409 Conflict ของ Event–Detour ใน `tests/e2e/event-detour-links-admin.spec.ts`; ไม่ครอบคลุม concurrency ของ 3 ตารางใน Phase 2.2
+  - [ ] ตรวจ/เพิ่ม coverage แถบไอคอนที่ viewport 1280px
+  - [ ] เพิ่ม coverage draft recovery (กู้คืน/ลบร่าง/ล้างหลังบันทึกสำเร็จ)
+  - [ ] รัน regression ที่เกี่ยวข้องและยืนยันเสถียรภาพก่อนปิด 4.2
+- [ ] `4.3` เตรียม Auth-Ready Switch (`REQUIRE_ADMIN_AUTH` env flag + `_shared/auth.ts` + `app/login/page.tsx`) สำหรับเปิดใช้เมื่อเจ้าของระบบเปลี่ยนนโยบาย `B-001` — พักไว้ตามคำสั่งเจ้าของ
 - [ ] `4.4` นำ Asset ตราครุฑทางการที่ผ่านอนุมัติมาใช้งานจริง (`B-016`)

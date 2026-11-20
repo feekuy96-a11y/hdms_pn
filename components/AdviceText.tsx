@@ -31,7 +31,7 @@ export function AdviceText({
       {blocks.map((block, index) => {
         if (block.kind === "heading") {
           return (
-            <div key={index} className="pt-2 font-heading text-[13px] font-bold text-amber-200 first:pt-0">
+            <div key={index} className="pt-[0.615em] font-heading text-[0.8125rem] font-bold text-amber-200 first:pt-0">
               <span aria-hidden="true" className="text-amber-400/60">=== </span>
               {block.text}
               <span aria-hidden="true" className="text-amber-400/60"> ===</span>
@@ -40,8 +40,8 @@ export function AdviceText({
         }
         if (block.kind === "step") {
           return (
-            <div key={index} className="flex gap-1.5">
-              <span className="w-5 shrink-0 text-right font-bold tabular-nums text-amber-300">{block.number}.</span>
+            <div key={index} className="flex gap-[0.5em]">
+              <span className="w-[1.667em] shrink-0 text-right font-bold tabular-nums text-amber-300">{block.number}.</span>
               <span className="min-w-0 break-words">
                 {block.label && <strong className="font-bold text-amber-200">{block.label} </strong>}
                 {block.text}
@@ -51,7 +51,7 @@ export function AdviceText({
         }
         if (block.kind === "summary") {
           return (
-            <div key={index} className="flex gap-1.5 pl-6">
+            <div key={index} className="flex gap-[0.5em] pl-[2em]">
               <span aria-hidden="true" className="shrink-0 text-amber-300">-</span>
               <span className="min-w-0 break-words">
                 {block.label && <strong className="font-bold text-amber-200">{block.label} </strong>}

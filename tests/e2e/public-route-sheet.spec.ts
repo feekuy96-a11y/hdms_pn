@@ -31,6 +31,13 @@ test("citizen route sheet filters floods and detours and returns from details wi
           direction_mode: "FORWARD_ONLY", is_active: true, updated_at: updatedAt,
           lat_start: 6.87, lon_start: 101.25, lat_end: 6.88, lon_end: 101.27,
           coordinates_json: [[101.25, 6.87], [101.27, 6.88]],
+        }, {
+          id: "D-LOCAL-006", flood_id_ref: null,
+          route_name: "ทางเลี่ยง ปน.ถ.006 ทดสอบชิปอิสระ",
+          description: "ใช้ ปน.ถ.006 เมื่อเส้นหลักปิด",
+          direction_mode: "FORWARD_ONLY", is_active: true, updated_at: updatedAt,
+          lat_start: 6.90, lon_start: 101.30, lat_end: 6.91, lon_end: 101.31,
+          coordinates_json: [[101.30, 6.90], [101.31, 6.91]],
         }],
         timelineUpdates: [], mitigationProjects: [], highwayLayers: [], offices: [],
         mapStyles: null, systemSettings: {
@@ -54,6 +61,9 @@ test("citizen route sheet filters floods and detours and returns from details wi
   const list = page.getByRole("dialog", { name: "รายการสายทางและจุดเฝ้าระวัง" });
   await expect(list).toBeVisible();
   await expect(list.getByRole("heading", { name: "สถานการณ์ทางหลวง" })).toBeVisible();
+  // Flood chips only represent active highway flood routes; local-road detours
+  // must not leak into this tab.
+  expect((await list.getByLabel("สายทาง", { exact: true }).locator("option").allTextContents()).join(" ")).not.toContain("ปน.");
   await list.getByLabel("สายทาง", { exact: true }).selectOption("42");
   await list.getByRole("button", { name: /ทางเลี่ยง \(1\)/ }).click();
   const detour = list.getByRole("button", { name: /ชื่อเส้นทางยาวที่ต้องขึ้นบรรทัดใหม่/ });
@@ -83,6 +93,18 @@ test("citizen route sheet filters floods and detours and returns from details wi
   await list.getByRole("button", { name: "แสดงทุกสถานะ" }).click();
   await list.getByLabel("สายทาง", { exact: true }).selectOption("ALL");
   await expect(list.getByText("สายทางที่ผ่านได้ปกติสำหรับทดสอบตัวกรอง")).toBeVisible();
+
+  await list.getByRole("button", { name: /ทางเลี่ยง \(2\)/ }).click();
+  const routeSelect = list.getByLabel("สายทาง", { exact: true });
+  expect((await routeSelect.locator("option").allTextContents()).join(" ")).toContain("ปน.ถ.006");
+  await routeSelect.selectOption("ปน.ถ.006");
+  await expect(list.getByRole("button", { name: /ปน\.ถ\.006 ทดสอบชิปอิสระ/ })).toBeVisible();
+  await expect(page.getByText("กำลังกรอง: ปน.ถ.006")).toBeVisible();
+  await expect(page.locator("[data-public-filter-counts]")).toHaveAttribute("data-public-filter-counts", /detour:1/);
+  // Verify the actual Leaflet marker wrapper is de-emphasized, not only React state.
+  await expect.poll(() => page.locator(".doh-detour-symbol").first().evaluate((element) =>
+    element.closest(".leaflet-marker-icon")?.getAttribute("data-filter-opacity")
+  )).toBe("0.25");
 });
 
 test("citizen map popups fit 360x640 mobile viewport without overflow or changing accessible names", async ({ page }) => {

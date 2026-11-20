@@ -111,10 +111,10 @@
 ## 4. รายการงานที่ยังรอการดำเนินการ (Pending Backlog จาก BACKLOG.md และ `docs/ADMIN_ROADMAP.md`)
 
 - **B-001 (วิกฤต — ยอมรับความเสี่ยงชั่วคราว 2026-11-16):** Edge Function เขียนข้อมูลด้วย service role โดยไม่ตรวจสิทธิ์ผู้เรียก (แผน Phase 1.3 เพิ่ม DB Audit Log และ Phase 4.3 เตรียม Opt-in Auth)
-- **B-014 (วิกฤต — เปิด):** ยืนยันโค้ด Edge Function Production เทียบกับรีโปและสกัด schema snapshot (`docs/ADMIN_ROADMAP.md` Phase 1.1)
+- **B-014 (วิกฤต — ปิด 2026-11-19):** ยืนยัน Production `hdms-api` v24 เป็น ACTIVE และบันทึกนิยาม RPC ที่ deploy จริงใน `docs/db-schema-snapshot.md` แล้ว
 - **B-022 (สูง — กำลังทำ):** ตั้ง `APPS_SCRIPT_WEB_APP_URL` ใหม่ใน Supabase Edge Secrets แล้ว deploy Edge (`Phase 1.2`)
 - **B-008 (กลาง — กำลังทำ):** ตั้ง `GOOGLE_MAPS_API_KEY` ใน Supabase Edge Secrets เพื่อเปิด Tier 1 Routing ลดการพึ่ง OSRM สาธารณะ (`Phase 1.2`)
-- **B-024 (กลาง — เปิด):** เพิ่มนโยบาย retention/archival สำหรับตาราง `doh_event_detour_operations` (`Phase 1.4`)
+- **B-024 (กลาง — กำลังทำ):** migration retention มี preflight นับจำนวนแถวก่อนลบและ partial index สำหรับ completed jobs แล้ว; ยังรอเจ้าของตรวจผลและ apply บน Production (`Phase 1.4`)
 - **B-005 (กลาง — ปิดบางส่วน):** เก็บ field telemetry เครื่องเจ้าหน้าที่จริง (`KI-012`) และแยกไฟล์ขนาดใหญ่ > 1,200 บรรทัด (`Phase 3 & 4.1`)
 - **B-016 (กลาง — เปิด):** ตราครุฑทางการสำหรับป้ายทางหลวงยังรอไฟล์ Asset ที่ผ่านอนุมัติ (`Phase 4.4`)
 - *(ปิดแล้วใน `UPDATE-137`: `B-002` ล็อก `.mcp.json` read-only, `B-003` ผูก `deploy.yml` รอ `CI`, `B-006` ย้าย `SUPPLEMENTAL_RULES.md` ไป `docs/archive/`)*
@@ -124,7 +124,7 @@
 ---
 
 ## อัปเดตหลักฐานใหม่: 2026-11-11 (Phase 6, ยังไม่ใช่ Release Verification)
-แม้ตารางด้านบนบันทึก Phase 5 ว่า 100% ตามผลทดสอบเดิม แต่การตรวจ Production แบบอ่านอย่างเดียวพบว่าข้อมูลทางเลี่ยง 8 รายการมี `direction_mode=TWO_WAY` ทั้งหมด และน้ำท่วม 4 รายการมี `road_side=UNKNOWN` ทั้งหมด ขณะที่ `hdms-api` ที่ deploy ยังขาดการบันทึกฟิลด์ส่วนขยาย ดังนั้นผลทดสอบ Phase 5 ไม่รับรองการทำงานจริงของช่องข้อมูลเหล่านี้ โปรดอ้างอิง `docs/PHASE6_VALIDATION.md` และ `docs/BACKLOG.md` (B-014) ก่อน Deploy
+แม้ตารางด้านบนบันทึก Phase 5 ว่า 100% ตามผลทดสอบเดิม แต่การตรวจ Production แบบอ่านอย่างเดียวพบว่าข้อมูลทางเลี่ยง 8 รายการมี `direction_mode=TWO_WAY` ทั้งหมด และน้ำท่วม 4 รายการมี `road_side=UNKNOWN` ทั้งหมด ข้อจำกัดนี้เป็นข้อมูลเดิมที่ต้องยืนยันเชิงธุรกิจ; ปัจจุบันยืนยันแล้วว่า `hdms-api` Production เป็น v24 และมี RPC snapshot ใน `docs/db-schema-snapshot.md` (ปิด B-014) โปรดอ้างอิง `docs/PHASE6_VALIDATION.md` และ snapshot ก่อนเปลี่ยนการแสดงผลหรือข้อมูล Production
 
 ### KI-006: Public Detour Detail และ Leaflet Popup Shared Presentation Logic (Phase 6 UPDATE-070)
 - `app/page.tsx` เป็น React Bottom Sheet; `components/map/LongdoGisMap.tsx` สร้าง Leaflet Popup เป็น HTML string
