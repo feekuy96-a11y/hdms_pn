@@ -403,8 +403,6 @@ export function findNearestHighwayFromLayers(
   return closest;
 }
 
-export { PATTANI_SUBDISTRICTS_DATA, PATTANI_DISTRICTS_GEOJSON } from "./gis-data";
-
 /** ชื่อพื้นที่สำหรับแสดงในข้อความ เช่น "(บ.บ้านดอนรัก ต.รูสะมิแล อ.เมืองปัตตานี)" */
 function formatAreaTag(area: { village: string; tambon: string; amphoe: string }): string {
   const parts: string[] = [];
@@ -732,7 +730,7 @@ async function buildSingleDirectionAdvice(
           }
         }
         if (!fullRoad) {
-          const locArea = localArea(lookaheadLoc[0], lookaheadLoc[1]);
+          const locArea = await localArea(lookaheadLoc[0], lookaheadLoc[1]);
           if (locArea.tambon && locArea.amphoe) {
             fullRoad = `เส้นทางเชื่อมต่อท้องถิ่น (ต.${locArea.tambon} อ.${locArea.amphoe})`;
           } else {
@@ -1135,8 +1133,6 @@ export async function calculateRoadSnappedDualSource(
     message: "ไม่พบถนนใกล้จุดที่ระบุ จึงลากเส้นตรงให้ — ลากจุดขาวเพื่อดัดตามถนนได้",
   };
 }
-
-// PATTANI_DISTRICTS_GEOJSON is imported and re-exported from ./gis-data
 
 /**
  * สกัดฟีเจอร์เส้นทางพร้อมข้อมูล Attributes จาก GeoJSON

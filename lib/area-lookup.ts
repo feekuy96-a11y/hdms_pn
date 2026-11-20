@@ -21,7 +21,7 @@
 // re-exported from lib/gis-utils.ts, so existing imports keep working.
 
 import { proxyReverseGeocodeAction, reverseGeocodeGoogleAction } from "@/app/actions/doh-actions";
-import { PATTANI_DISTRICTS_GEOJSON, PATTANI_SUBDISTRICTS_DATA } from "./gis-data";
+import { loadBaseHighwayNetwork, resetBaseHighwayNetworkCache } from "./gis-data";
 
 export interface AreaInfo {
   /** Village name without "บ." - only from an online source, "" otherwise. */
@@ -87,9 +87,10 @@ const PATTANI_AMPHOE_CENTERS = [
 ];
 
 /** ค้นหาชื่ออำเภอใน จ.ปัตตานี จากพิกัด (ขอบเขตรูปหลายเหลี่ยมอำเภอของกรมการปกครอง แล้ว fallback ศูนย์กลางอำเภอที่ใกล้ที่สุด) */
-export function findPattaniDistrictName(coord: [number, number]): string {
+export async function findPattaniDistrictName(coord: [number, number]): Promise<string> {
   if (!coord || coord.length < 2) return "จ.ปัตตานี";
-  for (const feat of PATTANI_DISTRICTS_GEOJSON.features) {
+  const { districtsGeojson } = await loadBaseHighwayNetwork();
+  for (const feat of districtsGeojson.features) {
     const geom = feat.geometry as { type: string; coordinates: any };
     if (geom.type === "Polygon") {
       if (isPointInPolygon(coord, geom.coordinates[0] as [number, number][])) {
@@ -120,7 +121,7 @@ export function findPattaniDistrictName(coord: [number, number]): string {
  * Local offline lookup using real DOPA 115 subdistrict polygons (bounding-box pre-filter -> Point-in-Polygon).
  * Falls back to the nearest subdistrict center inside the resolved district for coastal/river-bridge points.
  */
-export function localArea(lon: number, lat: number): AreaInfo {
+export async function localArea(lon: number, lat: number): Promise<AreaInfo> {
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
     return {
       village: "",
@@ -133,7 +134,8 @@ export function localArea(lon: number, lat: number): AreaInfo {
     };
   }
 
-  for (const s of PATTANI_SUBDISTRICTS_DATA) {
+  const { subdistricts } = await loadBaseHighwayNetwork();
+  for (const s of subdistricts) {
     const [minX, minY, maxX, maxY] = s.bounds;
     if (lon < minX || lon > maxX || lat < minY || lat > maxY) continue;
     if (s.polygon && s.polygon.length >= 3 && isPointInPolygon([lon, lat], s.polygon)) {
@@ -149,9 +151,9 @@ export function localArea(lon: number, lat: number): AreaInfo {
     }
   }
 
-  const district = cleanThaiAdminPrefix(findPattaniDistrictName([lon, lat])) || "เมืองปัตตานี";
-  const districtSubdistricts = PATTANI_SUBDISTRICTS_DATA.filter((s) => s.amphoe === district);
-  const pool = districtSubdistricts.length > 0 ? districtSubdistricts : PATTANI_SUBDISTRICTS_DATA;
+  const district = cleanThaiAdminPrefix(await findPattaniDistrictName([lon, lat])) || "เมืองปัตตานี";
+  const districtSubdistricts = subdistricts.filter((s) => s.amphoe === district);
+  const pool = districtSubdistricts.length > 0 ? districtSubdistricts : subdistricts;
 
   let bestDist = Infinity;
   let best = pool[0];
@@ -218,6 +220,7 @@ let googleGeoProbePromise: Promise<void> | null = null;
 
 /** Clears caches and counters (tests, or after the data source changes). */
 export function resetAreaLookup() {
+  resetBaseHighwayNetworkCache();
   memory.clear();
   inflight.clear();
   recent.length = 0;
@@ -460,7 +463,7 @@ async function queryGoogleGeocode(lon: number, lat: number): Promise<Partial<Are
 }
 
 async function resolveOnline(lon: number, lat: number): Promise<AreaInfo | null> {
-  const local = localArea(lon, lat);
+  const local = await localArea(lon, lat);
   const merge = (online: Partial<AreaInfo>): AreaInfo => {
     const tambonFromLocal = !online.tambon && local.tambon && (!online.amphoe || online.amphoe === local.amphoe);
     return {
@@ -512,7 +515,7 @@ export async function resolveArea(lon: number, lat: number, options: ResolveArea
 
   // Only the area name is needed: reuse a nearby online answer within 35 m unless local boundary differs.
   if (!options.needRoad) {
-    const localHint = localArea(lon, lat);
+    const localHint = await localArea(lon, lat);
     const near = recent.find((item) => {
       if (metersBetween(lon, lat, item.lon, item.lat) > NEARBY_REUSE_METERS) return false;
       if (localHint.amphoe && item.info.amphoe && localHint.amphoe !== item.info.amphoe) return false;
@@ -535,7 +538,7 @@ export async function resolveArea(lon: number, lat: number, options: ResolveArea
       return online;
     }
     // Offline or rate limited: answer locally, but remember it only briefly so a later call can upgrade it.
-    const fallback = localArea(lon, lat);
+    const fallback = await localArea(lon, lat);
     memory.set(key, { at: Date.now(), ttl: LOCAL_ANSWER_TTL_MS, info: fallback });
     return fallback;
   })().finally(() => {

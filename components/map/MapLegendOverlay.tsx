@@ -122,7 +122,7 @@ export function MapLegendOverlay({
 
       {/* Quick Geolocation Control & Live Status when Legend is collapsed */}
       {isLayerControlCollapsed && (
-        <div className={`absolute top-[0.333em]2 right-3 z-[400] flex flex-col items-end gap-[0.5em] pointer-events-none transition-opacity duration-150 ${mobileOverlayHiddenClass}`}>
+        <div className={`absolute top-[calc(1em+3rem)] right-3 z-[400] flex flex-col items-end gap-[0.5em] pointer-events-none transition-opacity duration-150 ${mobileOverlayHiddenClass}`}>
           <button
             type="button"
             onClick={locateUser}
