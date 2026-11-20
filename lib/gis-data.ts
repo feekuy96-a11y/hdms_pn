@@ -27,7 +27,7 @@ export interface BaseHighwayNetwork {
   };
 }
 
-const BASE_HIGHWAY_NETWORK_URL = "/data/highway-base-network.json";
+const BASE_HIGHWAY_NETWORK_URL = `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/data/highway-base-network.json`;
 let baseHighwayNetworkPromise: Promise<BaseHighwayNetwork> | null = null;
 
 function isBaseHighwayNetwork(value: unknown): value is BaseHighwayNetwork {
