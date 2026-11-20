@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 34871)
-Total output lines: 490
-
 # CHANGELOG.md — บันทึกงานใหม่ (แทนการเพิ่มใน docs/archive/SUPPLEMENTAL_RULES.md)
 
 ### [UPDATE-145] 2026-11-20 แยกตัวกรองสายทางหน้าประชาชนและให้แผนที่ลดความเด่นตามตัวกรอง
@@ -252,7 +249,62 @@ Total output lines: 490
 - **ไฟล์:** `components/admin/tabs/IncidentRegistryTab.tsx`, `app/page.tsx`, `app/globals.css`, `components/admin/tabs/FloodSituationSection.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/DetourManagementTab.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
 - **การแก้ไข:**
   1. **ชุดที่ 3 (ทะเบียนเหตุการณ์ `IncidentRegistryTab.tsx`):** เพิ่มตัวกรองสายทางหลวง (`ทล.xx`) และตัวกรองสถานะจราจร 5 ค่า พร้อมปุ่ม `ล้างตัวกรอง`, เพิ่มตัวเลือกเปลี่ยนสถานะจราจรด่วน (`Quick Status Override`) คู่กับช่องแก้ไขระดับน้ำแบบ inline (ยังคำนวณสถานะแนะนำอัตโนมัติเมื่อพิมพ์ระดับน้ำ), และแสดงจำนวนช่วงย่อย (`N ช่วง`) บนปุ่มพับ/กางเหตุการณ์หลัก
-  2. **ชุดที่ 1 (หน้าประชาชน `app/page.tsx`, `app/globals.css`):** เพิ่มปุ่ม `ล้างตัวกรอ…4871 tokens truncated…ร้อม scroll ภายใน, ปรับปุ่มนำทางในป๊อปอัพทางเลี่ยงเรียงแนวตั้งบนมือถือ, และคงข้อความ/accessible names เดิม
+  2. **ชุดที่ 1 (หน้าประชาชน `app/page.tsx`, `app/globals.css`):** เพิ่มปุ่ม `ล้างตัวกรอง` บนแถบค้นหาฝั่งเดสก์ท็อปเมื่อมีตัวกรองใช้งานอยู่, เพิ่มเงาจาง (Gradient Scroll Hint) ด้านขวาของแถบชิปเลือกสายทาง, และขยายขนาดปุ่มปิดป๊อปอัปแผนที่บนมือถือ (`.leaflet-popup-close-button`) เป็น `44×44px` ตามเกณฑ์ `UI_CONTRACT.md`
+  3. **ชุดที่ 2 (จัดการแผนที่ `FloodSituationSection.tsx`, `MapManagementTab.tsx`):** เพิ่มปุ่มลัด `เลือกทั้งหมด` / `ล้าง` สำหรับส่วนของถนนที่ถูกน้ำท่วมทั้งทางหลวง 1 คันทางและ 2 คันทาง, เพิ่มคำแนะนำไฟล์รูปถ่ายหน้างาน (`.jpg, .png`, บีบอัด ≤ 300 KB), และเพิ่มป้ายสถานะโหมดชัดเจน (`โหมดฉบับร่าง` vs `เผยแพร่ขึ้นแผนที่ประชาชน`) พร้อมปรับสีปุ่มบันทึกใน `StickyActionBar` ให้แยกจากโหมดเผยแพร่จริงชัดเจน
+  4. **ชุดที่ 4 (ทะเบียนทางเลี่ยง `DetourManagementTab.tsx`):** แสดงสถานะ `(กำลังเกิดเหตุ)` / `(ปกติแล้ว)` ในตัวกรองเหตุการณ์น้ำท่วม, เพิ่มปุ่ม `ล้างตัวกรอง`, และเพิ่มแผนที่ SVG พรีวิวรูปทรงแนวเส้นทางย่อ (Start `A` → End `B`) ในหน้าต่างรายละเอียดทางเลี่ยง
+- **ตรวจแล้ว:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (6/6 routes) ผ่านครบ; `PLAYWRIGHT_STATIC=1 npx playwright test tests/e2e/admin-menus.spec.ts:701` และ `smoke.spec.ts` ผ่าน
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Merge กิ่ง `feat/ui-roadmap-batches` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
+### [UPDATE-124] 2026-11-19 ปรับปรุง UX/UI ทั้งหน้าประชาชนและแอดมิน: ลดช่องกรอกซ้ำซ้อน, จัดลำดับปุ่ม, เพิ่ม Contrast และแยกชื่อหมุดแผนที่
+- **ไฟล์:** `app/page.tsx`, `components/map/LongdoGisMap.tsx`, `components/admin/tabs/HighwayIdentificationSection.tsx`, `components/admin/tabs/RouteGeometryEditorSection.tsx`, `components/admin/tabs/IncidentRegistryTab.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/CHANGELOG.md`
+- **การแก้ไข:**
+  1. **แอดมิน — ขจัดช่องกรอกที่มีความหมายซ้ำซ้อนกัน (`HighwayIdentificationSection.tsx`):** แยกหน้าที่ระหว่าง *"ชื่อตอนสายทางหลวง (ตามบัญชีทางหลวง) \*"* (สำหรับชื่อตอนทางหลวง) กับ *"จุดสังเกตหน้างาน / หมู่บ้าน / ตำบล–อำเภอ"* (สำหรับระบุจุดเกิดเหตุและตำบล/อำเภอ) และรวมปุ่มดึงตำแหน่ง/ตำบล-อำเภอจากพิกัดไว้ในจุดเดียว ไม่ให้เจ้าหน้าที่สับสนว่าต้องกรอกตำบล/อำเภอที่ช่องไหน
+  2. **แอดมิน — จัดลำดับความสำคัญปุ่มวาดเส้น (`RouteGeometryEditorSection.tsx`):** เน้นขั้นตอนหลัก *"สร้างแนวเส้นอัตโนมัติ (แนะนำ)"* (`คำนวณเส้นเกาะถนน`) ให้อยู่ในแถบไฮไลต์ชัดเจน และจัดกลุ่มเครื่องมือดัดเส้น/ย้อนกลับ/ล้างข้อมูลไว้ในกรอบรองที่เป็นสัดส่วน โดยคงตำแหน่งและการมองเห็นของปุ่มทั้งหมดไว้ครบถ้วนตามสัญญา E2E (R7)
+  3. **ประชาชน — แยกชื่อเข้าถึงได้ของหมุดแผนที่ (`LongdoGisMap.tsx`):** เพิ่ม `alt`, `title`, และ `aria-label` ที่ระบุหมายเลขทางหลวง ชื่อตอน หลัก กม. และสถานะจราจร ให้กับหมุดน้ำท่วมทั้งแบบแยกช่วงและแบบรวมเหตุการณ์
+  4. **ประชาชน — ปรับ Contrast และขนาดปุ่มบนมือถือ (`app/page.tsx`):** เพิ่มขนาดปุ่ม `"ดูตำแหน่งบนแผนที่"` ในโมดัลรายละเอียดเป็น `min-h-11` (44px) และปรับข้อความรอง `"ข้อควรทราบก่อนนำทาง"` เป็น `text-slate-300` เพื่อให้อ่านง่ายกลางแจ้ง
+  5. **แอดมิน — เพิ่ม Quick Inline Edit ระดับน้ำ (`IncidentRegistryTab.tsx`, `tests/e2e/admin-menus.spec.ts`):** เพิ่มปุ่ม `"แก้ตัวเลข"` ข้างระดับน้ำในแถวรายการเหตุการณ์ เพื่อแก้ไขตัวเลข 0–500 ซม. พร้อมแสดงตัวอย่างสถานะจราจรอัตโนมัติ (ตาม `deriveTrafficStatusFromWaterLevel`) และกดบันทึกทันที (รองรับ Enter/Escape) โดยไม่ต้องเปิดหน้าต่างใหม่ พร้อมสกัด helper `submitWaterLevelUpdate` ร่วมกับโมดัลอัปเดตด่วนและเพิ่มเทสต์ E2E รองรับ
+- **ตรวจแล้ว:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` ผ่านครบ; รัน E2E (`smoke.spec.ts`, `public-route-sheet.spec.ts`, `flood-form-rules.spec.ts`, `compact-card-detour-accordion.spec.ts`, `admin-menus.spec.ts`) ผ่านทุกข้อ (35 passed, 0 failed)
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Merge กิ่ง `fix/ui-p1-p2-accessibility-and-layout` เข้า `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
+### [UPDATE-123] 2026-11-19 ปรับสีเส้นทางเลี่ยง 2 ทิศทางให้ตรงสไตล์ที่ตั้งไว้ พร้อมแยกหมุด A→B / B→A และปลดล็อกดัดเส้นอิสระ
+- **ไฟล์:** `components/map/LongdoGisMap.tsx`, `components/admin/tabs/MapManagementTab.tsx`, `components/admin/tabs/RouteGeometryEditorSection.tsx`, `app/admin/page.tsx`, `tests/e2e/admin-menus.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF,UI_CONTRACT}.md`
+- **การแก้ไข:**
+  1. **แก้สี/ลวดลาย/ลูกศรทางเลี่ยง 2 ทิศทางให้ตรงกับสไตล์เส้นทาง (`components/map/LongdoGisMap.tsx`):** ถอดค่าสีฟ้า `#38bdf8` ที่ hardcode ไว้บนเส้นขากลับ B→A, ลูกศรขากลับ และเส้นพรีวิวร่างออก แล้วใช้ `mapStyles.detour` (รวมถึง `dashArrayFor` สำหรับ `dot` / `long-dash-dot` และ `resolveVisibleArrowColor`) ทั้งขาไปและขากลับเช่นเดียวกับเส้นน้ำท่วม พร้อมใช้ `dashArrayFor` บนเส้นน้ำท่วมด้วย
+  2. **แยกหมุดจุดเริ่ม–จุดสิ้นสุดฝั่งขากลับ (B → A) สำหรับโหมด 2 ทิศทาง (`RouteGeometryEditorSection.tsx`, `MapManagementTab.tsx`, `app/admin/page.tsx`, `LongdoGisMap.tsx`):** เพิ่มการ์ด `หมุดเส้นทางขากลับ (B → A)` (`PICK_REV_START` / `PICK_REV_END`, คลาส `.doh-draft-rev-endpoint`, ปุ่ม `แยกหมุด B→A บนแผนที่`) รองรับทั้งทางเลี่ยง 2 ทิศทางและน้ำท่วม 2 ฝั่งแยกกัน พร้อม fallback ไป B→A เดิมเมื่อยังไม่แยกหมุด
+  3. **ปลดล็อกการดัดเส้นอิสระ (`ดัดเส้นอิสระ`) สำหรับทั้งขาไป–ขากลับ (`MapManagementTab.tsx`, `LongdoGisMap.tsx`, `RouteGeometryEditorSection.tsx`):** ซ่อน `draftPickMarkers` ขณะเปิดโหมดดัดจุดดัดอิสระเพื่อไม่ให้แย่งลากหมุดปลายทาง, ปลดบล็อกการย้ายหมุดปลายทางและต่อปลายเส้น (`ADD_LINE_VERTEX`), เพิ่ม `revDraftLineRef` ให้ลากพรีวิวเส้นขากลับลื่นไหล, และปรับ `updateFreeGeometry` ให้ซิงค์พิกัดปลายทางฝั่งขากลับแยกจากขาไป
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Push ขึ้น `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
+### [UPDATE-122] 2026-11-19 Apply SQL Migration B-023 (`event_detour_both_directions`) บน Supabase Production
+- **ไฟล์:** `supabase/migrations/20261118000100_event_detour_both_directions.sql`, `docs/{CHANGELOG,AI_HANDOFF,BACKLOG,KNOWN_ISSUES}.md`
+- **การดำเนินการ:**
+  1. **อนุมัติและรัน DDL บน Supabase Production (B-023, KI-013):** ได้รับความยินยอมจากเจ้าของระบบ ("อนุญาตทุกครั้งจนเสร็จ") ดำเนินการ apply migration `20261118000100_event_detour_both_directions.sql` เข้า Supabase Production ผ่าน MCP tool `supabase_apply_migration` สำเร็จ (`name: event_detour_both_directions`, `{"success": true}`)
+  2. **ปรับ Check Constraints:** `chk_doh_edl_event_direction` รองรับค่า `BOTH`/`UNKNOWN`, `chk_doh_edl_detour_direction` รองรับ `TWO_WAY`/`UNKNOWN`, และ `chk_doh_edl_recommended_reviewed`
+  3. **อัปเดตฟังก์ชัน `doh_replace_event_detour_links`:** รองรับการบันทึกเชื่อมโยงทางเลี่ยงแบบ 2 ทิศทาง และ validation ตาม segments
+  4. **สถานะความเข้ากันได้:** Edge Function `hdms-api` v23 บน Supabase และหน้าเว็บ Production บน GitHub Pages รองรับ schema นี้สมบูรณ์แล้ว
+- **ลำดับ Deploy & ย้อนกลับ:** SQL รันแล้ว → Edge Function v23 ใช้งานอยู่แล้ว → เว็บ GitHub Pages เผยแพร่แล้ว; แผนย้อนกลับ: รัน restore function จาก migration `20261117135032_event_detour_relationships.sql`
+
+### [UPDATE-121] 2026-11-19 แก้ `popupclose` และพิกัดเทส 360×640 ที่ทำให้ E2E บน CI แกว่ง
+- **ไฟล์:** `components/map/LongdoGisMap.tsx`, `tests/e2e/public-route-sheet.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **แก้ `isMapPopupOpen` ค้างเมื่อปิดป๊อปอัพ (`components/map/LongdoGisMap.tsx`):** ปรับ handler `popupclose` ให้ตรวจ `(map as any)._popup !== e?.popup` (เพราะ Leaflet ยิง `popupclose` ก่อนล้าง `map._popup` หมด) เพื่อให้แถบควบคุมบนแผนที่และปุ่มซูมคืนกลับมาทุกครั้งหลังปิดป๊อปอัพ
+  2. **แก้พิกัดหมุดทดสอบใน `tests/e2e/public-route-sheet.spec.ts`:** แยกพิกัดหมุดน้ำท่วม (`101.225–101.235, 6.83–6.84`) กับหมุดทางเลี่ยง/ภาพทางเข้า (`101.26–101.29, 6.79–6.795`) ให้อยู่โซนกลางจอและห่างจากแคปซูล `ทล.42` (~65px) พร้อมถอด `{ force: true }` ออกจาก `.click()` เพื่อตรวจการไม่ถูกบังจริงบน `360×640`
+- **ตรวจแล้ว:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (`BASE_PATH=/hdms_pn` ผ่าน), Playwright `--repeat-each=5` บน `public-route-sheet.spec.ts` (`10 passed, 10 skipped, 0 failed`) และชุด `public-route-sheet`, `smoke`, `compact-card-detour-accordion`, `detour-navigation` (`26 passed, 4 skipped, 0 failed`)
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Push ขึ้น `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
+### [UPDATE-120] 2026-11-18 ปรับแถบสรุปแผนที่บนมือถือ 360px ไม่ให้ตัดข้อความทางเลี่ยง และซ่อน overlay ชั่วคราวขณะเปิดป๊อปอัพบนมือถือ
+- **ไฟล์:** `app/globals.css`, `components/map/LongdoGisMap.tsx`, `components/map/MapLegendOverlay.tsx`, `components/map/longdo-map-popups.ts`, `tests/e2e/public-route-sheet.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **แก้ข้อความ `"ทางเลี่ยง X เส้นทาง"` ถูกตัดบนจอ 360px (`components/map/MapLegendOverlay.tsx`):** เปลี่ยนแถบสรุปด้านซ้ายจาก `overflow-x-auto max-w-[calc(100%-105px)]` เป็น `flex-1 min-w-0 flex-wrap gap-1 sm:gap-1.5` (ใส่ `pointer-events-auto` เฉพาะป้าย ไม่ให้กล่องว่างดักคลิก), เปลี่ยนตัวครอบนอกเป็น `items-start`, และคงข้อความ/accessible name ของปุ่ม `"สัญลักษณ์บนแผนที่"` / `"สัญลักษณ์"` เดิม
+  2. **แก้ปุ่มปิดป๊อปอัพถูก overlay/ปุ่มซูมบังบนมือถือ (`LongdoGisMap.tsx`, `MapLegendOverlay.tsx`, `app/globals.css`, `longdo-map-popups.ts`):** ติดตามสถานะ `isMapPopupOpen` จาก `popupopen`/`popupclose` ของ Leaflet; ขณะป๊อปอัพเปิดบนมือถือ `< 640px` ซ่อนแถบสรุปด้านบน/ปุ่ม `"ตำแหน่งของฉัน"` และปุ่มซูม `+ / -` (`.doh-map-popup-open`) ชั่วคราวพร้อมคืนทันทีเมื่อปิดป๊อปอัพ และปรับ `autoPanPaddingTopLeft` บนมือถือเป็น `[12, 16]`
+  3. **เพิ่ม assertion ตรวจแถบสรุป 360×640 (`tests/e2e/public-route-sheet.spec.ts`):** ตรวจว่า badge `"น้ำท่วม 1 จุด"` และ `"ทางเลี่ยง 1 เส้นทาง"` (`exact: true`) มองเห็นครบ ไม่ถูกตัด (`scrollWidth <= clientWidth + 1`) และไม่ซ้อนทับปุ่ม `"สัญลักษณ์"`
+- **ตรวจแล้ว:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (`BASE_PATH=/hdms_pn` ผ่าน), และ Playwright Static (`PLAYWRIGHT_STATIC=1`, `BASE_PATH=/hdms_pn`: `public-route-sheet`, `smoke`, `compact-card-detour-accordion`, `detour-navigation` — `26 passed`, `4 skipped`, `0 failed`)
+- **ลำดับ Deploy & ย้อนกลับ:** ไม่ต้องแก้ SQL/Edge Function → Commit & Push ขึ้น `main` เพื่อ Deploy GitHub Pages; ย้อนกลับด้วย `git revert`
+
+### [UPDATE-119] 2026-11-18 ปรับปรุงป๊อปอัพหน้าประชาชนให้รองรับหน้าจอมือถือ 360×640 (`f1c3453`, `5f43716`, `0e57bb1`)
+- **ไฟล์:** `app/globals.css`, `app/page.tsx`, `components/map/LongdoGisMap.tsx`, `components/map/longdo-map-popups.ts`, `tests/e2e/public-route-sheet.spec.ts`, `docs/{CHANGELOG,AI_HANDOFF}.md`
+- **การแก้ไข:**
+  1. **คุมขนาดป๊อปอัพแผนที่แบบ Responsive (`components/map/longdo-map-popups.ts`, `components/map/LongdoGisMap.tsx`):** เพิ่ม `getResponsivePopupOptions` คำนวณ `minWidth`/`maxWidth` ตามขนาดหน้าจอมือถือ พร้อมตั้ง `autoPanPaddingTopLeft` (`[12, 96]`) และ `autoPanPaddingBottomRight` (`[12, 112]`) บน `< 640px` เพื่อเว้นระยะพ้นแถบสถานะด้านบนและแถบสรุปด้านล่าง
+  2. **แก้ปุ่มซูมบังป๊อปอัพและคุมขอบเขตบนมือถือ (`app/globals.css`, `components/map/longdo-map-popups.ts`):** เพิ่ม `.leaflet-popup-pane { z-index: 1050 !important; }` เพื่อไม่ให้ปุ่มซูม `+ / -` ลอยทับเนื้อหาป๊อปอัพ, จำกัดขนาดผ่าน `@media (max-width: 639px)` (`max-width: calc(100vw - 24px)`, ปุ่มปิด `34×34px`), ลด `max-height` ป๊อปอัพน้ำท่วม/ทางเลี่ยง/ภาพทางเข้าบนมือถือเป็น `min(54dvh, 350px)` พร้อม scroll ภายใน, ปรับปุ่มนำทางในป๊อปอัพทางเลี่ยงเรียงแนวตั้งบนมือถือ, และคงข้อความ/accessible names เดิม
   3. **ปรับปรุง Dialog รายละเอียดฝั่งประชาชน (`app/page.tsx`):** ขยายปุ่มปิด Flood/Detour Modal เป็น `min-h-[44px] min-w-[44px]` บนมือถือ และเปลี่ยนหัวข้อชื่อทางเลี่ยงใน Detour Modal จาก `truncate` เป็น `break-words` เพื่อให้ชื่อยาวขึ้นบรรทัดใหม่ได้ตาม `UI_CONTRACT.md`
   4. **เพิ่ม E2E ตรวจ Viewport 360×640 (`tests/e2e/public-route-sheet.spec.ts`):** เพิ่มเคส `citizen map popups fit 360x640 mobile viewport without overflow or changing accessible names` ตรวจขนาดป๊อปอัพ (`width <= 344`, `height <= 370`, `x + width <= 360`), `scrollWidth <= innerWidth`, กดปุ่มปิด `.leaflet-popup-close-button` ได้ไม่ถูกบัง, และ Accessible Name คงเดิม
 - **ตรวจแล้ว:** `npm run lint` (`0` warnings), `npm run typecheck` (`0` errors), `npm run build:pages` (Static export ผ่าน), และ Playwright Static (`PLAYWRIGHT_STATIC=1`: `public-route-sheet`, `smoke`, `compact-card-detour-accordion`, `detour-navigation` — `26 passed`, `4 skipped`, `0 failed`)

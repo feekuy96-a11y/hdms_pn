@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
 import {
   decodeGooglePolyline,
   findNearestHighwayFromLayers,
@@ -9,6 +11,18 @@ import {
 import { resetAreaLookup, resolveArea } from "../../lib/area-lookup";
 import { fetchOsrmWithFailover, resetOsrmClient } from "../../lib/osrm-client";
 import { sampleWaypointsForGoogleMaps } from "../../lib/detour-navigation";
+
+const baseHighwayNetwork = JSON.parse(
+  fs.readFileSync(path.join(process.cwd(), "public/data/highway-base-network.json"), "utf8")
+);
+
+function baseHighwayNetworkResponse(url: string): Response | null {
+  if (url !== "/data/highway-base-network.json") return null;
+  return new Response(JSON.stringify(baseHighwayNetwork), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
 test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
   const origEnvUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -127,6 +141,8 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
 
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
+      const networkResponse = baseHighwayNetworkResponse(url);
+      if (networkResponse) return networkResponse;
       if (url.includes("/functions/v1/hdms-api")) {
         const body = JSON.parse(String(init?.body || "{}"));
         edgeCalls.push({ action: body.action, args: body.args });
@@ -197,6 +213,8 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
 
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
+      const networkResponse = baseHighwayNetworkResponse(url);
+      if (networkResponse) return networkResponse;
       if (url.includes("/functions/v1/hdms-api")) {
         const body = JSON.parse(String(init?.body || "{}"));
         if (body.action === "computeGoogleDetourRouteAction") googleRouteCalls++;
@@ -269,6 +287,8 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
 
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
+      const networkResponse = baseHighwayNetworkResponse(url);
+      if (networkResponse) return networkResponse;
       if (url.includes("/functions/v1/hdms-api")) {
         const body = JSON.parse(String(init?.body || "{}"));
         if (body.action === "reverseGeocodeGoogleAction") {
@@ -331,6 +351,8 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
 
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();
+      const networkResponse = baseHighwayNetworkResponse(url);
+      if (networkResponse) return networkResponse;
       if (url.includes("/functions/v1/hdms-api")) {
         return new Response(JSON.stringify({ configured: false, available: false }), {
           status: 200,
@@ -379,6 +401,8 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
 
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
+      const networkResponse = baseHighwayNetworkResponse(url);
+      if (networkResponse) return networkResponse;
       if (url.includes("/functions/v1/hdms-api")) {
         const body = JSON.parse(String(init?.body || "{}"));
         edgeActionsCalled.push(body.action);

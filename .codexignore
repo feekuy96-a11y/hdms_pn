@@ -1,0 +1,7 @@
+docs/archive/
+lib/gis-data.ts
+supabase/migrations/
+tests/
+.next/
+out/
+package-lock.json

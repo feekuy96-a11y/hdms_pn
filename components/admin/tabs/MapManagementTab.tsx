@@ -660,17 +660,15 @@ export function MapManagementTab({
         if (flood.subdistrict && flood.district) {
           setStartArea({ subdistrict: flood.subdistrict, district: flood.district });
         } else {
-          const loc = localArea(Number(flood.lon_start), Number(flood.lat_start));
-          if (loc.tambon && loc.amphoe) {
-            setStartArea({ subdistrict: loc.tambon, district: loc.amphoe });
-          }
+          void localArea(Number(flood.lon_start), Number(flood.lat_start)).then((loc) => {
+            if (loc.tambon && loc.amphoe) setStartArea({ subdistrict: loc.tambon, district: loc.amphoe });
+          });
         }
       }
       if (flood.lat_end && flood.lon_end) {
-        const endLoc = localArea(Number(flood.lon_end), Number(flood.lat_end));
-        if (endLoc.tambon && endLoc.amphoe) {
-          setEndArea({ subdistrict: endLoc.tambon, district: endLoc.amphoe });
-        }
+        void localArea(Number(flood.lon_end), Number(flood.lat_end)).then((endLoc) => {
+          if (endLoc.tambon && endLoc.amphoe) setEndArea({ subdistrict: endLoc.tambon, district: endLoc.amphoe });
+        });
       }
 
       let coords: [number, number][] = [];
@@ -787,17 +785,15 @@ export function MapManagementTab({
         if (detour.subdistrict && detour.district) {
           setStartArea({ subdistrict: detour.subdistrict, district: detour.district });
         } else {
-          const loc = localArea(Number(detour.lon_start), Number(detour.lat_start));
-          if (loc.tambon && loc.amphoe) {
-            setStartArea({ subdistrict: loc.tambon, district: loc.amphoe });
-          }
+          void localArea(Number(detour.lon_start), Number(detour.lat_start)).then((loc) => {
+            if (loc.tambon && loc.amphoe) setStartArea({ subdistrict: loc.tambon, district: loc.amphoe });
+          });
         }
       }
       if (detour.lat_end && detour.lon_end) {
-        const endLoc = localArea(Number(detour.lon_end), Number(detour.lat_end));
-        if (endLoc.tambon && endLoc.amphoe) {
-          setEndArea({ subdistrict: endLoc.tambon, district: endLoc.amphoe });
-        }
+        void localArea(Number(detour.lon_end), Number(detour.lat_end)).then((endLoc) => {
+          if (endLoc.tambon && endLoc.amphoe) setEndArea({ subdistrict: endLoc.tambon, district: endLoc.amphoe });
+        });
       }
 
       let coords: [number, number][] = [];
@@ -1989,7 +1985,7 @@ export function MapManagementTab({
       };
 
       // ดึงหรือระบุ อำเภอ/ตำบล สำหรับบันทึกข้อมูลทางหลวงลงฐานข้อมูล
-      const fallbackArea = localArea(numSLon, numSLat);
+      const fallbackArea = await localArea(numSLon, numSLat);
       const effectiveDistrict =
         startArea?.district?.trim() ||
         endArea?.district?.trim() ||
@@ -2102,7 +2098,7 @@ export function MapManagementTab({
                 })?.id
               : undefined;
 
-        const revFallbackArea = (revSLon && revSLat) ? localArea(Number(revSLon), Number(revSLat)) : fallbackArea;
+        const revFallbackArea = (revSLon && revSLat) ? await localArea(Number(revSLon), Number(revSLat)) : fallbackArea;
         const revEffectiveDistrict = endArea?.district?.trim() || effectiveDistrict || revFallbackArea.amphoe || "";
         const revEffectiveSubdistrict = endArea?.subdistrict?.trim() || effectiveSubdistrict || revFallbackArea.tambon || "";
 

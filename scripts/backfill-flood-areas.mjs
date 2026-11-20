@@ -2,7 +2,7 @@
 /**
  * One-off Dry-Run & SQL generator for backfilling `district` and `subdistrict`
  * on `public.doh_flood_routes` from `(lon_start, lat_start)` using the
- * 115 DOPA subdistrict polygons in `lib/gis-data.ts`.
+ * 115 DOPA subdistrict polygons in `public/data/highway-base-network.json`.
  *
  * Usage:
  *   node scripts/backfill-flood-areas.mjs          # Read-only Dry-Run table
@@ -13,20 +13,15 @@ import fs from "node:fs";
 import path from "node:path";
 
 const ROOT = process.cwd();
-const GIS_DATA_PATH = path.join(ROOT, "lib", "gis-data.ts");
+const GIS_DATA_PATH = path.join(ROOT, "public", "data", "highway-base-network.json");
 const PUBLIC_CFG_PATH = path.join(ROOT, ".github", "hdms-public.json");
 
 function loadDopaSubdistricts() {
-  const src = fs.readFileSync(GIS_DATA_PATH, "utf8").replace(/\r\n/g, "\n");
-  const startMarker = "export const PATTANI_SUBDISTRICTS_DATA: SubdistrictDataEntry[] = [";
-  const endMarker = "];\n\nexport const PATTANI_DISTRICTS_GEOJSON";
-  const sIdx = src.indexOf(startMarker);
-  const eIdx = src.indexOf(endMarker);
-  if (sIdx === -1 || eIdx === -1) {
-    throw new Error("Could not locate PATTANI_SUBDISTRICTS_DATA in lib/gis-data.ts");
+  const payload = JSON.parse(fs.readFileSync(GIS_DATA_PATH, "utf8"));
+  if (!Array.isArray(payload.subdistricts)) {
+    throw new Error("Could not locate subdistricts in public/data/highway-base-network.json");
   }
-  const arraySrc = src.slice(sIdx + startMarker.length - 1, eIdx + 1);
-  return JSON.parse(arraySrc);
+  return payload.subdistricts;
 }
 
 function isPointInRing(point, ring) {
