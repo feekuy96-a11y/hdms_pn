@@ -47,6 +47,8 @@ import {
 
 export { isFloodLineVisibleOnCurrentMap } from "./longdo-map-popups";
 
+const EMPTY_IDS: string[] = [];
+
 interface LongdoGisMapProps {
   systemData: SystemDataPayload;
   selectedFloodId: string;
@@ -78,6 +80,9 @@ interface LongdoGisMapProps {
   className?: string;
   publicMode?: boolean;
   isSidebarCollapsed?: boolean;
+  /** Public-list filter: keep non-matching safety routes visible but de-emphasized. */
+  highlightFloodIds?: string[];
+  highlightDetourIds?: string[];
 }
 
 export function LongdoGisMap({
@@ -110,6 +115,8 @@ export function LongdoGisMap({
   className = "h-full w-full",
   publicMode = false,
   isSidebarCollapsed = false,
+  highlightFloodIds = EMPTY_IDS,
+  highlightDetourIds = EMPTY_IDS,
 }: LongdoGisMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
@@ -125,8 +132,8 @@ export function LongdoGisMap({
   const revDraftLineRef = useRef<any>(null);
   const vertexGroupRef = useRef<any>(null);
   const officeGroupRef = useRef<any>(null);
-  const floodLinesRef = useRef<Record<string, FloodLineEntry>>({});
-  const detourLinesRef = useRef<AnimatedLineEntry[]>([]);
+  const floodLinesRef = useRef<Record<string, FloodLineEntry & { baseOpacity: number }>>({});
+  const detourLinesRef = useRef<Array<AnimatedLineEntry & { id: string }>>([]);
   const userLocationMarkerRef = useRef<any>(null);
   const baseLayersRef = useRef<Record<string, any>>({});
   const currentBaseKeyRef = useRef<string>("longdo");
@@ -895,6 +902,7 @@ export function LongdoGisMap({
           renderer,
         }).addTo(group);
         detourLinesRef.current.push({
+          id: detour.id,
           line: polyline,
           baseWeight: detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight,
           baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
@@ -937,6 +945,7 @@ export function LongdoGisMap({
             renderer,
           }).addTo(group);
           detourLinesRef.current.push({
+            id: detour.id,
             line: revPolyline,
             baseWeight: reverseWeight,
             baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
@@ -1052,6 +1061,7 @@ export function LongdoGisMap({
         floodLinesRef.current[flood.id] = {
           line: polyline,
           baseWeight: fBaseWeight,
+          baseOpacity: fOpacity,
           casing,
           baseBorderWidth: Number(floodStyle?.borderWidth) || 0,
         };
@@ -1347,6 +1357,20 @@ export function LongdoGisMap({
       entry.casing?.setStyle({ weight: entry.baseWeight + selectedDelta + (entry.baseBorderWidth || 0) * 2 });
     });
   }, [selectedFloodId, mapReady, systemData.floodRoutes, showFloodLayer, mapStyles]);
+
+  // Public filters reuse the existing Canvas paths. Non-matching routes remain
+  // visible at 25% opacity so a traveler can still notice nearby safety data.
+  useEffect(() => {
+    if (!publicMode) return;
+    const floodMatches = new Set(highlightFloodIds);
+    const detourMatches = new Set(highlightDetourIds);
+    Object.entries(floodLinesRef.current).forEach(([id, entry]) => {
+      entry.line.setStyle({ opacity: floodMatches.has(id) ? entry.baseOpacity : entry.baseOpacity * 0.25 });
+    });
+    detourLinesRef.current.forEach((entry) => {
+      entry.line.setStyle({ opacity: detourMatches.has(entry.id) ? entry.baseOpacity : entry.baseOpacity * 0.25 });
+    });
+  }, [publicMode, highlightFloodIds, highlightDetourIds, mapReady, systemData.floodRoutes, systemData.detourRoutes]);
 
   // 4f. Admin draft route (A->B and B->A), conflict alerts, imported-GIS preview and draggable markers.
   useEffect(() => {
@@ -1849,7 +1873,7 @@ export function LongdoGisMap({
   }, [mapReady, systemData.offices, showOffices, publicMode, editableOfficeId]);
 
   return (
-    <div className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full min-h-[450px]`} style={{ minHeight: 450 }}>
+    <div data-public-filter-counts={`flood:${highlightFloodIds.length};detour:${highlightDetourIds.length}`} className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full min-h-[450px]`} style={{ minHeight: 450 }}>
       <div
         ref={mapContainerRef}
         className="w-full h-full min-h-[350px] bg-[#0b1426] relative z-0"
