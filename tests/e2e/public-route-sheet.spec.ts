@@ -101,6 +101,10 @@ test("citizen route sheet filters floods and detours and returns from details wi
   await expect(list.getByRole("button", { name: /ปน\.ถ\.006 ทดสอบชิปอิสระ/ })).toBeVisible();
   await expect(page.getByText("กำลังกรอง: ปน.ถ.006")).toBeVisible();
   await expect(page.locator("[data-public-filter-counts]")).toHaveAttribute("data-public-filter-counts", /detour:1/);
+  // Verify the actual Leaflet marker wrapper is de-emphasized, not only React state.
+  await expect.poll(() => page.locator(".doh-detour-symbol").first().evaluate((element) =>
+    element.closest(".leaflet-marker-icon")?.getAttribute("data-filter-opacity")
+  )).toBe("0.25");
 });
 
 test("citizen map popups fit 360x640 mobile viewport without overflow or changing accessible names", async ({ page }) => {
