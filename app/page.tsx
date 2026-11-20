@@ -1625,11 +1625,11 @@ export default function HomePage() {
                                           href={detourNav.url}
                                           target="_blank"
                                           rel="noopener noreferrer"
-                                          aria-label="นำทางด้วย Google Maps"
+                                          aria-label="ดูบน Google Maps"
                                           className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] px-2.5 py-2 font-heading text-xs sm:text-sm font-black text-slate-950 shadow-md transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                                         >
                                           <Navigation aria-hidden="true" className="h-4 w-4 shrink-0" />
-                                          <span>นำทาง</span>
+                                          <span>ดูบน Google Maps</span>
                                         </a>
                                       ) : (
                                         <span
@@ -2172,7 +2172,7 @@ export default function HomePage() {
                     );
                   })()}
 
-                  {/* 7. Bottom Action Buttons: นำทางด้วย Google Maps & ดูตำแหน่งบนแผนที่ */}
+                  {/* 7. Bottom Action Buttons: ดูบน Google Maps & ดูตำแหน่งบนแผนที่ */}
                   {(() => {
                     const nav = resolveDetourGoogleMapsNavigation(
                       viewingDetourModal,
@@ -2200,7 +2200,7 @@ export default function HomePage() {
                                 </div>
                                 <div className="text-left min-w-0">
                                   <div className="font-heading text-xs sm:text-sm font-bold text-white leading-tight truncate">
-                                    นำทางด้วย Google Maps
+                                    ดูบน Google Maps
                                   </div>
                                   <div className="text-[0.75rem]/[1.1rem] font-medium text-emerald-100 mt-0.5 truncate">
                                     {modalDetourDirection === "FORWARD" ? "(ขาไป A ➔ B)" : "(ขากลับ B ➔ A)"}
