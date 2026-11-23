@@ -9,11 +9,8 @@ import {
   defaultDetourDirection,
   isDetourDirectionAllowed,
 } from "@/lib/detour-presentation";
-import {
-  groupFloodRoutesIntoEvents,
-  parseFloodDirectionMeta,
-} from "@/lib/flood-event-schema";
-import { getLinkedDetoursForFlood, getLinkedEventsForDetour } from "@/lib/event-detour-links";
+import { groupFloodRoutesIntoEvents } from "@/lib/flood-event-schema";
+import { getLinkedDetoursForFlood } from "@/lib/event-detour-links";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import { getTrafficPresentation } from "@/lib/traffic-presentation";
 import { MapLegendOverlay } from "./MapLegendOverlay";
@@ -26,7 +23,6 @@ import {
   EMPTY_PICK_MARKERS,
   MAX_VISIBLE_SHIELDS,
   MAX_VERTEX_HANDLES,
-  type ShieldCandidate,
   type FloodLineEntry,
   type AnimatedLineEntry,
   addLineCasing,
@@ -44,6 +40,22 @@ import {
   buildFloodPopupHtml,
   buildOfficePopupHtml,
 } from "./longdo-map-popups";
+import {
+  buildDetourPhotoBadgeSpec,
+  buildDetourSymbolIconSpec,
+  buildFloodMarkerCandidates,
+  buildZoomAdaptiveFloodPinSpec,
+  clusterFloodMarkerCandidates,
+  collectCriticalHighwayRouteNos,
+  collectHighwayShieldCandidates,
+  collectLegendRoutes,
+  computeDeoverlappedMarkerCoord,
+  computeFloodEventCenter,
+  resolveDetourDefaultDirection,
+  resolveDetourPhotoPointCoords,
+  resolveHighwayForegroundStyle,
+  shouldShowHighwayFeature,
+} from "./longdo-layer-builders";
 
 export { isFloodLineVisibleOnCurrentMap } from "./longdo-map-popups";
 
@@ -161,24 +173,8 @@ export function LongdoGisMap({
   const [previewPointPhoto, setPreviewPointPhoto] = useState<{ url: string; title: string } | null>(null);
 
   const mapStyles = systemData.mapStyles || DEFAULT_MAP_STYLES;
-  const legendRoutes = (type: "MAIN_HIGHWAY" | "SECOND_HIGHWAY") => {
-    const routes = new globalThis.Map<string, string>();
-    (systemData.highwayLayers || []).forEach((layer) => {
-      if (!layer.is_visible) return;
-      (layer.geojson_data?.features || []).forEach((feature: any) => {
-        const props = feature.properties || {};
-        const featureType = props.highway_type || (layer.layer_id === "SECOND_HIGHWAY" ? "SECOND_HIGHWAY" : "MAIN_HIGHWAY");
-        const code = props.route_no || props.route_code || props.ROAD_NO || props.route || props.code;
-        const name = props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || "ไม่ระบุชื่อตอน";
-        if (featureType === type && props.is_visible !== false && code) {
-          routes.set(`${String(code)}::${String(name)}`, String(name));
-        }
-      });
-    });
-    return [...routes.entries()]
-      .map(([key, name]) => ({ code: key.split("::")[0], name }))
-      .sort((a, b) => a.code.localeCompare(b.code, "th", { numeric: true }) || a.name.localeCompare(b.name, "th"));
-  };
+  const legendRoutes = (type: "MAIN_HIGHWAY" | "SECOND_HIGHWAY") =>
+    collectLegendRoutes(systemData.highwayLayers, type);
 
   // Sync dynamic CSS variables on root when mapStyles update
   useEffect(() => {
@@ -637,37 +633,16 @@ export function LongdoGisMap({
   const allowLineAnimationRef = useRef(allowLineAnimation);
   allowLineAnimationRef.current = allowLineAnimation;
 
-  const shieldCandidates = useMemo<ShieldCandidate[]>(() => {
-    const items: ShieldCandidate[] = [];
-    (systemData.highwayLayers || []).forEach((layer) => {
-      if (!layer.is_visible) return;
-      const layerIsMain = layer.layer_id === "MAIN_HIGHWAY";
-      geoJsonFeatures(layer.geojson_data).forEach((feature: any) => {
-        const props = feature?.properties || {};
-        if (props.is_visible === false) return;
-        const geometry = feature?.geometry;
-        const code = routeCodeOf(props);
-        if (!code || !geometry || !["LineString", "MultiLineString"].includes(geometry.type)) return;
-        const featureIsMain = props.highway_type === "MAIN_HIGHWAY" ? true : props.highway_type === "SECOND_HIGHWAY" ? false : layerIsMain;
-        const line = geometry.type === "LineString" ? geometry.coordinates : geometry.coordinates.flat(1);
-        const midpoint = line[Math.floor(line.length / 2)];
-        if (!midpoint) return;
-        items.push({ code: String(code), name: String(routeNameOf(props)), latlng: toLeafletLatLng(midpoint), isMain: featureIsMain });
-      });
-    });
-    return items;
-  }, [systemData.highwayLayers]);
+  const shieldCandidates = useMemo(
+    () => collectHighwayShieldCandidates(systemData.highwayLayers),
+    [systemData.highwayLayers]
+  );
 
   // Set of highway numbers that currently have active flood or detour incidents (must remain visible even when zoomed out)
-  const criticalHighwayRouteNos = useMemo(() => {
-    const set = new Set<string>();
-    (systemData.floodRoutes || []).forEach((f) => {
-      if (f.is_active && f.route_no) {
-        set.add(String(f.route_no).replace(/^ทล\.?/i, "").trim());
-      }
-    });
-    return set;
-  }, [systemData.floodRoutes]);
+  const criticalHighwayRouteNos = useMemo(
+    () => collectCriticalHighwayRouteNos(systemData.floodRoutes),
+    [systemData.floodRoutes]
+  );
 
   // 4a. Highway network (Zoom-dependent rendering per Item 1: Zoom < 11 hides secondary highways unless they have active critical incidents or forceShowAllHighways is toggled).
   const showSecondaryAtCurrentZoom = forceShowAllHighways || currentZoom >= 11;
@@ -689,32 +664,18 @@ export function LongdoGisMap({
       const opacity = style?.opacity ?? 0.85;
       const className = lineAnimationClasses(style, allowLineAnimationRef.current);
 
-    const shouldShowFeature = (feature: any) => {
-      if (feature?.properties?.is_visible === false) return false;
-      const type = feature?.properties?.highway_type;
-      const featureIsMain = type === "MAIN_HIGHWAY" ? true : type === "SECOND_HIGHWAY" ? false : isMain;
-      if (featureIsMain) return showMainHwy;
-      if (!showSecHwy) return false;
-      if (showSecondaryAtCurrentZoom) return true;
-      const code = String(routeCodeOf(feature?.properties)).replace(/^ทล\.?/i, "").trim();
-      return Boolean(code && criticalHighwayRouteNos.has(code));
-    };
+    const shouldShowFeature = (feature: any) =>
+      shouldShowHighwayFeature(
+        feature,
+        isMain,
+        showMainHwy,
+        showSecHwy,
+        showSecondaryAtCurrentZoom,
+        criticalHighwayRouteNos
+      );
 
-    const highwayForegroundStyle = (feature: any) => {
-      const props = feature?.properties || {};
-      const featureIsMain = props.highway_type === "MAIN_HIGHWAY" ? true : props.highway_type === "SECOND_HIGHWAY" ? false : isMain;
-      const featureStyle = featureIsMain ? mapStyles.primary : mapStyles.secondary;
-      let featureWeight = featureStyle?.weight || weight;
-      if (props.lanes) {
-        const lanesStr = String(props.lanes);
-        if (lanesStr.includes("๘") || lanesStr.includes("8")) featureWeight = 8.5;
-        else if (lanesStr.includes("๖") || lanesStr.includes("6")) featureWeight = 7.5;
-        else if (lanesStr.includes("๔") || lanesStr.includes("4")) featureWeight = 5.5;
-        else if (lanesStr.includes("๒") || lanesStr.includes("2")) featureWeight = 3.5;
-      }
-      if (isLowZoom) featureWeight = Math.max(2, featureWeight * 0.8);
-      return { featureStyle, featureWeight };
-    };
+    const highwayForegroundStyle = (feature: any) =>
+      resolveHighwayForegroundStyle(feature, isMain, mapStyles, weight, isLowZoom);
 
       try {
       // Casing is a separate non-interactive Canvas path.  It must be drawn
@@ -879,14 +840,7 @@ export function LongdoGisMap({
       const fwdCoords = parseRouteCoordinates(detour.coordinates_json);
       const revCoords = parseRouteCoordinates(detour.reverse_coordinates_json);
 
-      const linkedEvents = getLinkedEventsForDetour(detour, systemData);
-      const linkedFlood = linkedEvents[0]?.primaryFlood ?? null;
-      const linkedMeta = linkedFlood ? parseFloodDirectionMeta(linkedFlood.direction_meta, linkedFlood) : null;
-      const linkedDetourDir = linkedEvents[0]?.links[0]?.detourDirection;
-      const defaultDir: "FORWARD" | "REVERSE" =
-        linkedDetourDir === "REVERSE" || linkedMeta?.directionCode === "B_TO_A" || detour.direction_mode === "REVERSE_ONLY"
-          ? "REVERSE"
-          : "FORWARD";
+      const defaultDir = resolveDetourDefaultDirection(detour, systemData);
 
       // Draw forward A->B line if mode is TWO_WAY or FORWARD_ONLY
       if (dirMode !== "REVERSE_ONLY" && fwdCoords.length >= 2) {
@@ -918,12 +872,7 @@ export function LongdoGisMap({
         });
 
         const midPoint = latLngs[Math.floor(latLngs.length / 2)];
-        const detourIcon = L.divIcon({
-          html: `<div class="doh-route-symbol" style="width:30px;height:30px;border-radius:9px;background:${dColor};color:#0f172a;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(15,23,42,.45)"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9"/><path d="m15 2 3 3-3 3"/><path d="M9 19h10"/><path d="m16 16 3 3-3 3"/></svg></div>`,
-          className: "doh-detour-symbol",
-          iconSize: [30, 30],
-          iconAnchor: [15, 15],
-        });
+        const detourIcon = L.divIcon(buildDetourSymbolIconSpec(dColor));
         const detourMarker = L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), detourPopupOpts).addTo(group);
         detourMarker.__dohFilterId = detour.id;
         detourMarker.on("click", (e: any) => {
@@ -969,18 +918,10 @@ export function LongdoGisMap({
       // Draw Start Point A & End Point B Entrance Photo Markers if photos are attached
       const startPhoto = detour.detour_meta?.start_point_photo;
       const endPhoto = detour.detour_meta?.end_point_photo;
-      const startLat = Number.isFinite(detour.lat_start) && detour.lat_start !== 0 ? detour.lat_start : (fwdCoords[0]?.[1] ?? NaN);
-      const startLon = Number.isFinite(detour.lon_start) && detour.lon_start !== 0 ? detour.lon_start : (fwdCoords[0]?.[0] ?? NaN);
-      const endLat = Number.isFinite(detour.lat_end) && detour.lat_end !== 0 ? detour.lat_end : (fwdCoords[fwdCoords.length - 1]?.[1] ?? NaN);
-      const endLon = Number.isFinite(detour.lon_end) && detour.lon_end !== 0 ? detour.lon_end : (fwdCoords[fwdCoords.length - 1]?.[0] ?? NaN);
+      const { startLat, startLon, endLat, endLon } = resolveDetourPhotoPointCoords(detour, fwdCoords);
 
       if (startPhoto?.url && Number.isFinite(startLat) && Number.isFinite(startLon)) {
-        const startPhotoIcon = L.divIcon({
-          html: `<div class="doh-detour-photo-badge" style="min-width:34px;height:26px;padding:0 6px;border-radius:999px;background:#064e3b;color:#a7f3d0;border:2px solid #10b981;display:flex;align-items:center;justify-content:center;gap:3px;font-weight:900;font-size:11px;box-shadow:0 3px 10px rgba(0,0,0,0.6)"><span>📷</span><span>A</span></div>`,
-          className: "doh-detour-photo-point doh-detour-photo-start",
-          iconSize: [36, 26],
-          iconAnchor: [-6, 26],
-        });
+        const startPhotoIcon = L.divIcon(buildDetourPhotoBadgeSpec("START"));
         const startMarker = L.marker([startLat, startLon], { icon: startPhotoIcon, interactive: true, zIndexOffset: 200 })
           .bindTooltip(`📷 ภาพทางเข้าจุดเริ่มต้น A (${detour.route_name})`, { direction: "top" })
           .bindPopup(
@@ -996,12 +937,7 @@ export function LongdoGisMap({
       }
 
       if (endPhoto?.url && Number.isFinite(endLat) && Number.isFinite(endLon)) {
-        const endPhotoIcon = L.divIcon({
-          html: `<div class="doh-detour-photo-badge" style="min-width:34px;height:26px;padding:0 6px;border-radius:999px;background:#0c4a6e;color:#bae6fd;border:2px solid #38bdf8;display:flex;align-items:center;justify-content:center;gap:3px;font-weight:900;font-size:11px;box-shadow:0 3px 10px rgba(0,0,0,0.6)"><span>📷</span><span>B</span></div>`,
-          className: "doh-detour-photo-point doh-detour-photo-end",
-          iconSize: [36, 26],
-          iconAnchor: [-6, 0],
-        });
+        const endPhotoIcon = L.divIcon(buildDetourPhotoBadgeSpec("END"));
         const endMarker = L.marker([endLat, endLon], { icon: endPhotoIcon, interactive: true, zIndexOffset: 200 })
           .bindTooltip(`📷 ภาพทางเข้าจุดสิ้นสุด B - ฝั่งขากลับ (${detour.route_name})`, { direction: "top" })
           .bindPopup(
@@ -1089,21 +1025,7 @@ export function LongdoGisMap({
       // Merged parent event capsule markers
       const parentEvents = groupFloodRoutesIntoEvents(visibleFloods);
       parentEvents.forEach((ev) => {
-        let sumLat = 0;
-        let sumLon = 0;
-        let count = 0;
-        ev.segments.forEach((seg) => {
-          const coords = parseRouteCoordinates(seg.coordinates_json);
-          const mid = coords.length > 0 ? coords[Math.floor(coords.length / 2)] : null;
-          const lat = mid ? mid[1] : (seg.lat_start || APP_CONFIG.DEFAULT_CENTER.lat);
-          const lon = mid ? mid[0] : (seg.lon_start || APP_CONFIG.DEFAULT_CENTER.lon);
-          sumLat += lat;
-          sumLon += lon;
-          count++;
-        });
-        const centerLat = count > 0 ? sumLat / count : APP_CONFIG.DEFAULT_CENTER.lat;
-        const centerLon = count > 0 ? sumLon / count : APP_CONFIG.DEFAULT_CENTER.lon;
-
+        const { centerLat, centerLon } = computeFloodEventCenter(ev.segments);
         const evPresentation = getTrafficPresentation(ev.mostSevereStatus, ev.maxWaterLevelCm);
         const zIndexMap = { red: 1000, orange: 800, amber: 700, sky: 600, slate: 400, emerald: 200 } as const;
         const zIndex = zIndexMap[evPresentation.color];
@@ -1140,156 +1062,16 @@ export function LongdoGisMap({
       });
     } else {
       // Individual segment markers with smart de-overlapping & priority z-index
-      type MarkerCandidate = {
-        flood: FloodRoute;
-        lat: number;
-        lon: number;
-        dirCode: string;
-        zIndex: number;
-        capsuleClass: string;
-        statusLabel: string;
-        sideBadge: string;
-        levelText: string;
-      };
-
-      const candidates: MarkerCandidate[] = visibleFloods.map((flood) => {
-        const coords = parseRouteCoordinates(flood.coordinates_json);
-        const midCoord = coords.length > 0 ? coords[Math.floor(coords.length / 2)] : null;
-        const lat = midCoord ? midCoord[1] : (flood.lat_start || APP_CONFIG.DEFAULT_CENTER.lat);
-        const lon = midCoord ? midCoord[0] : (flood.lon_start || APP_CONFIG.DEFAULT_CENTER.lon);
-
-        const meta = flood.direction_meta;
-        const trafficDetail = meta?.trafficStatusDetail;
-        const waterKnown = meta?.water_level_known !== false;
-        const levelText = waterKnown ? `${flood.water_level_cm} ซม.` : "รอวัดระดับน้ำ";
-
-        const presentation = getTrafficPresentation(
-          flood.traffic_status,
-          flood.water_level_cm ?? 0,
-          trafficDetail
-        );
-        const zIndexMap = { red: 1000, orange: 800, amber: 700, sky: 600, slate: 400, emerald: 200 } as const;
-        const zIndex = zIndexMap[presentation.color];
-        const capsuleClass = presentation.capsuleClass;
-        const statusLabel = presentation.label;
-
-        // Never guess a missing direction as two-way: unknown stays UNKNOWN (no side badge, no lateral offset by direction).
-        const dirCode = meta?.directionCode || (flood.road_side === "LEFT" ? "A_TO_B" : flood.road_side === "RIGHT" ? "B_TO_A" : flood.road_side === "BOTH" ? "BOTH" : "UNKNOWN");
-        const sideBadge = dirCode === "A_TO_B"
-          ? " [ขาไป]"
-          : dirCode === "B_TO_A"
-            ? " [ขากลับ]"
-            : flood.road_side === "LEFT"
-              ? " [ซ้าย]"
-              : flood.road_side === "RIGHT"
-                ? " [ขวา]"
-                : "";
-
-        return {
-          flood,
-          lat,
-          lon,
-          dirCode,
-          zIndex,
-          capsuleClass,
-          statusLabel,
-          sideBadge,
-          levelText,
-        };
-      });
-
-      // Cluster candidates within proximity (< ~35m or 0.00035 deg) to prevent stacking
-      const clusters: MarkerCandidate[][] = [];
-      const assigned = new Set<number>();
-
-      for (let i = 0; i < candidates.length; i++) {
-        if (assigned.has(i)) continue;
-        const c1 = candidates[i];
-        const groupList: MarkerCandidate[] = [c1];
-        assigned.add(i);
-
-        for (let j = i + 1; j < candidates.length; j++) {
-          if (assigned.has(j)) continue;
-          const c2 = candidates[j];
-          const distLat = Math.abs(c1.lat - c2.lat);
-          const distLon = Math.abs(c1.lon - c2.lon);
-          const isSameEvent = Boolean(c1.flood.direction_meta?.eventId && c1.flood.direction_meta.eventId === c2.flood.direction_meta?.eventId);
-          if ((distLat < 0.00035 && distLon < 0.00045) || (isSameEvent && distLat < 0.0008 && distLon < 0.0008)) {
-            groupList.push(c2);
-            assigned.add(j);
-          }
-        }
-        clusters.push(groupList);
-      }
+      const candidates = buildFloodMarkerCandidates(visibleFloods);
+      const clusters = clusterFloodMarkerCandidates(candidates);
 
       clusters.forEach((cluster) => {
         const count = cluster.length;
         cluster.forEach((item, idx) => {
-          let renderLat = item.lat;
-          let renderLon = item.lon;
-
-          if (count === 2) {
-            // Smart lateral offset for dual carriageways (A->B vs B->A)
-            if (item.dirCode === "A_TO_B") {
-              renderLat += 0.00018;
-              renderLon -= 0.00012;
-            } else if (item.dirCode === "B_TO_A") {
-              renderLat -= 0.00018;
-              renderLon += 0.00012;
-            } else {
-              renderLat += idx === 0 ? 0.00018 : -0.00018;
-            }
-          } else if (count > 2) {
-            const factor = idx - (count - 1) / 2;
-            renderLat += factor * 0.00022;
-            renderLon += factor * 0.00012;
-          }
-
-          // 3-Tier Zoom Adaptive Markers (P6-03: Compact Flood Marker)
-          let pinHtml = "";
-          let pinSize: [number, number] = [130, 28];
-          let pinAnchor: [number, number] = [65, 14];
-
-          if (currentZoom <= 10) {
-            // ซูมไกล: แสดงเฉพาะไอคอนสถานะในทรงกลมกะทัดรัด 28x28px
-            pinSize = [28, 28];
-            pinAnchor = [14, 14];
-            pinHtml = `
-              <div class="${item.capsuleClass} doh-capsule-zoom-far" style="background:${escapeHtml(fColor)}" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
-                ${floodWaveIcon}
-              </div>
-            `;
-          } else if (currentZoom >= 11 && currentZoom <= 13) {
-            // ซูมกลาง: แสดงไอคอนสถานะ + หมายเลขทางหลวง
-            pinSize = [96, 28];
-            pinAnchor = [48, 14];
-            pinHtml = `
-              <div class="${item.capsuleClass} doh-capsule-zoom-mid" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
-                ${floodWaveBadge}
-                <span>ทล.${escapeHtml(item.flood.route_no)}</span>
-              </div>
-            `;
-          } else {
-            // ซูมใกล้: ไอคอนสถานะ + ทล. + ระดับน้ำ (เช่น ⚠ ทล.4075 · 60 ซม.) — สีมาจากสถานะที่เจ้าหน้าที่บันทึก ไม่คำนวณจากระดับน้ำ
-            const isPending = item.statusLabel === "รอตรวจสอบสถานะ";
-            pinSize = [isPending ? 244 : 168, 28];
-            pinAnchor = [isPending ? 122 : 84, 14];
-            pinHtml = `
-              <div class="${item.capsuleClass} doh-capsule-zoom-near" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
-                ${floodWaveBadge}
-                <span>ทล.${escapeHtml(item.flood.route_no)}</span>
-                <span class="opacity-95 font-mono text-[11px]">· ${escapeHtml(item.levelText)}</span>
-                ${isPending ? '<span class="bg-black/25 px-1.5 py-0.5 rounded text-[10px] font-bold">รอตรวจสอบ</span>' : ""}
-              </div>
-            `;
-          }
-
-          const pinIcon = L.divIcon({
-            html: pinHtml,
-            className: "doh-map-capsule-pin",
-            iconSize: pinSize,
-            iconAnchor: pinAnchor,
-          });
+          const [renderLat, renderLon] = computeDeoverlappedMarkerCoord(item, idx, count);
+          const pinIcon = L.divIcon(
+            buildZoomAdaptiveFloodPinSpec(item, currentZoom, fColor, floodWaveIcon, floodWaveBadge)
+          );
 
           const markerAriaLabel = `ทล.${item.flood.route_no}${item.sideBadge} ${item.flood.section_name} กม.${item.flood.km_start} — ${item.statusLabel}`;
           const marker = L.marker([renderLat, renderLon], {
