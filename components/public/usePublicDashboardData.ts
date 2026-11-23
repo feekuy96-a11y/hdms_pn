@@ -280,6 +280,33 @@ export function usePublicDashboardData({
 
   const highlightFloodIds = useMemo(() => filteredFloods.map((route) => route.id), [filteredFloods]);
   const highlightDetourIds = useMemo(() => filteredDetours.map((route) => route.id), [filteredDetours]);
+  const isFilterActive = Boolean(searchQuery.trim()) || selectedRouteFilter !== "ALL" || selectedStatusFilter !== "ALL";
+  const highlightHighwayRouteNos = useMemo(() => {
+    if (!isFilterActive) return [];
+    const normalize = (value: string) => value.replace(/^ทล\.?\s*/i, "").trim();
+    const routes = new Set<string>();
+    const add = (value: string) => {
+      const number = normalize(value);
+      if (/^\d+$/.test(number)) routes.add(number);
+    };
+    filteredFloods.forEach((route) => add(route.route_no));
+    filteredDetours.forEach((route) => highwayIdsInDetour(route, systemData).forEach(add));
+    const query = searchQuery.trim().toLocaleLowerCase();
+    const normalizedQuery = normalize(query);
+    for (const layer of systemData.highwayLayers || []) {
+      const features = layer.geojson_data?.type === "FeatureCollection"
+        ? layer.geojson_data.features : layer.geojson_data?.type === "Feature" ? [layer.geojson_data] : [];
+      for (const feature of features || []) {
+        const props = feature.properties || {};
+        const number = normalize(String(props.route_no || props.route_code || props.ROAD_NO || props.route || props.code || ""));
+        const name = String(props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || "");
+        if ((selectedRouteFilter === "ALL" || number === normalize(selectedRouteFilter)) &&
+          (!query || number.toLocaleLowerCase().includes(normalizedQuery) || name.toLocaleLowerCase().includes(query)) &&
+          (selectedStatusFilter === "ALL" || filteredFloods.some((route) => normalize(route.route_no) === number))) add(number);
+      }
+    }
+    return [...routes].sort((a, b) => a.localeCompare(b, "th", { numeric: true }));
+  }, [isFilterActive, filteredFloods, filteredDetours, systemData, searchQuery, selectedRouteFilter, selectedStatusFilter]);
   const activeRouteChip = routeChips.find((chip) => chip.id === selectedRouteFilter);
 
   const selectedFloodDetourEntries = useMemo(
@@ -312,6 +339,8 @@ export function usePublicDashboardData({
     detourCountByFloodId,
     highlightFloodIds,
     highlightDetourIds,
+    isFilterActive,
+    highlightHighwayRouteNos,
     activeRouteChip,
     selectedFloodDetourEntries,
     selectedFloodDetours,

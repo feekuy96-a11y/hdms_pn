@@ -184,6 +184,7 @@ export function useLongdoPopupBridge({
 }
 
 export interface UseLongdoRouteLayersParams {
+  onActivateMapEntity?: (entity: { type: "FLOOD" | "DETOUR"; id: string }) => void;
   mapReady: boolean;
   systemData: SystemDataPayload;
   mapStyles: NonNullable<SystemDataPayload["mapStyles"]>;
@@ -223,7 +224,10 @@ export function useLongdoRouteLayers({
   floodLinesRef,
   allowLineAnimationRef,
   selectedFloodIdRef,
+  onActivateMapEntity,
 }: UseLongdoRouteLayersParams) {
+  const activationRef = React.useRef(onActivateMapEntity);
+  activationRef.current = onActivateMapEntity;
   // 4c. Detour routes + bidirectional symbol & entrance photo markers
   useEffect(() => {
     const L = leafletRef.current;
@@ -275,6 +279,7 @@ export function useLongdoRouteLayers({
         polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), detourPopupOpts);
         polyline.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
+          activationRef.current?.({ type: "DETOUR", id: detour.id });
           polyline.openPopup(e.latlng);
         });
 
@@ -286,6 +291,7 @@ export function useLongdoRouteLayers({
         detourMarker.__dohFilterId = detour.id;
         detourMarker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
+          activationRef.current?.({ type: "DETOUR", id: detour.id });
           detourMarker.openPopup();
         });
       }
@@ -321,6 +327,7 @@ export function useLongdoRouteLayers({
           const revPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
           revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), revPopupOpts);
           revPolyline.on("click", (e: any) => {
+            activationRef.current?.({ type: "DETOUR", id: detour.id });
             L.DomEvent.stopPropagation(e);
             revPolyline.openPopup(e.latlng);
           });
@@ -343,6 +350,7 @@ export function useLongdoRouteLayers({
           .addTo(group);
         startMarker.__dohFilterId = detour.id;
         startMarker.on("click", (e: any) => {
+          activationRef.current?.({ type: "DETOUR", id: detour.id });
           L.DomEvent.stopPropagation(e);
           startMarker.openPopup();
         });
@@ -359,6 +367,7 @@ export function useLongdoRouteLayers({
           .addTo(group);
         endMarker.__dohFilterId = detour.id;
         endMarker.on("click", (e: any) => {
+          activationRef.current?.({ type: "DETOUR", id: detour.id });
           L.DomEvent.stopPropagation(e);
           endMarker.openPopup();
         });
@@ -427,6 +436,7 @@ export function useLongdoRouteLayers({
         polyline.bindPopup(() => buildFloodPopupHtml(flood, countDetoursForFlood(flood)), floodPopupOpts);
         polyline.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
+          activationRef.current?.({ type: "FLOOD", id: flood.id });
           polyline.openPopup(e.latlng);
         });
       }
@@ -468,6 +478,7 @@ export function useLongdoRouteLayers({
         marker.bindPopup(() => buildFloodPopupHtml(primarySeg, countDetoursForFlood(primarySeg)), floodPopupOpts);
         marker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
+          activationRef.current?.({ type: "FLOOD", id: primarySeg.id });
           marker.openPopup();
         });
       });
@@ -497,6 +508,7 @@ export function useLongdoRouteLayers({
           marker.bindPopup(() => buildFloodPopupHtml(item.flood, countDetoursForFlood(item.flood)), floodPopupOpts);
           marker.on("click", (e: any) => {
             L.DomEvent.stopPropagation(e);
+            activationRef.current?.({ type: "FLOOD", id: item.flood.id });
             marker.openPopup();
           });
         });
