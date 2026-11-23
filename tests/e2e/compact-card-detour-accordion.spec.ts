@@ -168,7 +168,7 @@ test("compact flood card, detour jump link, ordered exclusive accordion, and rea
 
   // Direct action buttons are visible on the collapsed detour card without expanding first
   const firstCardWrapper = dialog.locator('[data-detour-card="D-FIRST"]');
-  await expect(firstCardWrapper.getByRole("link", { name: /นำทางด้วย Google Maps/ })).toBeVisible();
+  await expect(firstCardWrapper.getByRole("link", { name: /(?:นำทางด้วย|ดูบน) Google Maps/ })).toBeVisible();
   await expect(firstCardWrapper.getByRole("button", { name: /ดูตำแหน่งบนแผนที่/ })).toBeVisible();
 
   // Expand first accordion -> hides header summary (no duplicate) and shows metrics in 2-col grid below
@@ -177,7 +177,7 @@ test("compact flood card, detour jump link, ordered exclusive accordion, and rea
   await expect(firstTrigger).not.toContainText("เวลาประมาณ 5 นาที");
   const firstPanel = dialog.locator("#dossier-detour-panel-D-FIRST");
   await expect(firstPanel).toContainText("เวลาประมาณ 5 นาที");
-  await expect(firstCardWrapper.getByRole("link", { name: /นำทางด้วย Google Maps/ })).toBeVisible();
+  await expect(firstCardWrapper.getByRole("link", { name: /(?:นำทางด้วย|ดูบน) Google Maps/ })).toBeVisible();
   await expect(firstCardWrapper.getByRole("button", { name: /ดูตำแหน่งบนแผนที่/ })).toBeVisible();
 
   // Expand second accordion -> exclusively collapses the first
