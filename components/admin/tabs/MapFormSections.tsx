@@ -3,6 +3,10 @@
 import React from "react";
 import { FileUp, MapPinned, Save } from "lucide-react";
 import { StickyActionBar } from "@/components/admin/ui";
+import { HighwayIdentificationSection } from "@/components/admin/tabs/HighwayIdentificationSection";
+import { RouteGeometryEditorSection } from "@/components/admin/tabs/RouteGeometryEditorSection";
+import { DetourAdviceSection } from "@/components/admin/tabs/DetourAdviceSection";
+import { FloodSituationSection } from "@/components/admin/tabs/FloodSituationSection";
 
 // ============================================================================
 // 1. Header & Mode Switcher (เส้นน้ำท่วม vs ทางเลี่ยง)
@@ -203,9 +207,38 @@ export function MapSubmitActionBar({
 // 5. Main Form Section Container Wrapper
 // ============================================================================
 export interface MapFormSectionsProps {
-  children: React.ReactNode;
+  routeMode: "FLOOD" | "DETOUR";
+  highwayProps: Omit<React.ComponentProps<typeof HighwayIdentificationSection>, "routeMode">;
+  geometryProps: Omit<React.ComponentProps<typeof RouteGeometryEditorSection>, "routeMode">;
+  detourProps: React.ComponentProps<typeof DetourAdviceSection>;
+  floodProps: React.ComponentProps<typeof FloodSituationSection>;
+  submitBarProps: Omit<MapSubmitActionBarProps, "routeMode">;
 }
 
-export function MapFormSections({ children }: MapFormSectionsProps) {
-  return <div className="space-y-5">{children}</div>;
+export function MapFormSections({
+  routeMode,
+  highwayProps,
+  geometryProps,
+  detourProps,
+  floodProps,
+  submitBarProps,
+}: MapFormSectionsProps) {
+  return (
+    <div className="space-y-5">
+      {/* 1. Highway Identification */}
+      <HighwayIdentificationSection routeMode={routeMode} {...highwayProps} />
+
+      {/* 2. Coordinates & Dual-Source Snapping Controls */}
+      <RouteGeometryEditorSection routeMode={routeMode} {...geometryProps} />
+
+      {/* 3. Auto Detour Advice Generator (If in Detour mode) */}
+      {routeMode === "DETOUR" && <DetourAdviceSection {...detourProps} />}
+
+      {/* 4. Water Level, Status & Safety Measures (If Flood) */}
+      {routeMode === "FLOOD" && <FloodSituationSection {...floodProps} />}
+
+      {/* 5. Submit Route Button */}
+      <MapSubmitActionBar routeMode={routeMode} {...submitBarProps} />
+    </div>
+  );
 }
