@@ -12,6 +12,8 @@ import { useDualRoadSnapping } from "@/components/admin/tabs/useDualRoadSnapping
 import { useMapRouteSubmit } from "@/components/admin/tabs/useMapRouteSubmit";
 import { useMapRouteDraft } from "@/components/admin/tabs/useMapRouteDraft";
 import { useMapRouteMediaAndImport } from "@/components/admin/tabs/useMapRouteMediaAndImport";
+import { useMapRouteHydration } from "@/components/admin/tabs/useMapRouteHydration";
+import { useMapCoordinatePicker } from "@/components/admin/tabs/useMapCoordinatePicker";
 import {
   parseCoordinatePair,
   buildDetourRoutingParams,
@@ -19,6 +21,7 @@ import {
   sliceBranchByKmRange,
   buildAffectedPartSummary,
   buildDetourMetaPayload,
+  computeSlicedHighwayPolylines,
 } from "@/components/admin/tabs/map-management-helpers";
 export { buildDetourRoutingParams } from "@/components/admin/tabs/map-management-helpers";
 import {
@@ -530,316 +533,78 @@ export function MapManagementTab({
     return Array.from(names).sort((a, b) => a.localeCompare(b, "th"));
   }, [systemData.offices, availableHighways]);
 
-  // Hydrate an existing record only once per editing session. Refetches of public/full
-  // geometry must not silently overwrite the officer's unsaved manual edits.
-  const hydratedRouteKey = useRef<string | null>(null);
-  useEffect(() => {
-    if (!editingRoute) { hydratedRouteKey.current = null; return; }
-    const { type, id } = editingRoute;
-    const key = `${type}:${id}`;
-    if (id && hydratedRouteKey.current === key) return;
-    setRouteMode(type);
-    setRouteEditId(id);
-
-    if (type === "FLOOD") {
-      const flood = systemData.floodRoutes.find((r) => r.id === id);
-      if (!flood) return;
-      hydratedRouteKey.current = key;
-      setRouteNo(flood.route_no);
-      setKmStart(flood.km_start);
-      setKmEnd(flood.km_end);
-      setSectionName(flood.section_name);
-      const cleanSec = cleanHighwaySectionName(flood.section_name);
-      const matchedOpt = getAvailableHighwayRoutes(systemData).find(
-        (h) => h.no === String(flood.route_no).replace(/^ทล\.?/i, "").trim() &&
-          (!cleanSec || cleanHighwaySectionName(h.sectionName) === cleanSec)
-      );
-      setSelectedHighwayName(matchedOpt?.name || "");
-      sectionNameManuallyEdited.current = true;
-      setRouteWaterLevel(flood.water_level_cm);
-      setRouteStatus(flood.traffic_status);
-      const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
-      editOriginalFloodDirRef.current = meta.directionCode;
-      const effectiveSide = resolveEffectiveRoadSide(flood);
-      setRoadSide(effectiveSide);
-      setAffectedLanes(flood.affected_lanes || AFFECTED_LANES_OPTIONS[0]);
-      setAffectedShoulder((flood.affected_shoulder as AffectedShoulderType) || "NONE");
-      setReporterName(flood.reporter_name || "");
-      setWaterLevelKnown(flood.direction_meta?.water_level_known !== false);
-      setUseCarriagewaySnapping(flood.direction_meta?.carriageway_type === "DUAL_CARRIAGEWAY");
-      setSaveAsDraft(!flood.is_active);
-      setStartLat(flood.lat_start);
-      setStartLon(flood.lon_start);
-      setEndLat(flood.lat_end);
-      setEndLon(flood.lon_end);
-      if (flood.lat_start && flood.lon_start) {
-        if (flood.subdistrict && flood.district) {
-          setStartArea({ subdistrict: flood.subdistrict, district: flood.district });
-        } else {
-          void localArea(Number(flood.lon_start), Number(flood.lat_start)).then((loc) => {
-            if (loc.tambon && loc.amphoe) setStartArea({ subdistrict: loc.tambon, district: loc.amphoe });
-          });
-        }
-      }
-      if (flood.lat_end && flood.lon_end) {
-        void localArea(Number(flood.lon_end), Number(flood.lat_end)).then((endLoc) => {
-          if (endLoc.tambon && endLoc.amphoe) setEndArea({ subdistrict: endLoc.tambon, district: endLoc.amphoe });
-        });
-      }
-
-      let coords: [number, number][] = [];
-      if (Array.isArray(flood.coordinates_json)) coords = flood.coordinates_json as [number, number][];
-      else if (typeof flood.coordinates_json === "string") coords = JSON.parse(flood.coordinates_json);
-      originalRouteCoordinates.current = coords.map((coordinate) => [...coordinate] as [number, number]);
-      setDraftCoordinates(coords);
-
-      let revCoords: [number, number][] = [];
-      if (effectiveSide === "BOTH") {
-        const existingRevSibling = meta.eventId
-          ? (systemData.floodRoutes || []).find((f) => {
-              if (String(f.id) === String(flood.id)) return false;
-              const fm = parseFloodDirectionMeta(f.direction_meta, f);
-              return fm.eventId === meta.eventId && fm.directionCode === "B_TO_A";
-            })
-          : undefined;
-        if (existingRevSibling) {
-          if (Array.isArray(existingRevSibling.coordinates_json)) revCoords = existingRevSibling.coordinates_json as [number, number][];
-          else if (typeof existingRevSibling.coordinates_json === "string") {
-            try { revCoords = JSON.parse(existingRevSibling.coordinates_json); } catch { revCoords = []; }
-          }
-        }
-        if (revCoords.length < 2) {
-          const matchedGroup = findBestHighwayGroupForSelection(
-            systemData.highwayLayers,
-            flood.route_no,
-            flood.section_name,
-            flood.km_start,
-            flood.km_end
-          );
-          const fwdBranch = matchedGroup?.branches.find((b) => b.directionCode === "A_TO_B" && b.coordinates.length >= 2) || matchedGroup?.primaryBranch;
-          const revBranch = matchedGroup?.branches.find((b) => b.directionCode === "B_TO_A" && b.coordinates.length >= 2);
-          if (matchedGroup && revBranch) {
-            revCoords = sliceBranchByKmRange(revBranch, fwdBranch, matchedGroup.kmStart, matchedGroup.kmEnd, flood.km_start, flood.km_end, true);
-          } else if (coords.length >= 2) {
-            revCoords = [...coords].reverse().map((p) => [...p] as [number, number]);
-          }
-        }
-        setReverseRouteWaterLevel(existingRevSibling ? existingRevSibling.water_level_cm : flood.water_level_cm);
-        setReverseRouteStatus(existingRevSibling ? existingRevSibling.traffic_status : flood.traffic_status);
-        setReverseWaterLevelKnown(existingRevSibling ? existingRevSibling.direction_meta?.water_level_known !== false : flood.direction_meta?.water_level_known !== false);
-        const siblingMeta = existingRevSibling ? parseFloodDirectionMeta(existingRevSibling.direction_meta, existingRevSibling) : meta;
-        setReverseAffectedParts(siblingMeta.affectedParts && siblingMeta.affectedParts.length ? siblingMeta.affectedParts : ["ALL_LANES"]);
-      } else {
-        setReverseRouteWaterLevel("");
-        setReverseRouteStatus("WARNING");
-        setReverseWaterLevelKnown(true);
-        setReverseAffectedParts(["ALL_LANES"]);
-      }
-      originalReverseRouteCoordinates.current = revCoords.map((coordinate) => [...coordinate] as [number, number]);
-      setDraftReverseCoordinates?.(revCoords);
-      setDraftReverseWaypoints?.([]);
-      setDraftConflictPoints?.([]);
-      if (effectiveSide === "BOTH" && revCoords.length >= 2) {
-        setRevStartLat(revCoords[0][1]);
-        setRevStartLon(revCoords[0][0]);
-        setRevEndLat(revCoords[revCoords.length - 1][1]);
-        setRevEndLon(revCoords[revCoords.length - 1][0]);
-      } else {
-        setRevStartLat("");
-        setRevStartLon("");
-        setRevEndLat("");
-        setRevEndLon("");
-      }
-
-      // Phase 2 Meta Hydration
-      setSelectedParentEventId(meta.eventId);
-      setEventCode(meta.eventCode);
-      setEventTitle(meta.eventTitle || "");
-      setVillageOrLandmark(meta.villageOrLandmark || "");
-      if (meta.startedAt) setStartedAt(meta.startedAt.slice(0, 16));
-      setCauseAndNote(meta.causeAndNote || flood.detour_advice || "");
-      setDirectionCode(meta.directionCode);
-      setAffectedParts(meta.affectedParts && meta.affectedParts.length ? meta.affectedParts : ["UNSPECIFIED"]);
-      setDetailedPhotos(meta.photos || []);
-      setFieldImages(meta.photos?.length ? meta.photos.map((p) => p.dataUrl) : (flood.latest_photo_url ? [flood.latest_photo_url] : []));
-    } else {
-      const detour = systemData.detourRoutes.find((r) => r.id === id);
-      if (!detour) return;
-      hydratedRouteKey.current = key;
-      setDetourRefId(detour.flood_id_ref || "");
-      setDetourName(detour.route_name);
-      setDetourDesc(detour.description || "");
-      setDetourDirectionMode((detour.direction_mode as DetourDirectionModeType) || ("" as DetourDirectionModeType));
-      setDetourGoogleMapsUrlFwd(detour.detour_meta?.google_maps_url_forward || detour.detour_meta?.google_maps_url || "");
-      setDetourGoogleMapsUrlRev(detour.detour_meta?.google_maps_url_reverse || "");
-      setDetourRoadCondition(detour.detour_meta?.road_condition || "");
-      setDetourDistanceMeters({
-        forward: Number(detour.detour_meta?.forward_distance_m) || 0,
-        reverse: Number(detour.detour_meta?.reverse_distance_m) || 0,
-      });
-      const fwdSec = readDetourDurationSeconds(detour.detour_meta, "FORWARD");
-      const revSec = readDetourDurationSeconds(detour.detour_meta, "REVERSE");
-      setDetourDurationSeconds({
-        forward: fwdSec || 0,
-        reverse: revSec || 0,
-      });
-      durationFwdManualRef.current = Boolean(fwdSec);
-      durationRevManualRef.current = Boolean(revSec);
-      setDetourDurationMinFwd(fwdSec ? String(Math.max(1, Math.round(fwdSec / 60))) : "");
-      setDetourDurationMinRev(revSec ? String(Math.max(1, Math.round(revSec / 60))) : "");
-      setPassabilityWarnings([]);
-      setDetourStartPhotoUrl(detour.detour_meta?.start_point_photo?.url || "");
-      setDetourStartPhotoCaption(detour.detour_meta?.start_point_photo?.caption || "");
-      setDetourEndPhotoUrl(detour.detour_meta?.end_point_photo?.url || "");
-      setDetourEndPhotoCaption(detour.detour_meta?.end_point_photo?.caption || "");
-      setSaveAsDraft(!detour.is_active);
-      setStartLat(detour.lat_start || 0);
-      setStartLon(detour.lon_start || 0);
-      setEndLat(detour.lat_end || 0);
-      setEndLon(detour.lon_end || 0);
-      if (detour.lat_start && detour.lon_start) {
-        if (detour.subdistrict && detour.district) {
-          setStartArea({ subdistrict: detour.subdistrict, district: detour.district });
-        } else {
-          void localArea(Number(detour.lon_start), Number(detour.lat_start)).then((loc) => {
-            if (loc.tambon && loc.amphoe) setStartArea({ subdistrict: loc.tambon, district: loc.amphoe });
-          });
-        }
-      }
-      if (detour.lat_end && detour.lon_end) {
-        void localArea(Number(detour.lon_end), Number(detour.lat_end)).then((endLoc) => {
-          if (endLoc.tambon && endLoc.amphoe) setEndArea({ subdistrict: endLoc.tambon, district: endLoc.amphoe });
-        });
-      }
-
-      let coords: [number, number][] = [];
-      if (Array.isArray(detour.coordinates_json)) coords = detour.coordinates_json as [number, number][];
-      else if (typeof detour.coordinates_json === "string") coords = JSON.parse(detour.coordinates_json);
-      originalRouteCoordinates.current = coords.map((coordinate) => [...coordinate] as [number, number]);
-      setDraftCoordinates(coords);
-
-      let revCoords: [number, number][] = [];
-      if (Array.isArray(detour.reverse_coordinates_json)) revCoords = detour.reverse_coordinates_json as [number, number][];
-      else if (typeof detour.reverse_coordinates_json === "string") {
-        try { revCoords = JSON.parse(detour.reverse_coordinates_json); } catch { revCoords = []; }
-      }
-      originalReverseRouteCoordinates.current = (
-        revCoords.length >= 2 ? revCoords : [...coords].reverse()
-      ).map((coordinate) => [...coordinate] as [number, number]);
-      setDraftReverseCoordinates?.(revCoords);
-
-      let revWps: [number, number][] = [];
-      if (Array.isArray(detour.reverse_waypoints_json)) revWps = detour.reverse_waypoints_json as [number, number][];
-      else if (typeof detour.reverse_waypoints_json === "string") {
-        try { revWps = JSON.parse(detour.reverse_waypoints_json); } catch { revWps = []; }
-      }
-      setDraftReverseWaypoints?.(revWps);
-      setDraftConflictPoints?.([]);
-      setClosedRoadConflicts([]);
-      if (detour.direction_mode === "TWO_WAY" && revCoords.length >= 2) {
-        setRevStartLat(revCoords[0][1]);
-        setRevStartLon(revCoords[0][0]);
-        setRevEndLat(revCoords[revCoords.length - 1][1]);
-        setRevEndLon(revCoords[revCoords.length - 1][0]);
-      } else {
-        setRevStartLat("");
-        setRevStartLon("");
-        setRevEndLat("");
-        setRevEndLon("");
-      }
-    }
-  }, [editingRoute, systemData]);
-
-  // Listen to preset flood context when adding segment from parent event
-  useEffect(() => {
-    const handlePresetContext = (e: any) => {
-      const ctx = e.detail;
-      if (!ctx) return;
-      setRouteMode("FLOOD");
-      if (ctx.routeNo) setRouteNo(ctx.routeNo);
-      if (ctx.sectionName) {
-        setSectionName(ctx.sectionName);
-        sectionNameManuallyEdited.current = true;
-      }
-    };
-    window.addEventListener("doh:preset-flood-context", handlePresetContext);
-    return () => window.removeEventListener("doh:preset-flood-context", handlePresetContext);
-  }, []);
-
-  // Listen to pickedCoordinate from map
-  useEffect(() => {
-    if (!pickedCoordinate) return;
-
-    if (pickedCoordinate.mode === "PICK_START") {
-      setStartLat(pickedCoordinate.lat);
-      setStartLon(pickedCoordinate.lon);
-      setAdminPickMode(null);
-      onToast(`กำหนดจุดเริ่มต้น (A): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
-      handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat, "START");
-      if (endLat && endLon) { setFreeEditEnabled(false); setDraftCoordinates([]); setDraftReverseCoordinates?.([]); void triggerDualRoadSnapping(pickedCoordinate.lat, pickedCoordinate.lon, endLat, endLon); }
-    } else if (pickedCoordinate.mode === "PICK_END") {
-      setEndLat(pickedCoordinate.lat);
-      setEndLon(pickedCoordinate.lon);
-      setAdminPickMode(null);
-      onToast(`กำหนดจุดสิ้นสุด (B): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
-      handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat, "END");
-      if (startLat && startLon) { setFreeEditEnabled(false); setDraftCoordinates([]); setDraftReverseCoordinates?.([]); void triggerDualRoadSnapping(startLat, startLon, pickedCoordinate.lat, pickedCoordinate.lon); }
-    } else if (pickedCoordinate.mode === "PICK_REV_START") {
-      setRevStartLat(pickedCoordinate.lat);
-      setRevStartLon(pickedCoordinate.lon);
-      setAdminPickMode(null);
-      onToast(`กำหนดจุดเริ่มขากลับ (B → A): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
-      const targetRevEndLat = Number(revEndLat) || Number(startLat);
-      const targetRevEndLon = Number(revEndLon) || Number(startLon);
-      if (!freeEditEnabled && targetRevEndLat && targetRevEndLon && startLat && startLon && endLat && endLon) {
-        void triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints, draftReverseWaypoints, {
-          revSLat: pickedCoordinate.lat,
-          revSLon: pickedCoordinate.lon,
-          revELat: targetRevEndLat,
-          revELon: targetRevEndLon,
-          reverseOnly: draftCoordinates.length >= 2,
-        });
-      }
-    } else if (pickedCoordinate.mode === "PICK_REV_END") {
-      setRevEndLat(pickedCoordinate.lat);
-      setRevEndLon(pickedCoordinate.lon);
-      setAdminPickMode(null);
-      onToast(`กำหนดจุดสิ้นสุดขากลับ (B → A): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
-      const targetRevStartLat = Number(revStartLat) || Number(endLat);
-      const targetRevStartLon = Number(revStartLon) || Number(endLon);
-      if (!freeEditEnabled && targetRevStartLat && targetRevStartLon && startLat && startLon && endLat && endLon) {
-        void triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints, draftReverseWaypoints, {
-          revSLat: targetRevStartLat,
-          revSLon: targetRevStartLon,
-          revELat: pickedCoordinate.lat,
-          revELon: pickedCoordinate.lon,
-          reverseOnly: draftCoordinates.length >= 2,
-        });
-      }
-    } else if (pickedCoordinate.mode === "ADD_LINE_VERTEX" && freeEditEnabled) {
-      const point: [number, number] = [pickedCoordinate.lon, pickedCoordinate.lat];
-      const geometry = activeEditTarget === "REVERSE" ? draftReverseCoordinates : draftCoordinates;
-      if (geometry.length >= 2) updateFreeGeometry(insertVertex(geometry, nearestInsertIndex(geometry, point).index, point));
-      setAdminPickMode(null);
-    } else if (pickedCoordinate.mode === "ADD_WAYPOINT") {
-      const newWp: [number, number] = [pickedCoordinate.lon, pickedCoordinate.lat];
-      setDraftWaypoints((prev) => [...prev, newWp]);
-      setAdminPickMode(null);
-      onToast("เพิ่มจุดดัดเส้นทางขาไป (A → B) เรียบร้อย");
-      if (startLat && startLon && endLat && endLon) {
-        triggerDualRoadSnapping(startLat, startLon, endLat, endLon, [...draftWaypoints, newWp], draftReverseWaypoints);
-      }
-    } else if (pickedCoordinate.mode === "ADD_REVERSE_WAYPOINT") {
-      const newRevWp: [number, number] = [pickedCoordinate.lon, pickedCoordinate.lat];
-      const nextRevWps = [...draftReverseWaypoints, newRevWp];
-      setDraftReverseWaypoints?.(nextRevWps);
-      setAdminPickMode(null);
-      onToast("เพิ่มจุดดัดเส้นทางขากลับ (B → A) เรียบร้อย");
-      if (startLat && startLon && endLat && endLon) {
-        triggerDualRoadSnapping(startLat, startLon, endLat, endLon, draftWaypoints, nextRevWps);
-      }
-    }
-  }, [pickedCoordinate]);
+  // Hydrate existing record on edit + listen to preset flood context
+  useMapRouteHydration({
+    editingRoute,
+    systemData,
+    setRouteMode,
+    setRouteEditId,
+    setRouteNo,
+    setKmStart,
+    setKmEnd,
+    setSectionName,
+    setSelectedHighwayName,
+    sectionNameManuallyEdited,
+    setRouteWaterLevel,
+    setRouteStatus,
+    editOriginalFloodDirRef,
+    setRoadSide,
+    setAffectedLanes,
+    setAffectedShoulder,
+    setReporterName,
+    setWaterLevelKnown,
+    setUseCarriagewaySnapping,
+    setSaveAsDraft,
+    setStartLat,
+    setStartLon,
+    setEndLat,
+    setEndLon,
+    setRevStartLat,
+    setRevStartLon,
+    setRevEndLat,
+    setRevEndLon,
+    setStartArea,
+    setEndArea,
+    originalRouteCoordinates,
+    originalReverseRouteCoordinates,
+    setDraftCoordinates,
+    setDraftReverseCoordinates,
+    setDraftReverseWaypoints,
+    setDraftConflictPoints,
+    setClosedRoadConflicts,
+    setReverseRouteWaterLevel,
+    setReverseRouteStatus,
+    setReverseWaterLevelKnown,
+    setReverseAffectedParts,
+    setSelectedParentEventId,
+    setEventCode,
+    setEventTitle,
+    setVillageOrLandmark,
+    setStartedAt,
+    setCauseAndNote,
+    setDirectionCode,
+    setAffectedParts,
+    setDetailedPhotos,
+    setFieldImages,
+    setDetourRefId,
+    setDetourName,
+    setDetourDesc,
+    setDetourDirectionMode,
+    setDetourGoogleMapsUrlFwd,
+    setDetourGoogleMapsUrlRev,
+    setDetourRoadCondition,
+    setDetourDistanceMeters,
+    setDetourDurationSeconds,
+    durationFwdManualRef,
+    durationRevManualRef,
+    setDetourDurationMinFwd,
+    setDetourDurationMinRev,
+    setPassabilityWarnings,
+    setDetourStartPhotoUrl,
+    setDetourStartPhotoCaption,
+    setDetourEndPhotoUrl,
+    setDetourEndPhotoCaption,
+  });
 
   // Trigger Road Snapping
   const { triggerDualRoadSnapping } = useDualRoadSnapping({
@@ -876,23 +641,25 @@ export function MapManagementTab({
     onToast,
   });
 
-  // Auto Geocode
-  const handleAutoGeocode = async (lon: number, lat: number, endpoint: "START" | "END") => {
-    setIsGeocoding(true);
-    try {
-      const location = await reverseGeocodeTambonAmphoe(lon, lat);
-      if (location) {
-        const area = { subdistrict: location.subdistrict, district: location.district };
-        if (endpoint === "START") setStartArea(area);
-        else setEndArea(area);
-        onToast(`ระบุพื้นที่อัตโนมัติ: ต.${location.subdistrict} อ.${location.district}`);
-      }
-    } catch {
-      onToast("ไม่สามารถดึงข้อมูลตำบล/อำเภออัตโนมัติได้");
-    } finally {
-      setIsGeocoding(false);
-    }
-  };
+  // Coordinate Picker & Auto Geocode
+  const { handleAutoGeocode } = useMapCoordinatePicker({
+    pickedCoordinate,
+    startLat, startLon, endLat, endLon,
+    revStartLat, revStartLon, revEndLat, revEndLon,
+    setStartLat, setStartLon, setEndLat, setEndLon,
+    setRevStartLat, setRevStartLon, setRevEndLat, setRevEndLon,
+    setStartArea, setEndArea, setIsGeocoding,
+    setAdminPickMode,
+    freeEditEnabled, setFreeEditEnabled,
+    activeEditTarget,
+    draftCoordinates, setDraftCoordinates,
+    draftReverseCoordinates, setDraftReverseCoordinates,
+    draftWaypoints, setDraftWaypoints,
+    draftReverseWaypoints, setDraftReverseWaypoints,
+    updateFreeGeometry,
+    triggerDualRoadSnapping,
+    onToast,
+  });
 
   useEffect(() => {
     if (sectionNameManuallyEdited.current || !startArea || !endArea) return;
@@ -1274,75 +1041,16 @@ export function MapManagementTab({
       return;
     }
 
-    const cleanRoute = String(routeNo).replace(/^ทล\.?/i, "").trim();
-    const bestGroup = findBestHighwayGroupForSelection(systemData.highwayLayers, routeNo, sectionName, kmStart, kmEnd);
-
-    let slicedForward: [number, number][] = [];
-    let slicedReverse: [number, number][] = [];
-
-    if (bestGroup) {
-      const forwardBranch =
-        bestGroup.branches.find((b) => b.directionCode === "A_TO_B" && b.coordinates.length >= 2) ||
-        bestGroup.primaryBranch;
-      const reverseBranch = bestGroup.branches.find((b) => b.directionCode === "B_TO_A" && b.coordinates.length >= 2);
-
-      if (roadSide === "BOTH" && isSelectedHighwayDivided) {
-        if (forwardBranch && forwardBranch.coordinates.length >= 2) {
-          slicedForward = sliceBranchByKmRange(forwardBranch, forwardBranch, bestGroup.kmStart, bestGroup.kmEnd, kmStart, kmEnd, false);
-        }
-        if (reverseBranch && reverseBranch.coordinates.length >= 2) {
-          slicedReverse = sliceBranchByKmRange(reverseBranch, forwardBranch, bestGroup.kmStart, bestGroup.kmEnd, kmStart, kmEnd, true);
-        } else if (slicedForward.length >= 2) {
-          slicedReverse = [...slicedForward].reverse().map((p) => [...p] as [number, number]);
-        }
-      } else if (directionCode === "B_TO_A") {
-        const chosenBranch = reverseBranch || bestGroup.primaryBranch;
-        if (chosenBranch && chosenBranch.coordinates.length >= 2) {
-          slicedForward = sliceBranchByKmRange(chosenBranch, forwardBranch, bestGroup.kmStart, bestGroup.kmEnd, kmStart, kmEnd, true);
-        }
-      } else {
-        const chosenBranch = forwardBranch || bestGroup.primaryBranch;
-        if (chosenBranch && chosenBranch.coordinates.length >= 2) {
-          slicedForward = sliceBranchByKmRange(chosenBranch, forwardBranch, bestGroup.kmStart, bestGroup.kmEnd, kmStart, kmEnd, false);
-        }
-      }
-    }
-
-    // Fallback: search raw features if no grouped branch matched (prefer feature whose KM span covers target range)
-    if (slicedForward.length < 2) {
-      let targetCoords: [number, number][] = [];
-      let secKmStart: any = null;
-      let secKmEnd: any = null;
-      const reqStartM = parseKmPostMeters(kmStart);
-      const reqEndM = parseKmPostMeters(kmEnd);
-      const reqMidM = reqStartM !== null && reqEndM !== null ? (reqStartM + reqEndM) / 2 : null;
-      for (const layer of systemData.highwayLayers || []) {
-        if (layer.geojson_data && Array.isArray(layer.geojson_data.features)) {
-          for (const f of layer.geojson_data.features) {
-            const props = f.properties || {};
-            const fRoute = String(props.route_no || props.route_code || props.ROAD_NO || props.route || props.code || "").replace(/^ทล\.?/i, "").trim();
-            if (fRoute === cleanRoute && f.geometry?.coordinates?.length >= 2) {
-              const fStartM = parseKmPostMeters(props.km_start);
-              const fEndM = parseKmPostMeters(props.km_end);
-              const coversRange = reqMidM !== null && fStartM !== null && fEndM !== null &&
-                reqMidM >= Math.min(fStartM, fEndM) && reqMidM <= Math.max(fStartM, fEndM);
-              if (targetCoords.length < 2 || coversRange) {
-                targetCoords = f.geometry.coordinates;
-                secKmStart = props.km_start || kmStart;
-                secKmEnd = props.km_end || kmEnd;
-                if (coversRange) break;
-              }
-            }
-          }
-        }
-      }
-      if (targetCoords.length >= 2) {
-        slicedForward = slicePolylineByKmRange(targetCoords, secKmStart, secKmEnd, kmStart, kmEnd, directionCode === "B_TO_A");
-        if (roadSide === "BOTH" && isSelectedHighwayDivided && slicedForward.length >= 2) {
-          slicedReverse = [...slicedForward].reverse().map((p) => [...p] as [number, number]);
-        }
-      }
-    }
+    const { slicedForward, slicedReverse } = computeSlicedHighwayPolylines({
+      highwayLayers: systemData.highwayLayers,
+      routeNo,
+      sectionName,
+      kmStart,
+      kmEnd,
+      roadSide,
+      isSelectedHighwayDivided,
+      directionCode,
+    });
 
     if (slicedForward.length >= 2) {
       setDraftCoordinates(slicedForward);

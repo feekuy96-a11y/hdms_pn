@@ -267,3 +267,97 @@ export function buildDetourMetaPayload(params: BuildDetourMetaPayloadParams): Re
   }
   return nextMeta;
 }
+
+export function computeSlicedHighwayPolylines(params: {
+  highwayLayers: SystemDataPayload["highwayLayers"];
+  routeNo: string;
+  sectionName: string;
+  kmStart: string;
+  kmEnd: string;
+  roadSide: string;
+  isSelectedHighwayDivided: boolean;
+  directionCode: string;
+}): { slicedForward: [number, number][]; slicedReverse: [number, number][] } {
+  const {
+    highwayLayers,
+    routeNo,
+    sectionName,
+    kmStart,
+    kmEnd,
+    roadSide,
+    isSelectedHighwayDivided,
+    directionCode,
+  } = params;
+
+  const cleanRoute = String(routeNo).replace(/^ทล\.?/i, "").trim();
+  const bestGroup = findBestHighwayGroupForSelection(highwayLayers, routeNo, sectionName, kmStart, kmEnd);
+
+  let slicedForward: [number, number][] = [];
+  let slicedReverse: [number, number][] = [];
+
+  if (bestGroup) {
+    const forwardBranch =
+      bestGroup.branches.find((b) => b.directionCode === "A_TO_B" && b.coordinates.length >= 2) ||
+      bestGroup.primaryBranch;
+    const reverseBranch = bestGroup.branches.find((b) => b.directionCode === "B_TO_A" && b.coordinates.length >= 2);
+
+    if (roadSide === "BOTH" && isSelectedHighwayDivided) {
+      if (forwardBranch && forwardBranch.coordinates.length >= 2) {
+        slicedForward = sliceBranchByKmRange(forwardBranch, forwardBranch, bestGroup.kmStart, bestGroup.kmEnd, kmStart, kmEnd, false);
+      }
+      if (reverseBranch && reverseBranch.coordinates.length >= 2) {
+        slicedReverse = sliceBranchByKmRange(reverseBranch, forwardBranch, bestGroup.kmStart, bestGroup.kmEnd, kmStart, kmEnd, true);
+      } else if (slicedForward.length >= 2) {
+        slicedReverse = [...slicedForward].reverse().map((p) => [...p] as [number, number]);
+      }
+    } else if (directionCode === "B_TO_A") {
+      const chosenBranch = reverseBranch || bestGroup.primaryBranch;
+      if (chosenBranch && chosenBranch.coordinates.length >= 2) {
+        slicedForward = sliceBranchByKmRange(chosenBranch, forwardBranch, bestGroup.kmStart, bestGroup.kmEnd, kmStart, kmEnd, true);
+      }
+    } else {
+      const chosenBranch = forwardBranch || bestGroup.primaryBranch;
+      if (chosenBranch && chosenBranch.coordinates.length >= 2) {
+        slicedForward = sliceBranchByKmRange(chosenBranch, forwardBranch, bestGroup.kmStart, bestGroup.kmEnd, kmStart, kmEnd, false);
+      }
+    }
+  }
+
+  // Fallback: search raw features if no grouped branch matched (prefer feature whose KM span covers target range)
+  if (slicedForward.length < 2) {
+    let targetCoords: [number, number][] = [];
+    let secKmStart: string | number | null = null;
+    let secKmEnd: string | number | null = null;
+    const reqStartM = parseKmPostMeters(kmStart);
+    const reqEndM = parseKmPostMeters(kmEnd);
+    const reqMidM = reqStartM !== null && reqEndM !== null ? (reqStartM + reqEndM) / 2 : null;
+    for (const layer of highwayLayers || []) {
+      if (layer.geojson_data && Array.isArray(layer.geojson_data.features)) {
+        for (const f of layer.geojson_data.features) {
+          const props = f.properties || {};
+          const fRoute = String(props.route_no || props.route_code || props.ROAD_NO || props.route || props.code || "").replace(/^ทล\.?/i, "").trim();
+          if (fRoute === cleanRoute && f.geometry?.coordinates?.length >= 2) {
+            const fStartM = parseKmPostMeters(props.km_start);
+            const fEndM = parseKmPostMeters(props.km_end);
+            const coversRange = reqMidM !== null && fStartM !== null && fEndM !== null &&
+              reqMidM >= Math.min(fStartM, fEndM) && reqMidM <= Math.max(fStartM, fEndM);
+            if (targetCoords.length < 2 || coversRange) {
+              targetCoords = f.geometry.coordinates;
+              secKmStart = props.km_start || kmStart;
+              secKmEnd = props.km_end || kmEnd;
+              if (coversRange) break;
+            }
+          }
+        }
+      }
+    }
+    if (targetCoords.length >= 2) {
+      slicedForward = slicePolylineByKmRange(targetCoords, secKmStart ?? kmStart, secKmEnd ?? kmEnd, kmStart, kmEnd, directionCode === "B_TO_A");
+      if (roadSide === "BOTH" && isSelectedHighwayDivided && slicedForward.length >= 2) {
+        slicedReverse = [...slicedForward].reverse().map((p) => [...p] as [number, number]);
+      }
+    }
+  }
+
+  return { slicedForward, slicedReverse };
+}
