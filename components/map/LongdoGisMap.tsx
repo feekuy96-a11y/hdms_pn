@@ -2,17 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
-import { SystemDataPayload, FloodRoute, DetourRoute } from "@/db/default-data";
+import { SystemDataPayload, DetourRoute } from "@/db/default-data";
 import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
-import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
-import {
-  defaultDetourDirection,
-  isDetourDirectionAllowed,
-} from "@/lib/detour-presentation";
-import { groupFloodRoutesIntoEvents } from "@/lib/flood-event-schema";
-import { getLinkedDetoursForFlood } from "@/lib/event-detour-links";
-import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
-import { getTrafficPresentation } from "@/lib/traffic-presentation";
 import { MapLegendOverlay } from "./MapLegendOverlay";
 import {
   escapeHtml,
@@ -22,40 +13,30 @@ import {
   EMPTY_LINES,
   EMPTY_PICK_MARKERS,
   MAX_VISIBLE_SHIELDS,
-  MAX_VERTEX_HANDLES,
   type FloodLineEntry,
   type AnimatedLineEntry,
   addLineCasing,
   routeCodeOf,
   routeNameOf,
   geoJsonFeatures,
-  parseRouteCoordinates,
   lineAnimationClasses,
   dashArrayFor,
   raisePathLayers,
   getResponsivePopupOptions,
   buildHighwayPopupHtml,
-  buildDetourPopupHtml,
-  buildDetourPointPhotoPopupHtml,
-  buildFloodPopupHtml,
   buildOfficePopupHtml,
 } from "./longdo-map-popups";
 import {
-  buildDetourPhotoBadgeSpec,
-  buildDetourSymbolIconSpec,
-  buildFloodMarkerCandidates,
-  buildZoomAdaptiveFloodPinSpec,
-  clusterFloodMarkerCandidates,
   collectCriticalHighwayRouteNos,
   collectHighwayShieldCandidates,
   collectLegendRoutes,
-  computeDeoverlappedMarkerCoord,
-  computeFloodEventCenter,
-  resolveDetourDefaultDirection,
-  resolveDetourPhotoPointCoords,
   resolveHighwayForegroundStyle,
   shouldShowHighwayFeature,
 } from "./longdo-layer-builders";
+import { renderDirectionalArrows } from "./longdo-arrow-layer";
+import { renderVertexEditHandles } from "./longdo-vertex-handles";
+import { renderDraftAndConflictLayer } from "./longdo-draft-layer";
+import { useLongdoPopupBridge, useLongdoRouteLayers } from "./useLongdoRouteLayers";
 
 export { isFloodLineVisibleOnCurrentMap } from "./longdo-map-popups";
 
@@ -229,114 +210,15 @@ export function LongdoGisMap({
   systemDataRef.current = systemData;
 
   // Global popup handlers for direction toggling, opening modal, focusing map, and Google Maps navigation
-  useEffect(() => {
-    const activeDirMap: Record<string, "FORWARD" | "REVERSE"> = {};
-
-    (window as any).__getDetourCurrentDir = (id: string) => {
-      return activeDirMap[id] || "FORWARD";
-    };
-
-    (window as any).__openFloodDossier = (id: string) => {
-      leafletMapRef.current?.closePopup();
-      onSelectFloodRef.current?.(id);
-    };
-
-    (window as any).__openFloodDetourDossier = (id: string) => {
-      leafletMapRef.current?.closePopup();
-      if (onOpenFloodDetoursRef.current) {
-        onOpenFloodDetoursRef.current(id);
-      } else {
-        onSelectFloodRef.current?.(id);
-      }
-    };
-
-    (window as any).__focusFloodOnMap = (id: string) => {
-      const map = leafletMapRef.current;
-      const L = leafletRef.current;
-      const flood = (systemDataRef.current.floodRoutes || []).find((f) => f.id === id);
-      if (!map || !L || !flood) return;
-      const coords = parseRouteCoordinates(flood.coordinates_json);
-      if (coords.length >= 2) {
-        map.fitBounds(L.latLngBounds(coords.map(toLeafletLatLng)), { padding: [48, 48], maxZoom: 16 });
-      } else if (Number.isFinite(flood.lat_start) && Number.isFinite(flood.lon_start)) {
-        map.setView([flood.lat_start, flood.lon_start], 15);
-      }
-    };
-
-    (window as any).__openDetourModal = (id: string) => {
-      const routes = systemDataRef.current.detourRoutes || [];
-      const detour = routes.find((d) => d.id === id);
-      if (detour) {
-        onSelectDetourRef.current?.(detour);
-      }
-    };
-
-    (window as any).__openDetourPointPhoto = (url: string, title?: string) => {
-      if (!url) return;
-      setPreviewPointPhoto({ url, title: title || "ภาพทางเข้าเส้นทางเลี่ยง" });
-    };
-
-    (window as any).__openDetourGoogleMaps = (safeId: string, dir?: "FORWARD" | "REVERSE") => {
-      const routes = systemDataRef.current.detourRoutes || [];
-      const detour = routes.find((d) => String(d.id || "").replace(/[^a-zA-Z0-9_-]/g, "_") === safeId);
-      if (!detour) return;
-      const targetDir = dir || activeDirMap[safeId] || defaultDetourDirection(detour.direction_mode) || "FORWARD";
-      const nav = resolveDetourGoogleMapsNavigation(detour, targetDir, systemDataRef.current.floodRoutes || []);
-      if (nav.url) {
-        window.open(nav.url, "_blank", "noopener,noreferrer");
-      } else if (nav.warning) {
-        alert(nav.warning);
-      }
-    };
-
-    (window as any).__toggleDetourPopupDir = (id: string, dir: "FORWARD" | "REVERSE") => {
-      const routes = systemDataRef.current.detourRoutes || [];
-      const route = routes.find((d) => String(d.id || "").replace(/[^a-zA-Z0-9_-]/g, "_") === id);
-      if (!isDetourDirectionAllowed(route?.direction_mode, dir)) return;
-      activeDirMap[id] = dir;
-      const fwdBtn = document.getElementById(`detour-btn-fwd-${id}`);
-      const revBtn = document.getElementById(`detour-btn-rev-${id}`);
-      const fwdDesc = document.getElementById(`detour-desc-fwd-${id}`);
-      const revDesc = document.getElementById(`detour-desc-rev-${id}`);
-      const navSub = document.getElementById(`detour-nav-subtext-${id}`);
-      if (!fwdBtn || !revBtn || !fwdDesc || !revDesc) return;
-
-      const activeClasses = "min-h-[38px] py-1.5 px-2.5 text-xs font-black rounded-lg transition cursor-pointer flex items-center justify-center gap-1 bg-[#f59e0b] text-slate-950 shadow-sm disabled:opacity-35 disabled:cursor-not-allowed";
-      const inactiveClasses = "min-h-[38px] py-1.5 px-2.5 text-xs font-semibold rounded-lg transition cursor-pointer flex items-center justify-center gap-1 text-slate-300 hover:bg-slate-800/70 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed";
-
-      if (dir === "FORWARD") {
-        fwdBtn.className = activeClasses;
-        revBtn.className = inactiveClasses;
-        fwdBtn.setAttribute("aria-pressed", "true");
-        revBtn.setAttribute("aria-pressed", "false");
-        fwdDesc.classList.remove("hidden");
-        fwdDesc.classList.add("block");
-        revDesc.classList.remove("block");
-        revDesc.classList.add("hidden");
-        if (navSub) navSub.textContent = "(ขาไป A ➔ B)";
-      } else {
-        revBtn.className = activeClasses;
-        fwdBtn.className = inactiveClasses;
-        revBtn.setAttribute("aria-pressed", "true");
-        fwdBtn.setAttribute("aria-pressed", "false");
-        revDesc.classList.remove("hidden");
-        revDesc.classList.add("block");
-        fwdDesc.classList.remove("block");
-        fwdDesc.classList.add("hidden");
-        if (navSub) navSub.textContent = "(ขากลับ B ➔ A)";
-      }
-    };
-    return () => {
-      delete (window as any).__openFloodDossier;
-      delete (window as any).__openFloodDetourDossier;
-      delete (window as any).__focusFloodOnMap;
-      delete (window as any).__toggleDetourPopupDir;
-      delete (window as any).__openDetourModal;
-      delete (window as any).__openDetourPointPhoto;
-      delete (window as any).__openDetourGoogleMaps;
-      delete (window as any).__getDetourCurrentDir;
-    };
-  }, []);
+  useLongdoPopupBridge({
+    leafletMapRef,
+    leafletRef,
+    systemDataRef,
+    onSelectFloodRef,
+    onOpenFloodDetoursRef,
+    onSelectDetourRef,
+    setPreviewPointPhoto,
+  });
 
   // 1. Initialize Leaflet Map Instance
   useEffect(() => {
@@ -820,284 +702,25 @@ export function LongdoGisMap({
     };
   }, [mapReady, shieldCandidates, showHighwayShields, showMainHwy, showSecHwy, forceShowAllHighways, criticalHighwayRouteNos]);
 
-  // 4c. Detour routes (Supports A->B, B->A asymmetric carriageways & one-way detours per Item 4)
-  useEffect(() => {
-    const L = leafletRef.current;
-    const group = detourGroupRef.current;
-    detourLinesRef.current = [];
-    if (!mapReady || !L || !group) return;
-    group.clearLayers();
-    if (!effectiveShowDetourLayer) return;
-    const renderer = rendererRef.current;
-    const detourStyle = mapStyles.detour;
-    const dColor = detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
-    const dDash = dashArrayFor(detourStyle);
-    const className = lineAnimationClasses(detourStyle, allowLineAnimationRef.current);
-
-    (systemData.detourRoutes || []).forEach((detour) => {
-      if (!detour.is_active) return;
-      const dirMode = detour.direction_mode || "TWO_WAY";
-      const fwdCoords = parseRouteCoordinates(detour.coordinates_json);
-      const revCoords = parseRouteCoordinates(detour.reverse_coordinates_json);
-
-      const defaultDir = resolveDetourDefaultDirection(detour, systemData);
-
-      // Draw forward A->B line if mode is TWO_WAY or FORWARD_ONLY
-      if (dirMode !== "REVERSE_ONLY" && fwdCoords.length >= 2) {
-        const latLngs = fwdCoords.map(toLeafletLatLng);
-        const forwardWeight = detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight;
-        const casing = addLineCasing(L, group, latLngs, detourStyle || {}, forwardWeight, renderer);
-        if (casing) { casing.__dohFilterId = detour.id; casing.__dohBaseOpacity = detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity; }
-        const polyline = L.polyline(latLngs as any, {
-          color: dColor,
-          weight: forwardWeight,
-          dashArray: dDash,
-          opacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
-          className,
-          renderer,
-        }).addTo(group);
-        polyline.__dohFilterId = detour.id;
-        detourLinesRef.current.push({
-          id: detour.id,
-          line: polyline,
-          baseWeight: detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight,
-          baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
-          filterOpacity: 1,
-        });
-        const detourPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
-        polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), detourPopupOpts);
-        polyline.on("click", (e: any) => {
-          L.DomEvent.stopPropagation(e);
-          polyline.openPopup(e.latlng);
-        });
-
-        const midPoint = latLngs[Math.floor(latLngs.length / 2)];
-        const detourIcon = L.divIcon(buildDetourSymbolIconSpec(dColor));
-        const detourMarker = L.marker(midPoint, { icon: detourIcon, interactive: true }).bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), detourPopupOpts).addTo(group);
-        detourMarker.__dohFilterId = detour.id;
-        detourMarker.on("click", (e: any) => {
-          L.DomEvent.stopPropagation(e);
-          detourMarker.openPopup();
-        });
-      }
-
-      // Draw reverse B->A line if present and distinct (or when REVERSE_ONLY)
-      if (dirMode !== "FORWARD_ONLY") {
-        const effectiveRev = revCoords.length >= 2 ? revCoords : (dirMode === "REVERSE_ONLY" ? fwdCoords : []);
-        if (effectiveRev.length >= 2) {
-          const revLatLngs = effectiveRev.map(toLeafletLatLng);
-          const revColor = dColor;
-          const reverseWeight = detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight;
-          const casing = addLineCasing(L, group, revLatLngs, detourStyle || {}, reverseWeight, renderer);
-          if (casing) { casing.__dohFilterId = detour.id; casing.__dohBaseOpacity = detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity; }
-          const revPolyline = L.polyline(revLatLngs as any, {
-            color: revColor,
-            weight: reverseWeight,
-            dashArray: dDash,
-            opacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
-            className,
-            renderer,
-          }).addTo(group);
-          revPolyline.__dohFilterId = detour.id;
-          detourLinesRef.current.push({
-            id: detour.id,
-            line: revPolyline,
-            baseWeight: reverseWeight,
-            baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
-            filterOpacity: 1,
-          });
-          const revPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
-          revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), revPopupOpts);
-          revPolyline.on("click", (e: any) => {
-            L.DomEvent.stopPropagation(e);
-            revPolyline.openPopup(e.latlng);
-          });
-        }
-      }
-
-      // Draw Start Point A & End Point B Entrance Photo Markers if photos are attached
-      const startPhoto = detour.detour_meta?.start_point_photo;
-      const endPhoto = detour.detour_meta?.end_point_photo;
-      const { startLat, startLon, endLat, endLon } = resolveDetourPhotoPointCoords(detour, fwdCoords);
-
-      if (startPhoto?.url && Number.isFinite(startLat) && Number.isFinite(startLon)) {
-        const startPhotoIcon = L.divIcon(buildDetourPhotoBadgeSpec("START"));
-        const startMarker = L.marker([startLat, startLon], { icon: startPhotoIcon, interactive: true, zIndexOffset: 200 })
-          .bindTooltip(`📷 ภาพทางเข้าจุดเริ่มต้น A (${detour.route_name})`, { direction: "top" })
-          .bindPopup(
-            () => buildDetourPointPhotoPopupHtml(detour, "START", startPhoto, startLat, startLon),
-            getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
-          )
-          .addTo(group);
-        startMarker.__dohFilterId = detour.id;
-        startMarker.on("click", (e: any) => {
-          L.DomEvent.stopPropagation(e);
-          startMarker.openPopup();
-        });
-      }
-
-      if (endPhoto?.url && Number.isFinite(endLat) && Number.isFinite(endLon)) {
-        const endPhotoIcon = L.divIcon(buildDetourPhotoBadgeSpec("END"));
-        const endMarker = L.marker([endLat, endLon], { icon: endPhotoIcon, interactive: true, zIndexOffset: 200 })
-          .bindTooltip(`📷 ภาพทางเข้าจุดสิ้นสุด B - ฝั่งขากลับ (${detour.route_name})`, { direction: "top" })
-          .bindPopup(
-            () => buildDetourPointPhotoPopupHtml(detour, "END", endPhoto, endLat, endLon),
-            getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
-          )
-          .addTo(group);
-        endMarker.__dohFilterId = detour.id;
-        endMarker.on("click", (e: any) => {
-          L.DomEvent.stopPropagation(e);
-          endMarker.openPopup();
-        });
-      }
-    });
-
-    // Keep stacking order: highways (bottom) < detours < floods < drafts.
-    raisePathLayers(group, floodGroupRef.current, draftGroupRef.current);
-    return () => {
-      detourLinesRef.current = [];
-      group.clearLayers();
-    };
-  }, [mapReady, systemData.detourRoutes, effectiveShowDetourLayer, mapStyles]);
-
-  // 4d. Flood routes + capsule markers (Item 3: Hide flood line from current map when confirmed water_level_cm === 0, while preserving DB history).
-  useEffect(() => {
-    const L = leafletRef.current;
-    const group = floodGroupRef.current;
-    floodLinesRef.current = {};
-    if (!mapReady || !L || !group) return;
-    group.clearLayers();
-    if (!effectiveShowFloodLayer) return;
-    const renderer = rendererRef.current;
-    const floodStyle = mapStyles.flood;
-    const fColor = floodStyle?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
-    const floodWaveIcon = `<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M2 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0 4-2 6 0"/><path d="M2 16c2 2 4 2 6 0s4-2 6 0 4 2 6 0 4-2 6 0"/></svg>`;
-    const floodWaveBadge = `<span style="background:${escapeHtml(fColor)};color:white" class="inline-flex h-5 w-5 items-center justify-center rounded-md border border-white/70 shadow-sm" aria-hidden="true">${floodWaveIcon}</span>`;
-    const fBaseWeight = floodStyle?.weight || LAYER_CONFIG.FLOOD_RED_LINE.weight;
-    const fOpacity = floodStyle?.opacity ?? LAYER_CONFIG.FLOOD_RED_LINE.opacity;
-    const fDash = dashArrayFor(floodStyle);
-    const className = lineAnimationClasses(floodStyle, allowLineAnimationRef.current);
-
-    const countDetoursForFlood = (flood: FloodRoute) =>
-      getLinkedDetoursForFlood(flood, systemData).length;
-    const floodPopupOpts = getResponsivePopupOptions(L, 370, 300, "doh-flood-leaflet-popup");
-
-    // 4d. Flood routes + capsule markers (with De-overlapping, Priority z-Index & Merged/Segment modes)
-    const visibleFloods = (systemData.floodRoutes || []).filter(
-      (flood) => isFloodLineVisibleOnCurrentMap(flood)
-    );
-
-    // First draw polylines for all visible flood routes using configured unified line style
-    visibleFloods.forEach((flood) => {
-      const coords = parseRouteCoordinates(flood.coordinates_json);
-      if (coords.length >= 2) {
-        const selectedWeight = fBaseWeight + (flood.id === selectedFloodIdRef.current ? 1.5 : 0);
-        const latLngs = coords.map(toLeafletLatLng);
-        const casing = addLineCasing(L, group, latLngs, floodStyle || {}, selectedWeight, renderer);
-        if (casing) { casing.__dohFilterId = flood.id; casing.__dohBaseOpacity = fOpacity; }
-        const polyline = L.polyline(coords.map(toLeafletLatLng) as any, {
-          color: fColor,
-          weight: selectedWeight,
-          opacity: fOpacity,
-          dashArray: fDash,
-          className,
-          renderer,
-        }).addTo(group);
-        polyline.__dohFilterId = flood.id;
-        floodLinesRef.current[flood.id] = {
-          line: polyline,
-          baseWeight: fBaseWeight,
-          baseOpacity: fOpacity,
-          filterOpacity: 1,
-          casing,
-          baseBorderWidth: Number(floodStyle?.borderWidth) || 0,
-        };
-        polyline.bindPopup(() => buildFloodPopupHtml(flood, countDetoursForFlood(flood)), floodPopupOpts);
-        polyline.on("click", (e: any) => {
-          L.DomEvent.stopPropagation(e);
-          polyline.openPopup(e.latlng);
-        });
-      }
-    });
-
-    if (floodDisplayMode === "EVENTS") {
-      // Merged parent event capsule markers
-      const parentEvents = groupFloodRoutesIntoEvents(visibleFloods);
-      parentEvents.forEach((ev) => {
-        const { centerLat, centerLon } = computeFloodEventCenter(ev.segments);
-        const evPresentation = getTrafficPresentation(ev.mostSevereStatus, ev.maxWaterLevelCm);
-        const zIndexMap = { red: 1000, orange: 800, amber: 700, sky: 600, slate: 400, emerald: 200 } as const;
-        const zIndex = zIndexMap[evPresentation.color];
-        const capsuleClass = evPresentation.capsuleClass;
-
-        const pinIcon = L.divIcon({
-          html: `
-            <div class="${capsuleClass}">
-              ${floodWaveBadge}
-              <span>ทล.${escapeHtml(ev.routeNo)} [${ev.segments.length} ช่วง]</span>
-              <span class="opacity-90">(${escapeHtml(ev.maxWaterLevelCm)} ซม.)</span>
-            </div>
-          `,
-          className: "doh-map-capsule-pin",
-          iconSize: [140, 28],
-          iconAnchor: [70, 14],
-        });
-
-        const primarySeg = ev.segments[0];
-        const clusterAriaLabel = `ทล.${ev.routeNo} (${ev.segments.length} ช่วง) ระดับน้ำสูงสุด ${ev.maxWaterLevelCm} ซม. — ${evPresentation.label}`;
-        const marker = L.marker([centerLat, centerLon], {
-          icon: pinIcon,
-          zIndexOffset: zIndex,
-          alt: clusterAriaLabel,
-          title: clusterAriaLabel,
-        }).addTo(group);
-        marker.__dohFilterIds = ev.segments.map((segment) => segment.id);
-        marker.getElement()?.setAttribute("aria-label", clusterAriaLabel);
-        marker.bindPopup(() => buildFloodPopupHtml(primarySeg, countDetoursForFlood(primarySeg)), floodPopupOpts);
-        marker.on("click", (e: any) => {
-          L.DomEvent.stopPropagation(e);
-          marker.openPopup();
-        });
-      });
-    } else {
-      // Individual segment markers with smart de-overlapping & priority z-index
-      const candidates = buildFloodMarkerCandidates(visibleFloods);
-      const clusters = clusterFloodMarkerCandidates(candidates);
-
-      clusters.forEach((cluster) => {
-        const count = cluster.length;
-        cluster.forEach((item, idx) => {
-          const [renderLat, renderLon] = computeDeoverlappedMarkerCoord(item, idx, count);
-          const pinIcon = L.divIcon(
-            buildZoomAdaptiveFloodPinSpec(item, currentZoom, fColor, floodWaveIcon, floodWaveBadge)
-          );
-
-          const markerAriaLabel = `ทล.${item.flood.route_no}${item.sideBadge} ${item.flood.section_name} กม.${item.flood.km_start} — ${item.statusLabel}`;
-          const marker = L.marker([renderLat, renderLon], {
-            icon: pinIcon,
-            zIndexOffset: item.zIndex,
-            alt: markerAriaLabel,
-            title: markerAriaLabel,
-          }).addTo(group);
-          marker.__dohFilterId = item.flood.id;
-          marker.getElement()?.setAttribute("aria-label", markerAriaLabel);
-
-          marker.bindPopup(() => buildFloodPopupHtml(item.flood, countDetoursForFlood(item.flood)), floodPopupOpts);
-          marker.on("click", (e: any) => {
-            L.DomEvent.stopPropagation(e);
-            marker.openPopup();
-          });
-        });
-      });
-    }
-
-    raisePathLayers(group, draftGroupRef.current);
-    return () => {
-      group.clearLayers();
-      floodLinesRef.current = {};
-    };
-  }, [mapReady, systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, floodDisplayMode, mapStyles, currentZoom]);
+  // 4c & 4d. Detour routes + Flood routes & markers Hook
+  useLongdoRouteLayers({
+    mapReady,
+    systemData,
+    mapStyles,
+    effectiveShowDetourLayer,
+    effectiveShowFloodLayer,
+    floodDisplayMode,
+    currentZoom,
+    leafletRef,
+    rendererRef,
+    detourGroupRef,
+    floodGroupRef,
+    draftGroupRef,
+    detourLinesRef,
+    floodLinesRef,
+    allowLineAnimationRef,
+    selectedFloodIdRef,
+  });
 
   // Leaflet's Canvas renderer intentionally ignores CSS class animation. Animate only
   // the already-drawn flood/detour paths at a low fixed rate, so the style editor's
@@ -1189,148 +812,27 @@ export function LongdoGisMap({
     const L = leafletRef.current;
     const group = draftGroupRef.current;
     if (!mapReady || !L || !group) return;
-    group.clearLayers();
-    draftLineRef.current = null;
-    revDraftLineRef.current = null;
-    const renderer = rendererRef.current;
-
-    // Blue dashed preview of the GIS file being imported / geometry being edited
-    incomingGisLines.forEach((line) => {
-      if (line.length < 2) return;
-      L.polyline(line.map(toLeafletLatLng) as any, {
-        color: "#0284c7",
-        weight: 5,
-        dashArray: "6, 6",
-        opacity: 0.95,
-        renderer,
-      }).addTo(group);
+    renderDraftAndConflictLayer({
+      L,
+      group,
+      renderer: rendererRef.current,
+      incomingGisLines,
+      draftCoordinates,
+      draftReverseCoordinates,
+      draftWaypoints,
+      draftReverseWaypoints,
+      draftConflictPoints,
+      draftPickMarkers,
+      draftMode,
+      mapStyles,
+      vertexEditable,
+      draftLineRef,
+      revDraftLineRef,
+      adminPickModeRef,
+      onCoordinatePickedRef,
+      onWaypointDraggedRef,
+      onReverseWaypointDraggedRef,
     });
-
-    const draftStyle = draftMode === "FLOOD" ? mapStyles.flood : mapStyles.detour;
-    const draftColor = draftStyle?.color || (draftMode === "FLOOD" ? LAYER_CONFIG.FLOOD_RED_LINE.color : LAYER_CONFIG.DETOUR_YELLOW_LINE.color);
-    const draftDash = dashArrayFor(draftStyle);
-
-    // Snapped draft route (Primary / Forward A->B)
-    if (draftCoordinates.length >= 2) {
-      const draftLine = L.polyline(draftCoordinates.map(toLeafletLatLng) as any, {
-        color: draftColor,
-        weight: 6,
-        dashArray: draftDash,
-        opacity: 0.95,
-        renderer,
-      }).addTo(group);
-      draftLineRef.current = draftLine;
-      draftLine.on("click", (event: any) => {
-        const mode = adminPickModeRef.current;
-        if (mode !== "ADD_WAYPOINT" && mode !== "ADD_REVERSE_WAYPOINT") return;
-        L.DomEvent.stopPropagation(event);
-        const point = event.latlng;
-        onCoordinatePickedRef.current?.(Number(point.lat.toFixed(6)), Number(point.lng.toFixed(6)), mode);
-      });
-    }
-
-    // Snapped reverse draft route (B->A for Detour or Dual Carriageway preview)
-    if (draftReverseCoordinates.length >= 2) {
-      const revDraftLine = L.polyline(draftReverseCoordinates.map(toLeafletLatLng) as any, {
-        color: draftColor,
-        weight: 6,
-        dashArray: draftDash,
-        opacity: 0.95,
-        renderer,
-      }).addTo(group);
-      revDraftLineRef.current = revDraftLine;
-      revDraftLine.on("click", (event: any) => {
-        if (adminPickModeRef.current !== "ADD_REVERSE_WAYPOINT") return;
-        L.DomEvent.stopPropagation(event);
-        const point = event.latlng;
-        onCoordinatePickedRef.current?.(Number(point.lat.toFixed(6)), Number(point.lng.toFixed(6)), "ADD_REVERSE_WAYPOINT");
-      });
-    }
-
-    // Closed-road conflict warning markers on draft detour
-    draftConflictPoints.forEach((pt, idx) => {
-      const [lat, lng] = toLeafletLatLng(pt);
-      const conflictIcon = L.divIcon({
-        html: `<div style="width:28px;height:28px;border-radius:50%;background:#dc2626;color:#fff;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;box-shadow:0 0 12px rgba(220,38,38,0.9)">!</div>`,
-        className: "doh-conflict-marker",
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
-      });
-      L.marker([lat, lng], { icon: conflictIcon, zIndexOffset: 1500 })
-        .bindTooltip(`⚠️ จุดตัดผ่านถนนที่ปิดการจราจร (#${idx + 1}) — ห้ามใช้เส้นทางนี้`, { direction: "top" })
-        .addTo(group);
-    });
-
-    // Start / end pick markers (A / B and separate reverse pins B→ / →A).
-    // Hidden while freeform vertex handles are active so endpoint handles can be dragged freely.
-    if (!vertexEditable) {
-      const forwardPoints = draftPickMarkers.filter((p) => p.mode !== "PICK_REV_START" && p.mode !== "PICK_REV_END");
-      draftPickMarkers.forEach((point) => {
-        const isReversePin = point.mode === "PICK_REV_START" || point.mode === "PICK_REV_END";
-        const overlapsForwardPin = isReversePin && forwardPoints.some(
-          (fp) => Math.abs(fp.lat - point.lat) < 0.00008 && Math.abs(fp.lon - point.lon) < 0.00008
-        );
-        const badgeStyle = point.mode === "PICK_REV_START"
-          ? "background:#f59e0b;color:#0f172a;border:2px solid #fff"
-          : point.mode === "PICK_REV_END"
-            ? "background:#6366f1;color:#fff;border:2px solid #fff"
-            : "background:#0ea5e9;color:#fff;border:2px solid #fff";
-        const tooltipText = point.mode === "PICK_REV_START"
-          ? "จุดเริ่มต้นขากลับ (B → A) — ลากเพื่อย้าย"
-          : point.mode === "PICK_REV_END"
-            ? "จุดสิ้นสุดขากลับ (B → A) — ลากเพื่อย้าย"
-            : `จุด${point.label}`;
-        const icon = L.divIcon({
-          html: `<div style="${badgeStyle}" class="min-w-7 h-7 px-1.5 rounded-full font-heading font-black text-xs flex items-center justify-center shadow-lg">${escapeHtml(point.label)}</div>`,
-          className: isReversePin ? "doh-draft-rev-endpoint" : "doh-draft-endpoint",
-          iconSize: [32, 28],
-          iconAnchor: overlapsForwardPin ? [-2, 14] : [16, 14],
-        });
-        const marker = L.marker([point.lat, point.lon], {
-          icon,
-          zIndexOffset: isReversePin ? 1250 : 1200,
-          draggable: true,
-        }).bindTooltip(tooltipText, { direction: "top" }).addTo(group);
-        marker.on("dragend", (event: any) => {
-          const position = event.target.getLatLng();
-          onCoordinatePickedRef.current?.(Number(position.lat.toFixed(6)), Number(position.lng.toFixed(6)), point.mode);
-        });
-      });
-    }
-
-    // Numbered draggable waypoints for forward path (A->B)
-    draftWaypoints.forEach((wp, idx) => {
-      const wpIcon = L.divIcon({
-        html: `<div class="w-6 h-6 rounded-full bg-amber-400 text-slate-950 border-2 border-slate-950 font-heading font-black text-[11px] flex items-center justify-center shadow-lg cursor-move">${idx + 1}</div>`,
-        className: "doh-wp-marker",
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-      });
-      const wpMarker = L.marker([wp[1], wp[0]], { icon: wpIcon, draggable: true }).addTo(group);
-      wpMarker.bindTooltip(`จุดดัดขาไป A→B ที่ ${idx + 1} (ลากหมุดเพื่อขยับแนวถนน)`, { direction: "top" });
-      wpMarker.on("dragend", (ev: any) => {
-        const pos = ev.target.getLatLng();
-        onWaypointDraggedRef.current?.(idx, [Number(pos.lng.toFixed(6)), Number(pos.lat.toFixed(6))]);
-      });
-    });
-
-    // Numbered draggable waypoints for reverse path (B->A)
-    draftReverseWaypoints.forEach((wp, idx) => {
-      const wpIcon = L.divIcon({
-        html: `<div class="w-6 h-6 rounded-full bg-sky-400 text-slate-950 border-2 border-slate-950 font-heading font-black text-[11px] flex items-center justify-center shadow-lg cursor-move">R${idx + 1}</div>`,
-        className: "doh-wp-rev-marker",
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-      });
-      const wpMarker = L.marker([wp[1], wp[0]], { icon: wpIcon, draggable: true }).addTo(group);
-      wpMarker.bindTooltip(`จุดดัดขากลับ B→A ที่ ${idx + 1} (ลากหมุดเพื่อขยับแนวถนน)`, { direction: "top" });
-      wpMarker.on("dragend", (ev: any) => {
-        const pos = ev.target.getLatLng();
-        onReverseWaypointDraggedRef.current?.(idx, [Number(pos.lng.toFixed(6)), Number(pos.lat.toFixed(6))]);
-      });
-    });
-
-    raisePathLayers(group);
     return () => {
       draftLineRef.current = null;
       revDraftLineRef.current = null;
@@ -1347,186 +849,24 @@ export function LongdoGisMap({
     group.clearLayers();
 
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const MAX_ARROWS = 160;
-
-    const placeArrowsOnLine = (
-      coords: [number, number][],
-      direction: "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN",
-      color: string,
-      sizePx: number,
-      spacingPx: number,
-      bgBadge: string | null,
-      viewport: any,
-      counter: { count: number }
-    ) => {
-      if (direction === "UNKNOWN" || coords.length < 2 || counter.count >= MAX_ARROWS) return;
-      const latLngs = coords.map(toLeafletLatLng);
-      let accumPx = spacingPx * 0.45;
-
-      for (let i = 0; i < latLngs.length - 1 && counter.count < MAX_ARROWS; i++) {
-        const p1 = latLngs[i];
-        const p2 = latLngs[i + 1];
-        if (!viewport.contains(p1) && !viewport.contains(p2)) continue;
-
-        const pt1 = map.latLngToContainerPoint(p1);
-        const pt2 = map.latLngToContainerPoint(p2);
-        const dx = pt2.x - pt1.x;
-        const dy = pt2.y - pt1.y;
-        const segLenPx = Math.hypot(dx, dy);
-        if (segLenPx < 6) continue;
-
-        while (accumPx + segLenPx >= spacingPx && counter.count < MAX_ARROWS) {
-          const remain = spacingPx - accumPx;
-          const ratio = Math.max(0, Math.min(1, remain / segLenPx));
-          const lat = p1[0] + (p2[0] - p1[0]) * ratio;
-          const lng = p1[1] + (p2[1] - p1[1]) * ratio;
-
-          if (viewport.contains([lat, lng])) {
-            let angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
-            if (direction === "REVERSE") angleDeg += 180;
-
-            const svgHtml =
-              direction === "TWO_WAY"
-                ? `<div style="transform:rotate(${angleDeg.toFixed(1)}deg);width:${sizePx + 6}px;height:${sizePx + 6}px;display:flex;align-items:center;justify-content:center;${bgBadge ? `background:${bgBadge};border-radius:999px;border:1px solid rgba(255,255,255,0.75);box-shadow:0 1px 4px rgba(0,0,0,0.45);` : "filter:drop-shadow(0 1px 2px rgba(0,0,0,0.85));"}"><svg width="${sizePx}" height="${sizePx}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8l4 4-4 4"/><path d="M7 16l-4-4 4-4"/><path d="M3 12h18"/></svg></div>`
-                : `<div style="transform:rotate(${angleDeg.toFixed(1)}deg);width:${sizePx + 4}px;height:${sizePx + 4}px;display:flex;align-items:center;justify-content:center;${bgBadge ? `background:${bgBadge};border-radius:999px;border:1px solid rgba(255,255,255,0.8);box-shadow:0 1px 4px rgba(0,0,0,0.45);` : "filter:drop-shadow(0 1px 2px rgba(0,0,0,0.85));"}"><svg width="${sizePx}" height="${sizePx}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>`;
-
-            const icon = L.divIcon({
-              html: svgHtml,
-              className: "doh-dir-arrow-icon",
-              iconSize: [sizePx + 6, sizePx + 6],
-              iconAnchor: [(sizePx + 6) / 2, (sizePx + 6) / 2],
-            });
-            L.marker([lat, lng], { icon, interactive: false, keyboard: false }).addTo(group);
-            counter.count++;
-          }
-          accumPx -= spacingPx;
-        }
-        accumPx += segLenPx;
-      }
-    };
-
-    const drawArrows = () => {
-      group.clearLayers();
-      const z = map.getZoom();
-      const viewport = map.getBounds().pad(0.15);
-      const counter = { count: 0 };
-
-      // 1. Draft preview arrows (always shown at zoom >= 11 so admin can inspect before saving)
-      const draftStyle = draftMode === "DETOUR" ? mapStyles.detour : mapStyles.flood;
-      const draftBadgeBg = draftStyle?.color || (draftMode === "DETOUR" ? LAYER_CONFIG.DETOUR_YELLOW_LINE.color : LAYER_CONFIG.FLOOD_RED_LINE.color);
-      const draftArrowColor = resolveVisibleArrowColor(draftBadgeBg, draftStyle?.arrowColor || (draftMode === "DETOUR" ? "#0f172a" : "#ffffff"));
-      if (z >= 11 && draftCoordinates.length >= 2) {
-        const effectiveDir = draftReverseCoordinates.length >= 2 ? "FORWARD" : draftDirectionMeta;
-        placeArrowsOnLine(
-          draftCoordinates,
-          effectiveDir,
-          draftArrowColor,
-          13,
-          110,
-          draftBadgeBg,
-          viewport,
-          counter
-        );
-      }
-      if (z >= 11 && draftReverseCoordinates.length >= 2) {
-        placeArrowsOnLine(
-          draftReverseCoordinates,
-          "FORWARD",
-          draftArrowColor,
-          13,
-          110,
-          draftBadgeBg,
-          viewport,
-          counter
-        );
-      }
-
-      // While editing a line, keep the map focused on the draft. Rebuilding
-      // decorative markers for every active route competes with vertex dragging.
-      if (vertexEditable) return;
-
-      // 2. Active Detour Route Arrows (Item 4)
-      const detourStyle = mapStyles.detour;
-      const showDetourArrows = detourStyle?.showArrows ?? true;
-      const detourMinZoom = detourStyle?.arrowMinZoom ?? 11;
-      if (showDetourLayer && showDetourArrows && z >= detourMinZoom) {
-        const dBadgeBg = detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
-        const dArrowColor = resolveVisibleArrowColor(dBadgeBg, detourStyle?.arrowColor || "#0f172a");
-        const dArrowSize = detourStyle?.arrowSize || 12;
-        const dArrowSpacing = detourStyle?.arrowSpacingPx || 120;
-
-        (systemData.detourRoutes || []).forEach((detour) => {
-          if (!detour.is_active) return;
-          if (detour.detour_meta?.show_arrows === false) return;
-          const dirMode = detour.direction_mode || "TWO_WAY";
-          const fwd = parseRouteCoordinates(detour.coordinates_json);
-          const rev = parseRouteCoordinates(detour.reverse_coordinates_json);
-
-          if (dirMode === "FORWARD_ONLY") {
-            placeArrowsOnLine(fwd, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
-          } else if (dirMode === "REVERSE_ONLY") {
-            const target = rev.length >= 2 ? rev : fwd;
-            placeArrowsOnLine(target, rev.length >= 2 ? "FORWARD" : "REVERSE", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
-          } else {
-            if (rev.length >= 2) {
-              placeArrowsOnLine(fwd, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
-              placeArrowsOnLine(rev, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
-            } else {
-              placeArrowsOnLine(fwd, "TWO_WAY", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
-            }
-          }
-        });
-      }
-
-      // 3. Highway Network Arrows (Item 2: Only draw on features with explicit directional metadata or when zoomed in >= 12)
-      const priStyle = mapStyles.primary;
-      const secStyle = mapStyles.secondary;
-      if (z >= 12) {
-        (systemData.highwayLayers || []).forEach((layer) => {
-          if (!layer.is_visible || !layer.geojson_data) return;
-          const isMain = layer.layer_id === "MAIN_HIGHWAY";
-          geoJsonFeatures(layer.geojson_data).forEach((feature: any) => {
-            const props = feature?.properties || {};
-            if (props.is_visible === false) return;
-            const featureIsMain = props.highway_type === "MAIN_HIGHWAY" ? true : props.highway_type === "SECOND_HIGHWAY" ? false : isMain;
-            if (featureIsMain ? !showMainHwy : !showSecHwy) return;
-            if (!featureIsMain && !showSecondaryAtCurrentZoom) return;
-
-            const st = featureIsMain ? priStyle : secStyle;
-            const allowLayerArrows = (st?.showArrows ?? true) && z >= (st?.arrowMinZoom ?? (featureIsMain ? 12 : 13));
-            if (!allowLayerArrows && !props.arrow_direction) return;
-
-            // Only draw highway arrows when direction metadata is known (never guess from raw vertex order alone)
-            const dirMeta: "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN" =
-              props.arrow_direction === "FORWARD" || props.traffic_direction === "ONE_WAY_FORWARD"
-                ? "FORWARD"
-                : props.arrow_direction === "REVERSE" || props.traffic_direction === "ONE_WAY_REVERSE"
-                  ? "REVERSE"
-                  : props.arrow_direction === "TWO_WAY" || props.carriageway_type === "SINGLE_CENTERLINE" || props.lanes?.includes("2") || props.lanes?.includes("๒")
-                    ? "TWO_WAY"
-                    : props.arrow_direction === "UNKNOWN"
-                      ? "UNKNOWN"
-                      : "TWO_WAY";
-
-            if (props.show_arrows === false || dirMeta === "UNKNOWN") return;
-            const geom = feature?.geometry;
-            const lines: [number, number][][] =
-              geom?.type === "LineString"
-                ? [geom.coordinates]
-                : geom?.type === "MultiLineString"
-                  ? geom.coordinates
-                  : [];
-            const arrowColor = props.arrow_color || st?.arrowColor || "#ffffff";
-            const arrowSize = Number(props.arrow_size || st?.arrowSize || (featureIsMain ? 11 : 10));
-            const arrowSpacing = Number(props.arrow_spacing_px || st?.arrowSpacingPx || (featureIsMain ? 160 : 180));
-
-            lines.forEach((lineCoords) => {
-              placeArrowsOnLine(lineCoords, dirMeta, arrowColor, arrowSize, arrowSpacing, null, viewport, counter);
-            });
-          });
-        });
-      }
-    };
+    const drawArrows = () =>
+      renderDirectionalArrows({
+        L,
+        map,
+        group,
+        mapStyles,
+        highwayLayers: systemData.highwayLayers,
+        detourRoutes: systemData.detourRoutes,
+        showMainHwy,
+        showSecHwy,
+        showDetourLayer,
+        showSecondaryAtCurrentZoom,
+        draftCoordinates,
+        draftReverseCoordinates,
+        draftDirectionMeta,
+        draftMode,
+        vertexEditable,
+      });
 
     const schedule = () => {
       if (timer) clearTimeout(timer);
@@ -1553,79 +893,22 @@ export function LongdoGisMap({
     const geometryToEdit = vertexEditCoordinates ?? draftCoordinates;
     if (!vertexEditable || geometryToEdit.length < 2) return;
 
-    const working: [number, number][] = geometryToEdit.map(toLeafletLatLng);
-    const lastIndex = working.length - 1;
     let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const draw = () => {
-      group.clearLayers();
-      const view = map.getBounds().pad(0.15);
-      const visible: number[] = [];
-      for (let i = 0; i < working.length; i++) {
-        if (view.contains(working[i])) visible.push(i);
-      }
-      const step = Math.max(1, Math.ceil(visible.length / MAX_VERTEX_HANDLES));
-
-      visible.forEach((index, order) => {
-        const isEnd = index === 0 || index === lastIndex;
-        if (step > 1 && order % step !== 0 && !isEnd) return;
-        const borderColor = index === 0 ? "#22c55e" : index === lastIndex ? "#ef4444" : "#0284c7";
-        const icon = L.divIcon({
-          html: `<div style="width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid ${borderColor};box-shadow:0 1px 4px rgba(15,23,42,.6);cursor:grab"></div>`,
-          className: "doh-vertex-handle",
-          iconSize: [14, 14],
-          iconAnchor: [7, 7],
-        });
-        const handle = L.marker(working[index], { icon, draggable: true, zIndexOffset: 1100, keyboard: false }).addTo(group);
-        handle.bindTooltip(`จุดที่ ${index + 1} · ลากเพื่อย้าย · คลิกขวา/กดค้างเพื่อลบ`, { direction: "top", offset: [0, -8] });
-        handle.on("drag", (event: any) => {
-          const position = event.target.getLatLng();
-          working[index] = [position.lat, position.lng];
-          if (vertexEditCoordinates && vertexEditCoordinates === draftReverseCoordinates) {
-            revDraftLineRef.current?.setLatLngs(working);
-          } else if (!vertexEditCoordinates || vertexEditCoordinates === draftCoordinates) {
-            draftLineRef.current?.setLatLngs(working);
-          }
-        });
-        handle.on("dragend", (event: any) => {
-          const position = event.target.getLatLng();
-          onVertexMovedRef.current?.(index, [Number(position.lng.toFixed(6)), Number(position.lat.toFixed(6))]);
-        });
-        handle.on("click", (event: any) => {
-          L.DomEvent.stopPropagation(event);
-          onVertexClickedRef.current?.(index, "click");
-        });
-        handle.on("contextmenu", (event: any) => {
-          L.DomEvent.stopPropagation(event);
-          L.DomEvent.preventDefault(event);
-          onVertexClickedRef.current?.(index, "contextmenu");
-        });
+    const draw = () =>
+      renderVertexEditHandles({
+        L,
+        map,
+        group,
+        geometryToEdit,
+        draftCoordinates,
+        draftReverseCoordinates,
+        vertexEditCoordinates,
+        draftLineRef,
+        revDraftLineRef,
+        onVertexMovedRef,
+        onVertexInsertedRef,
+        onVertexClickedRef,
       });
-
-      // Midpoint handles are only shown when every vertex in view has its own handle.
-      if (step === 1) {
-        for (let i = 0; i < lastIndex; i++) {
-          if (!view.contains(working[i]) && !view.contains(working[i + 1])) continue;
-          const mid: [number, number] = [(working[i][0] + working[i + 1][0]) / 2, (working[i][1] + working[i + 1][1]) / 2];
-          const icon = L.divIcon({
-            html: `<div style="width:10px;height:10px;border-radius:50%;background:rgba(2,132,199,.55);border:1px solid #fff;cursor:copy"></div>`,
-            className: "doh-vertex-mid",
-            iconSize: [10, 10],
-            iconAnchor: [5, 5],
-          });
-          const midHandle = L.marker(mid, { icon, draggable: true, zIndexOffset: 900, keyboard: false }).addTo(group);
-          midHandle.bindTooltip("คลิกหรือลากเพื่อเพิ่มจุด", { direction: "top", offset: [0, -6] });
-          midHandle.on("click", (event: any) => {
-            L.DomEvent.stopPropagation(event);
-            onVertexInsertedRef.current?.(i + 1, [Number(mid[1].toFixed(6)), Number(mid[0].toFixed(6))]);
-          });
-          midHandle.on("dragend", (event: any) => {
-            const position = event.target.getLatLng();
-            onVertexInsertedRef.current?.(i + 1, [Number(position.lng.toFixed(6)), Number(position.lat.toFixed(6))]);
-          });
-        }
-      }
-    };
     const schedule = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(draw, 150);
