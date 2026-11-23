@@ -76,6 +76,10 @@ interface LongdoGisMapProps {
   /** Public-list filter: keep non-matching safety routes visible but de-emphasized. */
   highlightFloodIds?: string[];
   highlightDetourIds?: string[];
+  isFilterActive?: boolean;
+  searchQuery?: string;
+  highlightHighwayRouteNos?: string[];
+  activeCardFocus?: { floodIds: string[]; detourIds: string[]; highwayRouteNos: string[] } | null;
 }
 
 export function LongdoGisMap({
@@ -110,12 +114,17 @@ export function LongdoGisMap({
   isSidebarCollapsed = false,
   highlightFloodIds = EMPTY_IDS,
   highlightDetourIds = EMPTY_IDS,
+  isFilterActive = false,
+  searchQuery = "",
+  highlightHighwayRouteNos = EMPTY_IDS,
+  activeCardFocus = null,
 }: LongdoGisMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
   const leafletRef = useRef<any>(null);
   const rendererRef = useRef<any>(null);
   const highwayGroupRef = useRef<any>(null);
+  const highwayFeatureKeysRef = useRef(new WeakMap<object, string>());
   const shieldGroupRef = useRef<any>(null);
   const detourGroupRef = useRef<any>(null);
   const floodGroupRef = useRef<any>(null);
@@ -135,6 +144,7 @@ export function LongdoGisMap({
   const [isLayerControlCollapsed, setIsLayerControlCollapsed] = useState(true);
   const [mapReady, setMapReady] = useState(false);
   const [isMapPopupOpen, setIsMapPopupOpen] = useState(false);
+  const [activePopupEntity, setActivePopupEntity] = useState<{ type: "HIGHWAY" | "FLOOD" | "DETOUR"; id: string } | null>(null);
   const [currentZoom, setCurrentZoom] = useState<number>(APP_CONFIG.DEFAULT_ZOOM);
   const [forceShowAllHighways, setForceShowAllHighways] = useState(false);
   const [showFloodLayer, setShowFloodLayer] = useState(true);
@@ -322,6 +332,9 @@ export function LongdoGisMap({
         map.on("popupclose", (e: any) => {
           const activePopup = (map as any)._popup;
           setIsMapPopupOpen(Boolean(activePopup && activePopup !== e?.popup && activePopup.isOpen?.()));
+          queueMicrotask(() => {
+            if (!(map as any)._popup?.isOpen?.()) setActivePopupEntity(null);
+          });
         });
       } catch (err) {
         console.error("[LongdoGisMap] Failed to initialize Leaflet map:", err);
@@ -539,6 +552,9 @@ export function LongdoGisMap({
 
     (systemData.highwayLayers || []).forEach((layer) => {
       if (!layer.is_visible || !layer.geojson_data) return;
+      geoJsonFeatures(layer.geojson_data).forEach((feature: object, index: number) => {
+        highwayFeatureKeysRef.current.set(feature, `${layer.layer_id}:${index}`);
+      });
       const isMain = layer.layer_id === "MAIN_HIGHWAY";
       const style = isMain ? mapStyles.primary : mapStyles.secondary;
       const color = style?.color || (isMain ? "#1B5E20" : "#0284c7");
@@ -624,6 +640,7 @@ export function LongdoGisMap({
                 return;
               }
               map.openPopup(buildHighwayPopupHtml(props, featureIsMain, color), event.latlng);
+              setActivePopupEntity({ type: "HIGHWAY", id: highwayFeatureKeysRef.current.get(feature)! });
             });
           },
         }).addTo(group);
@@ -651,15 +668,20 @@ export function LongdoGisMap({
     const draw = () => {
       group.clearLayers();
       const z = map.getZoom();
-      if (z < 10) return;
+      if (z < 10 && !isFilterActive && !searchQuery.trim() && !activeCardFocus) return;
       const viewport = map.getBounds().pad(0.25);
       const occupied: Record<string, Array<{ x: number; y: number }>> = {};
       let drawn = 0;
 
       for (const item of shieldCandidates) {
+        if (!shouldShowHighwayFeature(
+          { properties: { route_no: item.code } }, item.isMain,
+          showMainHwy, showSecHwy, true, criticalHighwayRouteNos,
+          Boolean(activeCardFocus) || isFilterActive || Boolean(searchQuery.trim()),
+          activeCardFocus?.highwayRouteNos ?? highlightHighwayRouteNos, searchQuery
+        )) continue;
         if (drawn >= MAX_VISIBLE_SHIELDS) break;
         if (item.isMain ? !showMainHwy : !showSecHwy) continue;
-        if (!item.isMain && z < 11 && !forceShowAllHighways && !criticalHighwayRouteNos.has(item.code.replace(/^ทล\.?/i, "").trim())) continue;
         if (!viewport.contains(item.latlng)) continue;
         const point = map.latLngToContainerPoint(item.latlng);
         const cellX = Math.floor(point.x / 48);
@@ -685,6 +707,21 @@ export function LongdoGisMap({
         const sign = L.marker(item.latlng, { icon: signIcon, interactive: true }).addTo(group);
         sign.bindTooltip(`ทล.${escapeHtml(item.code)} · ${escapeHtml(item.name)}`, { direction: "top", offset: [0, -18] });
         sign.bindPopup(() => `<div style="padding-top:5px"><strong>ทล.${escapeHtml(item.code)}</strong><br/>${escapeHtml(item.name)}</div>`);
+        sign.on("popupopen", () => {
+          let closest: { key: string; distance: number } | null = null;
+          const visit = (path: any) => {
+            if (path.eachLayer) { path.eachLayer(visit); return; }
+            const feature = path.feature;
+            if (!feature || String(routeCodeOf(feature.properties)) !== String(item.code)) return;
+            const key = highwayFeatureKeysRef.current.get(feature);
+            const center = path.getBounds?.().getCenter();
+            if (!key || !center) return;
+            const distance = L.latLng(item.latlng).distanceTo(center);
+            if (!closest || distance < closest.distance) closest = { key, distance };
+          };
+          highwayGroupRef.current?.eachLayer(visit);
+          if (closest) setActivePopupEntity({ type: "HIGHWAY", id: (closest as { key: string }).key });
+        });
         drawn++;
       }
     };
@@ -700,10 +737,11 @@ export function LongdoGisMap({
       map.off("moveend zoomend", schedule);
       group.clearLayers();
     };
-  }, [mapReady, shieldCandidates, showHighwayShields, showMainHwy, showSecHwy, forceShowAllHighways, criticalHighwayRouteNos]);
+  }, [mapReady, shieldCandidates, showHighwayShields, showMainHwy, showSecHwy, forceShowAllHighways, criticalHighwayRouteNos, isFilterActive, searchQuery, activeCardFocus, highlightHighwayRouteNos]);
 
   // 4c & 4d. Detour routes + Flood routes & markers Hook
   useLongdoRouteLayers({
+    onActivateMapEntity: setActivePopupEntity,
     mapReady,
     systemData,
     mapStyles,
@@ -747,6 +785,9 @@ export function LongdoGisMap({
     const tick = () => {
       phase = (phase + 1) % 200;
       entries.forEach((entry) => {
+        const liveEntry = detourLinesRef.current.find((item) => item.line === entry.line) ?? Object.values(floodLinesRef.current).find((item) => item.line === entry.line);
+        if (!liveEntry || liveEntry.filterOpacity === 0) return;
+        entry.filterOpacity = liveEntry.filterOpacity;
         const speed = entry.animation === "blink" ? 1.8 : entry.animation === "pulse" ? 0.7 : 1.2;
         const wave = (Math.sin(phase * speed * 0.35) + 1) / 2;
         if (entry.animation === "pulse") {
@@ -781,31 +822,106 @@ export function LongdoGisMap({
   // visible at 25% opacity so a traveler can still notice nearby safety data.
   useEffect(() => {
     if (!publicMode) return;
-    const floodMatches = new Set(highlightFloodIds);
-    const detourMatches = new Set(highlightDetourIds);
+    const popupFocus = activePopupEntity ? {
+      floodIds: activePopupEntity.type === "FLOOD" ? [activePopupEntity.id] : [],
+      detourIds: activePopupEntity.type === "DETOUR" ? [activePopupEntity.id] : [],
+      highwayRouteNos: activePopupEntity.type === "HIGHWAY" ? [activePopupEntity.id] : [],
+    } : null;
+    const focus = popupFocus ?? activeCardFocus;
+    const hasFocus = focus !== null;
+    const active = hasFocus || isFilterActive || Boolean(searchQuery.trim());
+    const floodMatches = new Set(focus?.floodIds ?? highlightFloodIds);
+    const detourMatches = new Set(focus?.detourIds ?? highlightDetourIds);
     Object.entries(floodLinesRef.current).forEach(([id, entry]) => {
-      entry.filterOpacity = floodMatches.has(id) ? 1 : 0.25;
+      entry.filterOpacity = !active || floodMatches.has(id) ? 1 : 0;
       entry.line.setStyle({ opacity: entry.baseOpacity * entry.filterOpacity });
+      if (entry.line.__dohBaseInteractive === undefined) entry.line.__dohBaseInteractive = entry.line.options.interactive ?? true;
+      entry.line.options.interactive = Boolean(entry.filterOpacity) && entry.line.__dohBaseInteractive;
+      entry.casing?.setStyle({ opacity: entry.filterOpacity });
+      if (entry.casing) entry.casing.options.interactive = false;
     });
     detourLinesRef.current.forEach((entry) => {
-      entry.filterOpacity = detourMatches.has(entry.id) ? 1 : 0.25;
+      entry.filterOpacity = !active || detourMatches.has(entry.id) ? 1 : 0;
       entry.line.setStyle({ opacity: entry.baseOpacity * entry.filterOpacity });
+      if (entry.line.__dohBaseInteractive === undefined) entry.line.__dohBaseInteractive = entry.line.options.interactive ?? true;
+      entry.line.options.interactive = Boolean(entry.filterOpacity) && entry.line.__dohBaseInteractive;
     });
     const applyGroupOpacity = (group: any, matches: Set<string>) => group?.eachLayer?.((layer: any) => {
       const ids = layer.__dohFilterIds || (layer.__dohFilterId ? [layer.__dohFilterId] : null);
       if (!ids) return;
       const baseOpacity = Number.isFinite(layer.__dohBaseOpacity) ? layer.__dohBaseOpacity : 1;
-      const opacity = baseOpacity * (ids.some((id: string) => matches.has(id)) ? 1 : 0.25);
+      const visible = !active || ids.some((id: string) => matches.has(id));
+      const opacity = baseOpacity * (visible ? 1 : 0);
+      if (layer.__dohBaseInteractive === undefined) layer.__dohBaseInteractive = layer.options?.interactive ?? true;
+      layer.options.interactive = visible && layer.__dohBaseInteractive;
       if (layer.setStyle) layer.setStyle({ opacity });
       const element = layer.getElement?.();
       if (element) {
         element.style.opacity = String(opacity);
+        element.style.display = visible ? "" : "none";
+        element.style.pointerEvents = visible ? "" : "none";
         element.dataset.filterOpacity = String(opacity);
       }
     });
     applyGroupOpacity(floodGroupRef.current, floodMatches);
     applyGroupOpacity(detourGroupRef.current, detourMatches);
-  }, [publicMode, highlightFloodIds, highlightDetourIds, mapReady, systemData.floodRoutes, systemData.detourRoutes]);
+    const normalize = (value: string) => value.replace(/^ทล\.?\s*/i, "").trim();
+    const highways = new Set((focus?.highwayRouteNos ?? highlightHighwayRouteNos).map(normalize));
+    if (hasFocus && !activePopupEntity) {
+      systemData.floodRoutes.forEach((route) => {
+        if (floodMatches.has(route.id)) highways.add(normalize(route.route_no));
+      });
+    }
+    const applyHighwayOpacity = (layer: any) => {
+      if (layer.eachLayer) { layer.eachLayer(applyHighwayOpacity); return; }
+      if (!layer.feature || !layer.setStyle) return;
+      if (layer.__dohBaseOpacity === undefined) layer.__dohBaseOpacity = layer.options.opacity ?? 1;
+      const matched = activePopupEntity?.type === "HIGHWAY"
+        ? highwayFeatureKeysRef.current.get(layer.feature) === activePopupEntity.id
+        : highways.has(normalize(String(routeCodeOf(layer.feature.properties))));
+      const visible = !active || matched;
+      if (layer.__dohBaseInteractive === undefined) layer.__dohBaseInteractive = layer.options.interactive ?? true;
+      layer.options.interactive = visible && layer.__dohBaseInteractive;
+      layer.setStyle({ opacity: layer.__dohBaseOpacity * (visible ? 1 : 0) });
+      const element = layer.getElement?.();
+      if (element) {
+        element.style.display = visible ? "" : "none";
+        element.style.pointerEvents = visible ? "" : "none";
+      }
+    };
+    highwayGroupRef.current?.eachLayer(applyHighwayOpacity);
+    if (mapContainerRef.current) {
+      const highwayOpacities: Record<string, number> = {};
+      const highwayFeatures: Record<string, { opacity: number; x: number; y: number }> = {};
+      const collectHighwayOpacity = (layer: any) => {
+        if (layer.eachLayer) { layer.eachLayer(collectHighwayOpacity); return; }
+        if (!layer.feature) return;
+        const routeNo = normalize(String(routeCodeOf(layer.feature.properties)));
+        const opacity = Number(layer.options?.opacity);
+        const key = highwayFeatureKeysRef.current.get(layer.feature);
+        const center = layer.getBounds?.().getCenter();
+        if (key && center) {
+          const point = leafletMapRef.current.latLngToContainerPoint(center);
+          highwayFeatures[key] = { opacity, x: point.x, y: point.y };
+        }
+        if (routeNo && Number.isFinite(opacity)) {
+          highwayOpacities[routeNo] = Math.max(highwayOpacities[routeNo] ?? 0, opacity);
+        }
+      };
+      highwayGroupRef.current?.eachLayer(collectHighwayOpacity);
+      mapContainerRef.current.dataset.publicLayerOpacities = JSON.stringify({
+        zoom: leafletMapRef.current?.getZoom(),
+        highwayFeatures,
+        floods: Object.fromEntries(Object.entries(floodLinesRef.current).map(([id, entry]) => [id, entry.line.options.opacity])),
+        detours: Object.fromEntries(detourLinesRef.current.map((entry) => [entry.id, entry.line.options.opacity])),
+        highways: highwayOpacities,
+        interactive: {
+          floods: Object.fromEntries(Object.entries(floodLinesRef.current).map(([id, entry]) => [id, Boolean(entry.line.options.interactive)])),
+          detours: Object.fromEntries(detourLinesRef.current.map((entry) => [entry.id, Boolean(entry.line.options.interactive)])),
+        },
+      });
+    }
+  }, [publicMode, highlightFloodIds, highlightDetourIds, isFilterActive, searchQuery, highlightHighwayRouteNos, activeCardFocus, activePopupEntity, mapReady, systemData.floodRoutes, systemData.detourRoutes, systemData.highwayLayers, mapStyles, showMainHwy, showSecHwy, showRoadLabels, showSecondaryAtCurrentZoom, criticalHighwayRouteNos, currentZoom, showFloodLayer, showDetourLayer]);
 
   // 4f. Admin draft route (A->B and B->A), conflict alerts, imported-GIS preview and draggable markers.
   useEffect(() => {
@@ -849,7 +965,18 @@ export function LongdoGisMap({
     group.clearLayers();
 
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const drawArrows = () =>
+    const drawArrows = () => {
+      const visibleDetourIds = new Set(detourLinesRef.current
+        .filter((entry) => entry.line.options.opacity > 0)
+        .map((entry) => entry.id));
+      const visibleHighwayKeys = new Set<string>();
+      const collectVisibleHighways = (path: any) => {
+        if (path.eachLayer) { path.eachLayer(collectVisibleHighways); return; }
+        if (!path.feature || !(path.options?.opacity > 0)) return;
+        const key = highwayFeatureKeysRef.current.get(path.feature);
+        if (key) visibleHighwayKeys.add(key);
+      };
+      highwayGroupRef.current?.eachLayer(collectVisibleHighways);
       renderDirectionalArrows({
         L,
         map,
@@ -866,7 +993,11 @@ export function LongdoGisMap({
         draftDirectionMeta,
         draftMode,
         vertexEditable,
+        visibleDetourIds,
+        visibleHighwayKeys,
+        isFilterOrFocusActive: publicMode && (isFilterActive || Boolean(searchQuery.trim()) || Boolean(activeCardFocus) || Boolean(activePopupEntity)),
       });
+    };
 
     const schedule = () => {
       if (timer) clearTimeout(timer);
@@ -880,7 +1011,7 @@ export function LongdoGisMap({
       map.off("moveend zoomend", schedule);
       group.clearLayers();
     };
-  }, [mapReady, systemData.highwayLayers, systemData.detourRoutes, mapStyles, showMainHwy, showSecHwy, showDetourLayer, showSecondaryAtCurrentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode, vertexEditable]);
+  }, [mapReady, systemData.highwayLayers, systemData.detourRoutes, systemData.floodRoutes, mapStyles, showMainHwy, showSecHwy, showDetourLayer, showFloodLayer, showSecondaryAtCurrentZoom, currentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode, vertexEditable, publicMode, isFilterActive, searchQuery, activeCardFocus, activePopupEntity, highlightDetourIds, highlightHighwayRouteNos]);
 
   // 4h. Freeform vertex editor: draggable handle on every vertex + "+" handle on every segment middle.
   // Only vertices inside the viewport are drawn (at most MAX_VERTEX_HANDLES), so long lines stay fast.

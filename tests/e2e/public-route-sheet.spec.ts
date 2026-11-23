@@ -1,6 +1,54 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const base = process.env.BASE_PATH || "";
+
+type PublicLayerOpacities = {
+  zoom: number;
+  highwayFeatures: Record<string, { opacity: number; x: number; y: number }>;
+  floods: Record<string, number>;
+  detours: Record<string, number>;
+  highways: Record<string, number>;
+  interactive: { floods: Record<string, boolean>; detours: Record<string, boolean> };
+};
+
+const readPublicLayerOpacities = async (page: Page) =>
+  page.locator("[data-public-layer-opacities]").evaluate((element) =>
+    JSON.parse((element as HTMLElement).dataset.publicLayerOpacities || "{}") as PublicLayerOpacities
+  );
+
+test("highway popup focuses one of two features sharing the same route number", async ({ page }) => {
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: JSON.stringify({
+      floodRoutes: [], detourRoutes: [], timelineUpdates: [], mitigationProjects: [], offices: [], mapStyles: null,
+      systemSettings: { name: "ระบบทดสอบ", org: "แขวงทางหลวง", phone: "1586" },
+      highwayLayers: [{ layer_id: "MAIN_HIGHWAY", layer_name: "สายหลัก", is_visible: true,
+        color_hex: "#1B5E20", line_width: 5,
+        geojson_data: { type: "FeatureCollection", features: [
+          { type: "Feature", properties: { route_no: "42", section_name: "ช่วงทดสอบ A" }, geometry: { type: "LineString", coordinates: [[101.18, 6.85], [101.22, 6.85]] } },
+          { type: "Feature", properties: { route_no: "42", section_name: "ช่วงทดสอบ B" }, geometry: { type: "LineString", coordinates: [[101.18, 6.90], [101.22, 6.90]] } },
+        ] } }],
+    }),
+  }));
+  await page.goto(`${base}/`);
+  await expect.poll(async () => Object.keys((await readPublicLayerOpacities(page)).highwayFeatures || {}).length).toBe(2);
+  for (const [selected, other, title] of [
+    ["MAIN_HIGHWAY:0", "MAIN_HIGHWAY:1", "ช่วงทดสอบ A"],
+    ["MAIN_HIGHWAY:1", "MAIN_HIGHWAY:0", "ช่วงทดสอบ B"],
+  ]) {
+    const features = (await readPublicLayerOpacities(page)).highwayFeatures;
+    expect(features[selected].opacity).toBeGreaterThan(0);
+    expect(features[other].opacity).toBeGreaterThan(0);
+    const map = page.locator("[data-public-layer-opacities]");
+    await map.click({ position: { x: features[selected].x, y: features[selected].y } });
+    await expect(page.locator(".leaflet-popup")).toContainText(title);
+    await expect.poll(async () => (await readPublicLayerOpacities(page)).highwayFeatures[other].opacity).toBe(0);
+    await expect.poll(async () => (await readPublicLayerOpacities(page)).highwayFeatures[selected].opacity).toBeGreaterThan(0);
+    await page.locator(".leaflet-popup-close-button").click();
+    await expect(page.locator(".leaflet-popup")).toHaveCount(0);
+    await expect.poll(async () => (await readPublicLayerOpacities(page)).highwayFeatures[other].opacity).toBeGreaterThan(0);
+  }
+});
 
 test("citizen route sheet filters floods and detours and returns from details without stacking sheets", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) >= 1024, "Citizen sheet is a mobile-only view");
@@ -104,7 +152,7 @@ test("citizen route sheet filters floods and detours and returns from details wi
   // Verify the actual Leaflet marker wrapper is de-emphasized, not only React state.
   await expect.poll(() => page.locator(".doh-detour-symbol").first().evaluate((element) =>
     element.closest(".leaflet-marker-icon")?.getAttribute("data-filter-opacity")
-  )).toBe("0.25");
+  )).toBe("0");
 });
 
 test("citizen map popups fit 360x640 mobile viewport without overflow or changing accessible names", async ({ page }) => {
@@ -276,4 +324,91 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.locator(".doh-detour-leaflet-popup .leaflet-popup-close-button").click();
   await expect(photoPopup).toHaveCount(0);
+});
+
+test("public map restores flood, detour and highway opacity after closing each dossier", async ({ page }) => {
+  const updatedAt = "2026-11-11T03:00:00.000Z";
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      updatedAt,
+      floodRoutes: [
+        { id: "F-42", route_no: "42", section_name: "น้ำท่วม ทล.42", km_start: "1+000", km_end: "1+200", lat_start: 6.87, lon_start: 101.25, lat_end: 6.88, lon_end: 101.27, coordinates_json: [[101.25, 6.87], [101.27, 6.88]], water_level_cm: 30, traffic_status: "WARNING", direction_meta: {}, latest_photo_url: "", is_active: true, updated_at: updatedAt },
+        { id: "F-43", route_no: "43", section_name: "น้ำท่วม ทล.43", km_start: "2+000", km_end: "2+200", lat_start: 6.89, lon_start: 101.28, lat_end: 6.90, lon_end: 101.30, coordinates_json: [[101.28, 6.89], [101.30, 6.90]], water_level_cm: 20, traffic_status: "WARNING", direction_meta: {}, latest_photo_url: "", is_active: true, updated_at: updatedAt },
+      ],
+      detourRoutes: [
+        { id: "D-42", flood_id_ref: "F-42", route_name: "ทางเลี่ยง ทล.42", description: "ทางเลี่ยงสำหรับ ทล.42", direction_mode: "TWO_WAY", is_active: true, updated_at: updatedAt, lat_start: 6.86, lon_start: 101.24, lat_end: 6.88, lon_end: 101.27, coordinates_json: [[101.24, 6.86], [101.27, 6.88]] },
+        { id: "D-43", flood_id_ref: "F-43", route_name: "ทางเลี่ยง ทล.43", description: "ทางเลี่ยงสำหรับ ทล.43", direction_mode: "TWO_WAY", is_active: true, updated_at: updatedAt, lat_start: 6.88, lon_start: 101.27, lat_end: 6.90, lon_end: 101.31, coordinates_json: [[101.27, 6.88], [101.31, 6.90]] },
+      ],
+      highwayLayers: [{
+        layer_id: "MAIN_HIGHWAY", layer_name: "ทางหลวงสายหลัก", color_hex: "#1B5E20", line_width: 5, is_visible: true,
+        geojson_data: { type: "FeatureCollection", features: [
+          { type: "Feature", properties: { route_no: "42", route_name: "ทล.42" }, geometry: { type: "LineString", coordinates: [[101.23, 6.85], [101.28, 6.89]] } },
+          { type: "Feature", properties: { route_no: "43", route_name: "ทล.43" }, geometry: { type: "LineString", coordinates: [[101.27, 6.88], [101.32, 6.91]] } },
+        ] },
+      }],
+      timelineUpdates: [], mitigationProjects: [], offices: [], mapStyles: null,
+      systemSettings: { name: "ระบบทดสอบ", org: "แขวงทางหลวง", phone: "1586" },
+    }),
+  }));
+
+  await page.goto(`${base}/`);
+  await expect(page.locator(".doh-map-capsule-pin")).toHaveCount(2);
+  await expect.poll(async () => Object.keys((await readPublicLayerOpacities(page)).highways).sort().join(",")).toBe("42,43");
+  const initial = await readPublicLayerOpacities(page);
+  expect(initial.floods["F-42"]).toBeCloseTo(initial.floods["F-43"], 4);
+  expect(initial.detours["D-42"]).toBeCloseTo(initial.detours["D-43"], 4);
+  expect(initial.highways["42"]).toBeCloseTo(initial.highways["43"], 4);
+  const ratio = async (kind: "floods" | "detours" | "highways", id: string) =>
+    (await readPublicLayerOpacities(page))[kind][id] / initial[kind][id];
+
+  while ((await readPublicLayerOpacities(page)).zoom >= 10) {
+    const zoom = (await readPublicLayerOpacities(page)).zoom;
+    await page.getByRole("button", { name: "Zoom out", exact: true }).click();
+    await expect.poll(async () => (await readPublicLayerOpacities(page)).zoom).toBeLessThan(zoom);
+  }
+  await expect.poll(() => ratio("floods", "F-43")).toBeCloseTo(1, 4);
+  await expect.poll(() => ratio("detours", "D-43")).toBeCloseTo(1, 4);
+  await expect.poll(() => ratio("highways", "43")).toBeCloseTo(1, 4);
+
+  await page.locator(".doh-map-capsule-pin").first().click();
+  await page.locator(".doh-flood-leaflet-popup").getByRole("button", { name: "ดูรายละเอียด" }).click();
+  const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+  await expect(floodDialog).toBeVisible();
+  await expect.poll(() => ratio("floods", "F-42")).toBeCloseTo(1, 4);
+  await expect.poll(() => ratio("floods", "F-43")).toBe(0);
+  await expect.poll(() => ratio("detours", "D-42")).toBeCloseTo(1, 4);
+  await expect.poll(() => ratio("detours", "D-43")).toBe(0);
+  await expect.poll(() => ratio("highways", "42")).toBeCloseTo(1, 4);
+  await expect.poll(() => ratio("highways", "43")).toBe(0);
+  await expect.poll(async () => (await readPublicLayerOpacities(page)).interactive.floods["F-43"]).toBe(false);
+  await expect.poll(async () => (await readPublicLayerOpacities(page)).interactive.detours["D-43"]).toBe(false);
+  await page.keyboard.press("Escape");
+  await expect(floodDialog).toHaveCount(0);
+  await expect.poll(() => ratio("floods", "F-43")).toBeCloseTo(1, 4);
+  await expect.poll(() => ratio("detours", "D-43")).toBeCloseTo(1, 4);
+  await expect.poll(() => ratio("highways", "43")).toBeCloseTo(1, 4);
+  await expect.poll(async () => (await readPublicLayerOpacities(page)).interactive.floods["F-43"]).toBe(true);
+  await expect.poll(async () => (await readPublicLayerOpacities(page)).interactive.detours["D-43"]).toBe(true);
+
+  const routeList = (page.viewportSize()?.width ?? 1280) < 1024
+    ? page.getByRole("dialog", { name: "รายการสายทางและจุดเฝ้าระวัง" })
+    : page.locator("div.hidden.lg\\:flex").filter({ has: page.getByRole("heading", { name: /จุดเฝ้าระวังและน้ำท่วมทางหลวง/ }) });
+  if ((page.viewportSize()?.width ?? 1280) < 1024) {
+    await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
+  }
+  await expect(routeList).toBeVisible();
+  await routeList.getByRole("button", { name: /ทางเลี่ยง \(2\)/ }).click();
+  await routeList.getByRole("button", { name: /ทางเลี่ยง ทล\.42/ }).click();
+  const detourDialog = page.getByRole("dialog", { name: /คำแนะนำเส้นทางเลี่ยง/ });
+  await expect(detourDialog).toBeVisible();
+  await expect.poll(() => ratio("detours", "D-42")).toBeCloseTo(1, 4);
+  await expect.poll(() => ratio("detours", "D-43")).toBe(0);
+  await expect.poll(() => ratio("highways", "42")).toBeCloseTo(1, 4);
+  await expect.poll(() => ratio("highways", "43")).toBe(0);
+  await page.keyboard.press("Escape");
+  await expect(detourDialog).toHaveCount(0);
+  await expect.poll(() => ratio("detours", "D-43")).toBeCloseTo(1, 4);
+  await expect.poll(() => ratio("highways", "43")).toBeCloseTo(1, 4);
 });

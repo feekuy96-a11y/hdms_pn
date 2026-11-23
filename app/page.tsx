@@ -165,6 +165,8 @@ export default function HomePage() {
     detourCountByFloodId,
     highlightFloodIds,
     highlightDetourIds,
+    isFilterActive,
+    highlightHighwayRouteNos,
     activeRouteChip,
     selectedFloodDetourEntries,
     selectedFloodDetours,
@@ -662,6 +664,25 @@ export default function HomePage() {
           )}
 
           <LongdoGisMap
+            isFilterActive={isFilterActive}
+            searchQuery={searchQuery}
+            highlightHighwayRouteNos={highlightHighwayRouteNos}
+            activeCardFocus={viewingDetourModal
+              ? {
+                  floodIds: [],
+                  detourIds: [viewingDetourModal.id],
+                  highwayRouteNos: getHighwayIdsForDetour(viewingDetourModal, systemData),
+                }
+              : showDossier && selectedFlood
+                ? {
+                    floodIds: [selectedFlood.id],
+                    detourIds: selectedFloodDetours.map((detour) => detour.id),
+                    highwayRouteNos: [
+                      selectedFlood.route_no,
+                      ...selectedFloodDetours.flatMap((detour) => getHighwayIdsForDetour(detour, systemData)),
+                    ],
+                  }
+                : null}
             publicMode
             isSidebarCollapsed={isSidebarCollapsed}
             systemData={systemData}

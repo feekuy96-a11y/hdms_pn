@@ -84,6 +84,9 @@ export interface RenderDirectionalArrowsParams {
   draftDirectionMeta: "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN";
   draftMode: "FLOOD" | "DETOUR";
   vertexEditable: boolean;
+  visibleDetourIds?: ReadonlySet<string>;
+  visibleHighwayKeys?: ReadonlySet<string>;
+  isFilterOrFocusActive?: boolean;
 }
 
 /**
@@ -106,6 +109,9 @@ export function renderDirectionalArrows({
   draftDirectionMeta,
   draftMode,
   vertexEditable,
+  visibleDetourIds,
+  visibleHighwayKeys,
+  isFilterOrFocusActive = false,
 }: RenderDirectionalArrowsParams) {
   group.clearLayers();
   const z = map.getZoom();
@@ -161,7 +167,7 @@ export function renderDirectionalArrows({
   const detourStyle = mapStyles.detour;
   const showDetourArrows = detourStyle?.showArrows ?? true;
   const detourMinZoom = detourStyle?.arrowMinZoom ?? 11;
-  if (showDetourLayer && showDetourArrows && z >= detourMinZoom) {
+  if (showDetourLayer && showDetourArrows && (isFilterOrFocusActive || z >= detourMinZoom)) {
     const dBadgeBg = detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
     const dArrowColor = resolveVisibleArrowColor(dBadgeBg, detourStyle?.arrowColor || "#0f172a");
     const dArrowSize = detourStyle?.arrowSize || 12;
@@ -169,6 +175,7 @@ export function renderDirectionalArrows({
 
     (detourRoutes || []).forEach((detour) => {
       if (!detour.is_active) return;
+      if (visibleDetourIds && !visibleDetourIds.has(detour.id)) return;
       if (detour.detour_meta?.show_arrows === false) return;
       const dirMode = detour.direction_mode || "TWO_WAY";
       const fwd = parseRouteCoordinates(detour.coordinates_json);
@@ -203,20 +210,21 @@ export function renderDirectionalArrows({
   // 3. Highway Network Arrows (Only draw on features with explicit directional metadata or when zoomed in >= 12)
   const priStyle = mapStyles.primary;
   const secStyle = mapStyles.secondary;
-  if (z >= 12) {
+  if (isFilterOrFocusActive || z >= 12) {
     (highwayLayers || []).forEach((layer) => {
       if (!layer.is_visible || !layer.geojson_data) return;
       const isMain = layer.layer_id === "MAIN_HIGHWAY";
-      geoJsonFeatures(layer.geojson_data).forEach((feature: any) => {
+      geoJsonFeatures(layer.geojson_data).forEach((feature: any, index: number) => {
+        if (visibleHighwayKeys && !visibleHighwayKeys.has(`${layer.layer_id}:${index}`)) return;
         const props = feature?.properties || {};
         if (props.is_visible === false) return;
         const featureIsMain =
           props.highway_type === "MAIN_HIGHWAY" ? true : props.highway_type === "SECOND_HIGHWAY" ? false : isMain;
         if (featureIsMain ? !showMainHwy : !showSecHwy) return;
-        if (!featureIsMain && !showSecondaryAtCurrentZoom) return;
+        if (!isFilterOrFocusActive && !featureIsMain && !showSecondaryAtCurrentZoom) return;
 
         const st = featureIsMain ? priStyle : secStyle;
-        const allowLayerArrows = (st?.showArrows ?? true) && z >= (st?.arrowMinZoom ?? (featureIsMain ? 12 : 13));
+        const allowLayerArrows = (st?.showArrows ?? true) && (isFilterOrFocusActive || z >= (st?.arrowMinZoom ?? (featureIsMain ? 12 : 13)));
         if (!allowLayerArrows && !props.arrow_direction) return;
 
         // Only draw highway arrows when direction metadata is known (never guess from raw vertex order alone)

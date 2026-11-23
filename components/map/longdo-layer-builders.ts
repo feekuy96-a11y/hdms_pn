@@ -134,17 +134,23 @@ export function shouldShowHighwayFeature(
   showMainHwy: boolean,
   showSecHwy: boolean,
   showSecondaryAtCurrentZoom: boolean,
-  criticalHighwayRouteNos: Set<string>
+  criticalHighwayRouteNos: Set<string>,
+  isFilterActive = false,
+  highlightHighwayRouteNos: string[] = [],
+  searchQuery = ""
 ): boolean {
   if (feature?.properties?.is_visible === false) return false;
   const type = feature?.properties?.highway_type;
   const featureIsMain =
     type === "MAIN_HIGHWAY" ? true : type === "SECOND_HIGHWAY" ? false : isLayerMain;
-  if (featureIsMain) return showMainHwy;
-  if (!showSecHwy) return false;
-  if (showSecondaryAtCurrentZoom) return true;
-  const code = String(routeCodeOf(feature?.properties)).replace(/^ทล\.?/i, "").trim();
-  return Boolean(code && criticalHighwayRouteNos.has(code));
+  if (!(featureIsMain ? showMainHwy : showSecHwy)) return false;
+  const normalize = (value: string) => value.replace(/^ทล\.?\s*/i, "").trim();
+  const code = normalize(String(routeCodeOf(feature?.properties)));
+  // Keep the legacy zoom arguments compatible; road geometry is visible at every zoom.
+  void showSecondaryAtCurrentZoom;
+  void criticalHighwayRouteNos;
+  if (!isFilterActive && !searchQuery.trim()) return true;
+  return highlightHighwayRouteNos.some((value) => normalize(value) === code);
 }
 
 /** คำนวณ style และความหนาเส้นสายทางหลวงตามจำนวนช่องจราจรและระดับซูม */
