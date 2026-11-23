@@ -2,7 +2,9 @@
 
 ## Scope and evidence
 
+- Read `docs/CODEBASE_MAP.md` first to jump directly to target files and commands instead of scanning or grepping the whole repo.
 - Inspect only files needed for the assigned task. Preserve unrelated working-tree changes.
+- During incremental edits, run `npm run check:fast` and `npx eslint <changed-files> --max-warnings=0`; run full `npm run check:deploy` once before commit/PR.
 - Before editing, state the paths in scope. After editing, inspect `git diff --check` and the relevant diff.
 - Output diffs and concise verification results only; do not paste full source files or claim checks not run.
 - Do not commit, push, deploy, alter production data, rotate secrets, or relax authentication/RLS unless explicitly asked.
