@@ -1,0 +1,18 @@
+# AI Context & Quota Hygiene — skip archives, static payloads, backups, and build artifacts
+docs/archive/
+public/data/
+data/
+work/
+.aetox-attachments/
+lib/gis-data.ts
+supabase/migrations/
+tests/
+.next/
+out/
+test-results/
+playwright-report/
+package-lock.json
+tsconfig.tsbuildinfo
+BASE_FILE_HASHES.json
+VALIDATION_STATUS.json
+PATCH_NOTES.txt

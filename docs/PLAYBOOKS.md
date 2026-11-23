@@ -4,7 +4,7 @@
 
 ## P0 ก่อนเริ่มทุกงาน (1 นาที)
 1. จัดประเภทงาน: UI / DB / Edge Function / ประสิทธิภาพ / deploy / CI แดง / เอกสาร
-2. `grep -rn "<คำสำคัญ>" docs/CHANGELOG.md docs/BACKLOG.md docs/archive/SUPPLEMENTAL_RULES.md DECISION_LOG.md | head` — เคยทำ/ตัดสินใจเรื่องนี้ไว้หรือยัง
+2. `grep -rn "<คำสำคัญ>" docs/archive/history/CHANGELOG.md docs/BACKLOG.md docs/archive/history/SUPPLEMENTAL_RULES.md docs/archive/history/DECISION_LOG.md | head` — เคยทำ/ตัดสินใจเรื่องนี้ไว้หรือยัง
 3. ทำ Challenge (AGENTS §3) ก่อนลงมือ — ถ้าแนวคิดมีปัญหา ชี้และเสนอทางเลือก
 
 ## P1 ส่งมอบไฟล์ให้เจ้าของ (เจ้าของวางไฟล์ผ่านเว็บ GitHub)
@@ -63,7 +63,7 @@
 ## P8 งานเอกสาร/กฎ
 - แก้เอกสารเมื่อโค้ดเปลี่ยนในงานเดียวกัน ไม่ปล่อยให้เก่า
 - เพิ่มกฎใหม่ใน `AGENTS.md` เท่านั้น (ไฟล์ตัวชี้ไม่เพิ่มกฎ) และต้องมีเหตุผลหรือเหตุการณ์ที่ทำให้ต้องมีกฎนั้น
-- ประวัติการทำงานลง `docs/CHANGELOG.md` (แบบสั้น) ไม่เพิ่มใน `docs/archive/SUPPLEMENTAL_RULES.md` อีก
+- ประวัติการทำงานลง `docs/archive/history/CHANGELOG.md` (แบบสั้น) ไม่เพิ่มใน `docs/archive/history/SUPPLEMENTAL_RULES.md` อีก
 
 ## P9 รูปแบบ "ข้อเสนอเชิงรุก" ท้ายคำตอบ
 ```

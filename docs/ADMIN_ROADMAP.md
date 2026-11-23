@@ -50,7 +50,7 @@
 - [x] `0.1` ปิดและ commit งาน `UPDATE-136` (`0be5f8c`)
 - [x] `0.2` ล็อก `.mcp.json` เป็น `read_only=true` และจำกัดเฉพาะฟีเจอร์อ่าน (`B-002`)
 - [x] `0.3` ปรับ `.github/workflows/deploy.yml` ให้รอ `CI` ผ่านด้วย `workflow_run` พร้อมคง `workflow_dispatch` สำหรับฉุกเฉิน และตัดการรัน Playwright ซ้ำ (`B-003`)
-- [x] `0.4` ซิงก์ `PRODUCTION.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/AI_HANDOFF.md` ให้ตรงโค้ดจริง และย้าย `SUPPLEMENTAL_RULES.md` ไป `docs/archive/SUPPLEMENTAL_RULES.md` (`B-006`)
+- [x] `0.4` ซิงก์ `PRODUCTION.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/AI_HANDOFF.md` ให้ตรงโค้ดจริง และย้าย `SUPPLEMENTAL_RULES.md` ไป `docs/archive/history/SUPPLEMENTAL_RULES.md` (`B-006`)
 
 ### Phase 1: Security Depth & Ops Hardening — **กำลังดำเนินการ**
 - [x] `1.1` ยืนยัน Edge Production (`hdms-api` v24, ACTIVE) และสกัด `pg_get_functiondef` ของ RPC จริงเก็บใน `docs/db-schema-snapshot.md` (`R4`, ปิด B-014)
