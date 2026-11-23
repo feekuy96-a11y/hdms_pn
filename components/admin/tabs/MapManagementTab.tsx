@@ -5,17 +5,13 @@ import { StickyActionBar } from "@/components/admin/ui";
 import { SystemDataPayload } from "@/db/default-data";
 import { DetourAdviceSection } from "@/components/admin/tabs/DetourAdviceSection";
 import { HighwayIdentificationSection } from "@/components/admin/tabs/HighwayIdentificationSection";
-import {
-  clearAdminMapDraft,
-  hasMeaningfulAdminMapDraft,
-  readAdminMapDraft,
-  writeAdminMapDraft,
-  type AdminMapDraftSnapshot,
-} from "@/components/admin/tabs/map-draft-storage";
+import { clearAdminMapDraft } from "@/components/admin/tabs/map-draft-storage";
 import { RouteGeometryEditorSection } from "@/components/admin/tabs/RouteGeometryEditorSection";
 import { FloodSituationSection } from "@/components/admin/tabs/FloodSituationSection";
 import { useDualRoadSnapping } from "@/components/admin/tabs/useDualRoadSnapping";
 import { useMapRouteSubmit } from "@/components/admin/tabs/useMapRouteSubmit";
+import { useMapRouteDraft } from "@/components/admin/tabs/useMapRouteDraft";
+import { useMapRouteMediaAndImport } from "@/components/admin/tabs/useMapRouteMediaAndImport";
 import {
   parseCoordinatePair,
   buildDetourRoutingParams,
@@ -38,7 +34,6 @@ import { deleteExternalMediaAction, upsertRouteAction, snapRouteAction, syncRepo
 import {
   fetchOsrmWithFailover,
   computeGoogleRouteHybrid,
-  generateAutoDetourAdvice,
   extractDirectionalAdvice,
   reverseGeocodeTambonAmphoe,
   getDetailedPattaniAddress,
@@ -61,7 +56,6 @@ import {
   AffectedShoulderType,
   DetourDirectionModeType,
 } from "@/lib/constants";
-import { readRouteFile } from "@/lib/route-import";
 import {
   FloodDirectionCode,
   AffectedRoadPart,
@@ -478,7 +472,6 @@ export function MapManagementTab({
   const [fieldImages, setFieldImages] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveAsDraft, setSaveAsDraft] = useState(false);
-  const [recoverableDraft, setRecoverableDraft] = useState<AdminMapDraftSnapshot | null>(null);
 
   // Phase 2: Parent Event & Multi-Segment Management
   const [parentEventMode, setParentEventMode] = useState<"NEW" | "EXISTING">("NEW");
@@ -490,114 +483,35 @@ export function MapManagementTab({
   const [startedAt, setStartedAt] = useState<string>(() => new Date().toISOString().slice(0, 16));
   const [causeAndNote, setCauseAndNote] = useState<string>("");
 
-  // Phase 2.4: Detect unsaved draft on mount (new-record mode only)
-  useEffect(() => {
-    if (editingRoute?.id) return;
-    const saved = readAdminMapDraft();
-    if (saved) setRecoverableDraft(saved);
-  }, [editingRoute?.id]);
-
-  // Phase 2.4: Debounced Draft Auto-Save (600ms) for new flood/detour forms
-  useEffect(() => {
-    if (routeEditId || editingRoute?.id) return;
-    const snapshot: AdminMapDraftSnapshot = {
-      savedAt: Date.now(),
-      routeMode,
-      routeNo,
-      kmStart,
-      kmEnd,
-      sectionName,
-      reporterName,
-      routeWaterLevel,
-      routeStatus,
-      causeAndNote,
-      villageOrLandmark,
-      detourRefId,
-      detourName,
-      detourDesc,
-      detourGoogleMapsUrlFwd,
-      detourGoogleMapsUrlRev,
-      detourRoadCondition,
-      detourDurationMinFwd,
-      detourDurationMinRev,
-      detourDirectionMode,
-      saveAsDraft,
-      draftCoordinates,
-      draftWaypoints,
-      draftReverseCoordinates,
-      draftReverseWaypoints,
-    };
-    if (!hasMeaningfulAdminMapDraft(snapshot)) return;
-    const timer = window.setTimeout(() => {
-      writeAdminMapDraft(snapshot);
-    }, 600);
-    return () => window.clearTimeout(timer);
-  }, [
+  const { recoverableDraft, setRecoverableDraft, handleRestoreSavedDraft } = useMapRouteDraft({
     routeEditId,
-    editingRoute?.id,
-    routeMode,
-    routeNo,
-    kmStart,
-    kmEnd,
-    sectionName,
-    reporterName,
-    routeWaterLevel,
-    routeStatus,
-    causeAndNote,
-    villageOrLandmark,
-    detourRefId,
-    detourName,
-    detourDesc,
-    detourGoogleMapsUrlFwd,
-    detourGoogleMapsUrlRev,
-    detourRoadCondition,
-    detourDurationMinFwd,
-    detourDurationMinRev,
-    detourDirectionMode,
-    saveAsDraft,
-    draftCoordinates,
-    draftWaypoints,
-    draftReverseCoordinates,
-    draftReverseWaypoints,
-  ]);
-
-  const handleRestoreSavedDraft = () => {
-    if (!recoverableDraft) return;
-    setRouteMode(recoverableDraft.routeMode);
-    setRouteNo(recoverableDraft.routeNo);
-    setKmStart(recoverableDraft.kmStart);
-    setKmEnd(recoverableDraft.kmEnd);
-    setSectionName(recoverableDraft.sectionName);
-    setReporterName(recoverableDraft.reporterName);
-    setRouteWaterLevel(recoverableDraft.routeWaterLevel);
-    setRouteStatus(recoverableDraft.routeStatus);
-    setCauseAndNote(recoverableDraft.causeAndNote);
-    setVillageOrLandmark(recoverableDraft.villageOrLandmark);
-    setDetourRefId(recoverableDraft.detourRefId);
-    setDetourName(recoverableDraft.detourName);
-    setDetourDesc(recoverableDraft.detourDesc);
-    setDetourGoogleMapsUrlFwd(recoverableDraft.detourGoogleMapsUrlFwd);
-    setDetourGoogleMapsUrlRev(recoverableDraft.detourGoogleMapsUrlRev);
-    setDetourRoadCondition(recoverableDraft.detourRoadCondition);
-    setDetourDurationMinFwd(recoverableDraft.detourDurationMinFwd);
-    setDetourDurationMinRev(recoverableDraft.detourDurationMinRev);
-    setDetourDirectionMode(recoverableDraft.detourDirectionMode);
-    setSaveAsDraft(recoverableDraft.saveAsDraft);
-    if (recoverableDraft.draftCoordinates.length >= 2) {
-      setDraftCoordinates(recoverableDraft.draftCoordinates);
-    }
-    if (recoverableDraft.draftWaypoints.length > 0) {
-      setDraftWaypoints(recoverableDraft.draftWaypoints);
-    }
-    if (recoverableDraft.draftReverseCoordinates.length >= 2) {
-      setDraftReverseCoordinates(recoverableDraft.draftReverseCoordinates);
-    }
-    if (recoverableDraft.draftReverseWaypoints.length > 0) {
-      setDraftReverseWaypoints(recoverableDraft.draftReverseWaypoints);
-    }
-    setRecoverableDraft(null);
-    onToast("กู้คืนร่างข้อมูลที่พิมพ์ค้างไว้เรียบร้อย");
-  };
+    editingRouteId: editingRoute?.id,
+    routeMode, setRouteMode,
+    routeNo, setRouteNo,
+    kmStart, setKmStart,
+    kmEnd, setKmEnd,
+    sectionName, setSectionName,
+    reporterName, setReporterName,
+    routeWaterLevel, setRouteWaterLevel,
+    routeStatus, setRouteStatus,
+    causeAndNote, setCauseAndNote,
+    villageOrLandmark, setVillageOrLandmark,
+    detourRefId, setDetourRefId,
+    detourName, setDetourName,
+    detourDesc, setDetourDesc,
+    detourGoogleMapsUrlFwd, setDetourGoogleMapsUrlFwd,
+    detourGoogleMapsUrlRev, setDetourGoogleMapsUrlRev,
+    detourRoadCondition, setDetourRoadCondition,
+    detourDurationMinFwd, setDetourDurationMinFwd,
+    detourDurationMinRev, setDetourDurationMinRev,
+    detourDirectionMode, setDetourDirectionMode,
+    saveAsDraft, setSaveAsDraft,
+    draftCoordinates, setDraftCoordinates,
+    draftWaypoints, setDraftWaypoints,
+    draftReverseCoordinates, setDraftReverseCoordinates,
+    draftReverseWaypoints, setDraftReverseWaypoints,
+    onToast,
+  });
   const [detailedPhotos, setDetailedPhotos] = useState<FloodPhotoItem[]>([]);
 
   // Group existing flood routes into parent events
@@ -1460,44 +1374,29 @@ export function MapManagementTab({
     }
   };
 
-  // Adaptive Image Upload (Max 5 photos, <= 300 KB each)
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const remainingSlots = Math.max(0, 5 - detailedPhotos.length);
-    if (remainingSlots === 0) {
-      onToast("บันทึกภาพถ่ายได้สูงสุด ๕ ภาพต่อเหตุการณ์");
-      return;
-    }
-
-    const filesToProcess = Array.from(files).slice(0, remainingSlots);
-    onToast(`กำลังประมวลผลและบีบอัดภาพถ่าย ${filesToProcess.length} ภาพ...`);
-
-    const newPhotos: FloodPhotoItem[] = [];
-    for (let i = 0; i < filesToProcess.length; i++) {
-      const file = filesToProcess[i];
-      try {
-        const { dataUrl, sizeBytes, format } = await compressImageToAdaptiveBase64(file, 300 * 1024);
-        newPhotos.push({
-          id: `photo-${Date.now()}-${i}`,
-          dataUrl,
-          sizeBytes,
-          uploadedAt: new Date().toISOString(),
-          caption: file.name || `ภาพถ่ายที่ ${detailedPhotos.length + i + 1}`,
-          format: format || "webp",
-          originalSizeBytes: file.size,
-        });
-      } catch (err) {
-        console.warn("Failed to compress image:", err);
-      }
-    }
-
-    const updated = [...detailedPhotos, ...newPhotos].slice(0, 5);
-    setDetailedPhotos(updated);
-    setFieldImages(updated.map((p) => p.dataUrl));
-    onToast(`เพิ่มภาพถ่ายหน้างานสำเร็จ (${newPhotos.length} ภาพ) รวมเป็น ${updated.length}/5 ภาพ`);
-  };
+  // Adaptive Image Upload, Detour Advice Generator & Route File Import
+  const {
+    handleImageUpload,
+    handleGenerateDetourAdviceClick,
+    handleRouteFileImport,
+  } = useMapRouteMediaAndImport({
+    systemData,
+    routeMode,
+    routeNo, setRouteNo,
+    setSectionName,
+    setDetourName,
+    setDetourDesc,
+    startLat, startLon, endLat, endLon,
+    setStartLat, setStartLon, setEndLat, setEndLon,
+    draftCoordinates, setDraftCoordinates,
+    draftWaypoints, setDraftWaypoints,
+    draftReverseCoordinates, draftReverseWaypoints,
+    detourDirectionMode,
+    setSaveAsDraft,
+    detailedPhotos, setDetailedPhotos, setFieldImages,
+    sectionNameManuallyEdited,
+    onToast, showErrorModal,
+  });
 
   const requestClearRoute = () => {
     const isDirty = Boolean(
@@ -1513,63 +1412,6 @@ export function MapManagementTab({
       return;
     }
     handleClearRoute();
-  };
-
-  // Generate Detour Advice
-  const handleGenerateDetourAdviceClick = async () => {
-    const numSLat = Number(startLat) || 6.834;
-    const numSLon = Number(startLon) || 101.186;
-    const numELat = Number(endLat) || 6.839;
-    const numELon = Number(endLon) || 101.192;
-
-    const advice = await generateAutoDetourAdvice(
-      [numSLon, numSLat],
-      [numELon, numELat],
-      draftCoordinates,
-      routeNo,
-      systemData.highwayLayers || [],
-      draftReverseCoordinates,
-      detourDirectionMode,
-      {
-        forwardWaypoints: draftWaypoints,
-        reverseWaypoints: draftReverseCoordinates.length >= 2 ? draftReverseWaypoints : undefined,
-      }
-    );
-    setDetourDesc(advice);
-    onToast("วิเคราะห์คำแนะนำการเดินทางไป-กลับสำเร็จ");
-  };
-
-  const handleRouteFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    try {
-      const features = await readRouteFile(file);
-      const feature = features[0];
-      const coordinates = feature?.coords || [];
-      if (coordinates.length < 2) throw new Error("ไม่พบแนวเส้นที่ใช้งานได้");
-      setDraftCoordinates(coordinates);
-      setDraftWaypoints([]);
-      setSaveAsDraft(true);
-      const [firstLon, firstLat] = coordinates[0];
-      const [lastLon, lastLat] = coordinates[coordinates.length - 1];
-      setStartLat(firstLat); setStartLon(firstLon); setEndLat(lastLat); setEndLon(lastLon);
-      const properties = feature.properties || {};
-      const importedRouteNo = String(properties.route_no || properties.route || properties.ROAD_NO || "").replace(/^ทล\.?/i, "").trim();
-      const importedName = String(properties.section_name || properties.name || properties.route_name || file.name.replace(/\.[^.]+$/, ""));
-      if (routeMode === "FLOOD") {
-        if (importedRouteNo) setRouteNo(importedRouteNo);
-        sectionNameManuallyEdited.current = false;
-        setSectionName(importedName);
-      } else {
-        setDetourName(importedName);
-      }
-      onToast(`นำเข้าแนวเส้นจาก ${file.name} แล้ว (${coordinates.length} จุด) กรุณาตรวจรายละเอียดก่อนบันทึก`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "ไม่สามารถอ่านไฟล์ได้";
-      showErrorModal?.("นำเข้าไฟล์ไม่สำเร็จ", message);
-      if (!showErrorModal) onToast(message);
-    }
   };
 
   // Submit Flood or Detour Route
