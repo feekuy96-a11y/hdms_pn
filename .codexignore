@@ -1,5 +1,7 @@
 # AI Context & Quota Hygiene — skip archives, static payloads, backups, and build artifacts
 docs/archive/
+DECISION_LOG.md
+docs/CHANGELOG*.md
 public/data/
 data/
 work/
