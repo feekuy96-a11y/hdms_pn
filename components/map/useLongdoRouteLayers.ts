@@ -88,7 +88,18 @@ export function useLongdoPopupBridge({
       const coords = parseRouteCoordinates(flood.coordinates_json);
       if (coords.length >= 2) {
         map.fitBounds(L.latLngBounds(coords.map(toLeafletLatLng)), { padding: [48, 48], maxZoom: 16 });
-      } else if (Number.isFinite(flood.lat_start) && Number.isFinite(flood.lon_start)) {
+      } else if (
+        coords.length === 1 &&
+        Number.isFinite(coords[0][0]) &&
+        Number.isFinite(coords[0][1]) &&
+        (coords[0][0] !== 0 || coords[0][1] !== 0)
+      ) {
+        map.setView(toLeafletLatLng(coords[0]), 15);
+      } else if (
+        Number.isFinite(flood.lat_start) &&
+        Number.isFinite(flood.lon_start) &&
+        (flood.lat_start !== 0 || flood.lon_start !== 0)
+      ) {
         map.setView([flood.lat_start, flood.lon_start], 15);
       }
     };
