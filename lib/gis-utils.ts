@@ -3,7 +3,30 @@ import { UTM_47N_PARAMS } from "./constants";
 import { parseKmPostMeters } from "./highway-schema";
 import { cleanThaiAdminPrefix, findPattaniDistrictName, isPointInPolygon, resolveArea, localArea } from "./area-lookup";
 import { fetchOsrmWithFailover, getOsrmFailureHint } from "./osrm-client";
+import { haversineDistanceKm, calculatePolylineLengthKm, calculateGeoBearing } from "./gis/geo-math";
+import { extractFeaturesFromGeoJson, extractLinesFromGeoJson } from "./gis/gis-file-parser";
+import { pointToSegmentDistanceMeters } from "./gis/conflict-detection";
 export { cleanThaiAdminPrefix, findPattaniDistrictName, isPointInPolygon, localArea } from "./area-lookup";
+export { haversineDistanceKm, calculatePolylineLengthKm, calculateGeoBearing };
+export {
+  type ExtractedGisFeature,
+  extractFeaturesFromKmz,
+  extractLinesFromKmz,
+  extractFeaturesFromGeoJson,
+  extractLinesFromGeoJson,
+  extractFeaturesFromKml,
+  extractLinesFromKml,
+  extractAvailableGisFields,
+  detectSmartFieldMapping,
+} from "./gis/gis-file-parser";
+export { compressImageToBase64, compressImageToAdaptiveBase64 } from "./gis/image-compress";
+export {
+  type ClosedRoadConflict,
+  pointToSegmentDistanceMeters,
+  detectClosedRoadConflicts,
+  detectPassabilityFloodWarnings,
+  analyzeCarriagewaySeparation,
+} from "./gis/conflict-detection";
 
 const GOOGLE_ROUTE_UNCONFIGURED_COOLDOWN_MS = 5 * 60 * 1000;
 const GOOGLE_ROUTE_BREAKER_MS = 60 * 1000;
@@ -19,7 +42,7 @@ export function resetGoogleRouteBreaker() {
 }
 
 /**
- * ถอดรหัส Google Encoded Polyline (1e5) เป็นพิกัด GeoJSON [lon, lat][]
+ * เธ–เธญเธ”เธฃเธซเธฑเธช Google Encoded Polyline (1e5) เน€เธเนเธเธเธดเธเธฑเธ” GeoJSON [lon, lat][]
  */
 export function decodeGooglePolyline(encoded: string): [number, number][] {
   if (!encoded) return [];
@@ -123,7 +146,7 @@ export async function computeGoogleRouteHybrid(
 }
 
 /**
- * คัดเลือกจุดหักเลี้ยวสำคัญตามแนวเส้น (Douglas-Peucker importance) โดยคงลำดับต้นทาง → ปลายทางไว้
+ * เธเธฑเธ”เน€เธฅเธทเธญเธเธเธธเธ”เธซเธฑเธเน€เธฅเธตเนเธขเธงเธชเธณเธเธฑเธเธ•เธฒเธกเนเธเธงเน€เธชเนเธ (Douglas-Peucker importance) เนเธ”เธขเธเธเธฅเธณเธ”เธฑเธเธ•เนเธเธ—เธฒเธ โ’ เธเธฅเธฒเธขเธ—เธฒเธเนเธงเน
  */
 export function selectRouteCornerWaypoints(
   coords: [number, number][],
@@ -175,7 +198,7 @@ export function selectRouteCornerWaypoints(
 
   let chosenIndices: number[];
   if (significant.length === 0) {
-    // กรณีจุดเรียงตัวเป็นเส้นตรงทั้งหมด เลือกกระจายตัวสม่ำเสมอไม่เกิน maxCount จุด
+    // เธเธฃเธ“เธตเธเธธเธ”เน€เธฃเธตเธขเธเธ•เธฑเธงเน€เธเนเธเน€เธชเนเธเธ•เธฃเธเธ—เธฑเนเธเธซเธกเธ” เน€เธฅเธทเธญเธเธเธฃเธฐเธเธฒเธขเธ•เธฑเธงเธชเธกเนเธณเน€เธชเธกเธญเนเธกเนเน€เธเธดเธ maxCount เธเธธเธ”
     chosenIndices = [];
     const step = innerCount / (maxCount + 1);
     for (let i = 1; i <= maxCount; i++) {
@@ -191,8 +214,8 @@ export function selectRouteCornerWaypoints(
 }
 
 /**
- * แปลงพิกัดภูมิศาสตร์ (WGS84 Lat/Lon) เป็น UTM Zone 47N (EPSG:32647)
- * ใช้สูตรแม่นยำทางภูมิมาตรศาสตร์ตามมาตรฐานกรมทางหลวง
+ * เนเธเธฅเธเธเธดเธเธฑเธ”เธ เธนเธกเธดเธจเธฒเธชเธ•เธฃเน (WGS84 Lat/Lon) เน€เธเนเธ UTM Zone 47N (EPSG:32647)
+ * เนเธเนเธชเธนเธ•เธฃเนเธกเนเธเธขเธณเธ—เธฒเธเธ เธนเธกเธดเธกเธฒเธ•เธฃเธจเธฒเธชเธ•เธฃเนเธ•เธฒเธกเธกเธฒเธ•เธฃเธเธฒเธเธเธฃเธกเธ—เธฒเธเธซเธฅเธงเธ
  */
 export function latLonToUtm47N(lat: number, lon: number): { easting: number; northing: number; formatted: string } {
   if (isNaN(lat) || isNaN(lon)) {
@@ -230,7 +253,7 @@ export function latLonToUtm47N(lat: number, lon: number): { easting: number; nor
 }
 
 /**
- * จัดรูปแบบวันที่เป็นปีพุทธศักราช (พ.ศ.) ภาษาไทย
+ * เธเธฑเธ”เธฃเธนเธเนเธเธเธงเธฑเธเธ—เธตเนเน€เธเนเธเธเธตเธเธธเธ—เธเธจเธฑเธเธฃเธฒเธ (เธ.เธจ.) เธ เธฒเธฉเธฒเนเธ—เธข
  */
 export function formatThaiBuddhistDate(isoString: string | Date, includeTime = true): string {
   if (!isoString) return "-";
@@ -238,8 +261,8 @@ export function formatThaiBuddhistDate(isoString: string | Date, includeTime = t
   if (isNaN(date.getTime())) return "-";
 
   const thaiMonths = [
-    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-    "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
+    "เธก.เธ.", "เธ.เธ.", "เธกเธต.เธ.", "เน€เธก.เธข.", "เธ.เธ.", "เธกเธด.เธข.",
+    "เธ.เธ.", "เธช.เธ.", "เธ.เธข.", "เธ•.เธ.", "เธ.เธข.", "เธ.เธ."
   ];
 
   const day = date.getDate();
@@ -252,11 +275,11 @@ export function formatThaiBuddhistDate(isoString: string | Date, includeTime = t
 
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${day} ${month} ${yearBE} เวลา ${hours}:${minutes} น.`;
+  return `${day} ${month} ${yearBE} เน€เธงเธฅเธฒ ${hours}:${minutes} เธ.`;
 }
 
 /**
- * สกัดพิกัด GPS จากภาพถ่าย EXIF metadata
+ * เธชเธเธฑเธ”เธเธดเธเธฑเธ” GPS เธเธฒเธเธ เธฒเธเธ–เนเธฒเธข EXIF metadata
  */
 export async function extractExifGps(file: File): Promise<{ latitude: number; longitude: number } | null> {
   try {
@@ -274,41 +297,12 @@ export async function extractExifGps(file: File): Promise<{ latitude: number; lo
   return null;
 }
 
-/**
- * คำนวณระยะทาง Haversine ระหว่างสองพิกัด (กิโลเมตร)
- */
-export function haversineDistanceKm(p1: [number, number], p2: [number, number]): number {
-  const R = 6371; // รัศมีโลกเฉลี่ย กม.
-  const dLat = ((p2[1] - p1[1]) * Math.PI) / 180;
-  const dLon = ((p2[0] - p1[0]) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((p1[1] * Math.PI) / 180) *
-    Math.cos((p2[1] * Math.PI) / 180) *
-    Math.sin(dLon / 2) *
-    Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-/**
- * คำนวณความยาวรวมของเส้น Polyline (กิโลเมตร)
- */
-export function calculatePolylineLengthKm(coords: [number, number][]): number {
-  if (coords.length < 2) return 0;
-  let total = 0;
-  for (let i = 0; i < coords.length - 1; i++) {
-    total += haversineDistanceKm(coords[i], coords[i + 1]);
-  }
-  return Number(total.toFixed(2));
-}
-
 // fetchOsrmWithFailover now lives in ./osrm-client (cache, de-duplication, retry, spacing, circuit breaker).
 // It is re-exported here so existing imports from "@/lib/gis-utils" keep working.
 export { fetchOsrmWithFailover };
 
 /**
- * ตรวจสอบสถานะการเชื่อมต่อของ OSRM Routing Engines (Local & Public)
+ * เธ•เธฃเธงเธเธชเธญเธเธชเธ–เธฒเธเธฐเธเธฒเธฃเน€เธเธทเนเธญเธกเธ•เนเธญเธเธญเธ OSRM Routing Engines (Local & Public)
  */
 export async function checkOsrmStatus(): Promise<{ localOnline: boolean; publicOnline: boolean }> {
   let localOnline = false;
@@ -346,25 +340,25 @@ function formatHighwayLayerLabel(layerName: string, featureProps?: Record<string
   const propName = String(
     featureProps?.route_name || featureProps?.section_na || featureProps?.section_name || ""
   ).trim();
-  const layerFallback = (layerName || "").trim() || "โครงข่ายกรมทางหลวง";
+  const layerFallback = (layerName || "").trim() || "เนเธเธฃเธเธเนเธฒเธขเธเธฃเธกเธ—เธฒเธเธซเธฅเธงเธ";
   const displayName = propName || layerFallback;
   const candidateCodeSource = propRouteNo || layerFallback;
 
-  const ruralMatch = candidateCodeSource.match(/(?:ทางหลวงชนบท\s*)?(ปน|ยล|นธ|สข)\.?\s*(\d{3,5})/i);
+  const ruralMatch = candidateCodeSource.match(/(?:เธ—เธฒเธเธซเธฅเธงเธเธเธเธเธ—\s*)?(เธเธ|เธขเธฅ|เธเธ|เธชเธ)\.?\s*(\d{3,5})/i);
   if (ruralMatch) {
     const code = `${ruralMatch[1]}.${ruralMatch[2]}`;
-    return { code, label: `ทางหลวงชนบท ${code} (${displayName})`, name: displayName };
+    return { code, label: `เธ—เธฒเธเธซเธฅเธงเธเธเธเธเธ— ${code} (${displayName})`, name: displayName };
   }
-  const nationalMatch = candidateCodeSource.match(/(?:ทล\.?|ทางหลวง(?:แผ่นดิน)?(?:หมายเลข)?\s*)?(\d{1,4})/);
+  const nationalMatch = candidateCodeSource.match(/(?:เธ—เธฅ\.?|เธ—เธฒเธเธซเธฅเธงเธ(?:เนเธเนเธเธ”เธดเธ)?(?:เธซเธกเธฒเธขเน€เธฅเธ)?\s*)?(\d{1,4})/);
   if (nationalMatch) {
     const code = nationalMatch[1];
-    return { code, label: `ทล.${code} (${displayName})`, name: displayName };
+    return { code, label: `เธ—เธฅ.${code} (${displayName})`, name: displayName };
   }
   return { code: "", label: displayName, name: displayName };
 }
 
 /**
- * ค้นหาถนนหรือทางหลวงที่ใกล้พิกัดที่สุดจาก Highway Layers โดยวัดระยะตั้งฉากกับแนวเส้นจริงและอ่านรหัสสายทางจาก feature properties
+ * เธเนเธเธซเธฒเธ–เธเธเธซเธฃเธทเธญเธ—เธฒเธเธซเธฅเธงเธเธ—เธตเนเนเธเธฅเนเธเธดเธเธฑเธ”เธ—เธตเนเธชเธธเธ”เธเธฒเธ Highway Layers เนเธ”เธขเธงเธฑเธ”เธฃเธฐเธขเธฐเธ•เธฑเนเธเธเธฒเธเธเธฑเธเนเธเธงเน€เธชเนเธเธเธฃเธดเธเนเธฅเธฐเธญเนเธฒเธเธฃเธซเธฑเธชเธชเธฒเธขเธ—เธฒเธเธเธฒเธ feature properties
  */
 export function findNearestHighwayFromLayers(
   coord: [number, number],
@@ -403,19 +397,19 @@ export function findNearestHighwayFromLayers(
   return closest;
 }
 
-/** ชื่อพื้นที่สำหรับแสดงในข้อความ เช่น "(บ.บ้านดอนรัก ต.รูสะมิแล อ.เมืองปัตตานี)" */
+/** เธเธทเนเธญเธเธทเนเธเธ—เธตเนเธชเธณเธซเธฃเธฑเธเนเธชเธ”เธเนเธเธเนเธญเธเธงเธฒเธก เน€เธเนเธ "(เธ.เธเนเธฒเธเธ”เธญเธเธฃเธฑเธ เธ•.เธฃเธนเธชเธฐเธกเธดเนเธฅ เธญ.เน€เธกเธทเธญเธเธเธฑเธ•เธ•เธฒเธเธต)" */
 function formatAreaTag(area: { village: string; tambon: string; amphoe: string }): string {
   const parts: string[] = [];
-  if (area.village) parts.push(area.village.startsWith("บ้าน") ? area.village : `บ.${area.village}`);
-  if (area.tambon) parts.push(`ต.${area.tambon}`);
-  parts.push(`อ.${area.amphoe || "เมืองปัตตานี"}`);
+  if (area.village) parts.push(area.village.startsWith("เธเนเธฒเธ") ? area.village : `เธ.${area.village}`);
+  if (area.tambon) parts.push(`เธ•.${area.tambon}`);
+  parts.push(`เธญ.${area.amphoe || "เน€เธกเธทเธญเธเธเธฑเธ•เธ•เธฒเธเธต"}`);
   return `(${parts.join(" ")})`;
 }
 
 /**
- * ดึงชื่อหมู่บ้าน (บ.), ตำบล (ต.), อำเภอ (อ.) และชื่อถนนจากพิกัด
- * ใช้ตัวดึงข้อมูลพื้นที่กลาง (lib/area-lookup.ts): แคช, จำกัดอัตราเรียก, ใช้ข้อมูลภายในเมื่อออฟไลน์
- * needRoad = true เมื่อต้องการชื่อถนนของจุดนี้จริง ๆ (ถ้าไม่ต้องการ จะใช้คำตอบของจุดที่อยู่ใกล้ภายใน 150 ม.)
+ * เธ”เธถเธเธเธทเนเธญเธซเธกเธนเนเธเนเธฒเธ (เธ.), เธ•เธณเธเธฅ (เธ•.), เธญเธณเน€เธ เธญ (เธญ.) เนเธฅเธฐเธเธทเนเธญเธ–เธเธเธเธฒเธเธเธดเธเธฑเธ”
+ * เนเธเนเธ•เธฑเธงเธ”เธถเธเธเนเธญเธกเธนเธฅเธเธทเนเธเธ—เธตเนเธเธฅเธฒเธ (lib/area-lookup.ts): เนเธเธ, เธเธณเธเธฑเธ”เธญเธฑเธ•เธฃเธฒเน€เธฃเธตเธขเธ, เนเธเนเธเนเธญเธกเธนเธฅเธ เธฒเธขเนเธเน€เธกเธทเนเธญเธญเธญเธเนเธฅเธเน
+ * needRoad = true เน€เธกเธทเนเธญเธ•เนเธญเธเธเธฒเธฃเธเธทเนเธญเธ–เธเธเธเธญเธเธเธธเธ”เธเธตเนเธเธฃเธดเธ เน (เธ–เนเธฒเนเธกเนเธ•เนเธญเธเธเธฒเธฃ เธเธฐเนเธเนเธเธณเธ•เธญเธเธเธญเธเธเธธเธ”เธ—เธตเนเธญเธขเธนเนเนเธเธฅเนเธ เธฒเธขเนเธ 150 เธก.)
  */
 export async function getDetailedPattaniAddress(
   lon: number,
@@ -432,21 +426,21 @@ export async function getDetailedPattaniAddress(
   };
 }
 
-/** ส่วนหัวของแต่ละทิศทาง เช่น "=== ทิศทางขาไป: จุด A → จุด B (ต.รูสะมิแล อ.เมืองปัตตานี → ต.บานา อ.เมืองปัตตานี) ===" */
+/** เธชเนเธงเธเธซเธฑเธงเธเธญเธเนเธ•เนเธฅเธฐเธ—เธดเธจเธ—เธฒเธ เน€เธเนเธ "=== เธ—เธดเธจเธ—เธฒเธเธเธฒเนเธ: เธเธธเธ” A โ’ เธเธธเธ” B (เธ•.เธฃเธนเธชเธฐเธกเธดเนเธฅ เธญ.เน€เธกเธทเธญเธเธเธฑเธ•เธ•เธฒเธเธต โ’ เธ•.เธเธฒเธเธฒ เธญ.เน€เธกเธทเธญเธเธเธฑเธ•เธ•เธฒเธเธต) ===" */
 function formatDirectionHeader(
   label: string,
   startAddr: { tambon: string; amphoe: string },
   endAddr: { tambon: string; amphoe: string }
 ): string {
   const place = (addr: { tambon: string; amphoe: string }) =>
-    `${addr.tambon ? `ต.${addr.tambon} ` : ""}อ.${addr.amphoe || "เมืองปัตตานี"}`;
-  return `=== ${label} (${place(startAddr)} → ${place(endAddr)}) ===`;
+    `${addr.tambon ? `เธ•.${addr.tambon} ` : ""}เธญ.${addr.amphoe || "เน€เธกเธทเธญเธเธเธฑเธ•เธ•เธฒเธเธต"}`;
+  return `=== ${label} (${place(startAddr)} โ’ ${place(endAddr)}) ===`;
 }
 
 /**
- * แยกคำแนะนำแบบ ๒ ทิศทาง (ขาไป A -> B และ ขากลับ B -> A)
- * ใช้ส่วนหัว "=== ทิศทาง... ===" อันแรกเป็นขาไป และอันที่สองเป็นขากลับ (ไม่สนว่าสะกดคำว่าขาไป/ขากลับถูกหรือไม่)
- * และคืนส่วนหัวเดิมมาด้วย เพื่อไม่ให้รายละเอียดตำบล/อำเภอในหัวข้อหายไปเมื่อแก้ข้อความ
+ * เนเธขเธเธเธณเนเธเธฐเธเธณเนเธเธ เน’ เธ—เธดเธจเธ—เธฒเธ (เธเธฒเนเธ A -> B เนเธฅเธฐ เธเธฒเธเธฅเธฑเธ B -> A)
+ * เนเธเนเธชเนเธงเธเธซเธฑเธง "=== เธ—เธดเธจเธ—เธฒเธ... ===" เธญเธฑเธเนเธฃเธเน€เธเนเธเธเธฒเนเธ เนเธฅเธฐเธญเธฑเธเธ—เธตเนเธชเธญเธเน€เธเนเธเธเธฒเธเธฅเธฑเธ (เนเธกเนเธชเธเธงเนเธฒเธชเธฐเธเธ”เธเธณเธงเนเธฒเธเธฒเนเธ/เธเธฒเธเธฅเธฑเธเธ–เธนเธเธซเธฃเธทเธญเนเธกเน)
+ * เนเธฅเธฐเธเธทเธเธชเนเธงเธเธซเธฑเธงเน€เธ”เธดเธกเธกเธฒเธ”เนเธงเธข เน€เธเธทเนเธญเนเธกเนเนเธซเนเธฃเธฒเธขเธฅเธฐเน€เธญเธตเธขเธ”เธ•เธณเธเธฅ/เธญเธณเน€เธ เธญเนเธเธซเธฑเธงเธเนเธญเธซเธฒเธขเนเธเน€เธกเธทเนเธญเนเธเนเธเนเธญเธเธงเธฒเธก
  */
 export function extractDirectionalAdvice(text: string): {
   forward: string;
@@ -457,7 +451,7 @@ export function extractDirectionalAdvice(text: string): {
 } {
   if (!text) return { forward: "", reverse: "", hasBoth: false, forwardHeader: "", reverseHeader: "" };
 
-  const headers = Array.from(text.matchAll(/===\s*ทิศทาง[^=\n]*===/g));
+  const headers = Array.from(text.matchAll(/===\s*เธ—เธดเธจเธ—เธฒเธ[^=\n]*===/g));
   if (headers.length >= 2) {
     const [first, second] = headers;
     const third = headers[2];
@@ -494,7 +488,7 @@ export function extractDirectionalAdviceForEdit(text: string): {
 } {
   if (!text) return { forward: "", reverse: "", hasBoth: false, forwardHeader: "", reverseHeader: "" };
 
-  const headers = Array.from(text.matchAll(/===\s*ทิศทาง[^=\n]*===/g));
+  const headers = Array.from(text.matchAll(/===\s*เธ—เธดเธจเธ—เธฒเธ[^=\n]*===/g));
   if (headers.length >= 2) {
     const [first, second] = headers;
     const third = headers[2];
@@ -526,25 +520,25 @@ export function composeDirectionalAdvice(
   reverseHeader: string,
   reverseText: string
 ): string {
-  const fwdH = forwardHeader || "=== ทิศทางขาไป: จุด A → จุด B ===";
-  const revH = reverseHeader || "=== ทิศทางขากลับ: จุด B → จุด A ===";
+  const fwdH = forwardHeader || "=== เธ—เธดเธจเธ—เธฒเธเธเธฒเนเธ: เธเธธเธ” A โ’ เธเธธเธ” B ===";
+  const revH = reverseHeader || "=== เธ—เธดเธจเธ—เธฒเธเธเธฒเธเธฅเธฑเธ: เธเธธเธ” B โ’ เธเธธเธ” A ===";
   return `${fwdH}\n${forwardText}\n\n${revH}\n${reverseText}`;
 }
 
-export function formatHighwayOrRuralPrefix(rawNo?: string, fallbackStr: string = "จุดตัดทางหลวง"): string {
+export function formatHighwayOrRuralPrefix(rawNo?: string, fallbackStr: string = "เธเธธเธ”เธ•เธฑเธ”เธ—เธฒเธเธซเธฅเธงเธ"): string {
   const ref = (rawNo || "").trim();
   if (!ref) return fallbackStr;
-  if (/^(ทางหลวงชนบท|ทช\.)/i.test(ref)) {
+  if (/^(เธ—เธฒเธเธซเธฅเธงเธเธเธเธเธ—|เธ—เธ\.)/i.test(ref)) {
     return ref;
   }
-  if (/^(ปน|ยล|นธ|สข)\.?\s*\d+/i.test(ref)) {
-    return `ทางหลวงชนบท ${ref.replace(/\s+/g, "")}`;
+  if (/^(เธเธ|เธขเธฅ|เธเธ|เธชเธ)\.?\s*\d+/i.test(ref)) {
+    return `เธ—เธฒเธเธซเธฅเธงเธเธเธเธเธ— ${ref.replace(/\s+/g, "")}`;
   }
-  if (/^ทล\.\s*/i.test(ref)) {
+  if (/^เธ—เธฅ\.\s*/i.test(ref)) {
     return ref;
   }
   if (/^\d+$/.test(ref)) {
-    return `ทล.${ref}`;
+    return `เธ—เธฅ.${ref}`;
   }
   return ref;
 }
@@ -554,7 +548,7 @@ function formatRefRoadPrefix(rawRef: string | undefined, fallbackStr: string): s
 }
 
 /**
- * สกัดฟังก์ชันสร้างคำแนะนำเส้นทางเลี่ยงสำหรับ ๑ ทิศทาง (Google Routes API ก่อน แล้ว Fallback ไป OSRM / เส้นตรง)
+ * เธชเธเธฑเธ”เธเธฑเธเธเนเธเธฑเธเธชเธฃเนเธฒเธเธเธณเนเธเธฐเธเธณเน€เธชเนเธเธ—เธฒเธเน€เธฅเธตเนเธขเธเธชเธณเธซเธฃเธฑเธ เน‘ เธ—เธดเธจเธ—เธฒเธ (Google Routes API เธเนเธญเธ เนเธฅเนเธง Fallback เนเธ OSRM / เน€เธชเนเธเธ•เธฃเธ)
  */
 async function buildSingleDirectionAdvice(
   queryPoints: [number, number][],
@@ -566,7 +560,7 @@ async function buildSingleDirectionAdvice(
   const endPt = queryPoints[queryPoints.length - 1];
   const startAddr = await getDetailedPattaniAddress(startPt[0], startPt[1], { needRoad: true });
   const endAddr = await getDetailedPattaniAddress(endPt[0], endPt[1], { needRoad: true });
-  const startHwyStr = relatedHighwayNo ? formatHighwayOrRuralPrefix(relatedHighwayNo) : (startAddr.road || "จุดตัดทางหลวง");
+  const startHwyStr = relatedHighwayNo ? formatHighwayOrRuralPrefix(relatedHighwayNo) : (startAddr.road || "เธเธธเธ”เธ•เธฑเธ”เธ—เธฒเธเธซเธฅเธงเธ");
   const endHwyStr = relatedHighwayNo ? `${formatHighwayOrRuralPrefix(relatedHighwayNo)} ` : (endAddr.road ? `${endAddr.road} ` : "");
   const dirHeader = formatDirectionHeader(label, startAddr, endAddr);
 
@@ -575,7 +569,7 @@ async function buildSingleDirectionAdvice(
   if (googleRoute && googleRoute.steps.length > 0) {
     const lines: string[] = [dirHeader];
     let stepCounter = 1;
-    lines.push(`${stepCounter++}. จุดเริ่มต้น: บริเวณ ${startAddr.road || startHwyStr} ${startAddr.tag}`);
+    lines.push(`${stepCounter++}. เธเธธเธ”เน€เธฃเธดเนเธกเธ•เนเธ: เธเธฃเธดเน€เธงเธ“ ${startAddr.road || startHwyStr} ${startAddr.tag}`);
 
     for (let idx = 0; idx < googleRoute.steps.length; idx++) {
       const step = googleRoute.steps[idx];
@@ -583,17 +577,17 @@ async function buildSingleDirectionAdvice(
       if (!cleanInstr) continue;
       if (idx === 0 && step.distanceMeters < 15) continue;
       const distStr = step.distanceMeters >= 1000
-        ? `${(step.distanceMeters / 1000).toFixed(1)} กม.`
-        : `${Math.round(step.distanceMeters)} ม.`;
-      lines.push(`${stepCounter++}. ${cleanInstr}${step.distanceMeters > 0 ? ` (ระยะทาง ${distStr})` : ""}`);
+        ? `${(step.distanceMeters / 1000).toFixed(1)} เธเธก.`
+        : `${Math.round(step.distanceMeters)} เธก.`;
+      lines.push(`${stepCounter++}. ${cleanInstr}${step.distanceMeters > 0 ? ` (เธฃเธฐเธขเธฐเธ—เธฒเธ ${distStr})` : ""}`);
     }
 
-    lines.push(`${stepCounter++}. จุดสิ้นสุด: ถึงจุดบรรจบทางหลวงสายหลัก ${endHwyStr}${endAddr.tag} สัญจรต่อได้ตามปกติ`);
+    lines.push(`${stepCounter++}. เธเธธเธ”เธชเธดเนเธเธชเธธเธ”: เธ–เธถเธเธเธธเธ”เธเธฃเธฃเธเธเธ—เธฒเธเธซเธฅเธงเธเธชเธฒเธขเธซเธฅเธฑเธ ${endHwyStr}${endAddr.tag} เธชเธฑเธเธเธฃเธ•เนเธญเนเธ”เนเธ•เธฒเธกเธเธเธ•เธด`);
     const totalKm = ((googleRoute.distanceMeters || calculatePolylineLengthKm(queryPoints) * 1000) / 1000).toFixed(1);
     const estMinutes = Math.max(1, Math.round((googleRoute.durationSeconds || Number(totalKm) * 90) / 60));
-    lines.push(`- รวมระยะทางเลี่ยง: ${totalKm} กม.`);
-    lines.push(`- ระยะเวลาเดินทาง: ประมาณ ${estMinutes} นาที`);
-    lines.push(`- สภาพเส้นทาง: ผิวทางลาดยาง รถยนต์ทุกชนิดสามารถสัญจรได้ตามปกติ`);
+    lines.push(`- เธฃเธงเธกเธฃเธฐเธขเธฐเธ—เธฒเธเน€เธฅเธตเนเธขเธ: ${totalKm} เธเธก.`);
+    lines.push(`- เธฃเธฐเธขเธฐเน€เธงเธฅเธฒเน€เธ”เธดเธเธ—เธฒเธ: เธเธฃเธฐเธกเธฒเธ“ ${estMinutes} เธเธฒเธ—เธต`);
+    lines.push(`- เธชเธ เธฒเธเน€เธชเนเธเธ—เธฒเธ: เธเธดเธงเธ—เธฒเธเธฅเธฒเธ”เธขเธฒเธ เธฃเธ–เธขเธเธ•เนเธ—เธธเธเธเธเธดเธ”เธชเธฒเธกเธฒเธฃเธ–เธชเธฑเธเธเธฃเนเธ”เนเธ•เธฒเธกเธเธเธ•เธด`);
     return lines.join("\n");
   }
 
@@ -632,14 +626,14 @@ async function buildSingleDirectionAdvice(
       if (!isFirst && !isLast && s.distance < 20 && (mType === "new name" || mType === "notification")) {
         continue;
       }
-      // ข้าม micro-maneuvers (< 30 ม.) ที่เป็นเพียงทางโค้งหรือปรับระดับผิวทาง ไม่ใช่การเปลี่ยนสายทางจริง
+      // เธเนเธฒเธก micro-maneuvers (< 30 เธก.) เธ—เธตเนเน€เธเนเธเน€เธเธตเธขเธเธ—เธฒเธเนเธเนเธเธซเธฃเธทเธญเธเธฃเธฑเธเธฃเธฐเธ”เธฑเธเธเธดเธงเธ—เธฒเธ เนเธกเนเนเธเนเธเธฒเธฃเน€เธเธฅเธตเนเธขเธเธชเธฒเธขเธ—เธฒเธเธเธฃเธดเธ
       if (!isFirst && !isLast && s.distance < 30 && mType === "continue") continue;
       if (!isFirst && !isLast && s.distance < 25 && mType === "turn" && (mMod === "slight left" || mMod === "slight right") && !s.name && !s.ref) {
         continue;
       }
 
-      // คำนวณพิกัด Lookahead ถัดจากจุดทางแยก 25-50 ม. ตามแนวสายทางที่กำลังเลี้ยวเข้าไป
-      // เพื่อป้องกันไม่ให้การค้นหาทางหลวงจับคู่โดนทางหลวงสายหลักเดิม ณ จุดยอดทางแยก
+      // เธเธณเธเธงเธ“เธเธดเธเธฑเธ” Lookahead เธ–เธฑเธ”เธเธฒเธเธเธธเธ”เธ—เธฒเธเนเธขเธ 25-50 เธก. เธ•เธฒเธกเนเธเธงเธชเธฒเธขเธ—เธฒเธเธ—เธตเนเธเธณเธฅเธฑเธเน€เธฅเธตเนเธขเธงเน€เธเนเธฒเนเธ
+      // เน€เธเธทเนเธญเธเนเธญเธเธเธฑเธเนเธกเนเนเธซเนเธเธฒเธฃเธเนเธเธซเธฒเธ—เธฒเธเธซเธฅเธงเธเธเธฑเธเธเธนเนเนเธ”เธเธ—เธฒเธเธซเธฅเธงเธเธชเธฒเธขเธซเธฅเธฑเธเน€เธ”เธดเธก เธ“ เธเธธเธ”เธขเธญเธ”เธ—เธฒเธเนเธขเธ
       const stepCoords: [number, number][] = Array.isArray(s.geometry?.coordinates) ? s.geometry.coordinates : [];
       let lookaheadLoc: [number, number] = s.maneuver?.location || startPt;
       if (stepCoords.length >= 2) {
@@ -655,55 +649,55 @@ async function buildSingleDirectionAdvice(
         lookaheadLoc = chosen;
       }
 
-      let action = "ตรงไปตาม";
+      let action = "เธ•เธฃเธเนเธเธ•เธฒเธก";
 
       if (isFirst) {
-        action = "จุดเริ่มต้น:";
+        action = "เธเธธเธ”เน€เธฃเธดเนเธกเธ•เนเธ:";
       } else if (mType === "depart") {
-        // ขั้นตอน depart ของ leg ถัดไป (จาก waypoint กลางเส้นทาง) คือการขับตรงต่อเนื่องบนช่วงถนนนั้น
-        action = "ตรงไปตาม";
+        // เธเธฑเนเธเธ•เธญเธ depart เธเธญเธ leg เธ–เธฑเธ”เนเธ (เธเธฒเธ waypoint เธเธฅเธฒเธเน€เธชเนเธเธ—เธฒเธ) เธเธทเธญเธเธฒเธฃเธเธฑเธเธ•เธฃเธเธ•เนเธญเน€เธเธทเนเธญเธเธเธเธเนเธงเธเธ–เธเธเธเธฑเนเธ
+        action = "เธ•เธฃเธเนเธเธ•เธฒเธก";
       } else if (isLast || mType === "arrive") {
-        action = "ถึงจุดบรรจบทางหลวงสายหลัก:";
+        action = "เธ–เธถเธเธเธธเธ”เธเธฃเธฃเธเธเธ—เธฒเธเธซเธฅเธงเธเธชเธฒเธขเธซเธฅเธฑเธ:";
       } else if (mType === "roundabout" || mType === "rotary") {
         const exitNumber = Number(s.maneuver.exit);
         if (Number.isInteger(exitNumber) && exitNumber > 0) {
-          action = `เมื่อถึงวงเวียน ให้ใช้ทางออกที่ ${exitNumber} มุ่งหน้าสู่`;
+          action = `เน€เธกเธทเนเธญเธ–เธถเธเธงเธเน€เธงเธตเธขเธ เนเธซเนเนเธเนเธ—เธฒเธเธญเธญเธเธ—เธตเน ${exitNumber} เธกเธธเนเธเธซเธเนเธฒเธชเธนเน`;
         } else if (mMod.includes("left")) {
-          action = "เลี้ยวซ้ายผ่านวงเวียนมุ่งหน้าสู่";
+          action = "เน€เธฅเธตเนเธขเธงเธเนเธฒเธขเธเนเธฒเธเธงเธเน€เธงเธตเธขเธเธกเธธเนเธเธซเธเนเธฒเธชเธนเน";
         } else if (mMod.includes("right")) {
-          action = "เลี้ยวขวาผ่านวงเวียนมุ่งหน้าสู่";
+          action = "เน€เธฅเธตเนเธขเธงเธเธงเธฒเธเนเธฒเธเธงเธเน€เธงเธตเธขเธเธกเธธเนเธเธซเธเนเธฒเธชเธนเน";
         } else if (mMod.includes("straight")) {
-          action = "ตรงไปผ่านวงเวียนมุ่งหน้าสู่";
+          action = "เธ•เธฃเธเนเธเธเนเธฒเธเธงเธเน€เธงเธตเธขเธเธกเธธเนเธเธซเธเนเธฒเธชเธนเน";
         } else {
-          action = "เข้าสู่วงเวียน (เลี้ยวซ้าย) มุ่งหน้าสู่";
+          action = "เน€เธเนเธฒเธชเธนเนเธงเธเน€เธงเธตเธขเธ (เน€เธฅเธตเนเธขเธงเธเนเธฒเธข) เธกเธธเนเธเธซเธเนเธฒเธชเธนเน";
         }
       } else if (mType === "end of road") {
-        if (mMod.includes("left")) action = "สุดทาง เลี้ยวซ้ายเข้าสู่";
-        else if (mMod.includes("right")) action = "สุดทาง เลี้ยวขวาเข้าสู่";
-        else if (mMod.includes("uturn")) action = "สุดทาง กลับรถเข้าสู่";
-        else action = "สุดทาง มุ่งหน้าเข้าสู่";
+        if (mMod.includes("left")) action = "เธชเธธเธ”เธ—เธฒเธ เน€เธฅเธตเนเธขเธงเธเนเธฒเธขเน€เธเนเธฒเธชเธนเน";
+        else if (mMod.includes("right")) action = "เธชเธธเธ”เธ—เธฒเธ เน€เธฅเธตเนเธขเธงเธเธงเธฒเน€เธเนเธฒเธชเธนเน";
+        else if (mMod.includes("uturn")) action = "เธชเธธเธ”เธ—เธฒเธ เธเธฅเธฑเธเธฃเธ–เน€เธเนเธฒเธชเธนเน";
+        else action = "เธชเธธเธ”เธ—เธฒเธ เธกเธธเนเธเธซเธเนเธฒเน€เธเนเธฒเธชเธนเน";
       } else if (mType === "turn") {
-        if (mMod.includes("slight left")) action = "เบี่ยงซ้ายเข้าสู่";
-        else if (mMod.includes("sharp left")) action = "เลี้ยวซ้ายหักศอกเข้าสู่";
-        else if (mMod.includes("left")) action = "เลี้ยวซ้ายเข้าสู่";
-        else if (mMod.includes("slight right")) action = "เบี่ยงขวาเข้าสู่";
-        else if (mMod.includes("sharp right")) action = "เลี้ยวขวาหักศอกเข้าสู่";
-        else if (mMod.includes("right")) action = "เลี้ยวขวาเข้าสู่";
-        else if (mMod.includes("uturn")) action = "กลับรถเข้าสู่";
-        else action = "เลี้ยวเข้าสู่";
+        if (mMod.includes("slight left")) action = "เน€เธเธตเนเธขเธเธเนเธฒเธขเน€เธเนเธฒเธชเธนเน";
+        else if (mMod.includes("sharp left")) action = "เน€เธฅเธตเนเธขเธงเธเนเธฒเธขเธซเธฑเธเธจเธญเธเน€เธเนเธฒเธชเธนเน";
+        else if (mMod.includes("left")) action = "เน€เธฅเธตเนเธขเธงเธเนเธฒเธขเน€เธเนเธฒเธชเธนเน";
+        else if (mMod.includes("slight right")) action = "เน€เธเธตเนเธขเธเธเธงเธฒเน€เธเนเธฒเธชเธนเน";
+        else if (mMod.includes("sharp right")) action = "เน€เธฅเธตเนเธขเธงเธเธงเธฒเธซเธฑเธเธจเธญเธเน€เธเนเธฒเธชเธนเน";
+        else if (mMod.includes("right")) action = "เน€เธฅเธตเนเธขเธงเธเธงเธฒเน€เธเนเธฒเธชเธนเน";
+        else if (mMod.includes("uturn")) action = "เธเธฅเธฑเธเธฃเธ–เน€เธเนเธฒเธชเธนเน";
+        else action = "เน€เธฅเธตเนเธขเธงเน€เธเนเธฒเธชเธนเน";
       } else if (mType === "continue") {
-        if (mMod.includes("slight left")) action = "เบี่ยงซ้ายตาม";
-        else if (mMod.includes("left")) action = "เลี้ยวซ้ายไปตาม";
-        else if (mMod.includes("slight right")) action = "เบี่ยงขวาตาม";
-        else if (mMod.includes("right")) action = "เลี้ยวขวาไปตาม";
-        else if (mMod.includes("uturn")) action = "กลับรถไปตาม";
-        else action = "ตรงไปต่อเนื่องตาม";
+        if (mMod.includes("slight left")) action = "เน€เธเธตเนเธขเธเธเนเธฒเธขเธ•เธฒเธก";
+        else if (mMod.includes("left")) action = "เน€เธฅเธตเนเธขเธงเธเนเธฒเธขเนเธเธ•เธฒเธก";
+        else if (mMod.includes("slight right")) action = "เน€เธเธตเนเธขเธเธเธงเธฒเธ•เธฒเธก";
+        else if (mMod.includes("right")) action = "เน€เธฅเธตเนเธขเธงเธเธงเธฒเนเธเธ•เธฒเธก";
+        else if (mMod.includes("uturn")) action = "เธเธฅเธฑเธเธฃเธ–เนเธเธ•เธฒเธก";
+        else action = "เธ•เธฃเธเนเธเธ•เนเธญเน€เธเธทเนเธญเธเธ•เธฒเธก";
       } else if (mType === "off ramp") {
-        action = mMod.includes("left") ? "ใช้ทางออกซ้ายเข้าสู่" : "ใช้ทางออกขวาเข้าสู่";
+        action = mMod.includes("left") ? "เนเธเนเธ—เธฒเธเธญเธญเธเธเนเธฒเธขเน€เธเนเธฒเธชเธนเน" : "เนเธเนเธ—เธฒเธเธญเธญเธเธเธงเธฒเน€เธเนเธฒเธชเธนเน";
       } else if (mType === "merge" || mType === "on ramp" || mType === "fork") {
-        action = mMod.includes("right") ? "เบี่ยงขวาเข้าสู่" : "เบี่ยงซ้ายเข้าสู่";
+        action = mMod.includes("right") ? "เน€เธเธตเนเธขเธเธเธงเธฒเน€เธเนเธฒเธชเธนเน" : "เน€เธเธตเนเธขเธเธเนเธฒเธขเน€เธเนเธฒเธชเธนเน";
       } else if (mType === "new name") {
-        action = "ตรงไปตาม";
+        action = "เธ•เธฃเธเนเธเธ•เธฒเธก";
       }
 
       const roadName = (s.name || "").trim();
@@ -715,8 +709,8 @@ async function buildSingleDirectionAdvice(
 
       let fullRoad = "";
       if (roadName && refStr) {
-        fullRoad = /^ทางหลวงชนบท\s/.test(refStr)
-          ? `${roadName} ${refStr.replace(/^ทางหลวงชนบท\s+/, "")}`
+        fullRoad = /^เธ—เธฒเธเธซเธฅเธงเธเธเธเธเธ—\s/.test(refStr)
+          ? `${roadName} ${refStr.replace(/^เธ—เธฒเธเธซเธฅเธงเธเธเธเธเธ—\s+/, "")}`
           : `${roadName} (${refStr})`;
       } else if (refStr) {
         fullRoad = refStr;
@@ -732,9 +726,9 @@ async function buildSingleDirectionAdvice(
         if (!fullRoad) {
           const locArea = await localArea(lookaheadLoc[0], lookaheadLoc[1]);
           if (locArea.tambon && locArea.amphoe) {
-            fullRoad = `เส้นทางเชื่อมต่อท้องถิ่น (ต.${locArea.tambon} อ.${locArea.amphoe})`;
+            fullRoad = `เน€เธชเนเธเธ—เธฒเธเน€เธเธทเนเธญเธกเธ•เนเธญเธ—เนเธญเธเธ–เธดเนเธ (เธ•.${locArea.tambon} เธญ.${locArea.amphoe})`;
           } else {
-            fullRoad = "เส้นทางเชื่อมต่อท้องถิ่น";
+            fullRoad = "เน€เธชเนเธเธ—เธฒเธเน€เธเธทเนเธญเธกเธ•เนเธญเธ—เนเธญเธเธ–เธดเนเธ";
           }
         }
       }
@@ -747,7 +741,7 @@ async function buildSingleDirectionAdvice(
       });
     }
 
-    // รวมขั้นตอนที่ต่อเนื่องบนถนนเดียวกัน
+    // เธฃเธงเธกเธเธฑเนเธเธ•เธญเธเธ—เธตเนเธ•เนเธญเน€เธเธทเนเธญเธเธเธเธ–เธเธเน€เธ”เธตเธขเธงเธเธฑเธ
     const consolidated: {
       action: string;
       road: string;
@@ -760,8 +754,8 @@ async function buildSingleDirectionAdvice(
       if (
         prev &&
         prev.road === step.road &&
-        step.action.startsWith("ตรงไป") &&
-        prev.action.startsWith("ตรงไป")
+        step.action.startsWith("เธ•เธฃเธเนเธ") &&
+        prev.action.startsWith("เธ•เธฃเธเนเธ")
       ) {
         prev.distanceM += step.distanceM;
       } else {
@@ -775,17 +769,17 @@ async function buildSingleDirectionAdvice(
     const estMinutes = Math.max(2, Math.ceil(totalDurationS / 60));
 
     let stepCounter = 1;
-    // Step 1: จุดเริ่มต้น
+    // Step 1: เธเธธเธ”เน€เธฃเธดเนเธกเธ•เนเธ
     const initHwy = formatRefRoadPrefix(osrmSteps[0]?.ref, startHwyStr);
-    lines.push(`${stepCounter++}. จุดเริ่มต้น: บริเวณ ${initHwy} ${startAddr.tag}`);
+    lines.push(`${stepCounter++}. เธเธธเธ”เน€เธฃเธดเนเธกเธ•เนเธ: เธเธฃเธดเน€เธงเธ“ ${initHwy} ${startAddr.tag}`);
 
-    // Steps กลาง: จุดเลี้ยวและถนนจริง
+    // Steps เธเธฅเธฒเธ: เธเธธเธ”เน€เธฅเธตเนเธขเธงเนเธฅเธฐเธ–เธเธเธเธฃเธดเธ
     for (const step of consolidated) {
-      if (step.action.includes("จุดเริ่มต้น") || step.action.includes("จุดบรรจบ")) continue;
-      if (step.distanceM < 35 && !/(เลี้ยว|เบี่ยง|กลับรถ|วงเวียน|สุดทาง|ทางออก)/.test(step.action)) continue;
+      if (step.action.includes("เธเธธเธ”เน€เธฃเธดเนเธกเธ•เนเธ") || step.action.includes("เธเธธเธ”เธเธฃเธฃเธเธ")) continue;
+      if (step.distanceM < 35 && !/(เน€เธฅเธตเนเธขเธง|เน€เธเธตเนเธขเธ|เธเธฅเธฑเธเธฃเธ–|เธงเธเน€เธงเธตเธขเธ|เธชเธธเธ”เธ—เธฒเธ|เธ—เธฒเธเธญเธญเธ)/.test(step.action)) continue;
 
-      const distStr = step.distanceM >= 1000 ? `${(step.distanceM / 1000).toFixed(1)} กม.` : `${Math.round(step.distanceM)} ม.`;
-      const isLocalRoute = step.road.startsWith("เส้นทางเชื่อมต่อท้องถิ่น");
+      const distStr = step.distanceM >= 1000 ? `${(step.distanceM / 1000).toFixed(1)} เธเธก.` : `${Math.round(step.distanceM)} เธก.`;
+      const isLocalRoute = step.road.startsWith("เน€เธชเนเธเธ—เธฒเธเน€เธเธทเนเธญเธกเธ•เนเธญเธ—เนเธญเธเธ–เธดเนเธ");
       const stepAddr = await getDetailedPattaniAddress(step.loc[0], step.loc[1], {
         needRoad: isLocalRoute,
       });
@@ -793,28 +787,28 @@ async function buildSingleDirectionAdvice(
       if (isLocalRoute && stepAddr.road) {
         roadName = stepAddr.road;
       }
-      lines.push(`${stepCounter++}. ${step.action} ${roadName} (ระยะทาง ${distStr})`);
+      lines.push(`${stepCounter++}. ${step.action} ${roadName} (เธฃเธฐเธขเธฐเธ—เธฒเธ ${distStr})`);
     }
 
-    // Step สุดท้าย: ถึงจุดหมาย
-    lines.push(`${stepCounter++}. จุดสิ้นสุด: ถึงจุดบรรจบทางหลวงสายหลัก ${endHwyStr}${endAddr.tag} สัญจรต่อได้ตามปกติ`);
-    lines.push(`- รวมระยะทางเลี่ยง: ${totalKm} กม.`);
-    lines.push(`- ระยะเวลาเดินทาง: ประมาณ ${estMinutes} นาที`);
-    lines.push(`- สภาพเส้นทาง: ผิวทางลาดยาง รถยนต์ทุกชนิดสามารถสัญจรได้ตามปกติ`);
+    // Step เธชเธธเธ”เธ—เนเธฒเธข: เธ–เธถเธเธเธธเธ”เธซเธกเธฒเธข
+    lines.push(`${stepCounter++}. เธเธธเธ”เธชเธดเนเธเธชเธธเธ”: เธ–เธถเธเธเธธเธ”เธเธฃเธฃเธเธเธ—เธฒเธเธซเธฅเธงเธเธชเธฒเธขเธซเธฅเธฑเธ ${endHwyStr}${endAddr.tag} เธชเธฑเธเธเธฃเธ•เนเธญเนเธ”เนเธ•เธฒเธกเธเธเธ•เธด`);
+    lines.push(`- เธฃเธงเธกเธฃเธฐเธขเธฐเธ—เธฒเธเน€เธฅเธตเนเธขเธ: ${totalKm} เธเธก.`);
+    lines.push(`- เธฃเธฐเธขเธฐเน€เธงเธฅเธฒเน€เธ”เธดเธเธ—เธฒเธ: เธเธฃเธฐเธกเธฒเธ“ ${estMinutes} เธเธฒเธ—เธต`);
+    lines.push(`- เธชเธ เธฒเธเน€เธชเนเธเธ—เธฒเธ: เธเธดเธงเธ—เธฒเธเธฅเธฒเธ”เธขเธฒเธ เธฃเธ–เธขเธเธ•เนเธ—เธธเธเธเธเธดเธ”เธชเธฒเธกเธฒเธฃเธ–เธชเธฑเธเธเธฃเนเธ”เนเธ•เธฒเธกเธเธเธ•เธด`);
 
     return lines.join("\n");
   }
 
-  // Tier 3 Fallback กรณี Google และ OSRM ไม่ตอบสนอง
+  // Tier 3 Fallback เธเธฃเธ“เธต Google เนเธฅเธฐ OSRM เนเธกเนเธ•เธญเธเธชเธเธญเธ
   const lengthKm = calculatePolylineLengthKm(queryPoints);
   const lines: string[] = [
     dirHeader,
-    `1. จุดเริ่มต้น: บริเวณ ${startHwyStr} ${startAddr.tag}`,
-    `2. เบี่ยงเข้าสู่ โครงข่ายเส้นทางเลี่ยง มุ่งหน้า ${endAddr.tag}`,
-    `3. จุดสิ้นสุด: ถึงจุดบรรจบทางหลวงสายหลัก ${endHwyStr}${endAddr.tag} สัญจรต่อได้ตามปกติ`,
-    `- รวมระยะทางเลี่ยง: ประมาณ ${lengthKm} กม.`,
-    `- ระยะเวลาเดินทาง: ประมาณ ${Math.ceil(lengthKm * 1.5)} นาที`,
-    `- สภาพเส้นทาง: ผิวทางลาดยาง รถยนต์ทุกชนิดสามารถสัญจรได้ตามปกติ`,
+    `1. เธเธธเธ”เน€เธฃเธดเนเธกเธ•เนเธ: เธเธฃเธดเน€เธงเธ“ ${startHwyStr} ${startAddr.tag}`,
+    `2. เน€เธเธตเนเธขเธเน€เธเนเธฒเธชเธนเน เนเธเธฃเธเธเนเธฒเธขเน€เธชเนเธเธ—เธฒเธเน€เธฅเธตเนเธขเธ เธกเธธเนเธเธซเธเนเธฒ ${endAddr.tag}`,
+    `3. เธเธธเธ”เธชเธดเนเธเธชเธธเธ”: เธ–เธถเธเธเธธเธ”เธเธฃเธฃเธเธเธ—เธฒเธเธซเธฅเธงเธเธชเธฒเธขเธซเธฅเธฑเธ ${endHwyStr}${endAddr.tag} เธชเธฑเธเธเธฃเธ•เนเธญเนเธ”เนเธ•เธฒเธกเธเธเธ•เธด`,
+    `- เธฃเธงเธกเธฃเธฐเธขเธฐเธ—เธฒเธเน€เธฅเธตเนเธขเธ: เธเธฃเธฐเธกเธฒเธ“ ${lengthKm} เธเธก.`,
+    `- เธฃเธฐเธขเธฐเน€เธงเธฅเธฒเน€เธ”เธดเธเธ—เธฒเธ: เธเธฃเธฐเธกเธฒเธ“ ${Math.ceil(lengthKm * 1.5)} เธเธฒเธ—เธต`,
+    `- เธชเธ เธฒเธเน€เธชเนเธเธ—เธฒเธ: เธเธดเธงเธ—เธฒเธเธฅเธฒเธ”เธขเธฒเธ เธฃเธ–เธขเธเธ•เนเธ—เธธเธเธเธเธดเธ”เธชเธฒเธกเธฒเธฃเธ–เธชเธฑเธเธเธฃเนเธ”เนเธ•เธฒเธกเธเธเธ•เธด`,
   ];
   return lines.join("\n");
 }
@@ -825,9 +819,9 @@ export interface AutoDetourAdviceOptions {
 }
 
 /**
- * วิเคราะห์ทิศทางและสร้างคำแนะนำทางเลี่ยงอัตโนมัติสำหรับประชาชนแบบ ๒ ทิศทาง (ขาไป A -> B และ ขากลับ B -> A)
- * ดึงชื่อหมู่บ้าน (บ.) ตำบล (ต.) อำเภอ (อ.) ชื่อถนน และจุดเลี้ยวจริง
- * รองรับทั้งทางเลี่ยงแบบไป-กลับคนละเส้นทาง (reverseCoords แยก) และจุดดัดเส้นที่เจ้าหน้าที่วางไว้
+ * เธงเธดเน€เธเธฃเธฒเธฐเธซเนเธ—เธดเธจเธ—เธฒเธเนเธฅเธฐเธชเธฃเนเธฒเธเธเธณเนเธเธฐเธเธณเธ—เธฒเธเน€เธฅเธตเนเธขเธเธญเธฑเธ•เนเธเธกเธฑเธ•เธดเธชเธณเธซเธฃเธฑเธเธเธฃเธฐเธเธฒเธเธเนเธเธ เน’ เธ—เธดเธจเธ—เธฒเธ (เธเธฒเนเธ A -> B เนเธฅเธฐ เธเธฒเธเธฅเธฑเธ B -> A)
+ * เธ”เธถเธเธเธทเนเธญเธซเธกเธนเนเธเนเธฒเธ (เธ.) เธ•เธณเธเธฅ (เธ•.) เธญเธณเน€เธ เธญ (เธญ.) เธเธทเนเธญเธ–เธเธ เนเธฅเธฐเธเธธเธ”เน€เธฅเธตเนเธขเธงเธเธฃเธดเธ
+ * เธฃเธญเธเธฃเธฑเธเธ—เธฑเนเธเธ—เธฒเธเน€เธฅเธตเนเธขเธเนเธเธเนเธ-เธเธฅเธฑเธเธเธเธฅเธฐเน€เธชเนเธเธ—เธฒเธ (reverseCoords เนเธขเธ) เนเธฅเธฐเธเธธเธ”เธ”เธฑเธ”เน€เธชเนเธเธ—เธตเนเน€เธเนเธฒเธซเธเนเธฒเธ—เธตเนเธงเธฒเธเนเธงเน
  */
 export async function generateAutoDetourAdvice(
   startCoord: [number, number],
@@ -853,11 +847,11 @@ export async function generateAutoDetourAdvice(
     return [pts[0], ...corners, pts[pts.length - 1]];
   };
 
-  // สกัดลำดับพิกัดสำหรับทิศทางขาไป (Forward: A -> B)
+  // เธชเธเธฑเธ”เธฅเธณเธ”เธฑเธเธเธดเธเธฑเธ”เธชเธณเธซเธฃเธฑเธเธ—เธดเธจเธ—เธฒเธเธเธฒเนเธ (Forward: A -> B)
   const forwardPoints = buildQueryPoints(detourCoords, options.forwardWaypoints, startCoord, endCoord);
 
-  // สกัดลำดับพิกัดสำหรับทิศทางขากลับ (Reverse: B -> A)
-  // ใช้แนว/จุดดัดขากลับจริงก่อน หากไม่มีให้ใช้จุดหักเลี้ยวย้อนลำดับเพื่อให้เครื่องมือนำทางเลือกช่องจราจรฝั่ง B -> A ที่ถูกต้อง
+  // เธชเธเธฑเธ”เธฅเธณเธ”เธฑเธเธเธดเธเธฑเธ”เธชเธณเธซเธฃเธฑเธเธ—เธดเธจเธ—เธฒเธเธเธฒเธเธฅเธฑเธ (Reverse: B -> A)
+  // เนเธเนเนเธเธง/เธเธธเธ”เธ”เธฑเธ”เธเธฒเธเธฅเธฑเธเธเธฃเธดเธเธเนเธญเธ เธซเธฒเธเนเธกเนเธกเธตเนเธซเนเนเธเนเธเธธเธ”เธซเธฑเธเน€เธฅเธตเนเธขเธงเธขเนเธญเธเธฅเธณเธ”เธฑเธเน€เธเธทเนเธญเนเธซเนเน€เธเธฃเธทเนเธญเธเธกเธทเธญเธเธณเธ—เธฒเธเน€เธฅเธทเธญเธเธเนเธญเธเธเธฃเธฒเธเธฃเธเธฑเนเธ B -> A เธ—เธตเนเธ–เธนเธเธ•เนเธญเธ
   const reversePoints =
     reverseDetourCoords && reverseDetourCoords.length >= 2
       ? buildQueryPoints(reverseDetourCoords, options.reverseWaypoints, endCoord, startCoord)
@@ -866,27 +860,27 @@ export async function generateAutoDetourAdvice(
         : buildQueryPoints([...detourCoords].reverse(), undefined, endCoord, startCoord);
 
   if (directionMode === "FORWARD_ONLY") {
-    const forwardText = await buildSingleDirectionAdvice(forwardPoints, "ทิศทางขาไป: จุด A → จุด B", relatedHighwayNo, highwayLayers);
-    return `${forwardText}\n\n=== ทิศทางขากลับ: จุด B → จุด A ===\n- เส้นทางเลี่ยงนี้เปิดใช้งานเฉพาะทิศทางขาไป (A → B) เท่านั้น กรุณาใช้เส้นทางอื่นสำหรับขากลับ`;
+    const forwardText = await buildSingleDirectionAdvice(forwardPoints, "เธ—เธดเธจเธ—เธฒเธเธเธฒเนเธ: เธเธธเธ” A โ’ เธเธธเธ” B", relatedHighwayNo, highwayLayers);
+    return `${forwardText}\n\n=== เธ—เธดเธจเธ—เธฒเธเธเธฒเธเธฅเธฑเธ: เธเธธเธ” B โ’ เธเธธเธ” A ===\n- เน€เธชเนเธเธ—เธฒเธเน€เธฅเธตเนเธขเธเธเธตเนเน€เธเธดเธ”เนเธเนเธเธฒเธเน€เธเธเธฒเธฐเธ—เธดเธจเธ—เธฒเธเธเธฒเนเธ (A โ’ B) เน€เธ—เนเธฒเธเธฑเนเธ เธเธฃเธธเธ“เธฒเนเธเนเน€เธชเนเธเธ—เธฒเธเธญเธทเนเธเธชเธณเธซเธฃเธฑเธเธเธฒเธเธฅเธฑเธ`;
   }
 
   if (directionMode === "REVERSE_ONLY") {
-    const reverseText = await buildSingleDirectionAdvice(reversePoints, "ทิศทางขากลับ: จุด B → จุด A", relatedHighwayNo, highwayLayers);
-    return `=== ทิศทางขาไป: จุด A → จุด B ===\n- เส้นทางเลี่ยงนี้เปิดใช้งานเฉพาะทิศทางขากลับ (B → A) เท่านั้น กรุณาใช้เส้นทางอื่นสำหรับขาไป\n\n${reverseText}`;
+    const reverseText = await buildSingleDirectionAdvice(reversePoints, "เธ—เธดเธจเธ—เธฒเธเธเธฒเธเธฅเธฑเธ: เธเธธเธ” B โ’ เธเธธเธ” A", relatedHighwayNo, highwayLayers);
+    return `=== เธ—เธดเธจเธ—เธฒเธเธเธฒเนเธ: เธเธธเธ” A โ’ เธเธธเธ” B ===\n- เน€เธชเนเธเธ—เธฒเธเน€เธฅเธตเนเธขเธเธเธตเนเน€เธเธดเธ”เนเธเนเธเธฒเธเน€เธเธเธฒเธฐเธ—เธดเธจเธ—เธฒเธเธเธฒเธเธฅเธฑเธ (B โ’ A) เน€เธ—เนเธฒเธเธฑเนเธ เธเธฃเธธเธ“เธฒเนเธเนเน€เธชเนเธเธ—เธฒเธเธญเธทเนเธเธชเธณเธซเธฃเธฑเธเธเธฒเนเธ\n\n${reverseText}`;
   }
 
-  // สร้างคำแนะนำทั้ง ๒ ทิศทางพร้อมกัน
+  // เธชเธฃเนเธฒเธเธเธณเนเธเธฐเธเธณเธ—เธฑเนเธ เน’ เธ—เธดเธจเธ—เธฒเธเธเธฃเนเธญเธกเธเธฑเธ
   const [forwardText, reverseText] = await Promise.all([
-    buildSingleDirectionAdvice(forwardPoints, "ทิศทางขาไป: จุด A → จุด B", relatedHighwayNo, highwayLayers),
-    buildSingleDirectionAdvice(reversePoints, "ทิศทางขากลับ: จุด B → จุด A", relatedHighwayNo, highwayLayers),
+    buildSingleDirectionAdvice(forwardPoints, "เธ—เธดเธจเธ—เธฒเธเธเธฒเนเธ: เธเธธเธ” A โ’ เธเธธเธ” B", relatedHighwayNo, highwayLayers),
+    buildSingleDirectionAdvice(reversePoints, "เธ—เธดเธจเธ—เธฒเธเธเธฒเธเธฅเธฑเธ: เธเธธเธ” B โ’ เธเธธเธ” A", relatedHighwayNo, highwayLayers),
   ]);
 
   return `${forwardText}\n\n${reverseText}`;
 }
 
 /**
- * แยกคำแนะนำการเดินทางของเส้นทางเลี่ยงออกเป็น ๒ ทิศทาง: ขาไป (A → B) และขากลับ (B → A)
- * สำหรับใช้แสดงผลสลับแท็บบนแผนที่และหน้าต่างรายละเอียด
+ * เนเธขเธเธเธณเนเธเธฐเธเธณเธเธฒเธฃเน€เธ”เธดเธเธ—เธฒเธเธเธญเธเน€เธชเนเธเธ—เธฒเธเน€เธฅเธตเนเธขเธเธญเธญเธเน€เธเนเธ เน’ เธ—เธดเธจเธ—เธฒเธ: เธเธฒเนเธ (A โ’ B) เนเธฅเธฐเธเธฒเธเธฅเธฑเธ (B โ’ A)
+ * เธชเธณเธซเธฃเธฑเธเนเธเนเนเธชเธ”เธเธเธฅเธชเธฅเธฑเธเนเธ—เนเธเธเธเนเธเธเธ—เธตเนเนเธฅเธฐเธซเธเนเธฒเธ•เนเธฒเธเธฃเธฒเธขเธฅเธฐเน€เธญเธตเธขเธ”
  */
 export function splitDetourAdviceByDirection(
   description: string,
@@ -895,26 +889,26 @@ export function splitDetourAdviceByDirection(
   const desc = (description || "").trim();
   if (!desc) {
     return {
-      forwardText: "ยังไม่มีคำแนะนำการเดินทางขาไป (A → B)",
-      reverseText: "ยังไม่มีคำแนะนำการเดินทางขากลับ (B → A)",
+      forwardText: "เธขเธฑเธเนเธกเนเธกเธตเธเธณเนเธเธฐเธเธณเธเธฒเธฃเน€เธ”เธดเธเธ—เธฒเธเธเธฒเนเธ (A โ’ B)",
+      reverseText: "เธขเธฑเธเนเธกเนเธกเธตเธเธณเนเธเธฐเธเธณเธเธฒเธฃเน€เธ”เธดเธเธ—เธฒเธเธเธฒเธเธฅเธฑเธ (B โ’ A)",
     };
   }
 
   if (directionMode === "FORWARD_ONLY") {
     return {
       forwardText: desc,
-      reverseText: "เส้นทางเลี่ยงนี้เปิดใช้งานเฉพาะทิศทางขาไป (A → B) เท่านั้น กรุณาใช้เส้นทางอื่นสำหรับขากลับ",
+      reverseText: "เน€เธชเนเธเธ—เธฒเธเน€เธฅเธตเนเธขเธเธเธตเนเน€เธเธดเธ”เนเธเนเธเธฒเธเน€เธเธเธฒเธฐเธ—เธดเธจเธ—เธฒเธเธเธฒเนเธ (A โ’ B) เน€เธ—เนเธฒเธเธฑเนเธ เธเธฃเธธเธ“เธฒเนเธเนเน€เธชเนเธเธ—เธฒเธเธญเธทเนเธเธชเธณเธซเธฃเธฑเธเธเธฒเธเธฅเธฑเธ",
     };
   }
 
   if (directionMode === "REVERSE_ONLY") {
     return {
-      forwardText: "เส้นทางเลี่ยงนี้เปิดใช้งานเฉพาะทิศทางขากลับ (B → A) เท่านั้น กรุณาใช้เส้นทางอื่นสำหรับขาไป",
+      forwardText: "เน€เธชเนเธเธ—เธฒเธเน€เธฅเธตเนเธขเธเธเธตเนเน€เธเธดเธ”เนเธเนเธเธฒเธเน€เธเธเธฒเธฐเธ—เธดเธจเธ—เธฒเธเธเธฒเธเธฅเธฑเธ (B โ’ A) เน€เธ—เนเธฒเธเธฑเนเธ เธเธฃเธธเธ“เธฒเนเธเนเน€เธชเนเธเธ—เธฒเธเธญเธทเนเธเธชเธณเธซเธฃเธฑเธเธเธฒเนเธ",
       reverseText: desc,
     };
   }
 
-  // รองรับรูปแบบที่มีส่วนหัว === ทิศทาง... === ๒ ส่วน (แม้พิมพ์หัวข้อขากลับผิดเป็น "ทิศทางขาไป: จุด B → จุด A")
+  // เธฃเธญเธเธฃเธฑเธเธฃเธนเธเนเธเธเธ—เธตเนเธกเธตเธชเนเธงเธเธซเธฑเธง === เธ—เธดเธจเธ—เธฒเธ... === เน’ เธชเนเธงเธ (เนเธกเนเธเธดเธกเธเนเธซเธฑเธงเธเนเธญเธเธฒเธเธฅเธฑเธเธเธดเธ”เน€เธเนเธ "เธ—เธดเธจเธ—เธฒเธเธเธฒเนเธ: เธเธธเธ” B โ’ เธเธธเธ” A")
   const extracted = extractDirectionalAdvice(desc);
   if (extracted.hasBoth) {
     return {
@@ -924,11 +918,11 @@ export function splitDetourAdviceByDirection(
   }
 
   const markers = [
-    "=== ทิศทางขากลับ",
-    "ทิศทางขากลับ: จุด B → จุด A ===",
-    "ทิศทางขากลับ:",
-    "ขากลับ (จุด B → จุด A):",
-    "ขากลับ:",
+    "=== เธ—เธดเธจเธ—เธฒเธเธเธฒเธเธฅเธฑเธ",
+    "เธ—เธดเธจเธ—เธฒเธเธเธฒเธเธฅเธฑเธ: เธเธธเธ” B โ’ เธเธธเธ” A ===",
+    "เธ—เธดเธจเธ—เธฒเธเธเธฒเธเธฅเธฑเธ:",
+    "เธเธฒเธเธฅเธฑเธ (เธเธธเธ” B โ’ เธเธธเธ” A):",
+    "เธเธฒเธเธฅเธฑเธ:",
   ];
 
   for (const marker of markers) {
@@ -936,9 +930,9 @@ export function splitDetourAdviceByDirection(
     if (idx !== -1) {
       let forward = desc.substring(0, idx).trim();
       let reverse = desc.substring(idx).trim();
-      // ตัดหัวข้อนำทางเดิมออกเพื่อให้เนื้อหากระชับสวยงาม
-      forward = forward.replace(/^===?\s*ทิศทางขาไป[^=]*===?\s*/i, "").trim();
-      reverse = reverse.replace(/^===?\s*ทิศทางขากลับ[^=]*===?\s*/i, "").trim();
+      // เธ•เธฑเธ”เธซเธฑเธงเธเนเธญเธเธณเธ—เธฒเธเน€เธ”เธดเธกเธญเธญเธเน€เธเธทเนเธญเนเธซเนเน€เธเธทเนเธญเธซเธฒเธเธฃเธฐเธเธฑเธเธชเธงเธขเธเธฒเธก
+      forward = forward.replace(/^===?\s*เธ—เธดเธจเธ—เธฒเธเธเธฒเนเธ[^=]*===?\s*/i, "").trim();
+      reverse = reverse.replace(/^===?\s*เธ—เธดเธจเธ—เธฒเธเธเธฒเธเธฅเธฑเธ[^=]*===?\s*/i, "").trim();
       return {
         forwardText: forward || desc,
         reverseText: reverse || desc,
@@ -948,12 +942,12 @@ export function splitDetourAdviceByDirection(
 
   return {
     forwardText: desc,
-    reverseText: `ทิศทางขากลับ (จุด B → จุด A):\nวิ่งย้อนเส้นทางตามแนวถนนเดิม หรือใช้คำแนะนำการเดินทางของเส้นทางเลี่ยงนี้ในทิศทางตรงกันข้าม\n\n${desc}`,
+    reverseText: `เธ—เธดเธจเธ—เธฒเธเธเธฒเธเธฅเธฑเธ (เธเธธเธ” B โ’ เธเธธเธ” A):\nเธงเธดเนเธเธขเนเธญเธเน€เธชเนเธเธ—เธฒเธเธ•เธฒเธกเนเธเธงเธ–เธเธเน€เธ”เธดเธก เธซเธฃเธทเธญเนเธเนเธเธณเนเธเธฐเธเธณเธเธฒเธฃเน€เธ”เธดเธเธ—เธฒเธเธเธญเธเน€เธชเนเธเธ—เธฒเธเน€เธฅเธตเนเธขเธเธเธตเนเนเธเธ—เธดเธจเธ—เธฒเธเธ•เธฃเธเธเธฑเธเธเนเธฒเธก\n\n${desc}`,
   };
 }
 
 /**
- * ลดทอนจุดพิกัดส่วนเกินด้วยขั้นตอนวิธี Douglas-Peucker (Point Decimation)
+ * เธฅเธ”เธ—เธญเธเธเธธเธ”เธเธดเธเธฑเธ”เธชเนเธงเธเน€เธเธดเธเธ”เนเธงเธขเธเธฑเนเธเธ•เธญเธเธงเธดเธเธต Douglas-Peucker (Point Decimation)
  */
 export function simplifyCoordinates(
   points: [number, number][],
@@ -992,47 +986,8 @@ function perpendicularDistance(
   return Math.abs(dy * pt[0] - dx * pt[1] + lineEnd[0] * lineStart[1] - lineEnd[1] * lineStart[0]) / mag;
 }
 
-export interface ExtractedGisFeature {
-  coords: [number, number][];
-  properties: Record<string, any>;
-  lengthKm: number;
-}
-
 /**
- * สกัดฟีเจอร์เส้นทางพร้อมข้อมูล Attributes จากไฟล์ KMZ
- */
-export async function extractFeaturesFromKmz(file: File): Promise<ExtractedGisFeature[]> {
-  try {
-    const JSZip = (await import("jszip")).default;
-    const zip = await JSZip.loadAsync(file);
-    let kmlContent = "";
-
-    for (const filename of Object.keys(zip.files)) {
-      if (filename.toLowerCase().endsWith(".kml")) {
-        kmlContent = await zip.files[filename].async("text");
-        break;
-      }
-    }
-
-    if (kmlContent) {
-      return extractFeaturesFromKml(kmlContent);
-    }
-  } catch (err) {
-    console.warn("Error parsing KMZ with JSZip:", err);
-  }
-  return [];
-}
-
-/**
- * สกัดแนวเส้นทางจากไฟล์ KMZ (บีบอัดไฟล์ KML ภายใน)
- */
-export async function extractLinesFromKmz(file: File): Promise<[number, number][][]> {
-  const features = await extractFeaturesFromKmz(file);
-  return features.map((f) => f.coords);
-}
-
-/**
- * คำนวณแนวเส้นทางเกาะถนนจริงอัตโนมัติผ่าน OSRM (Multi-Tier Failover)
+ * เธเธณเธเธงเธ“เนเธเธงเน€เธชเนเธเธ—เธฒเธเน€เธเธฒเธฐเธ–เธเธเธเธฃเธดเธเธญเธฑเธ•เนเธเธกเธฑเธ•เธดเธเนเธฒเธ OSRM (Multi-Tier Failover)
  */
 export async function calculateRoadSnappedRoute(
   start: [number, number],
@@ -1051,15 +1006,15 @@ export async function calculateRoadSnappedRoute(
     console.warn("OSRM routing unavailable:", err);
   }
   const hint = getOsrmFailureHint();
-  const alternative = "หรือสลับเป็นโหมด \"วาด/แก้ไขอิสระ\" เพื่อลากจุดเอง";
-  if (hint === "rate_limited") throw new Error(`ระบบหาเส้นทาง (OSRM) ถูกจำกัดการเรียกชั่วคราว รอประมาณ 1 นาทีแล้วลองใหม่ ${alternative}`);
-  if (hint === "no_route") throw new Error(`ไม่พบเส้นทางตามถนนระหว่างจุดที่เลือก ลองขยับจุดให้ใกล้ถนนมากขึ้น ${alternative}`);
-  if (hint === "unreachable") throw new Error(`เชื่อมต่อระบบหาเส้นทาง (OSRM) ไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่ ${alternative}`);
-  throw new Error("ไม่สามารถคำนวณเส้นทางตามถนนได้ กรุณาลองใหม่");
+  const alternative = "เธซเธฃเธทเธญเธชเธฅเธฑเธเน€เธเนเธเนเธซเธกเธ” \"เธงเธฒเธ”/เนเธเนเนเธเธญเธดเธชเธฃเธฐ\" เน€เธเธทเนเธญเธฅเธฒเธเธเธธเธ”เน€เธญเธ";
+  if (hint === "rate_limited") throw new Error(`เธฃเธฐเธเธเธซเธฒเน€เธชเนเธเธ—เธฒเธ (OSRM) เธ–เธนเธเธเธณเธเธฑเธ”เธเธฒเธฃเน€เธฃเธตเธขเธเธเธฑเนเธงเธเธฃเธฒเธง เธฃเธญเธเธฃเธฐเธกเธฒเธ“ 1 เธเธฒเธ—เธตเนเธฅเนเธงเธฅเธญเธเนเธซเธกเน ${alternative}`);
+  if (hint === "no_route") throw new Error(`เนเธกเนเธเธเน€เธชเนเธเธ—เธฒเธเธ•เธฒเธกเธ–เธเธเธฃเธฐเธซเธงเนเธฒเธเธเธธเธ”เธ—เธตเนเน€เธฅเธทเธญเธ เธฅเธญเธเธเธขเธฑเธเธเธธเธ”เนเธซเนเนเธเธฅเนเธ–เธเธเธกเธฒเธเธเธถเนเธ ${alternative}`);
+  if (hint === "unreachable") throw new Error(`เน€เธเธทเนเธญเธกเธ•เนเธญเธฃเธฐเธเธเธซเธฒเน€เธชเนเธเธ—เธฒเธ (OSRM) เนเธกเนเนเธ”เน เธ•เธฃเธงเธเธชเธญเธเธญเธดเธเน€เธ—เธญเธฃเนเน€เธเนเธ•เนเธฅเนเธงเธฅเธญเธเนเธซเธกเน ${alternative}`);
+  throw new Error("เนเธกเนเธชเธฒเธกเธฒเธฃเธ–เธเธณเธเธงเธ“เน€เธชเนเธเธ—เธฒเธเธ•เธฒเธกเธ–เธเธเนเธ”เน เธเธฃเธธเธ“เธฒเธฅเธญเธเนเธซเธกเน");
 }
 
 /**
- * ระบบดัดเส้นถนนแบบ Dual-Source (PostGIS DB -> OSRM -> Straight Line)
+ * เธฃเธฐเธเธเธ”เธฑเธ”เน€เธชเนเธเธ–เธเธเนเธเธ Dual-Source (PostGIS DB -> OSRM -> Straight Line)
  */
 export async function calculateRoadSnappedDualSource(
   start: [number, number],
@@ -1072,14 +1027,14 @@ export async function calculateRoadSnappedDualSource(
   label?: string;
   message: string;
 }> {
-  // 1. ลองค้นหาตัดจากเลเยอร์โครงข่ายทางหลวงในระบบ (Local / PostGIS Proximity)
+  // 1. เธฅเธญเธเธเนเธเธซเธฒเธ•เธฑเธ”เธเธฒเธเน€เธฅเน€เธขเธญเธฃเนเนเธเธฃเธเธเนเธฒเธขเธ—เธฒเธเธซเธฅเธงเธเนเธเธฃเธฐเธเธ (Local / PostGIS Proximity)
   if (highwayLayers.length > 0) {
     for (const layer of highwayLayers) {
       const lines = extractLinesFromGeoJson(layer.geojson_data);
       for (const line of lines) {
         let nearestA = -1;
         let nearestB = -1;
-        let minDistA = 0.003; // ~300 เมตร
+        let minDistA = 0.003; // ~300 เน€เธกเธ•เธฃ
         let minDistB = 0.003;
 
         line.forEach((pt, idx) => {
@@ -1104,8 +1059,8 @@ export async function calculateRoadSnappedDualSource(
             return {
               coords: slice,
               via: "db",
-              label: layer.layer_name || "โครงข่ายกรมทางหลวง",
-              message: `เกาะตามถนน ${layer.layer_name || "ทล."} จากข้อมูลโครงข่ายในระบบ ✓ — ดัดเส้นเพิ่มได้`,
+              label: layer.layer_name || "เนเธเธฃเธเธเนเธฒเธขเธเธฃเธกเธ—เธฒเธเธซเธฅเธงเธ",
+              message: `เน€เธเธฒเธฐเธ•เธฒเธกเธ–เธเธ ${layer.layer_name || "เธ—เธฅ."} เธเธฒเธเธเนเธญเธกเธนเธฅเนเธเธฃเธเธเนเธฒเธขเนเธเธฃเธฐเธเธ โ“ โ€” เธ”เธฑเธ”เน€เธชเนเธเน€เธเธดเนเธกเนเธ”เน`,
             };
           }
         }
@@ -1113,315 +1068,29 @@ export async function calculateRoadSnappedDualSource(
     }
   }
 
-  // 2. หากไม่พบในระบบ ลองส่งคำนวณผ่าน OSRM (ตัวสำรอง)
+  // 2. เธซเธฒเธเนเธกเนเธเธเนเธเธฃเธฐเธเธ เธฅเธญเธเธชเนเธเธเธณเธเธงเธ“เธเนเธฒเธ OSRM (เธ•เธฑเธงเธชเธณเธฃเธญเธ)
   try {
     const osrmResult = await calculateRoadSnappedRoute(start, end, waypoints);
     if (osrmResult && osrmResult.length > 2) {
       return {
         coords: osrmResult,
         via: "osrm",
-        message: "สร้างเส้นตามถนนด้วย OSRM (ตัวสำรอง) — ตรวจแนวเส้นก่อนบันทึก",
+        message: "เธชเธฃเนเธฒเธเน€เธชเนเธเธ•เธฒเธกเธ–เธเธเธ”เนเธงเธข OSRM (เธ•เธฑเธงเธชเธณเธฃเธญเธ) โ€” เธ•เธฃเธงเธเนเธเธงเน€เธชเนเธเธเนเธญเธเธเธฑเธเธ—เธถเธ",
       };
     }
   } catch (err) { }
 
-  // 3. Fallback เส้นตรง
+  // 3. Fallback เน€เธชเนเธเธ•เธฃเธ
   const directLine: [number, number][] = [start, ...waypoints, end];
   return {
     coords: directLine,
     via: "line",
-    message: "ไม่พบถนนใกล้จุดที่ระบุ จึงลากเส้นตรงให้ — ลากจุดขาวเพื่อดัดตามถนนได้",
+    message: "เนเธกเนเธเธเธ–เธเธเนเธเธฅเนเธเธธเธ”เธ—เธตเนเธฃเธฐเธเธธ เธเธถเธเธฅเธฒเธเน€เธชเนเธเธ•เธฃเธเนเธซเน โ€” เธฅเธฒเธเธเธธเธ”เธเธฒเธงเน€เธเธทเนเธญเธ”เธฑเธ”เธ•เธฒเธกเธ–เธเธเนเธ”เน",
   };
 }
 
 /**
- * สกัดฟีเจอร์เส้นทางพร้อมข้อมูล Attributes จาก GeoJSON
- */
-export function extractFeaturesFromGeoJson(geojsonObj: any): ExtractedGisFeature[] {
-  const result: ExtractedGisFeature[] = [];
-  try {
-    const collections = Array.isArray(geojsonObj) ? geojsonObj : [geojsonObj];
-    collections.forEach((col) => {
-      const features = col.features || [col];
-      features.forEach((f: any) => {
-        const geom = f.geometry || f;
-        const props = f.properties || {};
-        if (!geom) return;
-        if (geom.type === "GeometryCollection" && Array.isArray(geom.geometries)) {
-          result.push(...extractFeaturesFromGeoJson(geom.geometries.map((geometry: any) => ({ type: "Feature", geometry, properties: props }))));
-        } else if (geom.type === "LineString" && Array.isArray(geom.coordinates)) {
-          result.push({
-            coords: geom.coordinates,
-            properties: props,
-            lengthKm: calculatePolylineLengthKm(geom.coordinates),
-          });
-        } else if (geom.type === "MultiLineString" && Array.isArray(geom.coordinates)) {
-          geom.coordinates.forEach((seg: [number, number][]) => {
-            result.push({
-              coords: seg,
-              properties: props,
-              lengthKm: calculatePolylineLengthKm(seg),
-            });
-          });
-        }
-      });
-    });
-  } catch (e) {
-    console.warn("Error parsing GeoJSON features:", e);
-  }
-  return result;
-}
-
-/**
- * ดึงเส้น LineString / MultiLineString จาก GeoJSON (รองรับแบบเดิม)
- */
-export function extractLinesFromGeoJson(geojsonObj: any): [number, number][][] {
-  const features = extractFeaturesFromGeoJson(geojsonObj);
-  return features.map((f) => f.coords);
-}
-
-/**
- * สกัดฟีเจอร์เส้นทางพร้อมข้อมูล Attributes จากไฟล์ KML
- */
-export function extractFeaturesFromKml(kmlText: string): ExtractedGisFeature[] {
-  const result: ExtractedGisFeature[] = [];
-  try {
-    const xml = new DOMParser().parseFromString(kmlText, "text/xml");
-    const placemarks = xml.getElementsByTagName("Placemark");
-
-    if (placemarks.length > 0) {
-      for (let i = 0; i < placemarks.length; i++) {
-        const p = placemarks[i];
-        const nameNode = p.getElementsByTagName("name")[0];
-        const descNode = p.getElementsByTagName("description")[0];
-        const name = nameNode ? (nameNode.textContent || "").trim() : "";
-        const description = descNode ? (descNode.textContent || "").trim() : "";
-
-        const props: Record<string, any> = { name, description };
-
-        // Parse SimpleData in ExtendedData if available
-        const simpleDataNodes = p.getElementsByTagName("SimpleData");
-        for (let j = 0; j < simpleDataNodes.length; j++) {
-          const s = simpleDataNodes[j];
-          const attrName = s.getAttribute("name");
-          if (attrName) {
-            props[attrName] = (s.textContent || "").trim();
-          }
-        }
-
-        const coordNodes = p.getElementsByTagName("coordinates");
-        for (let j = 0; j < coordNodes.length; j++) {
-          const raw = (coordNodes[j].textContent || "").trim();
-          const pts = raw
-            .split(/\s+/)
-            .map((chunk) => {
-              const [lon, lat] = chunk.split(",");
-              return [Number(lon), Number(lat)] as [number, number];
-            })
-            .filter((pt) => !isNaN(pt[0]) && !isNaN(pt[1]));
-
-          if (pts.length >= 2) {
-            result.push({
-              coords: pts,
-              properties: props,
-              lengthKm: calculatePolylineLengthKm(pts),
-            });
-          }
-        }
-      }
-    } else {
-      // Fallback for coordinate nodes without Placemarks
-      const coordNodes = xml.getElementsByTagName("coordinates");
-      for (let i = 0; i < coordNodes.length; i++) {
-        const raw = (coordNodes[i].textContent || "").trim();
-        const pts = raw
-          .split(/\s+/)
-          .map((chunk) => {
-            const [lon, lat] = chunk.split(",");
-            return [Number(lon), Number(lat)] as [number, number];
-          })
-          .filter((pt) => !isNaN(pt[0]) && !isNaN(pt[1]));
-
-        if (pts.length >= 2) {
-          result.push({
-            coords: pts,
-            properties: { name: `เส้นทางที่ ${i + 1}`, description: "" },
-            lengthKm: calculatePolylineLengthKm(pts),
-          });
-        }
-      }
-    }
-  } catch (e) {
-    console.warn("Error parsing KML features:", e);
-  }
-  return result;
-}
-
-/**
- * สกัดแนวเส้นทางจากเนื้อหาไฟล์ KML (รองรับแบบเดิม)
- */
-export function extractLinesFromKml(kmlText: string): [number, number][][] {
-  const features = extractFeaturesFromKml(kmlText);
-  return features.map((f) => f.coords);
-}
-
-/**
- * ดึงรายชื่อฟิลด์ Attribute ทั้งหมดที่มีในชุดข้อมูล GIS
- */
-export function extractAvailableGisFields(features: ExtractedGisFeature[]): string[] {
-  const fieldSet = new Set<string>();
-  features.forEach((f) => {
-    Object.keys(f.properties || {}).forEach((k) => {
-      if (k && typeof k === "string") fieldSet.add(k);
-    });
-  });
-  return Array.from(fieldSet);
-}
-
-/**
- * ตรวจจับการจับคู่ฟิลด์อัจฉริยะ (Smart Field Mapping) ตามมาตรฐานข้อมูลกรมทางหลวง
- */
-export function detectSmartFieldMapping(fields: string[]): {
-  routeCodeField: string;
-  routeNameField: string;
-  routeTypeField: string;
-} {
-  let routeCodeField = "";
-  let routeNameField = "";
-  let routeTypeField = "";
-
-  for (const f of fields) {
-    const lower = f.toLowerCase();
-    if (!routeCodeField && /^(road_?no|route_?no|route|hwy_?no|hwy|code|ref|สายทาง|ทล|no)$/i.test(lower)) {
-      routeCodeField = f;
-    }
-    if (!routeNameField && /^(road_?name|name|section_?name|section|desc|description|label|title|ชื่อสายทาง)$/i.test(lower)) {
-      routeNameField = f;
-    }
-    if (!routeTypeField && /^(class|type|category|hier|road_?type|ประเภท)$/i.test(lower)) {
-      routeTypeField = f;
-    }
-  }
-
-  return { routeCodeField, routeNameField, routeTypeField };
-}
-
-/**
- * แปลงไฟล์ภาพเป็น Base64 Data URL แบบย่อขนาด (Resize)
- */
-export function compressImageToBase64(file: File, maxDimension = 1200, quality = 0.8): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = reject;
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onerror = reject;
-      img.onload = () => {
-        const scale = img.width > maxDimension ? maxDimension / img.width : 1;
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          resolve(e.target?.result as string);
-          return;
-        }
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      };
-      img.src = e.target?.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-/**
- * บีบอัดรูปภาพแบบ Adaptive รับประกันขนาดไม่เกินเพดานที่กำหนด (ค่าเริ่มต้น 300 KB)
- * ปรับลดความละเอียดและคุณภาพอย่างเป็นลำดับ โดยใช้ WebP เป็นอันดับแรก (Fallback เป็น JPEG)
- * การวาดผ่าน Canvas ช่วยล้าง EXIF metadata ป้องกันข้อมูลตำแหน่งส่วนตัวและลดขนาดไฟล์ลงทันที
- */
-export async function compressImageToAdaptiveBase64(
-  file: File,
-  maxSizeBytes = 300 * 1024
-): Promise<{ dataUrl: string; sizeBytes: number; format?: "webp" | "jpeg" }> {
-  // สร้าง image element จากไฟล์
-  const dataUrlOriginal = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const i = new Image();
-    i.onload = () => resolve(i);
-    i.onerror = reject;
-    i.src = dataUrlOriginal;
-  });
-
-  // ตรวจสอบการรองรับ WebP บน Canvas
-  let supportsWebp = false;
-  try {
-    const testCanvas = document.createElement("canvas");
-    testCanvas.width = 1;
-    testCanvas.height = 1;
-    supportsWebp = testCanvas.toDataURL("image/webp").startsWith("data:image/webp");
-  } catch {
-    supportsWebp = false;
-  }
-  const preferredMime = supportsWebp ? "image/webp" : "image/jpeg";
-
-  // ลำดับขั้นตอนการลดขนาด: [maxDimension, quality]
-  const stages: Array<[number, number]> = [
-    [1280, 0.82],
-    [1024, 0.75],
-    [840, 0.65],
-    [680, 0.55],
-    [540, 0.45],
-    [420, 0.38],
-    [320, 0.32],
-  ];
-
-  let bestDataUrl = dataUrlOriginal;
-  let bestSizeBytes = Math.round((bestDataUrl.length * 3) / 4);
-  let bestFormat: "webp" | "jpeg" = "jpeg";
-
-  for (const [maxDim, quality] of stages) {
-    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-    const targetW = Math.max(1, Math.round(img.width * scale));
-    const targetH = Math.max(1, Math.round(img.height * scale));
-
-    const canvas = document.createElement("canvas");
-    canvas.width = targetW;
-    canvas.height = targetH;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) continue;
-
-    ctx.drawImage(img, 0, 0, targetW, targetH);
-    let candidateUrl = canvas.toDataURL(preferredMime, quality);
-    let chosenFormat: "webp" | "jpeg" = candidateUrl.startsWith("data:image/webp") ? "webp" : "jpeg";
-
-    if (preferredMime === "image/webp" && !candidateUrl.startsWith("data:image/webp")) {
-      candidateUrl = canvas.toDataURL("image/jpeg", quality);
-      chosenFormat = "jpeg";
-    }
-
-    const candidateSize = Math.round((candidateUrl.length * 3) / 4);
-
-    bestDataUrl = candidateUrl;
-    bestSizeBytes = candidateSize;
-    bestFormat = chosenFormat;
-
-    if (candidateSize <= maxSizeBytes) {
-      break;
-    }
-  }
-
-  return { dataUrl: bestDataUrl, sizeBytes: bestSizeBytes, format: bestFormat };
-}
-
-/**
- * ตัดช่วงพิกัด (LineString) จากเส้นทางหลวงหลักตามช่วงกิโลเมตรและทิศทาง (Linear Referencing)
+ * เธ•เธฑเธ”เธเนเธงเธเธเธดเธเธฑเธ” (LineString) เธเธฒเธเน€เธชเนเธเธ—เธฒเธเธซเธฅเธงเธเธซเธฅเธฑเธเธ•เธฒเธกเธเนเธงเธเธเธดเนเธฅเน€เธกเธ•เธฃเนเธฅเธฐเธ—เธดเธจเธ—เธฒเธ (Linear Referencing)
  */
 export function slicePolylineByKmRange(
   polylineCoords: [number, number][],
@@ -1444,7 +1113,7 @@ export function slicePolylineByKmRange(
     return polylineCoords;
   }
 
-  // คำนวณระยะทางสะสมตามจุดพิกัดจริง (เมตร)
+  // เธเธณเธเธงเธ“เธฃเธฐเธขเธฐเธ—เธฒเธเธชเธฐเธชเธกเธ•เธฒเธกเธเธธเธ”เธเธดเธเธฑเธ”เธเธฃเธดเธ (เน€เธกเธ•เธฃ)
   const cumDist: number[] = [0];
   for (let i = 1; i < polylineCoords.length; i++) {
     const d = haversineDistanceKm(polylineCoords[i - 1], polylineCoords[i]) * 1000;
@@ -1453,8 +1122,8 @@ export function slicePolylineByKmRange(
   const totalGeomMeters = cumDist[cumDist.length - 1];
   if (totalGeomMeters <= 0) return polylineCoords;
 
-  // คำนวณตำแหน่งสัดส่วนตามแนวสายทางจริง (Physical linear reference along the geometry from index 0 to last)
-  // ที่ index 0 มีค่าหลักกิโลเมตร = sKm, ที่ index สุดท้าย มีค่าหลักกิโลเมตร = eKm
+  // เธเธณเธเธงเธ“เธ•เธณเนเธซเธเนเธเธชเธฑเธ”เธชเนเธงเธเธ•เธฒเธกเนเธเธงเธชเธฒเธขเธ—เธฒเธเธเธฃเธดเธ (Physical linear reference along the geometry from index 0 to last)
+  // เธ—เธตเน index 0 เธกเธตเธเนเธฒเธซเธฅเธฑเธเธเธดเนเธฅเน€เธกเธ•เธฃ = sKm, เธ—เธตเน index เธชเธธเธ”เธ—เนเธฒเธข เธกเธตเธเนเธฒเธซเธฅเธฑเธเธเธดเนเธฅเน€เธกเธ•เธฃ = eKm
   const kmSpan = eKm - sKm;
   const fStart = (tStart - sKm) / kmSpan;
   const fEnd = (tEnd - sKm) / kmSpan;
@@ -1468,7 +1137,7 @@ export function slicePolylineByKmRange(
   const targetDistStart = minFraction * totalGeomMeters;
   const targetDistEnd = maxFraction * totalGeomMeters;
 
-  // ฟังก์ชันหาพิกัด ณ ระยะทาง dMeters
+  // เธเธฑเธเธเนเธเธฑเธเธซเธฒเธเธดเธเธฑเธ” เธ“ เธฃเธฐเธขเธฐเธ—เธฒเธ dMeters
   const interpolateAtDist = (dMeters: number): [number, number] => {
     if (dMeters <= 0) return polylineCoords[0];
     if (dMeters >= totalGeomMeters) return polylineCoords[polylineCoords.length - 1];
@@ -1503,15 +1172,15 @@ export function slicePolylineByKmRange(
 
   sliced.push(interpolateAtDist(targetDistEnd));
 
-  // ตรวจสอบทิศทางการจัดเรียงพิกัดผลลัพธ์ (Coordinate sequence order):
-  // clampedStart คือสัดส่วนตำแหน่งของ targetKmStart
-  // clampedEnd คือสัดส่วนตำแหน่งของ targetKmEnd
-  // หาก clampedStart > clampedEnd ลำดับพิกัดต้องย้อนกลับเพื่อให้จุดแรกของ sliced คือพิกัดของ targetKmStart
+  // เธ•เธฃเธงเธเธชเธญเธเธ—เธดเธจเธ—เธฒเธเธเธฒเธฃเธเธฑเธ”เน€เธฃเธตเธขเธเธเธดเธเธฑเธ”เธเธฅเธฅเธฑเธเธเน (Coordinate sequence order):
+  // clampedStart เธเธทเธญเธชเธฑเธ”เธชเนเธงเธเธ•เธณเนเธซเธเนเธเธเธญเธ targetKmStart
+  // clampedEnd เธเธทเธญเธชเธฑเธ”เธชเนเธงเธเธ•เธณเนเธซเธเนเธเธเธญเธ targetKmEnd
+  // เธซเธฒเธ clampedStart > clampedEnd เธฅเธณเธ”เธฑเธเธเธดเธเธฑเธ”เธ•เนเธญเธเธขเนเธญเธเธเธฅเธฑเธเน€เธเธทเนเธญเนเธซเนเธเธธเธ”เนเธฃเธเธเธญเธ sliced เธเธทเธญเธเธดเธเธฑเธ”เธเธญเธ targetKmStart
   if (clampedStart > clampedEnd) {
     sliced.reverse();
   }
 
-  // หากผู้ใช้ระบุให้สลับทิศทางสำหรับช่องจราจรขากลับ (isReverseOrientation / B_TO_A)
+  // เธซเธฒเธเธเธนเนเนเธเนเธฃเธฐเธเธธเนเธซเนเธชเธฅเธฑเธเธ—เธดเธจเธ—เธฒเธเธชเธณเธซเธฃเธฑเธเธเนเธญเธเธเธฃเธฒเธเธฃเธเธฒเธเธฅเธฑเธ (isReverseOrientation / B_TO_A)
   if (isReverseOrientation) {
     sliced.reverse();
   }
@@ -1520,8 +1189,8 @@ export function slicePolylineByKmRange(
 }
 
 /**
- * ดึงชื่อตำบล อำเภอ จังหวัด อัตโนมัติจากพิกัด (ตัวดึงข้อมูลพื้นที่กลาง: Longdo → OSM Nominatim → ข้อมูลภายใน)
- * confidence = "high" เมื่อได้ชื่อตำบลจากแหล่งออนไลน์ ส่วน "medium"/"low" ควรให้เจ้าหน้าที่ตรวจสอบก่อนใช้
+ * เธ”เธถเธเธเธทเนเธญเธ•เธณเธเธฅ เธญเธณเน€เธ เธญ เธเธฑเธเธซเธงเธฑเธ” เธญเธฑเธ•เนเธเธกเธฑเธ•เธดเธเธฒเธเธเธดเธเธฑเธ” (เธ•เธฑเธงเธ”เธถเธเธเนเธญเธกเธนเธฅเธเธทเนเธเธ—เธตเนเธเธฅเธฒเธ: Longdo โ’ OSM Nominatim โ’ เธเนเธญเธกเธนเธฅเธ เธฒเธขเนเธ)
+ * confidence = "high" เน€เธกเธทเนเธญเนเธ”เนเธเธทเนเธญเธ•เธณเธเธฅเธเธฒเธเนเธซเธฅเนเธเธญเธญเธเนเธฅเธเน เธชเนเธงเธ "medium"/"low" เธเธงเธฃเนเธซเนเน€เธเนเธฒเธซเธเนเธฒเธ—เธตเนเธ•เธฃเธงเธเธชเธญเธเธเนเธญเธเนเธเน
  */
 export async function reverseGeocodeTambonAmphoe(
   lon: number,
@@ -1546,267 +1215,7 @@ export async function reverseGeocodeTambonAmphoe(
 }
 
 /**
- * ตรวจสอบว่าแนวเส้นทางสองเส้นอยู่ใกล้หรือตัดกันภายในระยะที่กำหนด (เมตร) หรือไม่
- * ใช้สำหรับตรวจจับว่าเส้นทางเลี่ยงวิ่งผ่าจุดน้ำท่วมที่ปิดการจราจร (CLOSED) หรือไม่
- * และตรวจว่าเส้น A->B กับ B->A เป็นถนนเส้นเดี่ยวหรือถนนแยกฝั่งจราจร
+ * เธ•เธฃเธงเธเธชเธญเธเธงเนเธฒเนเธเธงเน€เธชเนเธเธ—เธฒเธเธชเธญเธเน€เธชเนเธเธญเธขเธนเนเนเธเธฅเนเธซเธฃเธทเธญเธ•เธฑเธ”เธเธฑเธเธ เธฒเธขเนเธเธฃเธฐเธขเธฐเธ—เธตเนเธเธณเธซเธเธ” (เน€เธกเธ•เธฃ) เธซเธฃเธทเธญเนเธกเน
+ * เนเธเนเธชเธณเธซเธฃเธฑเธเธ•เธฃเธงเธเธเธฑเธเธงเนเธฒเน€เธชเนเธเธ—เธฒเธเน€เธฅเธตเนเธขเธเธงเธดเนเธเธเนเธฒเธเธธเธ”เธเนเธณเธ—เนเธงเธกเธ—เธตเนเธเธดเธ”เธเธฒเธฃเธเธฃเธฒเธเธฃ (CLOSED) เธซเธฃเธทเธญเนเธกเน
+ * เนเธฅเธฐเธ•เธฃเธงเธเธงเนเธฒเน€เธชเนเธ A->B เธเธฑเธ B->A เน€เธเนเธเธ–เธเธเน€เธชเนเธเน€เธ”เธตเนเธขเธงเธซเธฃเธทเธญเธ–เธเธเนเธขเธเธเธฑเนเธเธเธฃเธฒเธเธฃ
  */
-export function pointToSegmentDistanceMeters(
-  pt: [number, number],
-  segStart: [number, number],
-  segEnd: [number, number]
-): number {
-  const cosLat = Math.cos(((segStart[1] + segEnd[1]) * 0.5 * Math.PI) / 180);
-  const mPerDegLat = 111320;
-  const mPerDegLon = 111320 * cosLat;
-
-  const px = (pt[0] - segStart[0]) * mPerDegLon;
-  const py = (pt[1] - segStart[1]) * mPerDegLat;
-  const dx = (segEnd[0] - segStart[0]) * mPerDegLon;
-  const dy = (segEnd[1] - segStart[1]) * mPerDegLat;
-
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq === 0) return Math.hypot(px, py);
-
-  const t = Math.max(0, Math.min(1, (px * dx + py * dy) / lenSq));
-  const projX = t * dx;
-  const projY = t * dy;
-  return Math.hypot(px - projX, py - projY);
-}
-
-function segmentsIntersect2D(
-  a1: [number, number],
-  a2: [number, number],
-  b1: [number, number],
-  b2: [number, number]
-): boolean {
-  const ccw = (p1: [number, number], p2: [number, number], p3: [number, number]) =>
-    (p3[1] - p1[1]) * (p2[0] - p1[0]) > (p2[1] - p1[1]) * (p3[0] - p1[0]);
-  return ccw(a1, b1, b2) !== ccw(a2, b1, b2) && ccw(a1, a2, b1) !== ccw(a1, a2, b2);
-}
-
-export interface ClosedRoadConflict {
-  floodId: string;
-  routeNo: string;
-  sectionName: string;
-  kmStart: string;
-  kmEnd: string;
-  trafficStatus: string;
-  direction: "FORWARD" | "REVERSE";
-  conflictPoint: [number, number];
-}
-
-function detectFloodStatusConflicts(
-  detourCoords: [number, number][],
-  floodRoutes: Array<{
-    id: string;
-    route_no: string;
-    section_name: string;
-    km_start: string;
-    km_end: string;
-    is_active: boolean;
-    traffic_status: string;
-    coordinates_json: string | [number, number][];
-  }>,
-  targetStatuses: Set<string>,
-  direction: "FORWARD" | "REVERSE" = "FORWARD",
-  thresholdMeters = 22
-): ClosedRoadConflict[] {
-  if (!Array.isArray(detourCoords) || detourCoords.length < 2) return [];
-  const startPt = detourCoords[0];
-  const endPt = detourCoords[detourCoords.length - 1];
-  const conflicts: ClosedRoadConflict[] = [];
-
-  for (const flood of floodRoutes || []) {
-    if (!flood.is_active || !targetStatuses.has(flood.traffic_status)) continue;
-    let fCoords: [number, number][] = [];
-    try {
-      fCoords = Array.isArray(flood.coordinates_json)
-        ? (flood.coordinates_json as [number, number][])
-        : typeof flood.coordinates_json === "string"
-        ? JSON.parse(flood.coordinates_json)
-        : [];
-    } catch {
-      fCoords = [];
-    }
-    if (fCoords.length < 2) continue;
-
-    let hitPoint: [number, number] | null = null;
-    for (let i = 0; i < detourCoords.length - 1 && !hitPoint; i++) {
-      const d1 = detourCoords[i];
-      const d2 = detourCoords[i + 1];
-      const midD: [number, number] = [(d1[0] + d2[0]) / 2, (d1[1] + d2[1]) / 2];
-
-      // ยกเว้นบริเวณจุดเชื่อมต่อปากทางเริ่มต้น/สิ้นสุดระยะ 45 เมตร
-      if (
-        haversineDistanceKm(midD, startPt) < 0.045 ||
-        haversineDistanceKm(midD, endPt) < 0.045
-      ) {
-        continue;
-      }
-
-      for (let j = 0; j < fCoords.length - 1; j++) {
-        const f1 = fCoords[j];
-        const f2 = fCoords[j + 1];
-        if (segmentsIntersect2D(d1, d2, f1, f2)) {
-          hitPoint = midD;
-          break;
-        }
-        const dist1 = pointToSegmentDistanceMeters(d1, f1, f2);
-        const dist2 = pointToSegmentDistanceMeters(midD, f1, f2);
-        if (Math.min(dist1, dist2) <= thresholdMeters) {
-          hitPoint = midD;
-          break;
-        }
-      }
-    }
-
-    if (hitPoint) {
-      conflicts.push({
-        floodId: flood.id,
-        routeNo: flood.route_no,
-        sectionName: flood.section_name,
-        kmStart: flood.km_start,
-        kmEnd: flood.km_end,
-        trafficStatus: flood.traffic_status,
-        direction,
-        conflictPoint: hitPoint,
-      });
-    }
-  }
-
-  return conflicts;
-}
-
-/**
- * ตรวจสอบว่าเส้นทางเลี่ยง (A->B หรือ B->A) วิ่งตัดหรือทับช่วงถนนที่ปิดการจราจร (CLOSED) หรือไม่
- * ไม่นับปลายจุดเริ่มต้น/สิ้นสุดระยะ 45 เมตรแรกเพื่อให้ทางเลี่ยงสามารถเริ่มต้นจากปากทางก่อนจุดปิดถนนได้
- */
-export function detectClosedRoadConflicts(
-  detourCoords: [number, number][],
-  floodRoutes: Array<{
-    id: string;
-    route_no: string;
-    section_name: string;
-    km_start: string;
-    km_end: string;
-    is_active: boolean;
-    traffic_status: string;
-    coordinates_json: string | [number, number][];
-  }>,
-  direction: "FORWARD" | "REVERSE" = "FORWARD",
-  thresholdMeters = 22
-): ClosedRoadConflict[] {
-  return detectFloodStatusConflicts(detourCoords, floodRoutes, new Set(["CLOSED"]), direction, thresholdMeters);
-}
-
-/**
- * ตรวจสอบคำเตือนเมื่อทางเลี่ยงวิ่งผ่านช่วงที่รถเล็กผ่านไม่ได้ (WARNING) หรือผ่านได้ ๑ ช่องทาง (ONE_LANE)
- */
-export function detectPassabilityFloodWarnings(
-  detourCoords: [number, number][],
-  floodRoutes: Array<{
-    id: string;
-    route_no: string;
-    section_name: string;
-    km_start: string;
-    km_end: string;
-    is_active: boolean;
-    traffic_status: string;
-    coordinates_json: string | [number, number][];
-  }>,
-  direction: "FORWARD" | "REVERSE" = "FORWARD",
-  thresholdMeters = 22
-): ClosedRoadConflict[] {
-  return detectFloodStatusConflicts(
-    detourCoords,
-    floodRoutes,
-    new Set(["WARNING", "ONE_LANE"]),
-    direction,
-    thresholdMeters
-  );
-}
-
-/**
- * ตรวจสอบว่าเส้นทางขาไป (A->B) และขากลับ (B->A) แยกฝั่งจราจรกัน (Dual Carriageway / Asymmetric) หรือเป็นเส้นเดี่ยวเดียวกัน
- */
-export function analyzeCarriagewaySeparation(
-  forwardCoords: [number, number][],
-  reverseCoords: [number, number][]
-): {
-  structure: "SINGLE_CENTERLINE" | "DUAL_CARRIAGEWAY" | "ASYMMETRIC_DETOUR";
-  avgSeparationMeters: number;
-  maxSeparationMeters: number;
-  medianSeparationMeters: number;
-  isSymmetricSingleLine: boolean;
-} {
-  if (forwardCoords.length < 2 || reverseCoords.length < 2) {
-    return {
-      structure: "SINGLE_CENTERLINE",
-      avgSeparationMeters: 0,
-      maxSeparationMeters: 0,
-      medianSeparationMeters: 0,
-      isSymmetricSingleLine: true,
-    };
-  }
-
-  const sampleCount = Math.min(25, forwardCoords.length);
-  const step = Math.max(1, Math.floor(forwardCoords.length / sampleCount));
-  let sumDist = 0;
-  let maxDist = 0;
-  let count = 0;
-
-  for (let i = 1; i < forwardCoords.length - 1; i += step) {
-    const pt = forwardCoords[i];
-    let minD = Infinity;
-    for (let j = 0; j < reverseCoords.length - 1; j++) {
-      const d = pointToSegmentDistanceMeters(pt, reverseCoords[j], reverseCoords[j + 1]);
-      if (d < minD) minD = d;
-    }
-    if (Number.isFinite(minD)) {
-      sumDist += minD;
-      if (minD > maxDist) maxDist = minD;
-      count++;
-    }
-  }
-
-  const avg = count > 0 ? sumDist / count : 0;
-  const roundedAvg = Number(avg.toFixed(1));
-  if (maxDist > 60 || avg > 35) {
-    return {
-      structure: "ASYMMETRIC_DETOUR",
-      avgSeparationMeters: Math.round(avg),
-      maxSeparationMeters: Math.round(maxDist),
-      medianSeparationMeters: Math.round(avg),
-      isSymmetricSingleLine: false,
-    };
-  }
-  if (avg >= 3.5 || maxDist >= 6) {
-    return {
-      structure: "DUAL_CARRIAGEWAY",
-      avgSeparationMeters: roundedAvg,
-      maxSeparationMeters: Number(maxDist.toFixed(1)),
-      medianSeparationMeters: roundedAvg,
-      isSymmetricSingleLine: false,
-    };
-  }
-  return {
-    structure: "SINGLE_CENTERLINE",
-    avgSeparationMeters: roundedAvg,
-    maxSeparationMeters: Number(maxDist.toFixed(1)),
-    medianSeparationMeters: roundedAvg,
-    isSymmetricSingleLine: true,
-  };
-}
-
-/**
- * คำนวณมุมทิศทาง (Bearing 0-360 องศา) จากพิกัดที่ 1 ไปพิกัดที่ 2
- */
-export function calculateGeoBearing(from: [number, number], to: [number, number]): number {
-  const fromLat = (from[1] * Math.PI) / 180;
-  const toLat = (to[1] * Math.PI) / 180;
-  const deltaLon = ((to[0] - from[0]) * Math.PI) / 180;
-  const y = Math.sin(deltaLon) * Math.cos(toLat);
-  const x = Math.cos(fromLat) * Math.sin(toLat) - Math.sin(fromLat) * Math.cos(toLat) * Math.cos(deltaLon);
-  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
-}
-
