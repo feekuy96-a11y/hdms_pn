@@ -17,65 +17,15 @@ import { useMapRouteHydration } from "@/components/admin/tabs/useMapRouteHydrati
 import { useMapCoordinatePicker } from "@/components/admin/tabs/useMapCoordinatePicker";
 import { useMapFreeGeometryEdit } from "@/components/admin/tabs/useMapFreeGeometryEdit";
 import { useMapRouteActions } from "@/components/admin/tabs/useMapRouteActions";
-import {
-  parseCoordinatePair,
-  buildDetourRoutingParams,
-  findBestHighwayGroupForSelection,
-  sliceBranchByKmRange,
-  buildAffectedPartSummary,
-  buildDetourMetaPayload,
-} from "@/components/admin/tabs/map-management-helpers";
+import { useMapFloodSituation } from "@/components/admin/tabs/useMapFloodSituation";
 export { buildDetourRoutingParams } from "@/components/admin/tabs/map-management-helpers";
-import {
-  calculatePolylineRoadDistanceKm,
-  detourDurationSeconds as readDetourDurationSeconds,
-} from "@/lib/detour-presentation";
-import { deleteExternalMediaAction, upsertRouteAction, snapRouteAction, syncReportingRowAction, uploadExternalMediaAction } from "@/app/actions/doh-actions";
-import {
-  fetchOsrmWithFailover,
-  computeGoogleRouteHybrid,
-  extractDirectionalAdvice,
-  reverseGeocodeTambonAmphoe,
-  compressImageToBase64,
-  compressImageToAdaptiveBase64,
-  slicePolylineByKmRange,
-  detectClosedRoadConflicts,
-  detectPassabilityFloodWarnings,
-  analyzeCarriagewaySeparation,
-  haversineDistanceKm,
-  localArea,
-} from "@/lib/gis-utils";
-import {
-  SAFETY_MEASURES,
-  ROAD_SIDE_OPTIONS,
-  AFFECTED_LANES_OPTIONS,
-  AFFECTED_SHOULDER_OPTIONS,
-  DETOUR_DIRECTION_MODES,
-  RoadSideType,
-  AffectedShoulderType,
-  DetourDirectionModeType,
-} from "@/lib/constants";
+import { compressImageToAdaptiveBase64 } from "@/lib/gis-utils";
+import type { DetourDirectionModeType } from "@/lib/constants";
 import {
   FloodDirectionCode,
-  AffectedRoadPart,
-  AFFECTED_ROAD_PART_LABELS,
-  DetailedTrafficStatus,
   FloodPhotoItem,
-  FloodSegmentDirectionMeta,
-  parseFloodDirectionMeta,
   groupFloodRoutesIntoEvents,
-  generateNextEventCode,
-  resolveEffectiveRoadSide,
-  mapTrafficStatusToDetail,
-  mapDetailToDbStatus,
-  detectOverlappingFloodSegments,
-  parseKmPostMeters,
 } from "@/lib/flood-event-schema";
-import { deriveTrafficStatusFromWaterLevel } from "@/lib/traffic-presentation";
-import {
-  getAvailableHighwayRoutes,
-  cleanHighwaySectionName,
-} from "@/lib/highway-schema";
 import type { VertexEditEvent } from "@/lib/line-edit";
 
 
@@ -171,13 +121,7 @@ export function MapManagementTab({
   const [endArea, setEndArea] = useState<{ subdistrict: string; district: string } | null>(null);
   const sectionNameManuallyEdited = useRef(false);
 
-  // Item 3: Directional & Lane-Specific Flood Attributes
-  const [roadSide, setRoadSide] = useState<RoadSideType>("UNKNOWN");
-  const [affectedLanes, setAffectedLanes] = useState<string>(AFFECTED_LANES_OPTIONS[0]);
-  const [affectedShoulder, setAffectedShoulder] = useState<AffectedShoulderType>("NONE");
   const [reporterName, setReporterName] = useState<string>("");
-  const [waterLevelKnown, setWaterLevelKnown] = useState<boolean>(true);
-  const [useCarriagewaySnapping, setUseCarriagewaySnapping] = useState<boolean>(false);
 
   // Highway Search Combobox State
   const [selectedHighwayName, setSelectedHighwayName] = useState("");
@@ -216,57 +160,40 @@ export function MapManagementTab({
   const [forceStraightThrough, setForceStraightThrough] = useState(false);
   const [detourDirectionMode, setDetourDirectionMode] = useState<DetourDirectionModeType>("TWO_WAY");
 
-  // Flood Severity & Traffic Status + Dual Carriageway Support
-  const [routeWaterLevel, setRouteWaterLevel] = useState<number | string>("");
-  const [routeStatus, setRouteStatus] = useState<"WARNING" | "CLOSED" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE">("WARNING");
-  const [selectedMeasure, setSelectedMeasure] = useState<string>(SAFETY_MEASURES[0]);
-  const [directionCode, setDirectionCode] = useState<FloodDirectionCode>("UNKNOWN");
-  const [affectedParts, setAffectedParts] = useState<AffectedRoadPart[]>(["UNSPECIFIED"]);
-  const [reverseRouteWaterLevel, setReverseRouteWaterLevel] = useState<number | string>("");
-  const [reverseRouteStatus, setReverseRouteStatus] = useState<"WARNING" | "CLOSED" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE">("WARNING");
-  const [reverseWaterLevelKnown, setReverseWaterLevelKnown] = useState<boolean>(true);
-  const [reverseAffectedParts, setReverseAffectedParts] = useState<AffectedRoadPart[]>(["ALL_LANES"]);
+  // Flood Situation, Highway Division & Traffic Status Hook
+  const {
+    roadSide, setRoadSide,
+    affectedLanes, setAffectedLanes,
+    affectedShoulder, setAffectedShoulder,
+    waterLevelKnown, setWaterLevelKnown,
+    useCarriagewaySnapping, setUseCarriagewaySnapping,
+    routeWaterLevel, setRouteWaterLevel,
+    routeStatus, setRouteStatus,
+    selectedMeasure, setSelectedMeasure,
+    directionCode, setDirectionCode,
+    affectedParts, setAffectedParts,
+    reverseRouteWaterLevel, setReverseRouteWaterLevel,
+    reverseRouteStatus, setReverseRouteStatus,
+    reverseWaterLevelKnown, setReverseWaterLevelKnown,
+    reverseAffectedParts, setReverseAffectedParts,
+    availableHighways, selectedHighwayOption, selectedHighwayLaneCount,
+    isSelectedHighwayDivided, isDividedBothFlood, availableOfficeNames,
+    handleWaterLevelInputChange, handleReverseWaterLevelInputChange,
+    toggleAffectedPartWithAutoStatus, ensureReverseFloodGeometry,
+    resetFloodSituationState,
+  } = useMapFloodSituation({
+    systemData,
+    routeMode,
+    routeNo,
+    selectedHighwayName,
+    sectionName,
+    kmStart,
+    kmEnd,
+    draftReverseCoordinates,
+    setDraftReverseCoordinates,
+    originalReverseRouteCoordinatesRef: originalReverseRouteCoordinates,
+  });
 
-  // Dynamic Highway Routes strictly from highwayLayers database
-  const availableHighways = React.useMemo(
-    () => getAvailableHighwayRoutes(systemData),
-    [systemData]
-  );
-
-  const selectedHighwayOption = React.useMemo(() => {
-    if (!routeNo && !selectedHighwayName) return undefined;
-    if (selectedHighwayName) {
-      const byName = availableHighways.find((h) => h.name === selectedHighwayName);
-      if (byName) return byName;
-    }
-    const cleanNo = String(routeNo || "").replace(/^ทล\.?/i, "").trim();
-    const candidates = availableHighways.filter((h) => h.no === cleanNo);
-    if (candidates.length === 0) return undefined;
-    const cleanSec = cleanHighwaySectionName(sectionName);
-    if (cleanSec) {
-      const bySec = candidates.find((h) => cleanHighwaySectionName(h.sectionName) === cleanSec);
-      if (bySec) return bySec;
-    }
-    const kmSMeters = parseKmPostMeters(kmStart);
-    const kmEMeters = parseKmPostMeters(kmEnd);
-    if (kmSMeters !== null && kmEMeters !== null) {
-      const mid = (kmSMeters + kmEMeters) / 2;
-      const containing = candidates.find((h) => {
-        const hs = parseKmPostMeters(h.kmStart);
-        const he = parseKmPostMeters(h.kmEnd);
-        return hs !== null && he !== null && mid >= Math.min(hs, he) && mid <= Math.max(hs, he);
-      });
-      if (containing) return containing;
-    }
-    return candidates[0];
-  }, [availableHighways, routeNo, selectedHighwayName, sectionName, kmStart, kmEnd]);
-
-  const selectedHighwayLaneCount = selectedHighwayOption?.laneCount ?? 0;
-  const isSelectedHighwayDivided = Boolean(
-    selectedHighwayOption && (selectedHighwayOption.laneCount >= 4 || selectedHighwayOption.hasDualCarriageway)
-  );
-  const isDividedBothFlood =
-    routeMode === "FLOOD" && roadSide === "BOTH" && directionCode === "BOTH" && isSelectedHighwayDivided;
   const supportsTwoWayLineEdit =
     (routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY") || isDividedBothFlood;
 
@@ -432,17 +359,6 @@ export function MapManagementTab({
   const existingParentEvents = React.useMemo(() => {
     return groupFloodRoutesIntoEvents(systemData.floodRoutes || []);
   }, [systemData.floodRoutes]);
-
-  const availableOfficeNames = React.useMemo(() => {
-    const names = new Set<string>();
-    (systemData.offices || []).forEach((o) => {
-      if (o.is_active && o.name) names.add(o.name.trim());
-    });
-    availableHighways.forEach((h) => {
-      if (h.responsibleOffice) names.add(h.responsibleOffice);
-    });
-    return Array.from(names).sort((a, b) => a.localeCompare(b, "th"));
-  }, [systemData.offices, availableHighways]);
 
   // Hydrate existing record on edit + listen to preset flood context
   useMapRouteHydration({
@@ -646,6 +562,7 @@ export function MapManagementTab({
   // Clear Route
   const handleClearRoute = () => {
     resetFreeGeometryHistory(true);
+    resetFloodSituationState();
     routingRequest.current += 1;
     setDraftCoordinates([]);
     setDraftWaypoints([]);
@@ -657,59 +574,27 @@ export function MapManagementTab({
     durationFwdManualRef.current = false;
     durationRevManualRef.current = false;
     editOriginalFloodDirRef.current = "UNKNOWN";
-    setSnappingStatusText("");
-    setStartLat("");
-    setStartLon("");
-    setEndLat("");
-    setEndLon("");
-    setRevStartLat("");
-    setRevStartLon("");
-    setRevEndLat("");
-    setRevEndLon("");
-    setKmStart("");
-    setKmEnd("");
-    setSectionName("");
+    sectionNameManuallyEdited.current = false;
     setStartArea(null);
     setEndArea(null);
-    sectionNameManuallyEdited.current = false;
-    setRouteWaterLevel("");
-    setRoadSide("UNKNOWN");
-    setAffectedLanes(AFFECTED_LANES_OPTIONS[0]);
-    setAffectedShoulder("NONE");
-    setReporterName("");
-    setWaterLevelKnown(true);
-    setUseCarriagewaySnapping(false);
-    setDetourName("");
-    setDetourDesc("");
+    [
+      setSnappingStatusText,
+      setStartLat, setStartLon, setEndLat, setEndLon,
+      setRevStartLat, setRevStartLon, setRevEndLat, setRevEndLon,
+      setKmStart, setKmEnd, setSectionName, setReporterName,
+      setDetourName, setDetourDesc, setDetourGoogleMapsUrlFwd, setDetourGoogleMapsUrlRev,
+      setDetourRoadCondition, setDetourDurationMinFwd, setDetourDurationMinRev,
+      setDetourStartPhotoUrl, setDetourStartPhotoCaption, setDetourEndPhotoUrl, setDetourEndPhotoCaption,
+      setSelectedParentEventId, setEventCode, setEventTitle, setVillageOrLandmark, setCauseAndNote,
+    ].forEach((reset) => reset(""));
     setDetourDirectionMode("TWO_WAY");
-    setDetourGoogleMapsUrlFwd("");
-    setDetourGoogleMapsUrlRev("");
-    setDetourRoadCondition("");
-    setDetourDurationMinFwd("");
-    setDetourDurationMinRev("");
-    setDetourStartPhotoUrl("");
-    setDetourStartPhotoCaption("");
-    setDetourEndPhotoUrl("");
-    setDetourEndPhotoCaption("");
     setDetourDistanceMeters({ forward: 0, reverse: 0 });
     setDetourDurationSeconds({ forward: 0, reverse: 0 });
     setFieldImages([]);
     setDetailedPhotos([]);
     setParentEventMode("NEW");
-    setSelectedParentEventId("");
-    setEventCode("");
-    setEventTitle("");
-    setVillageOrLandmark("");
     setStartedAt(new Date().toISOString().slice(0, 16));
-    setCauseAndNote("");
-    setDirectionCode("UNKNOWN");
-    setAffectedParts(["UNSPECIFIED"]);
-    setRouteStatus("WARNING");
     setFreeEditTarget("FORWARD");
-    setReverseRouteWaterLevel("");
-    setReverseRouteStatus("WARNING");
-    setReverseWaterLevelKnown(true);
-    setReverseAffectedParts(["ALL_LANES"]);
     setSaveAsDraft(false);
     setForceStraightThrough(false);
     clearAdminMapDraft();
@@ -717,76 +602,6 @@ export function MapManagementTab({
     originalRouteCoordinates.current = [];
     onDraftPickMarkersChange?.([]);
     onToast("ล้างเส้นทางร่างและแบบฟอร์มแล้ว");
-  };
-
-  // Water-level & affected road parts -> auto-derive suggested traffic status (editable manually afterward)
-  const handleWaterLevelInputChange = (rawValue: string) => {
-    const nextVal: number | string = rawValue === "" ? "" : Number(rawValue);
-    setRouteWaterLevel(nextVal);
-    if (nextVal !== "" && waterLevelKnown) {
-      const suggested = deriveTrafficStatusFromWaterLevel(nextVal, affectedParts);
-      if (suggested) setRouteStatus(suggested);
-    }
-  };
-
-  const handleReverseWaterLevelInputChange = (rawValue: string) => {
-    const nextVal: number | string = rawValue === "" ? "" : Number(rawValue);
-    setReverseRouteWaterLevel(nextVal);
-    if (nextVal !== "" && reverseWaterLevelKnown) {
-      const suggested = deriveTrafficStatusFromWaterLevel(nextVal, reverseAffectedParts);
-      if (suggested) setReverseRouteStatus(suggested);
-    }
-  };
-
-  const toggleAffectedPartWithAutoStatus = (
-    part: AffectedRoadPart,
-    currentParts: AffectedRoadPart[],
-    setParts: React.Dispatch<React.SetStateAction<AffectedRoadPart[]>>,
-    waterLevelValue: number | string,
-    isKnown: boolean,
-    setStatus: React.Dispatch<React.SetStateAction<"WARNING" | "CLOSED" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE">>
-  ) => {
-    const isSelected = currentParts.includes(part);
-    let nextParts: AffectedRoadPart[];
-    if (part === "ALL_LANES") {
-      nextParts = isSelected ? ["UNSPECIFIED"] : ["ALL_LANES"];
-    } else {
-      const filtered = currentParts.filter((p) => p !== "ALL_LANES" && p !== "UNSPECIFIED");
-      if (isSelected) {
-        const remaining = filtered.filter((p) => p !== part);
-        nextParts = remaining.length ? remaining : ["UNSPECIFIED"];
-      } else {
-        nextParts = [...filtered, part];
-      }
-    }
-    setParts(nextParts);
-    if (isKnown && waterLevelValue !== "") {
-      const suggested = deriveTrafficStatusFromWaterLevel(waterLevelValue, nextParts);
-      if (suggested) setStatus(suggested);
-    }
-  };
-
-  // Seed or slice reverse carriageway geometry when "ท่วมทั้งสองฝั่งจราจร" is chosen on a >= 4-lane highway
-  const ensureReverseFloodGeometry = (forwardSource: [number, number][]) => {
-    if (!isSelectedHighwayDivided) return;
-    if (routeNo && kmStart && kmEnd) {
-      const bestGroup = findBestHighwayGroupForSelection(systemData.highwayLayers, routeNo, sectionName, kmStart, kmEnd);
-      const fwdBranch = bestGroup?.branches.find((b) => b.directionCode === "A_TO_B" && b.coordinates.length >= 2) || bestGroup?.primaryBranch;
-      const revBranch = bestGroup?.branches.find((b) => b.directionCode === "B_TO_A" && b.coordinates.length >= 2);
-      if (bestGroup && revBranch) {
-        const slicedRev = sliceBranchByKmRange(revBranch, fwdBranch, bestGroup.kmStart, bestGroup.kmEnd, kmStart, kmEnd, true);
-        if (slicedRev.length >= 2) {
-          setDraftReverseCoordinates?.(slicedRev);
-          originalReverseRouteCoordinates.current = slicedRev.map((p) => [...p] as [number, number]);
-          return;
-        }
-      }
-    }
-    if (draftReverseCoordinates.length < 2 && forwardSource.length >= 2) {
-      const seeded = [...forwardSource].reverse().map((p) => [...p] as [number, number]);
-      setDraftReverseCoordinates?.(seeded);
-      originalReverseRouteCoordinates.current = seeded.map((p) => [...p] as [number, number]);
-    }
   };
 
   // Adaptive Image Upload, Detour Advice Generator & Route File Import
