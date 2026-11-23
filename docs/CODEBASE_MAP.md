@@ -20,16 +20,23 @@
 | แท็บจัดการแผนที่/วาดเส้นน้ำท่วม-ทางเลี่ยง | `components/admin/tabs/MapManagementTab.tsx` | `npm run check:fast` |
 | Hooks ของ MapManagementTab (draft, hydration, picker, media, snapping, submit) | `components/admin/tabs/useMapRoute*.ts`, `useDualRoadSnapping.ts`, `useMapCoordinatePicker.ts` | `npm run check:fast` |
 | Helper ตัดช่วง กม. บนแนวทางหลวง | `components/admin/tabs/map-management-helpers.ts` | `npm run check:fast` |
-| แท็บจัดการเส้นทางเลี่ยง (UI ตาราง/Modal) | `components/admin/tabs/DetourManagementTab.tsx` | `npx eslint components/admin/tabs/DetourManagementTab.tsx --max-warnings=0` |
+| แท็บจัดการเส้นทางเลี่ยง (UI หลัก/Container) | `components/admin/tabs/DetourManagementTab.tsx` | `npx eslint components/admin/tabs/DetourManagementTab.tsx --max-warnings=0` |
+| รายการทางเลี่ยง Mobile Cards / Table & Action buttons | `components/admin/tabs/DetourListCard.tsx` | `npx eslint components/admin/tabs/DetourListCard.tsx --max-warnings=0` |
+| Modal แก้ไขทางเลี่ยงฉุกเฉิน (Quick Detour Editor) | `components/admin/tabs/DetourEditModal.tsx` | `npx eslint components/admin/tabs/DetourEditModal.tsx --max-warnings=0` |
+| Modal ดูรายละเอียดทางเลี่ยง (Mini-map / Route Advice) | `components/admin/tabs/DetourViewModal.tsx` | `npx eslint components/admin/tabs/DetourViewModal.tsx --max-warnings=0` |
 | Logic จัดการเส้นทางเลี่ยง (filter, reorder, save, export) | `components/admin/tabs/useDetourManagement.ts` | `npm run check:fast` |
-| แท็บทะเบียนเหตุการณ์น้ำท่วม (UI ตาราง/Modal) | `components/admin/tabs/IncidentRegistryTab.tsx` | `npx eslint components/admin/tabs/IncidentRegistryTab.tsx --max-warnings=0` |
+| แท็บทะเบียนเหตุการณ์น้ำท่วม (UI หลัก/Container) | `components/admin/tabs/IncidentRegistryTab.tsx` | `npx eslint components/admin/tabs/IncidentRegistryTab.tsx --max-warnings=0` |
+| Modals ทะเบียนเหตุการณ์ (Update Water, Split, Merge) | `components/admin/tabs/IncidentActionModals.tsx` | `npx eslint components/admin/tabs/IncidentActionModals.tsx --max-warnings=0` |
+| Modal ดูรายละเอียดเหตุการณ์น้ำท่วม (Detail & Media) | `components/admin/tabs/IncidentDetailModal.tsx` | `npx eslint components/admin/tabs/IncidentDetailModal.tsx --max-warnings=0` |
 | Logic ทะเบียนเหตุการณ์ (filter, split, merge, inline water) | `components/admin/tabs/useIncidentRegistry.ts` | `npm run check:fast` |
-| Modal เชื่อมโยงเหตุการณ์น้ำท่วม ↔ ทางเลี่ยง | `components/admin/EventDetourLinkModal.tsx` | `npm run check:fast` |
+| Modal เชื่อมโยงเหตุการณ์น้ำท่วม ↔ ทางเลี่ยง (UI) | `components/admin/EventDetourLinkModal.tsx` | `npx eslint components/admin/EventDetourLinkModal.tsx --max-warnings=0` |
+| Logic เชื่อมโยงเหตุการณ์ ↔ ทางเลี่ยง (drafts, 409 version) | `components/admin/useEventDetourLinkModal.ts` | `npm run check:fast` |
 
 ## 3. Map & GIS Engine (Safety-Sensitive: `{ lon, lat }` / `POINT(lng lat)`)
 | งาน / อาการ | ไฟล์เป้าหมาย | คำสั่งตรวจเฉพาะจุด |
 |---|---|---|
 | Longdo Map canvas, layers, popups, markers | `components/map/LongdoGisMap.tsx` | `npm run check:fast` |
+| Pure layer & marker builders สำหรับ Longdo Map | `components/map/longdo-layer-builders.ts` | `npm run check:fast` |
 | คำนวณระยะทาง Haversine, ความยาวเส้น, Bearing | `lib/gis/geo-math.ts` | `npx playwright test tests/e2e/hybrid-google-maps.spec.ts` |
 | อ่านไฟล์ KMZ / KML / GeoJSON & field mapping | `lib/gis/gis-file-parser.ts` | `npm run check:fast` |
 | บีบอัดภาพ Base64 / Adaptive WebP-JPEG | `lib/gis/image-compress.ts` | `npm run check:fast` |
