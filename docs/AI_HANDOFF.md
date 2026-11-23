@@ -7,7 +7,7 @@
 1. อ่าน `AGENTS.md` แล้วอ่านไฟล์นี้ทั้งหมด
 2. รัน `git fetch origin`; ตรวจ `origin/main`, branch ปัจจุบัน และ `git status --short` ก่อนแก้ไฟล์
 3. ห้ามเขียนทับไฟล์ที่มีการแก้ค้างอยู่ และห้ามแก้จาก SHA เก่าหรือจากรายงานเก่าโดยไม่เทียบกับ `origin/main`
-4. อ่านเอกสารตามงาน: `docs/ARCHITECTURE.md`, `docs/UI_CONTRACT.md`, `docs/PLAYBOOKS.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/ADMIN_ROADMAP.md`; ใช้ `docs/CHANGELOG.md`, `docs/archive/SUPPLEMENTAL_RULES.md` และ `DECISION_LOG.md` แบบค้นคำ (`grep`) เท่านั้น
+4. อ่านเอกสารตามงาน: `docs/ARCHITECTURE.md`, `docs/UI_CONTRACT.md`, `docs/PLAYBOOKS.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/ADMIN_ROADMAP.md`; ใช้ `docs/archive/history/CHANGELOG.md`, `docs/archive/history/SUPPLEMENTAL_RULES.md` และ `docs/archive/history/DECISION_LOG.md` แบบค้นคำ (`grep`) เท่านั้น
 
 ## สถานะเผยแพร่ล่าสุด
 
@@ -49,7 +49,7 @@
 
 - ทำงานบน branch จาก `origin/main` ใหม่, รัน `npm run check:deploy` และ E2E เฉพาะส่วนที่แก้
 - สร้าง PR; รอ CI ผ่านก่อน merge. หลัง merge ตรวจ Pages workflow และ URL จริง
-- ทุกงานอัปเดต `docs/CHANGELOG.md`; อัปเดต `BACKLOG`/`KNOWN_ISSUES` เมื่อสถานะงานค้างหรือข้อจำกัดเปลี่ยน; ปรับไฟล์นี้เมื่อมีการเปลี่ยนกติกากลางหรือสถานะ deploy
+- ทุกงานอัปเดต `docs/archive/history/CHANGELOG.md`; อัปเดต `BACKLOG`/`KNOWN_ISSUES` เมื่อสถานะงานค้างหรือข้อจำกัดเปลี่ยน; ปรับไฟล์นี้เมื่อมีการเปลี่ยนกติกากลางหรือสถานะ deploy
 
 ## AI Handoff Template (สำหรับส่งต่อข้าม Codex / Gemini / Claude / Antigravity)
 

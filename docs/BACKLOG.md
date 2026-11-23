@@ -10,7 +10,7 @@
 | B-003 | สูง | Deploy ไม่รอ CI/e2e และรัน Playwright ซ้ำซ้อนเมื่อ push main | ปิด (2026-11-19, ดู UPDATE-137 — ผูก `deploy.yml` รอ `CI` ด้วย `workflow_run` + คง `workflow_dispatch`) |
 | B-004 | กลาง | หน้าแอดมินยังโหลด GeoJSON ทางหลวงเต็มความละเอียดทุกครั้ง | ปิด (2026-11-10, ดู UPDATE-063) |
 | B-005 | กลาง | ไฟล์ใหญ่เกิน: `GisDataImportTab.tsx` (1,218), `MapManagementTab.tsx` (2,353), `LongdoGisMap.tsx` (1,749), `DetourManagementTab.tsx` (1,770), `IncidentRegistryTab.tsx` (1,393), `EventDetourLinkModal.tsx` (1,306) | ปิดบางส่วน (ดู `docs/ADMIN_ROADMAP.md` Phase 3 & 4.1 สำหรับแผนแตกไฟล์และ telemetry เครื่องจริง) |
-| B-006 | กลาง | `SUPPLEMENTAL_RULES.md` ~120 KB ถูกบังคับให้อ่านทุกเซสชัน | ปิด (2026-11-19, ดู UPDATE-103 และ UPDATE-137 — ย้ายไป `docs/archive/SUPPLEMENTAL_RULES.md` พร้อมอัปเดตลิงก์ครบ) |
+| B-006 | กลาง | `SUPPLEMENTAL_RULES.md` ~120 KB ถูกบังคับให้อ่านทุกเซสชัน | ปิด (2026-11-19, ดู UPDATE-103 และ UPDATE-137 — ย้ายไป `docs/archive/history/SUPPLEMENTAL_RULES.md` พร้อมอัปเดตลิงก์ครบ) |
 | B-007 | ต่ำ | โค้ดค้างที่ไม่อยู่ใน path จริง (better-auth, supabase-server, routing-service, Docker Postgres) | ปิด (ลบไฟล์ค้างแล้วใน UPDATE-065) |
 | B-008 | กลาง | พึ่ง OSRM สาธารณะ (`router.project-osrm.org`) ไม่มี SLA | กำลังทำ (เพิ่ม Google Routes API proxy เป็น Tier 1 ก่อน OSRM; รอ deploy Edge + ตั้ง secret `GOOGLE_MAPS_API_KEY`) |
 | B-009 | ต่ำ | `npm run check` ไม่ได้ build แบบ Pages (ที่ใช้ deploy จริง) | ปิด (2026-11-16, UPDATE-095) |
@@ -102,7 +102,7 @@
   - **A (แนะนำ)** ให้เจ้าหน้าที่ไม่กี่คน login ด้วย Supabase Auth (อีเมล+รหัสผ่าน) · ตั้ง `app_metadata.role = admin/doh_admin` · Edge Function ตรวจ token + บทบาทก่อนทุก mutation แล้วจึงใช้ service role · หน้า `/admin` เพิ่มฟอร์ม login (ไม่ต้องเปลี่ยน UI อื่น) — ผลต่อผู้ใช้: ต้องกรอกรหัสครั้งเดียวต่อเซสชัน
   - **B** รหัสผ่านร่วม (passcode) ตรวจฝั่ง server แล้วออก token อายุสั้น — ทำเร็วกว่า แต่รหัสร่วมรั่วง่ายและตรวจสอบย้อนหลังไม่ได้ว่าใครแก้
   - **C** คงเดิมแต่ลดความเสียหาย: เปิด Point-in-Time Recovery/สำรองข้อมูลรายวัน + ตาราง audit log (trigger) + rate limit + แจ้งเตือนเมื่อสถานะเปลี่ยนผิดปกติ — ไม่หยุดการโจมตี แต่กู้คืนได้
-  - **D** ยอมรับความเสี่ยงเป็นลายลักษณ์อักษร (ต้องให้เจ้าของลงชื่อใน `docs/CHANGELOG.md`)
+  - **D** ยอมรับความเสี่ยงเป็นลายลักษณ์อักษร (ต้องให้เจ้าของลงชื่อใน `docs/archive/history/CHANGELOG.md`)
 - **คำแนะนำ:** A + C ทำคู่กัน; ถ้ายังไม่พร้อม A ให้ทำ C ทันทีเป็นขั้นต่ำ
 - **ข้อเสนอแนะการยืนยัน:** เปิด Supabase Dashboard → Edge Functions → `hdms-api` ดูโค้ดที่ deploy จริง ว่ามี `getUser`/ตรวจบทบาทหรือไม่ (อย่าทดสอบด้วยการลบข้อมูลจริง)
 - **ข้อห้ามชั่วคราว:** AI ห้ามเพิ่ม action เขียน/ลบใหม่ใน Edge Function จนกว่ารายการนี้จะปิดหรือเจ้าของยอมรับความเสี่ยง (AGENTS §4)
@@ -132,7 +132,7 @@
 - **สิ่งที่เหลือสำหรับอนาคต (เมื่อต้องการแยกเพิ่ม):** แยกส่วนตารางทางหลวง (`GisHighwaySpecsTable`) และฟอร์มย่อยของโหมดจุดน้ำท่วมใน `MapManagementTab.tsx` ใน PR ถัดไปโดยยึดชุดทดสอบ E2E เดียวกัน
 
 ## B-006 [กลาง] `SUPPLEMENTAL_RULES.md` — ปิดแล้ว
-- แก้แล้ว: ยกเลิกการบังคับอ่านทั้งไฟล์ใน `UPDATE-103` และใน `UPDATE-137` (2026-11-19) ย้ายไฟล์ไป `docs/archive/SUPPLEMENTAL_RULES.md` พร้อมปรับลิงก์อ้างอิงใน `AGENTS.md`, `GEMINI.md`, `CLAUDE.md`, `.cursorrules`, `.windsurfrules`, `docs/AI_HANDOFF.md` และ `docs/PLAYBOOKS.md` ครบถ้วน
+- แก้แล้ว: ยกเลิกการบังคับอ่านทั้งไฟล์ใน `UPDATE-103` และใน `UPDATE-137` (2026-11-19) ย้ายไฟล์ไป `docs/archive/history/SUPPLEMENTAL_RULES.md` พร้อมปรับลิงก์อ้างอิงใน `AGENTS.md`, `GEMINI.md`, `CLAUDE.md`, `.cursorrules`, `.windsurfrules`, `docs/AI_HANDOFF.md` และ `docs/PLAYBOOKS.md` ครบถ้วน
 - **สถานะ:** ปิด (2026-11-19, ดู UPDATE-137)
 
 ## B-007 [ต่ำ] โค้ดค้าง — ปิดบางส่วน
