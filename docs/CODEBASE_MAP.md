@@ -17,7 +17,8 @@
 ## 2. Admin Workspace (`/admin`)
 | งาน / อาการ | ไฟล์เป้าหมาย | คำสั่งตรวจเฉพาะจุด |
 |---|---|---|
-| แท็บจัดการแผนที่/วาดเส้นน้ำท่วม-ทางเลี่ยง | `components/admin/tabs/MapManagementTab.tsx` | `npm run check:fast` |
+| แท็บจัดการแผนที่/วาดเส้นน้ำท่วม-ทางเลี่ยง (UI หลัก/Container) | `components/admin/tabs/MapManagementTab.tsx` | `npm run check:fast` |
+| ส่วนประกอบ Form UI ย่อย (Header, Draft Banner, Action Bar) | `components/admin/tabs/MapFormSections.tsx` | `npx eslint components/admin/tabs/MapFormSections.tsx --max-warnings=0` |
 | Hooks ของ MapManagementTab (draft, hydration, picker, media, snapping, submit) | `components/admin/tabs/useMapRoute*.ts`, `useDualRoadSnapping.ts`, `useMapCoordinatePicker.ts` | `npm run check:fast` |
 | Helper ตัดช่วง กม. บนแนวทางหลวง | `components/admin/tabs/map-management-helpers.ts` | `npm run check:fast` |
 | แท็บจัดการเส้นทางเลี่ยง (UI หลัก/Container) | `components/admin/tabs/DetourManagementTab.tsx` | `npx eslint components/admin/tabs/DetourManagementTab.tsx --max-warnings=0` |
