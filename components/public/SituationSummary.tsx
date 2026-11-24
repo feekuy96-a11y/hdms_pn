@@ -24,7 +24,7 @@ export function SituationSummary({
               type="button"
               aria-pressed={activeFilter === item.color}
               onClick={() => onFilter(item.color)}
-              className={`inline-flex min-h-9 items-center gap-1.5 rounded-xl border px-2.5 py-1 text-left whitespace-nowrap leading-snug tracking-normal transition cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
+              className={`inline-flex min-h-9 items-center gap-1.5 rounded-xl border px-2.5 py-1 text-left whitespace-nowrap leading-snug tracking-normal transition touch-manipulation cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
                 activeFilter === item.color
                   ? "border-amber-400/80 bg-surface-card ring-1 ring-amber-400/50 text-white"
                   : "border-surface bg-surface-panel/70 hover:bg-surface-card text-slate-200"

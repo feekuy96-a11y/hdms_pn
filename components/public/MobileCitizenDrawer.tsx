@@ -89,7 +89,7 @@ export function MobileCitizenDrawer({
                       aria-label={`${situationCounts[item.color]} ${item.label}`}
                       title={item.label}
                       onClick={() => handleStatusFilter(item.color)}
-                      className={`inline-flex min-h-7 items-center gap-1 rounded-lg border px-1.5 py-0.5 whitespace-nowrap transition cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
+                      className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2 py-1 whitespace-nowrap transition touch-manipulation cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
                         selectedStatusFilter === item.color
                           ? "border-amber-400/80 bg-surface-card text-white"
                           : "border-surface bg-surface-panel/70 hover:bg-surface-card text-slate-200"
