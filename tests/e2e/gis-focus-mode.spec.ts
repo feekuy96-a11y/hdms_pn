@@ -521,4 +521,146 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
       )
       .toBe(preModalTransform);
   });
+
+  test("Sidebar Filter Auto-Exit leaves Focus Mode cleanly without keeping stale popup or modal", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Desktop sidebar filter auto-exit verification");
+    const payload = createMockPayload();
+    await page.route("**/functions/v1/hdms-api", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
+    );
+
+    await page.goto("/");
+    await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
+    const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+    await floodDialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).last().click();
+
+    const focusBar = page.getByTestId("gis-focus-mode-bar");
+    await expect(focusBar).toBeVisible();
+
+    // Change filter in sidebar (search query) while focused -> must auto-exit Focus Mode
+    const searchInput = page.getByPlaceholder(/ค้นหาสายทาง/);
+    await searchInput.fill("42");
+
+    await expect(focusBar).toHaveCount(0);
+    await expect(searchInput).toHaveValue("42");
+    await expect(floodDialog).toHaveCount(0);
+    await expect(page.locator(".leaflet-popup")).toHaveCount(0);
+  });
+
+  test("Enter and Exit Focus Mode 3 times leaves no leaked listeners, popups, or errors", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Desktop 3-cycle enter/exit stability verification");
+    const pageErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(err.message));
+
+    const payload = createMockPayload();
+    await page.route("**/functions/v1/hdms-api", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
+    );
+
+    await page.goto("/");
+    const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+    const focusBar = page.getByTestId("gis-focus-mode-bar");
+
+    for (let cycle = 1; cycle <= 3; cycle += 1) {
+      await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
+      await expect(floodDialog).toBeVisible();
+      await floodDialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).last().click();
+
+      await expect(floodDialog).toHaveCount(0);
+      await expect(focusBar).toBeVisible();
+
+      if (cycle < 3) {
+        await page.keyboard.press("Escape");
+      } else {
+        await page.getByTestId("gis-focus-exit-btn").click();
+      }
+
+      await expect(focusBar).toHaveCount(0);
+      await expect(floodDialog).toHaveCount(0);
+      await expect(page.locator(".leaflet-popup")).toHaveCount(0);
+    }
+
+    // Extra Escape press after exit must stay clean
+    await page.keyboard.press("Escape");
+    await expect(focusBar).toHaveCount(0);
+    await expect(page.locator(".leaflet-popup")).toHaveCount(0);
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("Mobile 360x640 Focus Bar respects Safe Padding and does not overlap map controls or floating bar", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "Mobile 360x640 layout overlap verification");
+    await page.setViewportSize({ width: 360, height: 640 });
+    const payload = createMockPayload();
+    await page.route("**/functions/v1/hdms-api", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
+    );
+
+    await page.goto("/");
+    await page.getByRole("button", { name: /ดูรายการสายทาง/ }).click();
+    await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
+    const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+    await floodDialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).last().click();
+
+    const focusBar = page.getByTestId("gis-focus-mode-bar");
+    await expect(focusBar).toBeVisible();
+    await page.waitForTimeout(350);
+
+    const layoutCheck = await page.evaluate(() => {
+      const overlaps = (a: DOMRect | undefined, b: DOMRect | undefined) => {
+        if (!a || !b) return false;
+        return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+      };
+      const bar = document.querySelector('[data-testid="gis-focus-mode-bar"]');
+      const barRect = bar?.getBoundingClientRect();
+      const zoomIn = document.querySelector(".leaflet-control-zoom-in");
+      const zoomOut = document.querySelector(".leaflet-control-zoom-out");
+      const locateBtn = Array.from(document.querySelectorAll("button")).find((b) =>
+        b.textContent?.includes("ตำแหน่งของฉัน")
+      );
+      const legendBtn = Array.from(document.querySelectorAll("button")).find((b) =>
+        b.textContent?.includes("สัญลักษณ์บนแผนที่")
+      );
+      const listBtn = Array.from(document.querySelectorAll("button")).find((b) =>
+        b.textContent?.includes("ดูรายการสายทาง")
+      );
+      const exitBtn = document.querySelector('[data-testid="gis-focus-exit-btn"]');
+
+      const centerHit = (el: Element | null | undefined) => {
+        if (!el) return { present: false, hitSelf: false };
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return { present: true, hitSelf: Boolean(hit && (el === hit || el.contains(hit))) };
+      };
+
+      return {
+        docOverflowX: document.documentElement.scrollWidth > window.innerWidth,
+        overlapZoomIn: overlaps(barRect, zoomIn?.getBoundingClientRect()),
+        overlapZoomOut: overlaps(barRect, zoomOut?.getBoundingClientRect()),
+        overlapLocate: overlaps(barRect, locateBtn?.getBoundingClientRect()),
+        overlapLegend: overlaps(barRect, legendBtn?.getBoundingClientRect()),
+        overlapFloatingBar: overlaps(barRect, listBtn?.closest(".fixed")?.getBoundingClientRect()),
+        hitZoomIn: centerHit(zoomIn),
+        hitLocate: centerHit(locateBtn),
+        hitLegend: centerHit(legendBtn),
+        hitFloatingList: centerHit(listBtn),
+        hitExitBtn: centerHit(exitBtn),
+      };
+    });
+
+    expect(layoutCheck.docOverflowX).toBe(false);
+    expect(layoutCheck.overlapZoomIn).toBe(false);
+    expect(layoutCheck.overlapZoomOut).toBe(false);
+    expect(layoutCheck.overlapLocate).toBe(false);
+    expect(layoutCheck.overlapLegend).toBe(false);
+    expect(layoutCheck.overlapFloatingBar).toBe(false);
+    expect(layoutCheck.hitZoomIn).toEqual({ present: true, hitSelf: true });
+    expect(layoutCheck.hitLocate).toEqual({ present: true, hitSelf: true });
+    expect(layoutCheck.hitLegend).toEqual({ present: true, hitSelf: true });
+    expect(layoutCheck.hitFloatingList).toEqual({ present: true, hitSelf: true });
+    expect(layoutCheck.hitExitBtn).toEqual({ present: true, hitSelf: true });
+
+    await page.getByTestId("gis-focus-exit-btn").click();
+    await expect(focusBar).toHaveCount(0);
+    await expect(floodDialog).toHaveCount(0);
+  });
 });

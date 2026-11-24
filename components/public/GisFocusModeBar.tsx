@@ -107,28 +107,28 @@ export function GisFocusModeBar({
       role="region"
       aria-label="แถบโหมดโฟกัสแผนที่"
       data-testid="gis-focus-mode-bar"
-      className="pointer-events-auto absolute inset-x-2 top-2 z-[620] mx-auto max-w-2xl rounded-2xl border border-amber-400/50 bg-[#081120]/95 px-3 py-2.5 text-slate-100 shadow-2xl backdrop-blur-md sm:inset-x-4 sm:top-3 sm:px-4"
+      className="pointer-events-auto absolute inset-x-2 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[620] mx-auto max-w-2xl rounded-2xl border border-amber-400/50 bg-[#081120]/95 px-3 py-2 text-slate-100 shadow-2xl backdrop-blur-md sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-3 sm:w-[min(34rem,calc(100%-22rem))] sm:-translate-x-1/2 sm:px-4 sm:py-2.5"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1">
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.7rem] font-heading font-bold ${
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6875rem] font-heading font-bold whitespace-nowrap ${
                 isDetour
                   ? "bg-amber-400 text-slate-950"
                   : "bg-sky-500 text-slate-950"
               }`}
             >
               {isDetour ? (
-                <ArrowLeftRight aria-hidden="true" className="h-3 w-3" />
+                <ArrowLeftRight aria-hidden="true" className="h-3 w-3 shrink-0" />
               ) : (
-                <Droplets aria-hidden="true" className="h-3 w-3" />
+                <Droplets aria-hidden="true" className="h-3 w-3 shrink-0" />
               )}
               <span>{isDetour ? "โหมดโฟกัส: เส้นทางเลี่ยง" : "โหมดโฟกัส: เหตุการณ์น้ำท่วม"}</span>
             </span>
 
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900/90 px-2 py-0.5 text-[0.7rem] text-slate-300">
-              <EyeOff aria-hidden="true" className="h-3 w-3 text-amber-300" />
+            <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900/90 px-2 py-0.5 text-[0.6875rem] text-slate-300 whitespace-nowrap">
+              <EyeOff aria-hidden="true" className="h-3 w-3 shrink-0 text-amber-300" />
               <span>ซ่อนชั้นข้อมูลอื่นชั่วคราว</span>
             </span>
           </div>
@@ -193,11 +193,13 @@ export function GisFocusModeBar({
         <button
           type="button"
           onClick={onExit}
+          aria-label="ออกจากโหมดโฟกัส"
           data-testid="gis-focus-exit-btn"
-          className="inline-flex min-h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-slate-600 bg-slate-800 px-3 py-1.5 font-heading text-xs font-bold text-white transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+          className="inline-flex min-h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-slate-600 bg-slate-800 px-2.5 py-1.5 font-heading text-xs font-bold text-white transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 sm:px-3"
         >
           <X aria-hidden="true" className="h-4 w-4" />
-          <span>ออกจากโหมดโฟกัส</span>
+          <span className="sm:hidden">ออก</span>
+          <span className="hidden sm:inline">ออกจากโหมดโฟกัส</span>
           <kbd className="hidden rounded bg-slate-950/80 px-1.5 py-0.5 font-mono text-[0.65rem] text-slate-300 sm:inline">
             Esc
           </kbd>
