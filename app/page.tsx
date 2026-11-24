@@ -805,10 +805,14 @@ export default function HomePage() {
       </div>
 
 
-      {/* Toast Notification */}
+      {/* Toast Notification (z-[640]: above map/floating-bar z-[400..600], below drawer z-[650] and modals z-[700..800]) */}
       {(toastMessage || isError) && (
-        <div role="status" aria-live="polite" className="fixed bottom-28 left-3 right-3 z-[9999] lg:bottom-4 lg:left-auto lg:right-4 bg-slate-950 border-2 border-amber-400 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-heading flex items-center gap-2.5 max-w-sm">
-          <span className="w-2 h-2 rounded-full bg-amber-400" />
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed bottom-28 left-3 right-3 z-[640] lg:bottom-4 lg:left-auto lg:right-4 bg-slate-950 border-2 border-amber-400 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-heading flex items-center gap-2.5 max-w-sm"
+        >
+          <span aria-hidden="true" className="w-2 h-2 shrink-0 rounded-full bg-amber-400" />
           <span>{toastMessage || "ตรวจสอบข้อมูลล่าสุดไม่สำเร็จ โปรดลองอีกครั้ง"}</span>
         </div>
       )}

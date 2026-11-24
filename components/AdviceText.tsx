@@ -60,6 +60,17 @@ export function AdviceText({
             </div>
           );
         }
+        if (/^(?:ยังไม่มีคำแนะนำ|เส้นทางเลี่ยงนี้เปิดใช้งานเฉพาะ)/.test(block.text)) {
+          return (
+            <div
+              key={index}
+              role="status"
+              className="rounded-xl border border-amber-500/40 bg-amber-950/35 px-3 py-2 text-xs text-amber-200 leading-relaxed break-words"
+            >
+              {block.text}
+            </div>
+          );
+        }
         return (
           <div key={index} className="break-words">
             {block.text}

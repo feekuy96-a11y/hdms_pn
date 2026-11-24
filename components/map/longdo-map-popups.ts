@@ -11,6 +11,7 @@ import {
   isRecordedDetourDirection,
   type DetourDirection,
   type DetourTimelinePresentation,
+  type DetourTimelineStep,
 } from "@/lib/detour-presentation";
 import {
   AFFECTED_ROAD_PART_LABELS,
@@ -228,25 +229,39 @@ export function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color:
   `;
 }
 
+function getDetourStepIconSvg(iconType: DetourTimelineStep["iconType"]): string {
+  switch (iconType) {
+    case "start":
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="#10b981" class="shrink-0" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>`;
+    case "end":
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>`;
+    case "turn_right":
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>`;
+    case "turn_left":
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>`;
+    case "slight_right":
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7dd3fc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>`;
+    case "slight_left":
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7dd3fc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><line x1="17" y1="17" x2="7" y2="7"/><polyline points="17 7 7 7 7 17"/></svg>`;
+    case "uturn":
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fde68a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11"/></svg>`;
+    case "roundabout":
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7dd3fc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`;
+    case "straight":
+    default:
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
+  }
+}
+
 export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePresentation): string {
   if (!presentation.steps.length) {
-    return `<div class="rounded-xl border border-slate-800 bg-[#0d1b36] p-[1em] text-xs text-slate-300 text-center">ไม่มีข้อมูลขั้นตอนการเดินทางสำหรับทิศทางนี้</div>`;
+    return `<div class="rounded-xl border border-amber-500/40 bg-[#0d1b36] p-[1em] text-xs text-amber-200 text-center">${escapeHtml(presentation.directionNotice || "ไม่มีข้อมูลขั้นตอนการเดินทางสำหรับทิศทางนี้")}</div>`;
   }
 
   const stepsHtml = presentation.steps
     .map((step, idx) => {
-      const isFirst = idx === 0;
       const isLast = idx === presentation.steps.length - 1;
-      const isTurnRight = step.iconType === "turn_right";
-      const isTurnLeft = step.iconType === "turn_left";
-
-      const iconSvg = isFirst
-        ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="#10b981" class="shrink-0" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>`
-        : isTurnRight
-          ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>`
-          : isTurnLeft
-            ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>`
-            : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
+      const iconSvg = getDetourStepIconSvg(step.iconType);
 
       return `
       <div class="relative flex items-start gap-[1em]">
@@ -255,18 +270,16 @@ export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePrese
           ${step.stepNumber}
         </div>
         <div class="flex-1 min-w-0 rounded-xl border border-slate-800 bg-[#0d1b36] p-[0.833em] shadow-sm">
-          <div class="flex items-center justify-between gap-[0.5em]">
+          <div class="flex items-start justify-between gap-[0.5em]">
             <div class="flex items-center gap-[0.5em] min-w-0">
               ${iconSvg}
-              <span class="font-bold text-[#fbbf24] text-xs font-heading truncate">${escapeHtml(step.title)}</span>
+              <span class="font-bold text-[#fbbf24] text-xs font-heading break-words">${escapeHtml(step.title)}</span>
             </div>
             <span class="shrink-0 rounded-full border border-slate-700 bg-slate-900/90 px-[0.667em] py-[0.167em] text-[0.75rem] font-medium text-slate-300">
               ${escapeHtml(step.badge)}
             </span>
           </div>
-          <p class="mt-1 text-xs text-slate-300 leading-relaxed break-words [overflow-wrap:anywhere]">
-            ${escapeHtml(step.detail)}
-          </p>
+          ${step.detail ? `<p class="mt-1 text-xs text-slate-300 leading-relaxed break-words [overflow-wrap:anywhere]">${escapeHtml(step.detail)}</p>` : ""}
         </div>
       </div>
     `;
@@ -282,7 +295,7 @@ export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePrese
         <div class="flex items-center gap-[0.5em] text-slate-300">
           <span class="text-sm" aria-hidden="true">🛣</span>
           <span>ระยะทางรวม</span>
-          <strong class="font-bold text-white text-xs">${escapeHtml(presentation.totalDistanceFormatted)} กม.</strong>
+          <strong class="font-bold text-white text-xs">${presentation.totalDistanceKm > 0 ? `${escapeHtml(presentation.totalDistanceFormatted)} กม.` : "ไม่ระบุ"}</strong>
         </div>
         <span class="text-slate-600 hidden sm:inline" aria-hidden="true">|</span>
         <div class="flex items-center gap-[0.5em] text-slate-300">
@@ -417,21 +430,21 @@ export function buildDetourPopupHtml(
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19V9a4 4 0 0 1 4-4h9"/><path d="m15 2 3 3-3 3"/><path d="M9 19h10"/><path d="m16 16 3 3-3 3"/></svg>
           <span class="font-bold text-white text-xs font-heading">คำแนะนำเส้นทาง</span>
         </div>
-        <div id="detour-desc-fwd-${safeId}" class="${!isRev ? "block" : "hidden"} max-h-32 sm:max-h-52 overflow-y-auto overscroll-contain pr-0.5">
+        <div id="detour-desc-fwd-${safeId}" class="${!isRev ? "block" : "hidden"} sm:max-h-48 sm:overflow-y-auto sm:overscroll-contain sm:pr-0.5">
           ${buildDetourTimelineSectionHtml(forwardPresentation)}
         </div>
-        <div id="detour-desc-rev-${safeId}" class="${isRev ? "block" : "hidden"} max-h-32 sm:max-h-52 overflow-y-auto overscroll-contain pr-0.5">
+        <div id="detour-desc-rev-${safeId}" class="${isRev ? "block" : "hidden"} sm:max-h-48 sm:overflow-y-auto sm:overscroll-contain sm:pr-0.5">
           ${buildDetourTimelineSectionHtml(reversePresentation)}
         </div>
       </div>
 
-      <div class="mt-2.5 sm:mt-3.5 pt-2 sm:pt-2.5 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center gap-[0.5em] sm:gap-[0.667em]">
+      <div class="mt-2.5 sm:mt-3.5 pt-2 sm:pt-2.5 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-stretch gap-[0.5em] sm:gap-[0.667em]">
         <button
           type="button"
           id="detour-nav-btn-${safeId}"
           ${recorded ? "" : "disabled aria-disabled=\"true\" title=\"รอเจ้าหน้าที่ตรวจสอบทิศทางเดินรถ\""}
           onclick="window.__openDetourGoogleMaps && window.__openDetourGoogleMaps('${safeId}', window.__getDetourCurrentDir ? window.__getDetourCurrentDir('${safeId}') : '${defaultDir}')"
-          class="doh-detour-nav-btn w-full sm:w-auto flex-1 min-h-[2.75rem] py-[0.667em] px-[1em] bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-xl flex items-center justify-between shadow transition cursor-pointer border border-emerald-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
+          class="doh-detour-nav-btn w-full sm:w-auto sm:flex-[1.35] min-h-[2.75rem] py-[0.667em] px-[1em] bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-xl flex items-center justify-between shadow transition touch-manipulation cursor-pointer border border-emerald-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <div class="flex items-center gap-[0.667em] min-w-0">
             <div class="w-6 h-6 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm" aria-hidden="true">
@@ -450,7 +463,7 @@ export function buildDetourPopupHtml(
         <button
           type="button"
           onclick="window.__openDetourModal && window.__openDetourModal('${escapeHtml(detour.id)}')"
-          class="doh-detour-detail-btn w-full sm:w-auto min-h-[2.75rem] py-[0.667em] px-[1em] bg-[#13203c] hover:bg-[#1a2b50] border border-sky-800/80 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-[0.5em] shadow transition cursor-pointer shrink-0"
+          class="doh-detour-detail-btn w-full sm:w-auto sm:flex-1 min-h-[2.75rem] py-[0.667em] px-[1em] bg-[#13203c] hover:bg-[#1a2b50] border border-sky-800/80 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-[0.5em] shadow transition touch-manipulation cursor-pointer shrink-0"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
           <span>ดูตำแหน่งบนแผนที่</span>

@@ -3,6 +3,9 @@
 import React from "react";
 import {
   ArrowLeftRight,
+  ArrowUp,
+  ArrowUpLeft,
+  ArrowUpRight,
   BookOpen,
   Camera,
   CheckCircle2,
@@ -10,9 +13,13 @@ import {
   CornerUpLeft,
   CornerUpRight,
   ExternalLink,
+  Flag,
   Link2,
+  MapPin,
   Milestone,
+  RefreshCw,
   Route,
+  Undo2,
   X,
 } from "lucide-react";
 import type { DetourRoute, SystemDataPayload } from "@/db/default-data";
@@ -27,7 +34,32 @@ import {
   getDetourTimelinePresentation,
   isDetourDirectionAllowed,
   isRecordedDetourDirection,
+  type DetourTimelineStep,
 } from "@/lib/detour-presentation";
+
+function renderStepIcon(iconType: DetourTimelineStep["iconType"]) {
+  switch (iconType) {
+    case "start":
+      return <MapPin aria-hidden="true" className="w-4 h-4 text-emerald-400 shrink-0 stroke-[2.5]" />;
+    case "end":
+      return <Flag aria-hidden="true" className="w-4 h-4 text-emerald-400 shrink-0 stroke-[2.5]" />;
+    case "turn_left":
+      return <CornerUpLeft aria-hidden="true" className="w-4 h-4 text-white shrink-0 stroke-[2.5]" />;
+    case "turn_right":
+      return <CornerUpRight aria-hidden="true" className="w-4 h-4 text-white shrink-0 stroke-[2.5]" />;
+    case "slight_left":
+      return <ArrowUpLeft aria-hidden="true" className="w-4 h-4 text-sky-300 shrink-0 stroke-[2.5]" />;
+    case "slight_right":
+      return <ArrowUpRight aria-hidden="true" className="w-4 h-4 text-sky-300 shrink-0 stroke-[2.5]" />;
+    case "uturn":
+      return <Undo2 aria-hidden="true" className="w-4 h-4 text-amber-200 shrink-0 stroke-[2.5]" />;
+    case "roundabout":
+      return <RefreshCw aria-hidden="true" className="w-4 h-4 text-sky-300 shrink-0 stroke-[2.5]" />;
+    case "straight":
+    default:
+      return <ArrowUp aria-hidden="true" className="w-4 h-4 text-white shrink-0 stroke-[2.5]" />;
+  }
+}
 import { getLinkedEventsForDetour } from "@/lib/event-detour-links";
 import { normalizeMediaUrl } from "@/lib/flood-event-schema";
 import {
@@ -68,10 +100,10 @@ export function DetourDossierModal({
         role="dialog"
         aria-modal="true"
         aria-label={`คำแนะนำเส้นทางเลี่ยง ${viewingDetourModal.route_name}`}
-        className="relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[1.75rem] border border-sky-950 bg-[#081120] text-slate-100 shadow-2xl sm:max-h-[88dvh] sm:max-w-[30.625rem] sm:rounded-[1.75rem]"
+        className="relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[1.75rem] border-x-0 border-t border-b-0 border-sky-950 bg-[#081120] text-slate-100 shadow-2xl sm:max-h-[88dvh] sm:max-w-[30.625rem] sm:rounded-[1.75rem] sm:border-0 sm:ring-1 sm:ring-sky-950"
       >
-        {/* 1. Top Header Bar */}
-        <div className="sticky top-0 z-20 border-b border-slate-800/80 bg-[#0c182e] px-4 pb-3 pt-2.5 shadow-md">
+        {/* 1. Top Header Bar (Fixed outside scroll container) */}
+        <div className="shrink-0 z-20 border-b border-slate-800/80 bg-[#0c182e] px-4 pb-3 pt-2.5 shadow-md">
           <div aria-hidden="true" className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-slate-600 sm:hidden" />
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -233,16 +265,20 @@ export function DetourDossierModal({
                 : fwdCoords;
             const fallbackPolyKm = calculatePolylineRoadDistanceKm(polyCoords);
             const linked = getLinkedEventsForDetour(viewingDetourModal, systemData)[0]?.primaryFlood ?? null;
-            const startHint = linked ? `ทล.${linked.route_no} (${linked.section_name})` : viewingDetourModal.route_name;
+            const baseStartHint = linked ? `ทล.${linked.route_no} (${linked.section_name})` : viewingDetourModal.route_name;
             const areaText = linked ? formatFloodAreaLine(linked) : null;
-            const endHint = areaText ? `(${areaText})` : "";
+            const baseEndHint = areaText ? `(${areaText})` : "";
+            const effectiveStartHint =
+              modalDetourDirection === "REVERSE" ? (baseEndHint || baseStartHint) : baseStartHint;
+            const effectiveEndHint =
+              modalDetourDirection === "REVERSE" ? baseStartHint : baseEndHint;
 
             const timeline = getDetourTimelinePresentation(
               adviceText,
               meters,
               fallbackPolyKm,
-              startHint,
-              endHint,
+              effectiveStartHint,
+              effectiveEndHint,
               viewingDetourModal.detour_meta?.road_condition,
               durationSeconds
             );
@@ -255,74 +291,79 @@ export function DetourDossierModal({
                   <span>คำแนะนำเส้นทาง</span>
                 </div>
 
-                {/* Step Timeline Container */}
-                <div className="relative space-y-3 pl-1">
-                  {/* Vertical Connector Line */}
-                  {timeline.steps.length > 1 && (
-                    <div
-                      aria-hidden="true"
-                      className="absolute left-[17px] top-4 bottom-4 w-0.5 bg-slate-600/70"
-                    />
-                  )}
-
-                  {timeline.steps.map((st) => (
-                    <div key={st.stepNumber} className="relative flex items-start">
-                      {/* Step Number Circle */}
+                {/* Step Timeline Container (numbered strictly for travel steps 1..N) */}
+                {timeline.steps.length > 0 ? (
+                  <div className="relative space-y-3 pl-1">
+                    {/* Vertical Connector Line */}
+                    {timeline.steps.length > 1 && (
                       <div
                         aria-hidden="true"
-                        className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#f59e0b] text-xs font-black text-slate-950 shadow-md"
-                      >
-                        {st.stepNumber}
-                      </div>
+                        className="absolute left-[17px] top-4 bottom-4 w-0.5 bg-slate-600/70"
+                      />
+                    )}
 
-                      {/* Step Card */}
-                      <div className="ml-3 flex-1 rounded-2xl border border-slate-800 bg-[#0d1b36] p-3 shadow-sm">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            {st.iconType === "start" ? (
-                              <span className="text-sm">📍</span>
-                            ) : st.iconType === "turn_left" ? (
-                              <CornerUpLeft className="w-4 h-4 text-white inline-block stroke-[2.5]" />
-                            ) : (
-                              <CornerUpRight className="w-4 h-4 text-white inline-block stroke-[2.5]" />
-                            )}
-                            <span className="font-heading font-bold text-sm text-amber-300 truncate">
-                              {st.title}
+                    {timeline.steps.map((st) => (
+                      <div key={st.stepNumber} className="relative flex items-start">
+                        {/* Step Number Circle */}
+                        <div
+                          aria-hidden="true"
+                          className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#f59e0b] text-xs font-black text-slate-950 shadow-md"
+                        >
+                          {st.stepNumber}
+                        </div>
+
+                        {/* Step Card */}
+                        <div className="ml-3 flex-1 min-w-0 rounded-2xl border border-slate-800 bg-[#0d1b36] p-3 shadow-sm">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {renderStepIcon(st.iconType)}
+                              <span className="font-heading font-bold text-sm text-amber-300 break-words">
+                                {st.title}
+                              </span>
+                            </div>
+                            <span className="rounded-md border border-slate-700/80 bg-slate-900/90 px-2 py-0.5 font-mono text-xs text-slate-300 whitespace-nowrap shrink-0">
+                              {st.badge}
                             </span>
                           </div>
-                          <span className="rounded-md border border-slate-700/80 bg-slate-900/90 px-2 py-0.5 font-mono text-xs text-slate-300 whitespace-nowrap shrink-0">
-                            {st.badge}
-                          </span>
+                          {st.detail && (
+                            <p className="text-xs text-slate-300 mt-1 leading-normal break-words">
+                              {st.detail}
+                            </p>
+                          )}
                         </div>
-                        <p className="text-xs text-slate-300 mt-1 leading-normal break-words">
-                          {st.detail}
-                        </p>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-amber-500/40 bg-slate-900/80 p-3.5 text-xs text-amber-200 leading-relaxed">
+                    {timeline.directionNotice || "ไม่มีข้อมูลขั้นตอนการเดินทางสำหรับทิศทางนี้"}
+                  </div>
+                )}
 
                 {/* 5. Metrics Bar: ระยะทางรวม & เวลาโดยประมาณ */}
-                <div className="rounded-2xl border border-slate-800/80 bg-[#0e1c36] p-3 flex items-center justify-around text-slate-200 mt-3 shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <Route className="w-4 h-4 text-slate-300" />
-                    <span className="text-xs text-slate-300">ระยะทางรวม</span>
-                    <strong className="font-heading font-bold text-sm sm:text-base text-white">
-                      {timeline.totalDistanceFormatted} กม.
-                    </strong>
+                <div className="grid grid-cols-2 gap-2.5 mt-3">
+                  <div className="rounded-2xl border border-slate-800/80 bg-[#0e1c36] px-3 py-2.5 flex items-center gap-2.5 shadow-sm">
+                    <Route aria-hidden="true" className="w-4 h-4 text-slate-300 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[0.75rem]/[1.1rem] text-slate-400">ระยะทางรวม</div>
+                      <strong className="font-heading font-bold text-sm text-white block">
+                        {timeline.totalDistanceKm > 0 ? `${timeline.totalDistanceFormatted} กม.` : "ไม่ระบุ"}
+                      </strong>
+                    </div>
                   </div>
-                  <div className="h-5 w-px bg-slate-700/80" />
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-slate-300" />
-                    <span className="text-xs text-slate-300">เวลาโดยประมาณ</span>
-                    <strong className="font-heading font-bold text-sm sm:text-base text-white">
-                      {timeline.estimatedMinutes !== null ? `${timeline.estimatedMinutes} นาที` : timeline.estimatedDurationText}
-                    </strong>
+                  <div className="rounded-2xl border border-slate-800/80 bg-[#0e1c36] px-3 py-2.5 flex items-center gap-2.5 shadow-sm">
+                    <Clock aria-hidden="true" className="w-4 h-4 text-slate-300 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[0.75rem]/[1.1rem] text-slate-400">เวลาโดยประมาณ</div>
+                      <strong className="font-heading font-bold text-xs sm:text-sm text-white block break-words">
+                        {timeline.estimatedMinutes !== null ? `${timeline.estimatedMinutes} นาที` : timeline.estimatedDurationText}
+                      </strong>
+                    </div>
                   </div>
                 </div>
 
                 {/* 6. Road Condition Bar: สภาพเส้นทาง */}
-                <div className="flex items-center justify-between mt-3 px-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 mt-3 px-1">
                   <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-200">
                     <Milestone className="w-4 h-4 text-slate-300" />
                     <span>สภาพเส้นทาง</span>
@@ -335,75 +376,93 @@ export function DetourDossierModal({
               </section>
             );
           })()}
+        </div>
 
-          {/* 7. Bottom Action Buttons: ดูบน Google Maps & ดูตำแหน่งบนแผนที่ */}
-          {(() => {
-            const nav = resolveDetourGoogleMapsNavigation(
-              viewingDetourModal,
-              modalDetourDirection,
-              systemData.floodRoutes
-            );
+        {/* 7. Bottom Action Footer (Outside scroll container — zero scroll overlap) */}
+        {(() => {
+          const nav = resolveDetourGoogleMapsNavigation(
+            viewingDetourModal,
+            modalDetourDirection,
+            systemData.floodRoutes
+          );
 
-            return (
-              <div className="sticky bottom-0 -mx-4 -mb-4 space-y-2 border-t border-slate-800/90 bg-[#081120] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_20px_rgba(8,17,32,0.95)]">
-                <div className="grid grid-cols-2 gap-2.5">
-                  {nav.isValid && nav.url ? (
-                    <a
-                      href={nav.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between rounded-2xl bg-[#10b981] hover:bg-[#059669] p-2.5 sm:p-3 text-white shadow-lg shadow-emerald-950/40 transition-all cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 rounded-full bg-white p-1 flex items-center justify-center shadow">
-                          <svg viewBox="0 0 24 24" className="w-5 h-5">
-                            <path fill="#EA4335" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
-                            <circle fill="#FFFFFF" cx="12" cy="9" r="2.8" />
-                            <circle fill="#4285F4" cx="12" cy="9" r="1.8" />
-                          </svg>
+          const getFocusCoords = (): [number, number] | undefined => {
+            const fwdCoords = parseRouteCoordinates(viewingDetourModal.coordinates_json);
+            const revCoords = parseRouteCoordinates(viewingDetourModal.reverse_coordinates_json);
+            if (modalDetourDirection === "REVERSE") {
+              if (revCoords.length > 0 && Number.isFinite(revCoords[0][0]) && Number.isFinite(revCoords[0][1])) {
+                return revCoords[0];
+              }
+              if (Number.isFinite(viewingDetourModal.lon_end) && Number.isFinite(viewingDetourModal.lat_end)) {
+                return [viewingDetourModal.lon_end, viewingDetourModal.lat_end];
+              }
+              if (fwdCoords.length > 0) {
+                const last = fwdCoords[fwdCoords.length - 1];
+                if (Number.isFinite(last[0]) && Number.isFinite(last[1])) return last;
+              }
+            }
+            if (Number.isFinite(viewingDetourModal.lon_start) && Number.isFinite(viewingDetourModal.lat_start)) {
+              return [viewingDetourModal.lon_start, viewingDetourModal.lat_start];
+            }
+            if (fwdCoords.length > 0 && Number.isFinite(fwdCoords[0][0]) && Number.isFinite(fwdCoords[0][1])) {
+              return fwdCoords[0];
+            }
+            return undefined;
+          };
+
+          return (
+            <div className="shrink-0 z-20 space-y-2 border-t border-slate-800/90 bg-[#081120] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_20px_rgba(8,17,32,0.95)] sm:rounded-b-[1.75rem]">
+              <div className="flex flex-col sm:flex-row sm:items-stretch gap-2.5">
+                {nav.isValid && nav.url ? (
+                  <a
+                    href={nav.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:flex-[1.35] min-h-[2.75rem] flex items-center justify-between rounded-2xl bg-[#10b981] hover:bg-[#059669] px-3.5 py-2.5 text-white shadow-lg shadow-emerald-950/40 transition-all touch-manipulation cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 rounded-full bg-white p-1 flex items-center justify-center shadow">
+                        <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
+                          <path fill="#EA4335" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+                          <circle fill="#FFFFFF" cx="12" cy="9" r="2.8" />
+                          <circle fill="#4285F4" cx="12" cy="9" r="1.8" />
+                        </svg>
+                      </div>
+                      <div className="text-left min-w-0">
+                        <div className="font-heading text-xs sm:text-sm font-bold text-white leading-tight truncate">
+                          ดูบน Google Maps
                         </div>
-                        <div className="text-left min-w-0">
-                          <div className="font-heading text-xs sm:text-sm font-bold text-white leading-tight truncate">
-                            ดูบน Google Maps
-                          </div>
-                          <div className="text-[0.75rem]/[1.1rem] font-medium text-emerald-100 mt-0.5 truncate">
-                            {modalDetourDirection === "FORWARD" ? "(ขาไป A ➔ B)" : "(ขากลับ B ➔ A)"}
-                          </div>
+                        <div className="text-[0.75rem]/[1.1rem] font-medium text-emerald-100 mt-0.5 truncate">
+                          {modalDetourDirection === "FORWARD" ? "(ขาไป A ➔ B)" : "(ขากลับ B ➔ A)"}
                         </div>
                       </div>
-                      <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5 text-white shrink-0 ml-1 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                    </a>
-                  ) : (
-                    <div className="flex items-center justify-center rounded-2xl border border-amber-500/40 bg-slate-900 p-2.5 text-center text-xs text-amber-200">
-                      ⚠️ {nav.warning || "เส้นทางยังไม่พร้อมสำหรับการนำทาง"}
                     </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const coords =
-                        Number.isFinite(viewingDetourModal.lon_start) && Number.isFinite(viewingDetourModal.lat_start)
-                          ? ([viewingDetourModal.lon_start, viewingDetourModal.lat_start] as [number, number])
-                          : undefined;
-                      onFocusMapLocation(coords);
-                    }}
-                    className="flex items-center justify-center gap-2 rounded-2xl border border-slate-700/80 bg-[#13203c] hover:bg-[#1a2b50] p-2.5 sm:p-3 font-heading text-xs sm:text-sm font-bold text-white shadow transition-all cursor-pointer"
-                  >
-                    <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-white shrink-0" />
-                    <span>ดูตำแหน่งบนแผนที่</span>
-                  </button>
-                </div>
-                {nav.disclaimer && (
-                  <details className="text-xs text-slate-300">
-                    <summary className="cursor-pointer text-center text-slate-300 underline underline-offset-2 hover:text-white">ข้อควรทราบก่อนนำทาง</summary>
-                    <p className="mt-1 text-center leading-relaxed text-slate-300">{nav.disclaimer}</p>
-                  </details>
+                    <ExternalLink aria-hidden="true" className="w-4 h-4 sm:w-5 sm:h-5 text-white shrink-0 ml-1 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  </a>
+                ) : (
+                  <div className="w-full sm:flex-[1.35] min-h-[2.75rem] flex items-center justify-center rounded-2xl border border-amber-500/40 bg-slate-900 px-3.5 py-2.5 text-center text-xs text-amber-200">
+                    ⚠️ {nav.warning || "เส้นทางยังไม่พร้อมสำหรับการนำทาง"}
+                  </div>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => onFocusMapLocation(getFocusCoords())}
+                  className="w-full sm:flex-1 min-h-[2.75rem] flex items-center justify-center gap-2 rounded-2xl border border-slate-700/80 bg-[#13203c] hover:bg-[#1a2b50] px-3.5 py-2.5 font-heading text-xs sm:text-sm font-bold text-white shadow transition-all touch-manipulation cursor-pointer shrink-0"
+                >
+                  <BookOpen aria-hidden="true" className="w-4 h-4 sm:w-5 sm:h-5 text-white shrink-0" />
+                  <span>ดูตำแหน่งบนแผนที่</span>
+                </button>
               </div>
-            );
-          })()}
-        </div>
+              {nav.disclaimer && (
+                <details className="text-xs text-slate-300">
+                  <summary className="cursor-pointer py-0.5 text-center text-slate-300 underline underline-offset-2 hover:text-white">ข้อควรทราบก่อนนำทาง</summary>
+                  <p className="mt-1 text-center leading-relaxed text-slate-300">{nav.disclaimer}</p>
+                </details>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

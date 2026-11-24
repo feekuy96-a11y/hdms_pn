@@ -136,10 +136,10 @@ export function FloodDossierModal({
         role="dialog"
         aria-modal="true"
         aria-label={`รายละเอียดจุดน้ำท่วม ${selectedFlood.section_name}`}
-        className="relative max-h-[94dvh] w-full overflow-y-auto overscroll-contain rounded-t-3xl border border-slate-700/80 bg-[#081120] text-slate-100 shadow-2xl sm:max-h-[92dvh] sm:max-w-[57.5rem] sm:rounded-3xl"
+        className="relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[1.75rem] border-x-0 border-t border-b-0 border-slate-700/80 bg-[#081120] text-slate-100 shadow-2xl sm:max-h-[92dvh] sm:max-w-[57.5rem] sm:rounded-[1.75rem] sm:border-0 sm:ring-1 sm:ring-slate-700/80"
       >
         {/* Header: Route Badge, Section Title, KM Range, Area, Traffic Status, Close */}
-        <div className="sticky top-0 z-20 border-b border-slate-800/90 bg-[#0c182e] px-4 py-3.5 sm:px-6 shadow-md">
+        <div className="shrink-0 z-20 border-b border-slate-800/90 bg-[#0c182e] px-4 py-3.5 sm:px-6 shadow-md">
           <div aria-hidden="true" className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-slate-600 sm:hidden" />
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-2">
@@ -179,6 +179,7 @@ export function FloodDossierModal({
         </div>
 
         {/* 2-Column Dark Navy Body */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain sm:rounded-b-[1.75rem]">
         <div className="grid grid-cols-1 gap-4 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5 md:grid-cols-[1.18fr_0.82fr]">
           {/* LEFT COLUMN: Real DB Photo Carousel + Detour Recommendations Accordion */}
           <div className="space-y-4 min-w-0">
@@ -388,6 +389,7 @@ export function FloodDossierModal({
             isHistoryExpanded={isHistoryExpanded}
             setIsHistoryExpanded={setIsHistoryExpanded}
           />
+        </div>
         </div>
       </div>
 

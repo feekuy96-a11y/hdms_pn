@@ -133,12 +133,13 @@ export function FloodDossierDetourSection({
                 : effectiveDirection === "FORWARD"
                   ? parsed.forwardText
                   : parsed.reverseText;
+            const baseHint = selectedFlood ? `${routeLabel} (${selectedFlood.section_name})` : route.route_name;
             const timeline = getDetourTimelinePresentation(
               displayText || "",
               meters,
               polyKm,
-              selectedFlood ? `${routeLabel} (${selectedFlood.section_name})` : route.route_name,
-              "",
+              effectiveDirection === "REVERSE" ? route.route_name : baseHint,
+              effectiveDirection === "REVERSE" ? baseHint : "",
               route.detour_meta?.road_condition,
               durationSec
             );
@@ -209,6 +210,10 @@ export function FloodDossierDetourSection({
                         hideDistanceAndDuration
                         className="text-xs sm:text-sm text-slate-200 leading-relaxed"
                       />
+                    ) : timeline.directionNotice ? (
+                      <div role="status" className="rounded-xl border border-amber-500/40 bg-amber-950/35 px-3 py-2 text-xs text-amber-200 leading-relaxed">
+                        {timeline.directionNotice}
+                      </div>
                     ) : (
                       <p className="text-xs text-slate-400">ยังไม่มีคำแนะนำการเดินทาง</p>
                     )}
@@ -299,7 +304,7 @@ export function FloodDossierDetourSection({
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="ดูบน Google Maps"
-                      className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] px-2.5 py-2 font-heading text-xs sm:text-sm font-black text-slate-950 shadow-md transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                      className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] px-2.5 py-2 font-heading text-xs sm:text-sm font-black text-slate-950 shadow-md transition touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                     >
                       <Navigation aria-hidden="true" className="h-4 w-4 shrink-0" />
                       <span>ดูบน Google Maps</span>
@@ -317,19 +322,38 @@ export function FloodDossierDetourSection({
                   <button
                     type="button"
                     onClick={() => {
-                      if (Number.isFinite(route.lon_start) && Number.isFinite(route.lat_start)) {
-                        setFocusCoordinates([route.lon_start, route.lat_start]);
-                      } else if (Array.isArray(polyCoords) && polyCoords.length > 0 && Array.isArray(polyCoords[0])) {
-                        const mid = polyCoords[Math.floor(polyCoords.length / 2)];
-                        const a = Number(mid[0]);
-                        const b = Number(mid[1]);
-                        if (Number.isFinite(a) && Number.isFinite(b)) {
-                          setFocusCoordinates(Math.abs(a) <= 90 && Math.abs(b) > 90 ? [b, a] : [a, b]);
-                        }
+                      const pickCoord = (pt: unknown): [number, number] | null => {
+                        if (!Array.isArray(pt) || pt.length < 2) return null;
+                        const a = Number(pt[0]);
+                        const b = Number(pt[1]);
+                        if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+                        return Math.abs(a) <= 90 && Math.abs(b) > 90 ? [b, a] : [a, b];
+                      };
+
+                      let target: [number, number] | null = null;
+                      if (effectiveDirection === "REVERSE") {
+                        target =
+                          pickCoord(revCoords[0]) ??
+                          (Number.isFinite(route.lon_end) && Number.isFinite(route.lat_end)
+                            ? [route.lon_end, route.lat_end]
+                            : null) ??
+                          pickCoord(fwdCoords[fwdCoords.length - 1]);
+                      } else {
+                        target =
+                          (Number.isFinite(route.lon_start) && Number.isFinite(route.lat_start)
+                            ? [route.lon_start, route.lat_start]
+                            : null) ??
+                          pickCoord(fwdCoords[0]);
                       }
+
+                      if (!target && Array.isArray(polyCoords) && polyCoords.length > 0) {
+                        target = pickCoord(polyCoords[Math.floor(polyCoords.length / 2)]);
+                      }
+
+                      if (target) setFocusCoordinates(target);
                       setShowDossier(false);
                     }}
-                    className="flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-600/80 bg-[#13203c] hover:bg-[#1a2b50] px-2.5 py-2 font-heading text-xs sm:text-sm font-bold text-white leading-tight text-center transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                    className="flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-600/80 bg-[#13203c] hover:bg-[#1a2b50] px-2.5 py-2 font-heading text-xs sm:text-sm font-bold text-white leading-tight text-center transition touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                   >
                     <MapPinned aria-hidden="true" className="h-4 w-4 shrink-0 text-sky-300" />
                     <span>ดูตำแหน่งบนแผนที่</span>
