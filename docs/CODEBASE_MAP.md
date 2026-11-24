@@ -10,6 +10,7 @@
 | การ์ดสรุปเหตุการณ์น้ำท่วม (6-group compact card) | `components/public/FloodCard.tsx` | `npx eslint components/public/FloodCard.tsx --max-warnings=0` |
 | แถบสรุปสถานะ & ปุ่มกรอง (Status pills) | `components/public/SituationSummary.tsx` | `npx eslint components/public/SituationSummary.tsx --max-warnings=0` |
 | Modal รายละเอียดน้ำท่วม, รูปภาพ, กราฟน้ำ, ทางเลี่ยง | `components/public/FloodDossierModal.tsx` | `npx eslint components/public/FloodDossierModal.tsx --max-warnings=0` |
+| ส่วนประกอบย่อย Dossier (ทางเลี่ยงแนะนำ, ประวัติระดับน้ำ) | `components/public/FloodDossierSections.tsx` | `npx eslint components/public/FloodDossierSections.tsx --max-warnings=0` |
 | Modal ทางเลี่ยงเดี่ยว (Standalone Detour) | `components/public/DetourDossierModal.tsx` | `npx eslint components/public/DetourDossierModal.tsx --max-warnings=0` |
 | Bottom sheet สำหรับมือถือ | `components/public/MobileCitizenDrawer.tsx` | `npx eslint components/public/MobileCitizenDrawer.tsx --max-warnings=0` |
 | Constants & pure formatters ของหน้าหลัก | `components/public/public-route-helpers.ts` | `npm run check:fast` |
@@ -20,6 +21,7 @@
 | แท็บจัดการแผนที่/วาดเส้นน้ำท่วม-ทางเลี่ยง (UI หลัก/Container) | `components/admin/tabs/MapManagementTab.tsx` | `npm run check:fast` |
 | ส่วนประกอบ Form UI ย่อย (Header, Draft Banner, Action Bar) | `components/admin/tabs/MapFormSections.tsx` | `npx eslint components/admin/tabs/MapFormSections.tsx --max-warnings=0` |
 | Hooks ของ MapManagementTab (draft, hydration, picker, media, snapping, submit) | `components/admin/tabs/useMapRoute*.ts`, `useDualRoadSnapping.ts`, `useMapCoordinatePicker.ts` | `npm run check:fast` |
+| Hooks ฟอร์มแผนที่ (state โหมด, พิกัด, นำทาง, combobox) | `components/admin/tabs/useMapRouteFormState.ts` | `npm run check:fast` |
 | Helper ตัดช่วง กม. บนแนวทางหลวง | `components/admin/tabs/map-management-helpers.ts` | `npm run check:fast` |
 | แท็บจัดการเส้นทางเลี่ยง (UI หลัก/Container) | `components/admin/tabs/DetourManagementTab.tsx` | `npx eslint components/admin/tabs/DetourManagementTab.tsx --max-warnings=0` |
 | รายการทางเลี่ยง Mobile Cards / Table & Action buttons | `components/admin/tabs/DetourListCard.tsx` | `npx eslint components/admin/tabs/DetourListCard.tsx --max-warnings=0` |
@@ -32,6 +34,9 @@
 | Logic ทะเบียนเหตุการณ์ (filter, split, merge, inline water) | `components/admin/tabs/useIncidentRegistry.ts` | `npm run check:fast` |
 | Modal เชื่อมโยงเหตุการณ์น้ำท่วม ↔ ทางเลี่ยง (UI) | `components/admin/EventDetourLinkModal.tsx` | `npx eslint components/admin/EventDetourLinkModal.tsx --max-warnings=0` |
 | Logic เชื่อมโยงเหตุการณ์ ↔ ทางเลี่ยง (drafts, 409 version) | `components/admin/useEventDetourLinkModal.ts` | `npm run check:fast` |
+| Modals จัดการข้อมูลทางหลวง GIS (Container) | `components/admin/tabs/GisHighwayModals.tsx` | `npx eslint components/admin/tabs/GisHighwayModals.tsx --max-warnings=0` |
+| Modal ดูรายละเอียดสายทางหลวง (Route Detail) | `components/admin/tabs/HighwayRouteDetailModal.tsx` | `npx eslint components/admin/tabs/HighwayRouteDetailModal.tsx --max-warnings=0` |
+| Panel ปรับแนวถนนทางหลวง (Geometry Editor Panel) | `components/admin/tabs/HighwayGeometryEditorPanel.tsx` | `npx eslint components/admin/tabs/HighwayGeometryEditorPanel.tsx --max-warnings=0` |
 
 ## 3. Map & GIS Engine (Safety-Sensitive: `{ lon, lat }` / `POINT(lng lat)`)
 | งาน / อาการ | ไฟล์เป้าหมาย | คำสั่งตรวจเฉพาะจุด |
