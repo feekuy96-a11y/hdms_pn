@@ -107,7 +107,7 @@ export function GisFocusModeBar({
       role="region"
       aria-label="แถบโหมดโฟกัสแผนที่"
       data-testid="gis-focus-mode-bar"
-      className="pointer-events-auto absolute inset-x-2 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[620] mx-auto max-w-2xl rounded-2xl border border-amber-400/50 bg-[#081120]/95 px-3 py-2 text-slate-100 shadow-2xl backdrop-blur-md sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-3 sm:w-[min(34rem,calc(100%-22rem))] sm:-translate-x-1/2 sm:px-4 sm:py-2.5"
+      className="pointer-events-auto absolute inset-x-2 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[620] mx-auto max-w-2xl rounded-2xl border border-amber-400/50 bg-[#081120]/95 px-3 py-2 text-slate-100 shadow-2xl backdrop-blur-md sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-14 sm:w-[min(32rem,calc(100%-17.5rem))] sm:-translate-x-1/2 sm:px-4 sm:py-2.5"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1 space-y-1">

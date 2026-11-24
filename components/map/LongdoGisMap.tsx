@@ -42,6 +42,7 @@ import {
   collectFocusBoundsPoints,
   resolveDetourFocusGeometry,
   resolveFloodFocusData,
+  type GisFocusDirection,
   type GisFocusState,
   type GisFocusViewportSnapshot,
 } from "@/lib/gis-focus-mode";
@@ -98,6 +99,10 @@ interface LongdoGisMapProps {
   gisFocus?: GisFocusState | null;
   /** Imperative viewport snapshot/restore bridge for Shared GIS Focus Mode. */
   mapViewportApiRef?: React.MutableRefObject<GisMapViewportApi | null>;
+  /** Enter Shared GIS Focus Mode directly from flood map popup. */
+  onFocusFloodOnMap?: (floodId: string) => void;
+  /** Enter Shared GIS Focus Mode directly from detour map popup. */
+  onFocusDetourOnMap?: (detourId: string, direction: GisFocusDirection) => void;
 }
 
 export function LongdoGisMap({
@@ -138,6 +143,8 @@ export function LongdoGisMap({
   activeCardFocus = null,
   gisFocus = null,
   mapViewportApiRef,
+  onFocusFloodOnMap,
+  onFocusDetourOnMap,
 }: LongdoGisMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
@@ -243,6 +250,10 @@ export function LongdoGisMap({
   onOpenFloodDetoursRef.current = onOpenFloodDetours;
   const onSelectDetourRef = useRef(onSelectDetour);
   onSelectDetourRef.current = onSelectDetour;
+  const onFocusFloodOnMapRef = useRef(onFocusFloodOnMap);
+  onFocusFloodOnMapRef.current = onFocusFloodOnMap;
+  const onFocusDetourOnMapRef = useRef(onFocusDetourOnMap);
+  onFocusDetourOnMapRef.current = onFocusDetourOnMap;
   const selectedFloodIdRef = useRef(selectedFloodId);
   selectedFloodIdRef.current = selectedFloodId;
   const systemDataRef = useRef(systemData);
@@ -258,6 +269,54 @@ export function LongdoGisMap({
     onSelectDetourRef,
     setPreviewPointPhoto,
   });
+
+  // Route flood & detour popup "ดูตำแหน่งบนแผนที่" actions into Shared GIS Focus Mode when provided
+  useEffect(() => {
+    const prevFocusFlood = (window as any).__focusFloodOnMap;
+    (window as any).__focusFloodOnMap = (id: string) => {
+      if (onFocusFloodOnMapRef.current) {
+        leafletMapRef.current?.closePopup?.();
+        onFocusFloodOnMapRef.current(id);
+        return;
+      }
+      prevFocusFlood?.(id);
+    };
+
+    const container = mapContainerRef.current;
+    const handlePopupFocusClick = (evt: Event) => {
+      if (!onFocusDetourOnMapRef.current) return;
+      const target = evt.target as HTMLElement | null;
+      const detailBtn = target?.closest?.(".doh-detour-detail-btn") as HTMLButtonElement | null;
+      if (!detailBtn) return;
+      const popupRoot = detailBtn.closest?.(".doh-detour-popup") as HTMLElement | null;
+      if (!popupRoot) return;
+      const onclickAttr = detailBtn.getAttribute("onclick") || "";
+      const match = onclickAttr.match(/__openDetourModal\((['"])([^'"]+)\1\)/);
+      const rawId = match?.[2];
+      if (!rawId) return;
+      const detour = (systemDataRef.current.detourRoutes || []).find(
+        (d) => d.id === rawId || escapeHtml(d.id) === rawId
+      );
+      const detourId = detour?.id ?? rawId;
+      const isReverse = Boolean(
+        popupRoot.querySelector('button[id^="detour-btn-rev-"][aria-pressed="true"]')
+      );
+      evt.preventDefault();
+      evt.stopPropagation();
+      leafletMapRef.current?.closePopup?.();
+      onFocusDetourOnMapRef.current(detourId, isReverse ? "REVERSE" : "FORWARD");
+    };
+
+    container?.addEventListener("click", handlePopupFocusClick, true);
+    return () => {
+      container?.removeEventListener("click", handlePopupFocusClick, true);
+      if (prevFocusFlood) {
+        (window as any).__focusFloodOnMap = prevFocusFlood;
+      } else {
+        delete (window as any).__focusFloodOnMap;
+      }
+    };
+  }, []);
 
   // 1. Initialize Leaflet Map Instance
   useEffect(() => {

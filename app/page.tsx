@@ -827,6 +827,8 @@ export default function HomePage() {
             focusCoordinates={focusCoordinates}
             gisFocus={gisFocus}
             mapViewportApiRef={mapViewportApiRef}
+            onFocusFloodOnMap={handleEnterFloodFocus}
+            onFocusDetourOnMap={handleEnterDetourFocus}
             className="h-full w-full"
           />
           <GisFocusModeBar
