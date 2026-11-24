@@ -9,6 +9,7 @@ import {
 } from "../../lib/gis-focus-mode";
 import type { SystemDataPayload } from "../../db/default-data";
 
+const base = process.env.BASE_PATH || "";
 const mockUpdatedAt = "2026-11-24T06:00:00.000Z";
 
 function createMockPayload(): SystemDataPayload {
@@ -243,7 +244,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
     );
 
-    await page.goto("/");
+    await page.goto(`${base}/`);
     await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
     const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
     await expect(floodDialog).toBeVisible();
@@ -278,7 +279,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
     );
 
-    await page.goto("/");
+    await page.goto(`${base}/`);
     await page.getByRole("button", { name: /ดูรายการสายทาง/ }).click();
     await page.getByRole("button", { name: /ทางเลี่ยง/ }).first().click();
     await page.getByRole("button", { name: /เส้นทางเลี่ยง ปน\.2043/ }).first().click();
@@ -324,7 +325,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
     );
 
-    await page.goto("/");
+    await page.goto(`${base}/`);
     await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
     const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
     await expect(floodDialog).toBeVisible();
@@ -358,7 +359,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
       });
     });
 
-    await page.goto("/");
+    await page.goto(`${base}/`);
     await page.locator(".leaflet-control-zoom-in").waitFor({ state: "visible" });
 
     await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
@@ -419,7 +420,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
     );
 
-    await page.goto("/");
+    await page.goto(`${base}/`);
     await page.locator(".leaflet-control-zoom-in").waitFor({ state: "visible" });
 
     // Set a distinct pre-A zoom level (zoom in once from default zoom 11 -> 12)
@@ -486,7 +487,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
     );
 
-    await page.goto("/");
+    await page.goto(`${base}/`);
     await page.locator(".leaflet-control-zoom-in").waitFor({ state: "visible" });
     await page.locator(".leaflet-control-zoom-in").click();
     await page.waitForTimeout(350);
@@ -529,7 +530,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
     );
 
-    await page.goto("/");
+    await page.goto(`${base}/`);
     await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
     const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
     await floodDialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).last().click();
@@ -557,7 +558,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
     );
 
-    await page.goto("/");
+    await page.goto(`${base}/`);
     const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
     const focusBar = page.getByTestId("gis-focus-mode-bar");
 
@@ -595,7 +596,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
     );
 
-    await page.goto("/");
+    await page.goto(`${base}/`);
     await page.getByRole("button", { name: /ดูรายการสายทาง/ }).click();
     await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
     const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
