@@ -1,0 +1,524 @@
+import { test, expect } from "@playwright/test";
+import {
+  enterGisFocus,
+  exitGisFocus,
+  IDLE_GIS_FOCUS_STATE,
+  resolveDetourFocusGeometry,
+  resolveFloodFocusData,
+  updateGisFocusOptions,
+} from "../../lib/gis-focus-mode";
+import type { SystemDataPayload } from "../../db/default-data";
+
+const mockUpdatedAt = "2026-11-24T06:00:00.000Z";
+
+function createMockPayload(): SystemDataPayload {
+  return {
+    updatedAt: mockUpdatedAt,
+    floodRoutes: [
+      {
+        id: "F-42-LT",
+        route_no: "42",
+        section_name: "นาจวก - ดอนยาง",
+        km_start: "76+000",
+        km_end: "77+100",
+        lat_start: 6.79,
+        lon_start: 101.14,
+        lat_end: 6.8,
+        lon_end: 101.15,
+        coordinates_json: [
+          [101.14, 6.79],
+          [101.15, 6.8],
+        ],
+        water_level_cm: 35,
+        traffic_status: "WARNING",
+        direction_meta: { sideCode: "LT", impactMode: "ONE_SIDE" },
+        latest_photo_url: "",
+        is_active: true,
+        updated_at: mockUpdatedAt,
+        subdistrict: "มะกรูด",
+        district: "โคกโพธิ์",
+        province: "ปัตตานี",
+      },
+      {
+        id: "F-42-RT",
+        route_no: "42",
+        section_name: "นาจวก - ดอนยาง",
+        km_start: "76+000",
+        km_end: "77+100",
+        lat_start: 6.791,
+        lon_start: 101.141,
+        lat_end: 6.801,
+        lon_end: 101.151,
+        coordinates_json: [
+          [101.141, 6.791],
+          [101.151, 6.801],
+        ],
+        water_level_cm: 30,
+        traffic_status: "WARNING",
+        direction_meta: { sideCode: "RT", impactMode: "ONE_SIDE" },
+        latest_photo_url: "",
+        is_active: true,
+        updated_at: mockUpdatedAt,
+        subdistrict: "มะกรูด",
+        district: "โคกโพธิ์",
+        province: "ปัตตานี",
+      },
+      {
+        id: "F-RESOLVED",
+        route_no: "43",
+        section_name: "ปัตตานี - หนองจิก",
+        km_start: "10+000",
+        km_end: "11+000",
+        lat_start: 6.85,
+        lon_start: 101.2,
+        lat_end: 6.86,
+        lon_end: 101.21,
+        coordinates_json: [
+          [101.2, 6.85],
+          [101.21, 6.86],
+        ],
+        water_level_cm: 0,
+        traffic_status: "PASSABLE",
+        direction_meta: {},
+        latest_photo_url: "",
+        is_active: true,
+        updated_at: mockUpdatedAt,
+      },
+    ],
+    detourRoutes: [
+      {
+        id: "D-2043",
+        flood_id_ref: "F-42-LT",
+        route_name: "เส้นทางเลี่ยง ปน.2043",
+        direction_mode: "TWO_WAY",
+        lat_start: 6.78,
+        lon_start: 101.13,
+        lat_end: 6.81,
+        lon_end: 101.17,
+        coordinates_json: [
+          [101.13, 6.78],
+          [101.145, 6.795],
+          [101.17, 6.81],
+        ],
+        reverse_coordinates_json: [
+          [101.17, 6.81],
+          [101.15, 6.796],
+          [101.13, 6.78],
+        ],
+        description: "1. จุดเริ่มต้น ทล.42\n2. ตรงไป ปน.2043",
+        is_active: true,
+        updated_at: mockUpdatedAt,
+        detour_meta: { road_condition: "ผิวทางลาดยาง สัญจรได้ตามปกติ" },
+      },
+    ],
+    timelineUpdates: [],
+    mitigationProjects: [],
+    highwayLayers: [],
+    offices: [],
+    mapStyles: null,
+    systemSettings: { name: "HDMS Test", desc: "ระบบเฝ้าระวังน้ำท่วม", org: "แขวงทางหลวงปัตตานี", phone: "1586" },
+  };
+}
+
+test.describe("Shared GIS Focus Mode — Pure State & Geometry Contracts", () => {
+  test("preserves immutable originSnapshot when switching focus A -> B without exiting", () => {
+    const snapA = {
+      viewport: { center: [101.25, 6.87] as [number, number], zoom: 11 },
+      filters: { activeTab: "FLOOD" as const, statusFilter: "ALL", routeFilter: "ALL", searchQuery: "" },
+    };
+    const snapB = {
+      viewport: { center: [101.14, 6.79] as [number, number], zoom: 15 },
+      filters: { activeTab: "DETOUR" as const, statusFilter: "WARNING", routeFilter: "42", searchQuery: "42" },
+    };
+
+    const focusedA = enterGisFocus(IDLE_GIS_FOCUS_STATE, {
+      targetType: "FLOOD",
+      targetId: "F-42-LT",
+      captureSnapshot: () => snapA,
+    });
+    expect(focusedA.status).toBe("focused");
+    expect(focusedA.originSnapshot).toEqual(snapA);
+
+    const focusedB = enterGisFocus(focusedA, {
+      targetType: "DETOUR",
+      targetId: "D-2043",
+      direction: "REVERSE",
+      captureSnapshot: () => snapB,
+    });
+    expect(focusedB.targetType).toBe("DETOUR");
+    expect(focusedB.targetId).toBe("D-2043");
+    expect(focusedB.direction).toBe("REVERSE");
+    expect(focusedB.originSnapshot).toEqual(snapA);
+
+    const toggled = updateGisFocusOptions(focusedB, { direction: "FORWARD", refit: true });
+    expect(toggled.originSnapshot).toEqual(snapA);
+
+    const { nextState, restoreSnapshot } = exitGisFocus(toggled);
+    expect(nextState.status).toBe("idle");
+    expect(restoreSnapshot).toEqual(snapA);
+  });
+
+  test("resolves detour A->B and B->A geometry without mutating original arrays", () => {
+    const payload = createMockPayload();
+    const detour = payload.detourRoutes[0];
+    const originalFwd = JSON.stringify(detour.coordinates_json);
+    const originalRev = JSON.stringify(detour.reverse_coordinates_json);
+
+    const fwd = resolveDetourFocusGeometry(detour, "FORWARD");
+    const rev = resolveDetourFocusGeometry(detour, "REVERSE");
+
+    expect(fwd.startCoord).toEqual([101.13, 6.78]);
+    expect(fwd.endCoord).toEqual([101.17, 6.81]);
+    expect(rev.startCoord).toEqual([101.17, 6.81]);
+    expect(rev.endCoord).toEqual([101.13, 6.78]);
+    expect(JSON.stringify(detour.coordinates_json)).toBe(originalFwd);
+    expect(JSON.stringify(detour.reverse_coordinates_json)).toBe(originalRev);
+  });
+
+  test("groups LT/RT flood segments and recognizes 0 cm resolved flood", () => {
+    const payload = createMockPayload();
+    const active = resolveFloodFocusData("F-42-LT", payload);
+    expect(active.isResolved).toBe(false);
+    expect(active.activeSegments.length).toBe(2);
+    expect(active.maxWaterLevelCm).toBe(35);
+    expect(active.linkedDetours.map((d) => d.id)).toEqual(["D-2043"]);
+
+    const resolved = resolveFloodFocusData("F-RESOLVED", payload);
+    expect(resolved.isResolved).toBe(true);
+    expect(resolved.activeSegments.length).toBe(0);
+  });
+
+  test("handles missing / empty / zero [0,0] geometry gracefully and keeps fitRequestId stable on non-refit updates", () => {
+    const payload = createMockPayload();
+    const emptyDetour = {
+      ...payload.detourRoutes[0],
+      id: "D-EMPTY",
+      lat_start: 0,
+      lon_start: 0,
+      lat_end: 0,
+      lon_end: 0,
+      coordinates_json: [],
+      reverse_coordinates_json: [],
+    };
+    const emptyFlood = {
+      ...payload.floodRoutes[0],
+      id: "F-EMPTY",
+      route_no: "418",
+      section_name: "จุดทดสอบไม่มีพิกัด",
+      km_start: "1+000",
+      km_end: "2+000",
+      lat_start: 0,
+      lon_start: 0,
+      lat_end: 0,
+      lon_end: 0,
+      coordinates_json: [],
+    };
+    payload.detourRoutes.push(emptyDetour);
+    payload.floodRoutes.push(emptyFlood);
+
+    const dGeom = resolveDetourFocusGeometry(emptyDetour, "REVERSE");
+    expect(dGeom.coords).toEqual([]);
+    expect(dGeom.startCoord).toBeNull();
+    expect(dGeom.endCoord).toBeNull();
+
+    const fData = resolveFloodFocusData("F-EMPTY", payload);
+    expect(fData.coordsList).toEqual([]);
+    expect(fData.pointFallbacks).toEqual([]);
+
+    const focused = enterGisFocus(IDLE_GIS_FOCUS_STATE, {
+      targetType: "FLOOD",
+      targetId: "F-42-LT",
+      captureSnapshot: () => ({ viewport: null, filters: null }),
+    });
+    const updatedWithoutRefit = updateGisFocusOptions(focused, { showLinkedDetour: true });
+    expect(updatedWithoutRefit.fitRequestId).toBe(focused.fitRequestId);
+  });
+});
+
+test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
+  test("Flood Focus -> linked detour overlay -> A/B switch -> Exit via Esc on Desktop", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Desktop Esc & sidebar verification");
+    const payload = createMockPayload();
+    await page.route("**/functions/v1/hdms-api", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
+    );
+
+    await page.goto("/");
+    await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
+    const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+    await expect(floodDialog).toBeVisible();
+
+    await floodDialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).last().click();
+    await expect(floodDialog).toHaveCount(0);
+
+    const focusBar = page.getByTestId("gis-focus-mode-bar");
+    await expect(focusBar).toBeVisible();
+    await expect(focusBar).toContainText("โหมดโฟกัส: เหตุการณ์น้ำท่วม");
+    await expect(focusBar).toContainText("ซ่อนชั้นข้อมูลอื่นชั่วคราว");
+    await expect(focusBar).toContainText("ระดับน้ำ 35 ซม.");
+
+    const overlayBtn = page.getByTestId("gis-focus-toggle-linked-detour");
+    await expect(overlayBtn).toBeVisible();
+    await overlayBtn.click();
+    await expect(overlayBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("gis-focus-dir-reverse")).toBeVisible();
+    await page.getByTestId("gis-focus-dir-reverse").click();
+    await expect(page.getByTestId("gis-focus-dir-reverse")).toHaveAttribute("aria-pressed", "true");
+
+    // Exit with Esc on Desktop — must not reopen modal/popup
+    await page.keyboard.press("Escape");
+    await expect(focusBar).toHaveCount(0);
+    await expect(floodDialog).toHaveCount(0);
+  });
+
+  test("Detour Focus from DetourDossierModal on Mobile collapses drawer and exits cleanly", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "Mobile viewport drawer & focus verification");
+    const payload = createMockPayload();
+    await page.route("**/functions/v1/hdms-api", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
+    );
+
+    await page.goto("/");
+    await page.getByRole("button", { name: /ดูรายการสายทาง/ }).click();
+    await page.getByRole("button", { name: /ทางเลี่ยง/ }).first().click();
+    await page.getByRole("button", { name: /เส้นทางเลี่ยง ปน\.2043/ }).first().click();
+
+    const detourDialog = page.getByRole("dialog", { name: /คำแนะนำเส้นทางเลี่ยง/ });
+    await expect(detourDialog).toBeVisible();
+    await detourDialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).click();
+    await expect(detourDialog).toHaveCount(0);
+
+    const focusBar = page.getByTestId("gis-focus-mode-bar");
+    await expect(focusBar).toBeVisible();
+    await expect(focusBar).toContainText("โหมดโฟกัส: เส้นทางเลี่ยง");
+    await expect(focusBar).toContainText("ซ่อนชั้นข้อมูลอื่นชั่วคราว");
+
+    await page.getByTestId("gis-focus-dir-reverse").click();
+    await expect(focusBar).toContainText("ขากลับ (B → A)");
+
+    await page.getByTestId("gis-focus-exit-btn").click();
+    await expect(focusBar).toHaveCount(0);
+    await expect(detourDialog).toHaveCount(0);
+  });
+
+  test("Missing / empty coordinates_json shows alert without crashing map and exits without reopening popup", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Desktop card -> modal flow");
+    const pageErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(err.message));
+
+    const payload = createMockPayload();
+    payload.floodRoutes = [
+      {
+        ...payload.floodRoutes[0],
+        id: "F-NO-GEOM",
+        route_no: "418",
+        section_name: "จุดไม่มีพิกัดเส้นทาง",
+        lat_start: 0,
+        lon_start: 0,
+        lat_end: 0,
+        lon_end: 0,
+        coordinates_json: [],
+      },
+    ];
+    await page.route("**/functions/v1/hdms-api", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
+    );
+
+    await page.goto("/");
+    await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
+    const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+    await expect(floodDialog).toBeVisible();
+
+    await floodDialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).last().click();
+    await expect(floodDialog).toHaveCount(0);
+
+    const focusBar = page.getByTestId("gis-focus-mode-bar");
+    await expect(focusBar).toBeVisible();
+    await expect(focusBar.getByRole("alert")).toContainText("ไม่พบข้อมูลพิกัดเส้นทาง");
+    await expect(page.locator(".leaflet-container")).toBeVisible();
+
+    await page.getByTestId("gis-focus-exit-btn").click();
+    await expect(focusBar).toHaveCount(0);
+    await expect(floodDialog).toHaveCount(0);
+    await expect(page.locator(".leaflet-popup")).toHaveCount(0);
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("Live data refresh updates Focus Bar in place without overriding user pan/zoom or opening popup", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Desktop pan/zoom & focus live refresh verification");
+    let currentPayload = createMockPayload();
+    let apiCalls = 0;
+
+    await page.route("**/functions/v1/hdms-api", (route) => {
+      apiCalls += 1;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(currentPayload),
+      });
+    });
+
+    await page.goto("/");
+    await page.locator(".leaflet-control-zoom-in").waitFor({ state: "visible" });
+
+    await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
+    const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+    await floodDialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).last().click();
+
+    const focusBar = page.getByTestId("gis-focus-mode-bar");
+    await expect(focusBar).toContainText("ระดับน้ำ 35 ซม.");
+    await page.waitForTimeout(550);
+
+    // User manually zooms out and pans map during Focus Mode
+    await page.locator(".leaflet-control-zoom-out").click();
+    await page.waitForTimeout(350);
+    const mapBox = await page.locator(".leaflet-container").boundingBox();
+    expect(mapBox).not.toBeNull();
+    await page.mouse.move(mapBox!.x + mapBox!.width / 2, mapBox!.y + mapBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(mapBox!.x + mapBox!.width / 2 + 90, mapBox!.y + mapBox!.height / 2 + 50, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(350);
+
+    const userViewportSnapshot = await page.evaluate(() => ({
+      proxyTransform: document.querySelector<HTMLElement>(".leaflet-proxy")?.style.transform || "",
+      paneTransform: document.querySelector<HTMLElement>(".leaflet-map-pane")?.style.transform || "",
+    }));
+
+    // Push live update via focus refetch
+    const updatedPayload = createMockPayload();
+    updatedPayload.updatedAt = "2026-11-24T06:45:00.000Z";
+    updatedPayload.floodRoutes[0].water_level_cm = 72;
+    updatedPayload.floodRoutes[0].traffic_status = "CLOSED";
+    currentPayload = updatedPayload;
+
+    const callsBeforeRefresh = apiCalls;
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("offline"));
+      window.dispatchEvent(new Event("online"));
+    });
+    await expect.poll(() => apiCalls).toBeGreaterThan(callsBeforeRefresh);
+
+    await expect(focusBar).toContainText("ระดับน้ำ 72 ซม.");
+    await page.waitForTimeout(450);
+
+    const viewportAfterRefresh = await page.evaluate(() => ({
+      proxyTransform: document.querySelector<HTMLElement>(".leaflet-proxy")?.style.transform || "",
+      paneTransform: document.querySelector<HTMLElement>(".leaflet-map-pane")?.style.transform || "",
+    }));
+
+    expect(viewportAfterRefresh.proxyTransform).toBe(userViewportSnapshot.proxyTransform);
+    expect(viewportAfterRefresh.paneTransform).toBe(userViewportSnapshot.paneTransform);
+    await expect(page.locator(".leaflet-popup")).toHaveCount(0);
+  });
+
+  test("Switching Focus A (Flood) -> B (Detour) without exiting restores pre-A Origin Snapshot without reopening popup", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Desktop sidebar switching without exiting");
+    const payload = createMockPayload();
+    await page.route("**/functions/v1/hdms-api", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
+    );
+
+    await page.goto("/");
+    await page.locator(".leaflet-control-zoom-in").waitFor({ state: "visible" });
+
+    // Set a distinct pre-A zoom level (zoom in once from default zoom 11 -> 12)
+    await page.locator(".leaflet-control-zoom-in").click();
+    await page.waitForTimeout(350);
+    const originProxyTransform = await page.evaluate(
+      () => document.querySelector<HTMLElement>(".leaflet-proxy")?.style.transform || ""
+    );
+
+    const parseProxy = (transform: string) => {
+      const m = /translate3d\(([-\d.]+)px,\s*([-\d.]+)px,\s*[-\d.]+px\)\s*scale\(([-\d.]+)\)/.exec(transform);
+      return m ? { x: Number(m[1]), y: Number(m[2]), scale: Number(m[3]) } : null;
+    };
+
+    const originProxy = parseProxy(originProxyTransform);
+    expect(originProxy).not.toBeNull();
+
+    // 1. Focus Item A (Flood)
+    await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
+    const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+    await floodDialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).last().click();
+
+    const focusBar = page.getByTestId("gis-focus-mode-bar");
+    await expect(focusBar).toContainText("โหมดโฟกัส: เหตุการณ์น้ำท่วม");
+    await page.waitForTimeout(550);
+
+    // Confirm map actually zoomed in to Item A (different proxy scale from pre-A)
+    const itemAProxyTransform = await page.evaluate(
+      () => document.querySelector<HTMLElement>(".leaflet-proxy")?.style.transform || ""
+    );
+    const itemAProxy = parseProxy(itemAProxyTransform);
+    expect(itemAProxy?.scale).not.toBe(originProxy!.scale);
+
+    // 2. Switch directly to Item B (Detour) via sidebar without exiting Focus
+    await page.getByRole("button", { name: /ทางเลี่ยง/ }).first().click();
+    await page.getByRole("button", { name: /เส้นทางเลี่ยง ปน\.2043/ }).first().click();
+    const detourDialog = page.getByRole("dialog", { name: /คำแนะนำเส้นทางเลี่ยง/ });
+    await expect(detourDialog).toBeVisible();
+    await detourDialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).click();
+
+    await expect(detourDialog).toHaveCount(0);
+    await expect(focusBar).toContainText("โหมดโฟกัส: เส้นทางเลี่ยง");
+    await expect(focusBar).toContainText("เส้นทางเลี่ยง ปน.2043");
+    await page.waitForTimeout(550);
+
+    // 3. Exit Focus -> must restore exact pre-A Origin Snapshot center + zoom (not drifted by handleSelectFlood flyTo!)
+    await page.getByTestId("gis-focus-exit-btn").click();
+    await expect(focusBar).toHaveCount(0);
+    await expect(floodDialog).toHaveCount(0);
+    await expect(detourDialog).toHaveCount(0);
+    await expect(page.locator(".leaflet-popup")).toHaveCount(0);
+
+    await expect
+      .poll(async () =>
+        page.evaluate(() => document.querySelector<HTMLElement>(".leaflet-proxy")?.style.transform || "")
+      )
+      .toBe(originProxyTransform);
+  });
+
+  test("FloodDossierSections detour card launches Detour Focus with chosen B -> A direction and restores exact viewport on Exit", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Desktop FloodDossier detour accordion -> Focus verification");
+    const payload = createMockPayload();
+    await page.route("**/functions/v1/hdms-api", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
+    );
+
+    await page.goto("/");
+    await page.locator(".leaflet-control-zoom-in").waitFor({ state: "visible" });
+    await page.locator(".leaflet-control-zoom-in").click();
+    await page.waitForTimeout(350);
+    const preModalTransform = await page.evaluate(
+      () => document.querySelector<HTMLElement>(".leaflet-proxy")?.style.transform || ""
+    );
+
+    // Open Flood Dossier -> expand detour accordion -> choose B -> A -> click "ดูตำแหน่งบนแผนที่" inside detour card
+    await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
+    const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+    await expect(floodDialog).toBeVisible();
+
+    await floodDialog.getByRole("button", { name: /ทางเลี่ยงที่ 1/ }).click();
+    await floodDialog.getByRole("button", { name: "ขากลับ (B → A)" }).click();
+    await floodDialog.locator("#dossier-detour-section").getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).first().click();
+
+    await expect(floodDialog).toHaveCount(0);
+    const focusBar = page.getByTestId("gis-focus-mode-bar");
+    await expect(focusBar).toBeVisible();
+    await expect(focusBar).toContainText("โหมดโฟกัส: เส้นทางเลี่ยง");
+    await expect(focusBar).toContainText("เส้นทางเลี่ยง ปน.2043");
+    await expect(focusBar).toContainText("ขากลับ (B → A)");
+    await page.waitForTimeout(550);
+
+    await page.keyboard.press("Escape");
+    await expect(focusBar).toHaveCount(0);
+    await expect(floodDialog).toHaveCount(0);
+
+    await expect
+      .poll(async () =>
+        page.evaluate(() => document.querySelector<HTMLElement>(".leaflet-proxy")?.style.transform || "")
+      )
+      .toBe(preModalTransform);
+  });
+});

@@ -72,6 +72,8 @@ export interface FloodDossierModalProps {
   isHistoryExpanded: boolean;
   setIsHistoryExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   selectedFloodRecentUpdates: SystemDataPayload["timelineUpdates"];
+  onFocusFloodOnMap?: (floodId: string) => void;
+  onFocusDetourOnMap?: (detourId: string, direction: "FORWARD" | "REVERSE") => void;
 }
 
 export function FloodDossierModal({
@@ -102,6 +104,8 @@ export function FloodDossierModal({
   isHistoryExpanded,
   setIsHistoryExpanded,
   selectedFloodRecentUpdates,
+  onFocusFloodOnMap,
+  onFocusDetourOnMap,
 }: FloodDossierModalProps) {
   const routeLabel = /^(?:ทล|ปน)\.?\s*/i.test(selectedFlood.route_no) ? selectedFlood.route_no : `ทล.${selectedFlood.route_no}`;
   const dossierArea = formatFloodAreaLine(selectedFlood);
@@ -305,6 +309,7 @@ export function FloodDossierModal({
               directionalAdvice={directionalAdvice}
               setFocusCoordinates={setFocusCoordinates}
               setShowDossier={setShowDossier}
+              onFocusDetourOnMap={onFocusDetourOnMap}
             />
           </div>
 
@@ -368,6 +373,10 @@ export function FloodDossierModal({
               <button
                 type="button"
                 onClick={() => {
+                  if (onFocusFloodOnMap) {
+                    onFocusFloodOnMap(selectedFlood.id);
+                    return;
+                  }
                   if (Number.isFinite(selectedFlood.lon_start) && Number.isFinite(selectedFlood.lat_start)) {
                     setFocusCoordinates([selectedFlood.lon_start, selectedFlood.lat_start]);
                   }

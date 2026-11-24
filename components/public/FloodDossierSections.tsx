@@ -59,6 +59,7 @@ export interface FloodDossierDetourSectionProps {
   directionalAdvice: ReturnType<typeof extractDirectionalAdvice>;
   setFocusCoordinates: (coords: [number, number]) => void;
   setShowDossier: (show: boolean) => void;
+  onFocusDetourOnMap?: (detourId: string, direction: "FORWARD" | "REVERSE") => void;
 }
 
 export function FloodDossierDetourSection({
@@ -77,6 +78,7 @@ export function FloodDossierDetourSection({
   directionalAdvice,
   setFocusCoordinates,
   setShowDossier,
+  onFocusDetourOnMap,
 }: FloodDossierDetourSectionProps) {
   return (
     <div
@@ -322,6 +324,11 @@ export function FloodDossierDetourSection({
                   <button
                     type="button"
                     onClick={() => {
+                      if (onFocusDetourOnMap) {
+                        onFocusDetourOnMap(route.id, effectiveDirection);
+                        return;
+                      }
+
                       const pickCoord = (pt: unknown): [number, number] | null => {
                         if (!Array.isArray(pt) || pt.length < 2) return null;
                         const a = Number(pt[0]);

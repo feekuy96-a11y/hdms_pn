@@ -8,6 +8,16 @@ import { getPublicSystemDataAction } from "@/app/actions/doh-actions";
 import { AdviceText } from "@/components/AdviceText";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload, FloodRoute, DetourRoute } from "@/db/default-data";
 import { createClient } from "@/lib/supabase/client";
+import type { GisMapViewportApi } from "@/components/map/LongdoGisMap";
+import { GisFocusModeBar } from "@/components/public/GisFocusModeBar";
+import {
+  enterGisFocus,
+  exitGisFocus,
+  IDLE_GIS_FOCUS_STATE,
+  updateGisFocusOptions,
+  type GisFocusDirection,
+  type GisFocusState,
+} from "@/lib/gis-focus-mode";
 
 const LongdoGisMap = dynamic(
   () => import("@/components/map/LongdoGisMap").then((mod) => mod.LongdoGisMap),
@@ -138,6 +148,107 @@ export default function HomePage() {
   const [returnToDetourList, setReturnToDetourList] = useState(false);
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
+  const [gisFocus, setGisFocus] = useState<GisFocusState>(IDLE_GIS_FOCUS_STATE);
+  const mapViewportApiRef = useRef<GisMapViewportApi | null>(null);
+  const preModalViewportRef = useRef<{ center: [number, number]; zoom: number } | null>(null);
+
+  const captureFocusOriginSnapshot = useCallback(() => {
+    const viewport = preModalViewportRef.current ?? mapViewportApiRef.current?.getViewport() ?? null;
+    preModalViewportRef.current = null;
+    return {
+      viewport,
+      filters: {
+        activeTab: sidebarTab,
+        statusFilter: selectedStatusFilter,
+        routeFilter: selectedRouteFilter,
+        searchQuery,
+      },
+    };
+  }, [sidebarTab, selectedStatusFilter, selectedRouteFilter, searchQuery]);
+
+  // Clear pre-modal snapshot if user closes FloodDossierModal without entering Focus Mode
+  useEffect(() => {
+    if (!showDossier && gisFocus.status === "idle") {
+      preModalViewportRef.current = null;
+    }
+  }, [showDossier, gisFocus.status]);
+
+  const handleEnterDetourFocus = useCallback((detourId: string, direction: GisFocusDirection) => {
+    mapViewportApiRef.current?.closePopup();
+    setFocusCoordinates(null);
+    setViewingDetourModal(null);
+    setShowDossier(false);
+    setReturnToDetourList(false);
+    setIsMobileDrawerOpen(false);
+    setGisFocus((prev) =>
+      enterGisFocus(prev, {
+        targetType: "DETOUR",
+        targetId: detourId,
+        direction,
+        captureSnapshot: captureFocusOriginSnapshot,
+      })
+    );
+  }, [captureFocusOriginSnapshot]);
+
+  const handleEnterFloodFocus = useCallback((floodId: string) => {
+    mapViewportApiRef.current?.closePopup();
+    setFocusCoordinates(null);
+    setShowDossier(false);
+    setViewingDetourModal(null);
+    setIsMobileDrawerOpen(false);
+    setGisFocus((prev) =>
+      enterGisFocus(prev, {
+        targetType: "FLOOD",
+        targetId: floodId,
+        direction: "FORWARD",
+        showLinkedDetour: false,
+        linkedDetourId: null,
+        captureSnapshot: captureFocusOriginSnapshot,
+      })
+    );
+  }, [captureFocusOriginSnapshot]);
+
+  const handleExitGisFocus = useCallback(() => {
+    preModalViewportRef.current = null;
+    setFocusCoordinates(null);
+    setGisFocus((prev) => {
+      const { nextState, restoreSnapshot } = exitGisFocus(prev);
+      if (restoreSnapshot?.viewport) {
+        const vp = restoreSnapshot.viewport;
+        window.requestAnimationFrame(() => {
+          mapViewportApiRef.current?.restoreViewport(vp);
+        });
+      }
+      return nextState;
+    });
+  }, []);
+
+  // Desktop Esc shortcut to exit Shared GIS Focus Mode when no modal is open
+  useEffect(() => {
+    if (gisFocus.status !== "focused" || showDossier || viewingDetourModal) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        handleExitGisFocus();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [gisFocus.status, showDossier, viewingDetourModal, handleExitGisFocus]);
+
+  // Interaction Policy: auto-exit Focus Mode when sidebar filters/search change to prevent state conflict
+  const prevFiltersRef = useRef({ searchQuery, selectedRouteFilter, selectedStatusFilter });
+  useEffect(() => {
+    const prev = prevFiltersRef.current;
+    const changed =
+      prev.searchQuery !== searchQuery ||
+      prev.selectedRouteFilter !== selectedRouteFilter ||
+      prev.selectedStatusFilter !== selectedStatusFilter;
+    prevFiltersRef.current = { searchQuery, selectedRouteFilter, selectedStatusFilter };
+    if (changed && gisFocus.status === "focused") {
+      setGisFocus((current) => exitGisFocus(current).nextState);
+    }
+  }, [searchQuery, selectedRouteFilter, selectedStatusFilter, gisFocus.status]);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -249,6 +360,9 @@ export default function HomePage() {
 
   const handleSelectFlood = (flood: FloodRoute, scrollToDetour: boolean = false) => {
     scrollToDetourOnOpenRef.current = scrollToDetour;
+    if (gisFocus.status === "idle" && !preModalViewportRef.current) {
+      preModalViewportRef.current = mapViewportApiRef.current?.getViewport() ?? null;
+    }
     setSelectedFloodId(flood.id);
     const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
     if (meta.directionCode === "B_TO_A") {
@@ -259,7 +373,9 @@ export default function HomePage() {
     setActivePhotoIdx(0);
     setShowDossier(true);
     setIsMobileDrawerOpen(false);
-    if (flood.lat_start && flood.lon_start) setFocusCoordinates([flood.lon_start, flood.lat_start]);
+    if (gisFocus.status !== "focused" && flood.lat_start && flood.lon_start) {
+      setFocusCoordinates([flood.lon_start, flood.lat_start]);
+    }
     loadFloodPhotosOnDemand(flood);
   };
 
@@ -709,7 +825,26 @@ export default function HomePage() {
               setIsMobileDrawerOpen(false);
             }}
             focusCoordinates={focusCoordinates}
+            gisFocus={gisFocus}
+            mapViewportApiRef={mapViewportApiRef}
             className="h-full w-full"
+          />
+          <GisFocusModeBar
+            focusState={gisFocus}
+            systemData={systemData}
+            onExit={handleExitGisFocus}
+            onChangeDirection={(direction) =>
+              setGisFocus((prev) => updateGisFocusOptions(prev, { direction, refit: true }))
+            }
+            onToggleLinkedDetour={(show, detourId) =>
+              setGisFocus((prev) =>
+                updateGisFocusOptions(prev, {
+                  showLinkedDetour: show,
+                  linkedDetourId: detourId ?? prev.linkedDetourId,
+                  refit: true,
+                })
+              )
+            }
           />
           {selectedRouteFilter !== "ALL" && activeRouteChip && (
             <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 top-14 sm:top-3 z-[405] flex items-center gap-2 rounded-xl border border-amber-400/60 bg-surface-floating px-3 py-1.5 text-xs font-semibold text-amber-100 shadow-lg whitespace-nowrap">
@@ -780,6 +915,8 @@ export default function HomePage() {
               isHistoryExpanded={isHistoryExpanded}
               setIsHistoryExpanded={setIsHistoryExpanded}
               selectedFloodRecentUpdates={selectedFloodRecentUpdates}
+              onFocusFloodOnMap={(floodId) => handleEnterFloodFocus(floodId)}
+              onFocusDetourOnMap={(detourId, dir) => handleEnterDetourFocus(detourId, dir)}
             />
           )}
 
@@ -793,11 +930,8 @@ export default function HomePage() {
               detourDialogRef={detourDialogRef}
               detourCloseRef={detourCloseRef}
               closeDetourDetails={closeDetourDetails}
-              onFocusMapLocation={(coords) => {
-                if (coords) setFocusCoordinates(coords);
-                setViewingDetourModal(null);
-                setReturnToDetourList(false);
-                setIsMobileDrawerOpen(false);
+              onFocusMapLocation={() => {
+                handleEnterDetourFocus(viewingDetourModal.id, modalDetourDirection);
               }}
             />
           )}

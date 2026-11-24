@@ -33,10 +33,24 @@ import {
   resolveHighwayForegroundStyle,
   shouldShowHighwayFeature,
 } from "./longdo-layer-builders";
-import { renderDirectionalArrows } from "./longdo-arrow-layer";
+import { placeArrowsOnLine, renderDirectionalArrows } from "./longdo-arrow-layer";
 import { renderVertexEditHandles } from "./longdo-vertex-handles";
 import { renderDraftAndConflictLayer } from "./longdo-draft-layer";
 import { useLongdoPopupBridge, useLongdoRouteLayers } from "./useLongdoRouteLayers";
+import { getTrafficPresentation } from "@/lib/traffic-presentation";
+import {
+  collectFocusBoundsPoints,
+  resolveDetourFocusGeometry,
+  resolveFloodFocusData,
+  type GisFocusState,
+  type GisFocusViewportSnapshot,
+} from "@/lib/gis-focus-mode";
+
+export interface GisMapViewportApi {
+  getViewport: () => GisFocusViewportSnapshot | null;
+  restoreViewport: (viewport: GisFocusViewportSnapshot) => void;
+  closePopup: () => void;
+}
 
 export { isFloodLineVisibleOnCurrentMap } from "./longdo-map-popups";
 
@@ -80,6 +94,10 @@ interface LongdoGisMapProps {
   searchQuery?: string;
   highlightHighwayRouteNos?: string[];
   activeCardFocus?: { floodIds: string[]; detourIds: string[]; highwayRouteNos: string[] } | null;
+  /** Shared GIS Focus Mode state (Presentation Override on the existing Map Instance). */
+  gisFocus?: GisFocusState | null;
+  /** Imperative viewport snapshot/restore bridge for Shared GIS Focus Mode. */
+  mapViewportApiRef?: React.MutableRefObject<GisMapViewportApi | null>;
 }
 
 export function LongdoGisMap({
@@ -118,6 +136,8 @@ export function LongdoGisMap({
   searchQuery = "",
   highlightHighwayRouteNos = EMPTY_IDS,
   activeCardFocus = null,
+  gisFocus = null,
+  mapViewportApiRef,
 }: LongdoGisMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
@@ -134,6 +154,10 @@ export function LongdoGisMap({
   const revDraftLineRef = useRef<any>(null);
   const vertexGroupRef = useRef<any>(null);
   const officeGroupRef = useRef<any>(null);
+  const focusGroupRef = useRef<any>(null);
+  const isProgrammaticMoveRef = useRef(false);
+  const userInteractedDuringFocusRef = useRef(false);
+  const lastFittedRequestIdRef = useRef<number>(0);
   const floodLinesRef = useRef<Record<string, FloodLineEntry & { baseOpacity: number; filterOpacity: number }>>({});
   const detourLinesRef = useRef<Array<AnimatedLineEntry & { id: string; filterOpacity: number }>>([]);
   const userLocationMarkerRef = useRef<any>(null);
@@ -147,15 +171,20 @@ export function LongdoGisMap({
   const [activePopupEntity, setActivePopupEntity] = useState<{ type: "HIGHWAY" | "FLOOD" | "DETOUR"; id: string } | null>(null);
   const [currentZoom, setCurrentZoom] = useState<number>(APP_CONFIG.DEFAULT_ZOOM);
   const [forceShowAllHighways, setForceShowAllHighways] = useState(false);
+  const isFocusMode = gisFocus?.status === "focused";
   const [showFloodLayer, setShowFloodLayer] = useState(true);
   const [floodDisplayMode, setFloodDisplayMode] = useState<"SEGMENTS" | "EVENTS">("SEGMENTS");
   const [showDetourLayer, setShowDetourLayer] = useState(true);
-  const effectiveShowFloodLayer = showFloodLayer;
-  const effectiveShowDetourLayer = showDetourLayer;
+  const effectiveShowFloodLayer = isFocusMode ? false : showFloodLayer;
+  const effectiveShowDetourLayer = isFocusMode ? false : showDetourLayer;
   const [showMainHwy, setShowMainHwy] = useState(true);
   const [showSecHwy, setShowSecHwy] = useState(true);
   const [showHighwayShields, setShowHighwayShields] = useState(false);
   const [showOffices, setShowOffices] = useState(true);
+  const effectiveShowMainHwy = isFocusMode ? false : showMainHwy;
+  const effectiveShowSecHwy = isFocusMode ? false : showSecHwy;
+  const effectiveShowHighwayShields = isFocusMode ? false : showHighwayShields;
+  const effectiveShowOffices = isFocusMode ? false : showOffices;
   const [showRoadLabels, setShowRoadLabels] = useState(true);
   const [legendRouteList, setLegendRouteList] = useState<"MAIN_HIGHWAY" | "SECOND_HIGHWAY" | null>(null);
   const [animationsEnabled, setAnimationsEnabled] = useState(true);
@@ -297,11 +326,40 @@ export function LongdoGisMap({
         vertexGroupRef.current = L.layerGroup().addTo(map);
         officeGroupRef.current = L.layerGroup().addTo(map);
         shieldGroupRef.current = L.layerGroup().addTo(map);
+        focusGroupRef.current = L.layerGroup().addTo(map);
 
         setCurrentZoom(map.getZoom());
         map.on("zoomend", () => {
           setCurrentZoom(map.getZoom());
         });
+        map.on("dragstart zoomstart", () => {
+          if (!isProgrammaticMoveRef.current) {
+            userInteractedDuringFocusRef.current = true;
+          }
+        });
+
+        if (mapViewportApiRef) {
+          mapViewportApiRef.current = {
+            getViewport: () => {
+              const center = map.getCenter();
+              return {
+                center: [center.lng, center.lat],
+                zoom: map.getZoom(),
+              };
+            },
+            restoreViewport: (vp) => {
+              isProgrammaticMoveRef.current = true;
+              map.stop();
+              map.setView([vp.center[1], vp.center[0]], vp.zoom, { animate: true });
+              window.setTimeout(() => {
+                isProgrammaticMoveRef.current = false;
+              }, 350);
+            },
+            closePopup: () => {
+              map.closePopup();
+            },
+          };
+        }
 
         setMapReady(true);
 
@@ -566,8 +624,8 @@ export function LongdoGisMap({
       shouldShowHighwayFeature(
         feature,
         isMain,
-        showMainHwy,
-        showSecHwy,
+        effectiveShowMainHwy,
+        effectiveShowSecHwy,
         showSecondaryAtCurrentZoom,
         criticalHighwayRouteNos
       );
@@ -653,7 +711,7 @@ export function LongdoGisMap({
     return () => {
       group.clearLayers();
     };
-  }, [mapReady, systemData.highwayLayers, mapStyles, showMainHwy, showSecHwy, showRoadLabels, showSecondaryAtCurrentZoom, criticalHighwayRouteNos, currentZoom]);
+  }, [mapReady, systemData.highwayLayers, mapStyles, effectiveShowMainHwy, effectiveShowSecHwy, showRoadLabels, showSecondaryAtCurrentZoom, criticalHighwayRouteNos, currentZoom]);
 
   // 4b. Highway shield labels - viewport-limited, grid-based collision check, redrawn on pan/zoom.
   useEffect(() => {
@@ -662,7 +720,7 @@ export function LongdoGisMap({
     const group = shieldGroupRef.current;
     if (!mapReady || !L || !map || !group) return;
     group.clearLayers();
-    if (!showHighwayShields) return;
+    if (!effectiveShowHighwayShields) return;
 
     let timer: ReturnType<typeof setTimeout> | null = null;
     const draw = () => {
@@ -676,12 +734,12 @@ export function LongdoGisMap({
       for (const item of shieldCandidates) {
         if (!shouldShowHighwayFeature(
           { properties: { route_no: item.code } }, item.isMain,
-          showMainHwy, showSecHwy, true, criticalHighwayRouteNos,
+          effectiveShowMainHwy, effectiveShowSecHwy, true, criticalHighwayRouteNos,
           Boolean(activeCardFocus) || isFilterActive || Boolean(searchQuery.trim()),
           activeCardFocus?.highwayRouteNos ?? highlightHighwayRouteNos, searchQuery
         )) continue;
         if (drawn >= MAX_VISIBLE_SHIELDS) break;
-        if (item.isMain ? !showMainHwy : !showSecHwy) continue;
+        if (item.isMain ? !effectiveShowMainHwy : !effectiveShowSecHwy) continue;
         if (!viewport.contains(item.latlng)) continue;
         const point = map.latLngToContainerPoint(item.latlng);
         const cellX = Math.floor(point.x / 48);
@@ -737,7 +795,7 @@ export function LongdoGisMap({
       map.off("moveend zoomend", schedule);
       group.clearLayers();
     };
-  }, [mapReady, shieldCandidates, showHighwayShields, showMainHwy, showSecHwy, forceShowAllHighways, criticalHighwayRouteNos, isFilterActive, searchQuery, activeCardFocus, highlightHighwayRouteNos]);
+  }, [mapReady, shieldCandidates, effectiveShowHighwayShields, effectiveShowMainHwy, effectiveShowSecHwy, forceShowAllHighways, criticalHighwayRouteNos, isFilterActive, searchQuery, activeCardFocus, highlightHighwayRouteNos]);
 
   // 4c & 4d. Detour routes + Flood routes & markers Hook
   useLongdoRouteLayers({
@@ -764,7 +822,7 @@ export function LongdoGisMap({
   // the already-drawn flood/detour paths at a low fixed rate, so the style editor's
   // motion settings are visible without changing renderer or rebuilding GIS layers.
   useEffect(() => {
-    if (!mapReady || !allowLineAnimation) return;
+    if (!mapReady || !allowLineAnimation || isFocusMode) return;
     const floodStyle = mapStyles.flood;
     const detourStyle = mapStyles.detour;
     const floodAnimation = floodStyle?.animation || "none";
@@ -807,7 +865,7 @@ export function LongdoGisMap({
       window.clearInterval(timer);
       entries.forEach((entry) => entry.line.setStyle({ opacity: entry.baseOpacity * entry.filterOpacity, weight: entry.baseWeight, dashOffset: "0" }));
     };
-  }, [mapReady, allowLineAnimation, mapStyles, systemData.floodRoutes, systemData.detourRoutes, showFloodLayer, showDetourLayer]);
+  }, [mapReady, allowLineAnimation, isFocusMode, mapStyles, systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, effectiveShowDetourLayer]);
 
   // 4e. Selected flood: restyle one polyline in place instead of redrawing the map.
   useEffect(() => {
@@ -984,9 +1042,9 @@ export function LongdoGisMap({
         mapStyles,
         highwayLayers: systemData.highwayLayers,
         detourRoutes: systemData.detourRoutes,
-        showMainHwy,
-        showSecHwy,
-        showDetourLayer,
+        showMainHwy: effectiveShowMainHwy,
+        showSecHwy: effectiveShowSecHwy,
+        showDetourLayer: effectiveShowDetourLayer,
         showSecondaryAtCurrentZoom,
         draftCoordinates,
         draftReverseCoordinates,
@@ -1011,7 +1069,7 @@ export function LongdoGisMap({
       map.off("moveend zoomend", schedule);
       group.clearLayers();
     };
-  }, [mapReady, systemData.highwayLayers, systemData.detourRoutes, systemData.floodRoutes, mapStyles, showMainHwy, showSecHwy, showDetourLayer, showFloodLayer, showSecondaryAtCurrentZoom, currentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode, vertexEditable, publicMode, isFilterActive, searchQuery, activeCardFocus, activePopupEntity, highlightDetourIds, highlightHighwayRouteNos]);
+  }, [mapReady, systemData.highwayLayers, systemData.detourRoutes, systemData.floodRoutes, mapStyles, effectiveShowMainHwy, effectiveShowSecHwy, effectiveShowDetourLayer, effectiveShowFloodLayer, showSecondaryAtCurrentZoom, currentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode, vertexEditable, publicMode, isFilterActive, searchQuery, activeCardFocus, activePopupEntity, highlightDetourIds, highlightHighwayRouteNos]);
 
   // 4h. Freeform vertex editor: draggable handle on every vertex + "+" handle on every segment middle.
   // Only vertices inside the viewport are drawn (at most MAX_VERTEX_HANDLES), so long lines stay fast.
@@ -1060,7 +1118,7 @@ export function LongdoGisMap({
     const group = officeGroupRef.current;
     if (!mapReady || !L || !group) return;
     group.clearLayers();
-    if (!showOffices) return;
+    if (!effectiveShowOffices) return;
 
     (systemData.offices || []).forEach((office) => {
       if (!office.is_active) return;
@@ -1096,7 +1154,211 @@ export function LongdoGisMap({
     return () => {
       group.clearLayers();
     };
-  }, [mapReady, systemData.offices, showOffices, publicMode, editableOfficeId]);
+  }, [mapReady, systemData.offices, effectiveShowOffices, publicMode, editableOfficeId]);
+
+  // 4h. Shared GIS Focus Mode Layer (single presentation override on existing map instance)
+  useEffect(() => {
+    const L = leafletRef.current;
+    const map = leafletMapRef.current;
+    const group = focusGroupRef.current;
+    if (!mapReady || !L || !map || !group) return;
+
+    group.clearLayers();
+    if (!gisFocus || gisFocus.status !== "focused" || !gisFocus.targetType || !gisFocus.targetId) {
+      userInteractedDuringFocusRef.current = false;
+      return;
+    }
+
+    const renderer = rendererRef.current;
+    const allPolylines: [number, number][][] = [];
+    const allPoints: ([number, number] | null)[] = [];
+
+    const drawDetourFocusOverlay = (
+      detour: DetourRoute,
+      direction: "FORWARD" | "REVERSE",
+      isPrimary: boolean
+    ) => {
+      const geom = resolveDetourFocusGeometry(detour, direction);
+      const color = isPrimary ? "#f59e0b" : "#38bdf8";
+      const weight = isPrimary ? 6.5 : 5;
+
+      if (geom.coords.length >= 2) {
+        const latLngs = geom.coords.map(toLeafletLatLng);
+        L.polyline(latLngs, {
+          renderer,
+          color: "#091326",
+          weight: weight + 4,
+          opacity: 0.92,
+        }).addTo(group);
+        const line = L.polyline(latLngs, {
+          renderer,
+          color,
+          weight,
+          opacity: 1,
+          dashArray: isPrimary ? undefined : "10, 6",
+        }).addTo(group);
+        raisePathLayers(line);
+        allPolylines.push(geom.coords);
+
+        const viewport = map.getBounds().pad(0.6);
+        placeArrowsOnLine(
+          L,
+          map,
+          group,
+          geom.coords,
+          "FORWARD",
+          "#091326",
+          14,
+          72,
+          color,
+          viewport,
+          { count: 0 }
+        );
+      } else if (geom.startCoord) {
+        allPoints.push(geom.startCoord);
+      }
+
+      const startLabel = direction === "REVERSE" ? "B" : "A";
+      const endLabel = direction === "REVERSE" ? "A" : "B";
+
+      if (geom.startCoord) {
+        allPoints.push(geom.startCoord);
+        L.marker(toLeafletLatLng(geom.startCoord), {
+          interactive: false,
+          zIndexOffset: 900,
+          icon: L.divIcon({
+            className: "hdms-focus-endpoint",
+            html: `<div style="transform:translate(-50%,-50%)" class="flex items-center gap-1 rounded-full border-2 border-white bg-emerald-600 px-2 py-0.5 text-[11px] font-black text-white shadow-lg whitespace-nowrap">จุดเริ่ม ${startLabel}</div>`,
+            iconSize: [0, 0],
+          }),
+        }).addTo(group);
+      }
+
+      if (geom.endCoord) {
+        allPoints.push(geom.endCoord);
+        L.marker(toLeafletLatLng(geom.endCoord), {
+          interactive: false,
+          zIndexOffset: 900,
+          icon: L.divIcon({
+            className: "hdms-focus-endpoint",
+            html: `<div style="transform:translate(-50%,-50%)" class="flex items-center gap-1 rounded-full border-2 border-white bg-sky-600 px-2 py-0.5 text-[11px] font-black text-white shadow-lg whitespace-nowrap">จุดสิ้นสุด ${endLabel}</div>`,
+            iconSize: [0, 0],
+          }),
+        }).addTo(group);
+      }
+    };
+
+    if (gisFocus.targetType === "DETOUR") {
+      const detour = (systemData.detourRoutes || []).find((d) => d.id === gisFocus.targetId);
+      if (detour) {
+        drawDetourFocusOverlay(detour, gisFocus.direction, true);
+        // Show linked flood impact warning marker if an active flood affects this detour
+        const linkedFlood = (systemData.floodRoutes || []).find(
+          (f) => f.id === detour.flood_id_ref && f.is_active !== false && f.water_level_cm > 0
+        );
+        if (linkedFlood && Number.isFinite(linkedFlood.lon_start) && Number.isFinite(linkedFlood.lat_start)) {
+          const status = getTrafficPresentation(linkedFlood.traffic_status);
+          L.marker([linkedFlood.lat_start, linkedFlood.lon_start], {
+            interactive: false,
+            zIndexOffset: 850,
+            icon: L.divIcon({
+              className: "hdms-focus-warning",
+              html: `<div style="transform:translate(-50%,-50%)" class="rounded-lg border border-rose-400 bg-rose-950/95 px-2 py-0.5 text-[10px] font-bold text-rose-200 shadow-lg whitespace-nowrap">⚠️ ทล.${escapeHtml(linkedFlood.route_no)} ${escapeHtml(status.label)}</div>`,
+              iconSize: [0, 0],
+            }),
+          }).addTo(group);
+        }
+      }
+    } else if (gisFocus.targetType === "FLOOD") {
+      const floodData = resolveFloodFocusData(gisFocus.targetId, systemData);
+      if (floodData.primaryFlood && !floodData.isResolved) {
+        // Draw all active segments (including LT/RT siblings) exempt from zoom-dependent hiding
+        floodData.activeSegments.forEach((seg) => {
+          const segStatus = getTrafficPresentation(seg.traffic_status);
+          const segColor = segStatus.color === "red" ? "#ef4444" : segStatus.color === "amber" ? "#f59e0b" : "#38bdf8";
+          const segCoords = (floodData.coordsList.find((_, idx) => floodData.activeSegments[idx]?.id === seg.id)) || [];
+          if (segCoords.length >= 2) {
+            const latLngs = segCoords.map(toLeafletLatLng);
+            L.polyline(latLngs, {
+              renderer,
+              color: "#ffffff",
+              weight: 10,
+              opacity: 0.9,
+            }).addTo(group);
+            const line = L.polyline(latLngs, {
+              renderer,
+              color: segColor,
+              weight: 6.5,
+              opacity: 1,
+            }).addTo(group);
+            raisePathLayers(line);
+            allPolylines.push(segCoords);
+          } else if (Number.isFinite(seg.lon_start) && Number.isFinite(seg.lat_start)) {
+            allPoints.push([seg.lon_start, seg.lat_start]);
+            L.circleMarker([seg.lat_start, seg.lon_start], {
+              renderer,
+              radius: 10,
+              color: "#ffffff",
+              weight: 2.5,
+              fillColor: segColor,
+              fillOpacity: 0.95,
+            }).addTo(group);
+          }
+        });
+      } else if (floodData.primaryFlood && floodData.isResolved) {
+        // Resolved / 0 cm flood: do NOT draw as an active impacted flood line; keep neutral location point only for bounds
+        floodData.pointFallbacks.forEach((pt) => allPoints.push(pt));
+        floodData.coordsList.forEach((line) => allPolylines.push(line));
+      }
+
+      if (gisFocus.showLinkedDetour && floodData.linkedDetours.length > 0) {
+        const linked =
+          floodData.linkedDetours.find((d) => d.id === gisFocus.linkedDetourId) ??
+          floodData.linkedDetours[0];
+        if (linked) {
+          drawDetourFocusOverlay(linked, gisFocus.direction, false);
+        }
+      }
+    }
+
+    // Fit bounds only on explicit fit requests (not on live data refresh after user pan/zoom)
+    const shouldFit =
+      gisFocus.fitRequestId !== lastFittedRequestIdRef.current ||
+      !userInteractedDuringFocusRef.current;
+
+    if (shouldFit && gisFocus.fitRequestId !== lastFittedRequestIdRef.current) {
+      lastFittedRequestIdRef.current = gisFocus.fitRequestId;
+      userInteractedDuringFocusRef.current = false;
+      map.closePopup();
+
+      const boundsPoints = collectFocusBoundsPoints(allPolylines, allPoints);
+      if (boundsPoints.length >= 2) {
+        const isMobileViewport = typeof window !== "undefined" && window.innerWidth < 640;
+        isProgrammaticMoveRef.current = true;
+        map.stop();
+        map.fitBounds(L.latLngBounds(boundsPoints.map(toLeafletLatLng)), {
+          paddingTopLeft: [24, isMobileViewport ? 168 : 132],
+          paddingBottomRight: [24, isMobileViewport ? 56 : 40],
+          maxZoom: 15,
+          animate: true,
+        });
+        window.setTimeout(() => {
+          isProgrammaticMoveRef.current = false;
+        }, 400);
+      } else if (boundsPoints.length === 1) {
+        isProgrammaticMoveRef.current = true;
+        map.stop();
+        map.setView(toLeafletLatLng(boundsPoints[0]), 14, { animate: true });
+        window.setTimeout(() => {
+          isProgrammaticMoveRef.current = false;
+        }, 400);
+      }
+    }
+
+    return () => {
+      group.clearLayers();
+    };
+  }, [mapReady, gisFocus, systemData]);
 
   return (
     <div data-public-filter-counts={`flood:${highlightFloodIds.length};detour:${highlightDetourIds.length}`} className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full min-h-[450px]`} style={{ minHeight: 450 }}>
