@@ -2,19 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --surface-canvas: #070d19;
+  --surface-panel: #0b1324;
+  --surface-card: #101d33;
+  --surface-floating: rgba(11, 19, 36, 0.94);
+  --surface-border: #1e293b;
+  --doh-amber: #f59e0b;
+  --doh-amber-light: #fbbf24;
+  --doh-navy: #071b3d;
+}
+
 @layer base {
   body {
     @apply bg-slate-950 text-slate-100 font-body antialiased;
     overflow-x: hidden;
+    line-height: 1.6;
   }
+  /* Thai typography: normal tracking prevents tone mark and vowel clipping */
   h1, h2, h3, h4, h5, h6 {
-    @apply font-heading tracking-tight;
+    @apply font-heading tracking-normal leading-snug;
+  }
+  p, span, label, input, button {
+    text-rendering: optimizeLegibility;
+  }
+}
+
+@layer utilities {
+  .bg-surface-canvas {
+    background-color: var(--surface-canvas);
+  }
+  .bg-surface-panel {
+    background-color: var(--surface-panel);
+  }
+  .bg-surface-card {
+    background-color: var(--surface-card);
+  }
+  .bg-surface-floating {
+    background-color: var(--surface-floating);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .border-surface {
+    border-color: var(--surface-border);
   }
 }
 
 /* Department of Highways brand surfaces */
 .doh-header {
-  background: #091122;
+  background: var(--surface-panel);
 }
 
 /* Leaflet Map Container Global Enforcement */
