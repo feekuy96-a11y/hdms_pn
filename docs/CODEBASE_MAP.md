@@ -34,6 +34,8 @@
 | Logic ทะเบียนเหตุการณ์ (filter, split, merge, inline water) | `components/admin/tabs/useIncidentRegistry.ts` | `npm run check:fast` |
 | Modal เชื่อมโยงเหตุการณ์น้ำท่วม ↔ ทางเลี่ยง (UI) | `components/admin/EventDetourLinkModal.tsx` | `npx eslint components/admin/EventDetourLinkModal.tsx --max-warnings=0` |
 | Logic เชื่อมโยงเหตุการณ์ ↔ ทางเลี่ยง (drafts, 409 version) | `components/admin/useEventDetourLinkModal.ts` | `npm run check:fast` |
+| แท็บนำเข้า/จัดการข้อมูลสายทางหลวง GIS (UI หลัก/Container) | `components/admin/tabs/GisDataImportTab.tsx` | `npm run check:fast` |
+| ตารางสายทางและเลเยอร์โครงข่ายเดิม (Highway Table & Layer List) | `components/admin/tabs/GisHighwayTable.tsx` | `npx eslint components/admin/tabs/GisHighwayTable.tsx --max-warnings=0` |
 | Modals จัดการข้อมูลทางหลวง GIS (Container) | `components/admin/tabs/GisHighwayModals.tsx` | `npx eslint components/admin/tabs/GisHighwayModals.tsx --max-warnings=0` |
 | Modal ดูรายละเอียดสายทางหลวง (Route Detail) | `components/admin/tabs/HighwayRouteDetailModal.tsx` | `npx eslint components/admin/tabs/HighwayRouteDetailModal.tsx --max-warnings=0` |
 | Panel ปรับแนวถนนทางหลวง (Geometry Editor Panel) | `components/admin/tabs/HighwayGeometryEditorPanel.tsx` | `npx eslint components/admin/tabs/HighwayGeometryEditorPanel.tsx --max-warnings=0` |
