@@ -26,8 +26,9 @@ export function useModalAccessibility(isOpen: boolean, onClose: () => void) {
     window.addEventListener("keydown", closeOnEscape, true);
     const frame = window.requestAnimationFrame(() => {
       const dialog = dialogRef.current;
-      const first = dialog?.querySelector<HTMLElement>(focusableSelector);
-      (first || dialog)?.focus();
+      if (!dialog || (document.activeElement && dialog.contains(document.activeElement))) return;
+      const first = dialog.querySelector<HTMLElement>(focusableSelector);
+      (first || dialog).focus();
     });
     return () => {
       window.cancelAnimationFrame(frame);

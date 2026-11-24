@@ -79,13 +79,25 @@ export function MobileCitizenDrawer({
               <p className="font-heading text-sm font-bold leading-snug tracking-normal text-white truncate">
                 จุดเฝ้าระวังน้ำท่วม {activeFloodCount} จุด
               </p>
-              <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[0.75rem] text-slate-300">
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.75rem] text-slate-300">
                 {SUMMARY_ITEMS.filter((item) => situationCounts[item.color] > 0).length > 0 ? (
                   SUMMARY_ITEMS.filter((item) => situationCounts[item.color] > 0).map((item) => (
-                    <span key={item.color} className="inline-flex items-center gap-1 whitespace-nowrap">
+                    <button
+                      key={item.color}
+                      type="button"
+                      aria-pressed={selectedStatusFilter === item.color}
+                      aria-label={`${situationCounts[item.color]} ${item.label}`}
+                      title={item.label}
+                      onClick={() => handleStatusFilter(item.color)}
+                      className={`inline-flex min-h-7 items-center gap-1 rounded-lg border px-1.5 py-0.5 whitespace-nowrap transition cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
+                        selectedStatusFilter === item.color
+                          ? "border-amber-400/80 bg-surface-card text-white"
+                          : "border-surface bg-surface-panel/70 hover:bg-surface-card text-slate-200"
+                      }`}
+                    >
                       <span aria-hidden="true" className={`h-2 w-2 rounded-full ${item.dot}`} />
                       <strong className="font-mono text-white">{situationCounts[item.color]}</strong>
-                    </span>
+                    </button>
                   ))
                 ) : (
                   <span className="truncate">ยังไม่มีจุดเฝ้าระวัง</span>
