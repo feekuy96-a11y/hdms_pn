@@ -62,7 +62,7 @@ function DetourDirectionalPreview({
   if (ext.hasBoth) {
     if (variant === "card") {
       return (
-        <div className="text-[11px] space-y-1 bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+        <div className="text-[11px] space-y-1 bg-surface-panel p-2 rounded-lg border border-surface">
           <div className="text-amber-200 line-clamp-1">
             <strong className="text-amber-400">🚗 ขาไป:</strong> {ext.forward}
           </div>
@@ -116,7 +116,7 @@ export function DetourListCard({
   return (
     <div
       onClick={() => onViewDetour(item)}
-      className={`p-3.5 rounded-2xl border border-slate-800 bg-slate-950/80 shadow-md space-y-2.5 cursor-pointer hover:border-slate-700 transition ${
+      className={`p-3.5 rounded-2xl border border-surface bg-surface-card shadow-md space-y-2.5 cursor-pointer hover:border-amber-400/60 transition ${
         !item.is_active ? "opacity-60" : ""
       }`}
     >
@@ -136,7 +136,7 @@ export function DetourListCard({
           >
             <Route className="h-4 w-4" />
           </span>
-          <span className="font-heading font-black text-sm text-white">{item.route_name}</span>
+          <span className="font-heading font-black text-sm leading-snug tracking-normal text-white">{item.route_name}</span>
         </div>
         <button
           type="button"
@@ -144,10 +144,10 @@ export function DetourListCard({
             e.stopPropagation();
             onToggleStatus(item.id, item.is_active);
           }}
-          className={`min-h-9 px-2.5 py-1 rounded-full text-[10px] font-heading font-bold border whitespace-nowrap transition cursor-pointer ${
+          className={`min-h-9 px-2.5 py-1 rounded-full text-xs leading-snug tracking-normal font-heading font-bold border whitespace-nowrap transition cursor-pointer ${
             item.is_active
               ? "bg-emerald-950 text-emerald-300 border-emerald-600"
-              : "bg-slate-900 text-slate-400 border-slate-700"
+              : "bg-surface-panel text-slate-300 border-surface"
           }`}
         >
           {item.is_active ? "เปิดใช้งาน" : "ปิดชั่วคราว"}
@@ -171,7 +171,7 @@ export function DetourListCard({
 
       <DetourDirectionalPreview description={item.description} variant="card" />
 
-      <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2 text-[11px]">
+      <div className="pt-2 border-t border-surface flex items-center justify-between gap-2 text-[11px]">
         <span className="text-slate-400 font-mono">
           ลำดับที่ {groupPos + 1} ·{" "}
           {Array.isArray(item.coordinates_json) ? item.coordinates_json.length : 0} จุดโหนด
@@ -183,7 +183,7 @@ export function DetourListCard({
             disabled={!canMoveUp}
             onClick={() => onMoveOrder(item, "UP")}
             title="เลื่อนลำดับขึ้น"
-            className="min-h-9 px-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+            className="min-h-9 px-2 rounded-lg border border-surface bg-surface-panel text-slate-200 hover:bg-slate-800 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
           >
             <ChevronUp className="w-3.5 h-3.5" />
           </button>
@@ -193,14 +193,14 @@ export function DetourListCard({
             disabled={!canMoveDown}
             onClick={() => onMoveOrder(item, "DOWN")}
             title="เลื่อนลำดับลง"
-            className="min-h-9 px-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+            className="min-h-9 px-2 rounded-lg border border-surface bg-surface-panel text-slate-200 hover:bg-slate-800 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
           >
             <ChevronDown className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
             onClick={() => onViewDetour(item)}
-            className="min-h-10 px-2.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 font-heading font-bold text-xs hover:bg-slate-700"
+            className="min-h-10 px-2.5 rounded-lg border border-surface bg-surface-panel text-slate-100 font-heading font-bold tracking-normal text-xs hover:bg-slate-800 cursor-pointer"
           >
             รายละเอียด
           </button>
@@ -208,7 +208,7 @@ export function DetourListCard({
             type="button"
             aria-label={`ผูกหลายเหตุการณ์ ${item.route_name}`}
             onClick={() => onOpenLinkModal(item.id)}
-            className="min-h-10 px-2.5 rounded-lg border border-sky-500/50 bg-sky-950/50 text-sky-300 font-heading font-bold text-xs hover:bg-sky-900 inline-flex items-center gap-1"
+            className="min-h-10 px-2.5 rounded-lg border border-sky-500/50 bg-sky-950/50 text-sky-300 font-heading font-bold tracking-normal text-xs hover:bg-sky-900 inline-flex items-center gap-1 cursor-pointer"
           >
             <Link2 className="w-3.5 h-3.5" />
             <span>ผูกหลายเหตุการณ์</span>
@@ -216,7 +216,7 @@ export function DetourListCard({
           <button
             type="button"
             onClick={() => onOpenEditModal(item)}
-            className="min-h-10 px-3 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg font-heading font-bold text-xs border border-slate-700"
+            className="min-h-10 px-3 bg-surface-panel hover:bg-slate-800 text-amber-300 rounded-lg font-heading font-bold tracking-normal text-xs border border-surface cursor-pointer"
           >
             แก้ไข
           </button>
@@ -225,7 +225,7 @@ export function DetourListCard({
             aria-label={`ลบทางเลี่ยง ${item.route_name}`}
             title="ลบเส้นทางเลี่ยง"
             onClick={() => onDeleteDetour(item)}
-            className="min-h-10 min-w-10 inline-flex items-center justify-center bg-red-950/60 text-red-400 hover:bg-red-900 rounded-lg border border-red-900/40"
+            className="min-h-10 min-w-10 inline-flex items-center justify-center bg-red-950/60 text-red-400 hover:bg-red-900 rounded-lg border border-red-900/40 cursor-pointer"
           >
             <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
@@ -256,13 +256,13 @@ export function DetourListSection({
 }: DetourListSectionProps) {
   if (filteredDetours.length === 0) {
     return (
-      <div className="bg-slate-950 p-8 rounded-2xl border border-slate-800 text-center text-xs text-slate-400 space-y-2">
+      <div className="bg-surface-panel p-8 rounded-2xl border border-surface text-center text-xs text-slate-400 space-y-2">
         <Signpost className="w-8 h-8 text-slate-600 mx-auto" />
         <p>ไม่พบรายการเส้นทางเลี่ยงที่ตรงกับเงื่อนไขการค้นหา</p>
         <button
           type="button"
           onClick={onAddDetour}
-          className="text-amber-400 hover:underline font-heading font-bold inline-block"
+          className="text-amber-400 hover:underline font-heading font-bold tracking-normal inline-block cursor-pointer"
         >
           + คลิกที่นี่เพื่อวาดเส้นทางเลี่ยงใหม่บนแผนที่
         </button>
@@ -306,9 +306,9 @@ export function DetourListSection({
 
       {/* Desktop & Tablet Table View */}
       {tableLayoutMode !== "cards" && (
-        <div className="doh-auto-table-desktop hidden md:block overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-xl">
+        <div className="doh-auto-table-desktop hidden md:block overflow-x-auto rounded-2xl border border-surface bg-surface-panel shadow-xl">
           <table className="w-full min-w-[880px] table-auto text-left text-xs text-slate-300">
-            <thead className="bg-[#091122] text-slate-400 font-heading border-b border-slate-800">
+            <thead className="bg-surface-card text-slate-300 font-heading tracking-normal border-b border-surface">
               <tr>
                 <th className="p-3 w-10 text-center">#</th>
                 <th className="p-3 w-20 text-center whitespace-nowrap">สถานะ</th>
@@ -333,8 +333,8 @@ export function DetourListSection({
                   <tr
                     key={item.id}
                     onClick={() => onViewDetour(item)}
-                    className={`hover:bg-slate-900/60 transition ${
-                      !item.is_active ? "opacity-50 bg-slate-950/40" : ""
+                    className={`hover:bg-surface-card/60 transition cursor-pointer ${
+                      !item.is_active ? "opacity-55 bg-surface-canvas/40" : ""
                     }`}
                   >
                     <td className="p-3 text-center font-mono text-slate-400">
@@ -355,10 +355,10 @@ export function DetourListSection({
                       <button
                         type="button"
                         onClick={() => onToggleStatus(item.id, item.is_active)}
-                        className={`min-h-9 px-2.5 py-1 rounded-full text-[10px] font-heading font-bold border whitespace-nowrap transition cursor-pointer ${
+                        className={`min-h-9 px-2.5 py-1 rounded-full text-xs leading-snug tracking-normal font-heading font-bold border whitespace-nowrap transition cursor-pointer ${
                           item.is_active
                             ? "bg-emerald-950 text-emerald-300 border-emerald-600 hover:bg-emerald-900"
-                            : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"
+                            : "bg-surface-card text-slate-300 border-surface hover:text-white"
                         }`}
                         title={item.is_active ? "คลิกเพื่อปิดใช้งานชั่วคราว" : "คลิกเพื่อเปิดใช้งาน"}
                       >
@@ -367,7 +367,7 @@ export function DetourListSection({
                     </td>
 
                     <td className="p-3">
-                      <div className="font-heading font-bold text-white text-xs flex items-center gap-1.5">
+                      <div className="font-heading font-bold leading-snug tracking-normal text-white text-xs flex items-center gap-1.5">
                         <span
                           className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-slate-950"
                           title="เส้นทางเลี่ยง"
@@ -431,7 +431,7 @@ export function DetourListSection({
                           disabled={!canMoveUp}
                           onClick={() => onMoveOrder(item, "UP")}
                           title={`เลื่อนลำดับขึ้น (ปัจจุบันลำดับที่ ${groupPos + 1})`}
-                          className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
+                          className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-surface-card hover:bg-slate-800 text-slate-200 border border-surface transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
                         >
                           <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
@@ -441,7 +441,7 @@ export function DetourListSection({
                           disabled={!canMoveDown}
                           onClick={() => onMoveOrder(item, "DOWN")}
                           title={`เลื่อนลำดับลง (ปัจจุบันลำดับที่ ${groupPos + 1})`}
-                          className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
+                          className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-surface-card hover:bg-slate-800 text-slate-200 border border-surface transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
                         >
                           <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
@@ -453,7 +453,7 @@ export function DetourListSection({
                             aria-label={`ซูมไปยังทางเลี่ยง ${item.route_name} บนแผนที่`}
                             onClick={() => onFocusCoordinates([item.lon_start, item.lat_start])}
                             title="ซูมไปยังเส้นทางบนแผนที่"
-                            className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 text-sky-400 border border-slate-700 transition cursor-pointer"
+                            className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-surface-card hover:bg-slate-800 text-sky-400 border border-surface transition cursor-pointer"
                           >
                             <Eye className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
@@ -464,7 +464,7 @@ export function DetourListSection({
                           aria-label={`ผูกหลายเหตุการณ์ ${item.route_name}`}
                           onClick={() => onOpenLinkModal(item.id)}
                           title="ผูกหลายเหตุการณ์ (Many-to-Many)"
-                          className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 text-sky-300 border border-sky-700/60 transition cursor-pointer"
+                          className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-surface-card hover:bg-slate-800 text-sky-300 border border-sky-700/60 transition cursor-pointer"
                         >
                           <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
@@ -474,7 +474,7 @@ export function DetourListSection({
                           aria-label="แก้ไข"
                           onClick={() => onOpenEditModal(item)}
                           title="แก้ไขรายละเอียด & คำแนะนำ"
-                          className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-700 transition cursor-pointer"
+                          className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-surface-card hover:bg-slate-800 text-amber-400 border border-surface transition cursor-pointer"
                         >
                           <Edit className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
@@ -484,7 +484,7 @@ export function DetourListSection({
                           aria-label={`ลบทางเลี่ยง ${item.route_name}`}
                           onClick={() => onDeleteDetour(item)}
                           title="ลบเส้นทางเลี่ยง"
-                          className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-slate-900 hover:bg-rose-950 text-rose-400 border border-slate-700 hover:border-rose-600 transition cursor-pointer"
+                          className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-surface-card hover:bg-rose-950 text-rose-400 border border-surface hover:border-rose-600 transition cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>

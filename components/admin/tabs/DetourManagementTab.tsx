@@ -118,41 +118,41 @@ export function DetourManagementTab({
     <div className="space-y-4">
       {/* 1. Header & Summary Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl">
-          <span className="text-[11px] text-slate-400 block font-heading">เส้นทางเลี่ยงทั้งหมด</span>
+        <div className="bg-surface-card border border-surface p-3 rounded-2xl">
+          <span className="text-xs leading-snug tracking-normal text-slate-400 block font-heading">เส้นทางเลี่ยงทั้งหมด</span>
           <span className="text-xl sm:text-2xl font-bold font-mono text-amber-400 mt-0.5 block">
             {totalCount}
           </span>
-          <span className="text-[10px] text-slate-400">โครงข่ายทางเลี่ยงในระบบ</span>
+          <span className="text-[11px] text-slate-400">โครงข่ายทางเลี่ยงในระบบ</span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl">
-          <span className="text-[11px] text-slate-400 block font-heading">เปิดใช้งาน (Active)</span>
+        <div className="bg-surface-card border border-surface p-3 rounded-2xl">
+          <span className="text-xs leading-snug tracking-normal text-slate-400 block font-heading">เปิดใช้งาน (Active)</span>
           <span className="text-xl sm:text-2xl font-bold font-mono text-emerald-400 mt-0.5 block">
             {activeCount}
           </span>
-          <span className="text-[10px] text-emerald-500/80">แสดงบนแผนที่ประชาชน</span>
+          <span className="text-[11px] text-emerald-500/80">แสดงบนแผนที่ประชาชน</span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl">
-          <span className="text-[11px] text-slate-400 block font-heading">ปิดชั่วคราว</span>
+        <div className="bg-surface-card border border-surface p-3 rounded-2xl">
+          <span className="text-xs leading-snug tracking-normal text-slate-400 block font-heading">ปิดชั่วคราว</span>
           <span className="text-xl sm:text-2xl font-bold font-mono text-slate-400 mt-0.5 block">
             {inactiveCount}
           </span>
-          <span className="text-[10px] text-slate-400">ซ่อนจากการแสดงผล</span>
+          <span className="text-[11px] text-slate-400">ซ่อนจากการแสดงผล</span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl">
-          <span className="text-[11px] text-slate-400 block font-heading">ผูกกับจุดน้ำท่วม</span>
+        <div className="bg-surface-card border border-surface p-3 rounded-2xl">
+          <span className="text-xs leading-snug tracking-normal text-slate-400 block font-heading">ผูกกับจุดน้ำท่วม</span>
           <span className="text-xl sm:text-2xl font-bold font-mono text-sky-400 mt-0.5 block">
             {new Set(Array.from(linkedEventsByDetourId.values()).flatMap((evs) => evs.map((e) => e.eventId))).size}
           </span>
-          <span className="text-[10px] text-sky-400/80">เหตุการณ์ที่มีเส้นทางเลี่ยง</span>
+          <span className="text-[11px] text-sky-400/80">เหตุการณ์ที่มีเส้นทางเลี่ยง</span>
         </div>
       </div>
 
       {/* 2. Top Action Bar: Search, Filters & Buttons */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-surface-panel p-3.5 rounded-2xl border border-surface">
         <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
           {/* Search Input */}
           <div className="relative min-w-[180px] flex-1 basis-[210px] max-w-xs">
@@ -163,7 +163,7 @@ export function DetourManagementTab({
               placeholder="ค้นหาเส้นทางเลี่ยง, ทล., ตอนควบคุม..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400 transition"
+              className="min-h-10 w-full bg-surface-card border border-surface rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-slate-400 focus:outline-none focus:border-amber-400 transition"
             />
           </div>
 
@@ -172,7 +172,7 @@ export function DetourManagementTab({
             aria-label="กรองตามสถานะทางเลี่ยง"
             value={detourFilter}
             onChange={(e: any) => setDetourFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-amber-400 font-heading"
+            className="min-h-10 bg-surface-card border border-surface text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-amber-400 font-heading tracking-normal"
           >
             <option value="ALL">สถานะทั้งหมด ({totalCount})</option>
             <option value="ACTIVE">เปิดใช้งาน ({activeCount})</option>
@@ -184,7 +184,7 @@ export function DetourManagementTab({
             aria-label="กรองตามจุดน้ำท่วม"
             value={floodFilter}
             onChange={(e) => setFloodFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-amber-400 font-heading max-w-[200px] truncate"
+            className="min-h-10 bg-surface-card border border-surface text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-amber-400 font-heading tracking-normal max-w-[200px] truncate"
           >
             <option value="ALL">จุดน้ำท่วมทั้งหมด</option>
             {floodList.map((f) => (
@@ -201,7 +201,7 @@ export function DetourManagementTab({
                 setFloodFilter("ALL");
                 setSearchQuery("");
               }}
-              className="min-h-10 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 px-3 text-xs text-slate-300 hover:text-white transition cursor-pointer"
+              className="min-h-10 rounded-xl border border-surface bg-surface-card hover:bg-slate-800 px-3 text-xs text-slate-300 hover:text-white transition cursor-pointer"
             >
               ล้างตัวกรอง
             </button>
@@ -213,12 +213,12 @@ export function DetourManagementTab({
           <button
             type="button"
             onClick={() => setLinkModalState({ mode: "BY_DETOUR" })}
-            className="min-h-10 bg-sky-500/15 hover:bg-sky-500 text-sky-300 hover:text-slate-950 border border-sky-500/50 font-heading font-bold text-xs px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition"
+            className="min-h-10 bg-sky-500/15 hover:bg-sky-500 text-sky-300 hover:text-slate-950 border border-sky-500/50 font-heading font-bold tracking-normal text-xs px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition cursor-pointer"
           >
             <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
             <span>จัดการความสัมพันธ์ (หลายจุด)</span>
           </button>
-          <label className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-2 text-xs text-slate-200">
+          <label className="flex items-center gap-1.5 rounded-xl border border-surface bg-surface-card px-2 text-xs text-slate-200">
             <FileText className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
             <select aria-label="ขอบเขตส่งออกทางเลี่ยง" value={exportScope} onChange={(e) => setExportScope(e.target.value as typeof exportScope)} className="min-h-10 max-w-28 bg-transparent font-heading outline-none">
               <option value="FILTERED">ตามตัวกรอง</option><option value="ALL">ทั้งหมด</option><option value="SELECTED">ที่เลือก</option>
@@ -231,7 +231,7 @@ export function DetourManagementTab({
           <button
             type="button"
             onClick={onAddDetour}
-            className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20"
+            className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold tracking-normal text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20 cursor-pointer"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
             <span>วาดทางเลี่ยงใหม่บนแผนที่</span>

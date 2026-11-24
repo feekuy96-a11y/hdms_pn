@@ -1,8 +1,7 @@
 "use client";
 
 import React from "react";
-import { FileUp, MapPinned, Save } from "lucide-react";
-import { StickyActionBar } from "@/components/admin/ui";
+import { FileText, FileUp, Globe, MapPinned, Save } from "lucide-react";
 import { HighwayIdentificationSection } from "@/components/admin/tabs/HighwayIdentificationSection";
 import { RouteGeometryEditorSection } from "@/components/admin/tabs/RouteGeometryEditorSection";
 import { DetourAdviceSection } from "@/components/admin/tabs/DetourAdviceSection";
@@ -18,22 +17,22 @@ export interface MapTabHeaderProps {
 
 export function MapTabHeader({ routeMode, onSelectRouteMode }: MapTabHeaderProps) {
   return (
-    <div className="border-b border-slate-800 pb-3 flex flex-wrap items-center justify-between gap-3">
+    <div className="border-b border-surface pb-3 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 className="font-heading font-black text-lg text-white flex items-center gap-2">
-          <MapPinned className="w-5 h-5 text-amber-400" /> จัดการแผนที่และรายงานเหตุการณ์
+        <h2 className="font-heading font-black text-lg leading-snug tracking-normal text-white flex items-center gap-2">
+          <MapPinned className="w-5 h-5 text-amber-400 shrink-0" /> จัดการแผนที่และรายงานเหตุการณ์
         </h2>
-        <p className="text-xs text-slate-400 mt-0.5">
+        <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
           กำหนดจุดน้ำท่วม จุดเริ่มต้น-สิ้นสุด และดัดแนวเส้นทางให้เกาะถนนจริง
         </p>
       </div>
       {/* Switcher: Flood vs Detour */}
-      <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+      <div className="flex bg-surface-canvas p-1 rounded-xl border border-surface">
         <button
           type="button"
           onClick={() => onSelectRouteMode("FLOOD")}
-          className={`min-h-[2.5rem] px-[0.9em] py-[0.45em] rounded-lg text-xs font-heading font-bold transition ${
-            routeMode === "FLOOD" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"
+          className={`min-h-[2.5rem] px-[0.9em] py-[0.45em] rounded-lg text-xs font-heading font-bold tracking-normal transition cursor-pointer ${
+            routeMode === "FLOOD" ? "bg-red-600 text-white shadow-sm" : "text-slate-400 hover:text-white"
           }`}
         >
           เส้นน้ำท่วม
@@ -41,8 +40,8 @@ export function MapTabHeader({ routeMode, onSelectRouteMode }: MapTabHeaderProps
         <button
           type="button"
           onClick={() => onSelectRouteMode("DETOUR")}
-          className={`min-h-[2.5rem] px-[0.9em] py-[0.45em] rounded-lg text-xs font-heading font-bold transition ${
-            routeMode === "DETOUR" ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"
+          className={`min-h-[2.5rem] px-[0.9em] py-[0.45em] rounded-lg text-xs font-heading font-bold tracking-normal transition cursor-pointer ${
+            routeMode === "DETOUR" ? "bg-amber-500 text-slate-950 shadow-sm" : "text-slate-400 hover:text-white"
           }`}
         >
           ทางเลี่ยง
@@ -87,14 +86,14 @@ export function DraftRecoveryBanner({
         <button
           type="button"
           onClick={onRestore}
-          className="min-h-[2.5rem] rounded-lg bg-amber-500 px-[0.9em] py-[0.45em] text-[0.75rem] font-heading font-bold text-slate-950 hover:bg-amber-400 transition"
+          className="min-h-[2.5rem] rounded-lg bg-amber-500 px-[0.9em] py-[0.45em] text-[0.75rem] font-heading font-bold tracking-normal text-slate-950 hover:bg-amber-400 transition cursor-pointer"
         >
           กู้คืนร่างที่ค้างไว้
         </button>
         <button
           type="button"
           onClick={onClear}
-          className="min-h-[2.5rem] rounded-lg border border-slate-700 bg-slate-900 px-[0.9em] py-[0.45em] text-[0.75rem] font-heading font-bold text-slate-300 hover:text-white transition"
+          className="min-h-[2.5rem] rounded-lg border border-surface bg-surface-card px-[0.9em] py-[0.45em] text-[0.75rem] font-heading font-bold tracking-normal text-slate-300 hover:text-white transition cursor-pointer"
         >
           ลบร่าง
         </button>
@@ -119,8 +118,8 @@ export function RouteImportAndDraftOptions({
 }: RouteImportAndDraftOptionsProps) {
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-sky-700 bg-sky-950/30 px-3 py-2 text-xs font-semibold text-sky-300 hover:bg-sky-950/50">
-        <FileUp className="h-4 w-4" /> นำเข้าแนวเส้นเพื่อแก้รายละเอียดภายหลัง
+      <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-sky-500/50 bg-surface-card/70 px-3 py-2 text-xs font-semibold text-sky-300 hover:bg-surface-card hover:border-sky-400 transition">
+        <FileUp className="h-4 w-4 shrink-0" /> นำเข้าแนวเส้นเพื่อแก้รายละเอียดภายหลัง
         <input
           type="file"
           className="sr-only"
@@ -129,14 +128,14 @@ export function RouteImportAndDraftOptions({
         />
       </label>
 
-      <label className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-3 text-xs text-slate-200">
+      <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-surface bg-surface-card px-3 py-2 text-xs text-slate-200 hover:border-amber-400/50 transition">
         <input
           type="checkbox"
           checked={saveAsDraft}
           onChange={(event) => onSaveAsDraftChange(event.target.checked)}
-          className="h-4 w-4 accent-amber-500"
+          className="h-4 w-4 accent-amber-500 shrink-0 cursor-pointer"
         />
-        บันทึกเป็นฉบับร่าง (ยังไม่แสดงบนแผนที่ประชาชน)
+        <span>บันทึกเป็นฉบับร่าง (ยังไม่แสดงบนแผนที่ประชาชน)</span>
       </label>
     </div>
   );
@@ -163,43 +162,55 @@ export function MapSubmitActionBar({
   onCancelEdit,
 }: MapSubmitActionBarProps) {
   return (
-    <StickyActionBar>
-      <div className="flex flex-1 flex-col gap-1.5 sm:flex-row sm:items-center">
+    <div className="sticky bottom-0 z-10 -mx-[0.25rem] flex flex-wrap sm:flex-nowrap items-center gap-[0.5em] rounded-xl border border-surface bg-surface-floating p-[0.75rem] shadow-[0_-10px_24px_rgba(2,6,23,0.65)]">
+      <div className="flex flex-1 min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center">
         <span
-          className={`inline-flex items-center justify-center rounded-lg px-2.5 py-1 text-[11px] font-heading font-bold whitespace-nowrap ${
+          className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-heading font-bold leading-snug tracking-normal whitespace-nowrap ${
             saveAsDraft
               ? "border border-amber-500/40 bg-amber-950/50 text-amber-200"
               : "border border-emerald-500/40 bg-emerald-950/50 text-emerald-200"
           }`}
         >
-          {saveAsDraft ? "📝 โหมดฉบับร่าง (ยังไม่แสดงประชาชน)" : "🌐 เผยแพร่ขึ้นแผนที่ประชาชน"}
+          {saveAsDraft ? (
+            <>
+              <FileText className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span>โหมดฉบับร่าง (ยังไม่แสดงประชาชน)</span>
+            </>
+          ) : (
+            <>
+              <Globe className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span>เผยแพร่ขึ้นแผนที่ประชาชน</span>
+            </>
+          )}
         </span>
         <button
           type="button"
           disabled={isSubmitting}
           onClick={onSubmit}
-          className={`flex-1 font-heading font-black py-3 px-4 rounded-xl text-sm shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 transition cursor-pointer ${
+          className={`flex-1 min-h-11 font-heading font-black tracking-normal py-2.5 px-4 rounded-xl text-sm shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 transition cursor-pointer ${
             saveAsDraft
-              ? "bg-slate-700 hover:bg-slate-600 text-amber-200 border border-amber-500/50"
+              ? "bg-surface-card hover:bg-slate-800 text-amber-200 border border-amber-500/50"
               : "bg-amber-500 hover:bg-amber-400 text-slate-950"
           }`}
         >
-          <Save className="w-4 h-4" />
-          {routeEditId
-            ? routeMode === "DETOUR" ? "บันทึกการแก้ไขทางเลี่ยง" : "บันทึกการแก้ไขเหตุการณ์"
-            : routeMode === "DETOUR" ? "บันทึกทางเลี่ยงเข้าสู่ระบบสารสนเทศ" : "บันทึกเหตุการณ์เข้าสู่ระบบสารสนเทศ"}
+          <Save className="w-4 h-4 shrink-0" />
+          <span>
+            {routeEditId
+              ? routeMode === "DETOUR" ? "บันทึกการแก้ไขทางเลี่ยง" : "บันทึกการแก้ไขเหตุการณ์"
+              : routeMode === "DETOUR" ? "บันทึกทางเลี่ยงเข้าสู่ระบบสารสนเทศ" : "บันทึกเหตุการณ์เข้าสู่ระบบสารสนเทศ"}
+          </span>
         </button>
       </div>
       {routeEditId && onCancelEdit && (
         <button
           type="button"
           onClick={onCancelEdit}
-          className="bg-slate-800 text-slate-300 px-4 py-3 rounded-xl text-xs font-heading font-semibold"
+          className="min-h-11 border border-surface bg-surface-card hover:bg-slate-800 text-slate-200 px-4 py-2.5 rounded-xl text-xs font-heading font-semibold tracking-normal transition cursor-pointer"
         >
           ยกเลิก
         </button>
       )}
-    </StickyActionBar>
+    </div>
   );
 }
 

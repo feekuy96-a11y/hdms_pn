@@ -286,7 +286,7 @@ export function GisHighwayTable({
     <>
       {/* Highway Layers in System */}
       <div className="space-y-3">
-        <h3 className="font-heading font-bold text-sm text-white">เลเยอร์โครงข่ายเดิมในระบบ</h3>
+        <h3 className="font-heading font-bold text-sm leading-snug tracking-normal text-white">เลเยอร์โครงข่ายเดิมในระบบ</h3>
         <div className="space-y-2">
           {(systemData.highwayLayers || []).map((layer) => {
             const firstType = layer.geojson_data?.features?.[0]?.properties?.highway_type;
@@ -299,31 +299,31 @@ export function GisHighwayTable({
             return (
               <div
                 key={layer.layer_id}
-                className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between text-xs transition hover:border-slate-700"
+                className="p-3 bg-surface-card rounded-xl border border-surface flex items-center justify-between gap-3 text-xs transition hover:border-amber-400/50"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   <span
-                    className="w-4 h-4 rounded-full border border-white/40 shadow"
+                    className="w-4 h-4 shrink-0 rounded-full border border-white/40 shadow"
                     style={{ backgroundColor: layerColor }}
                   />
-                  <div>
-                    <strong className="text-white block">{layer.layer_name}</strong>
+                  <div className="min-w-0">
+                    <strong className="text-white leading-snug tracking-normal block truncate">{layer.layer_name}</strong>
                     <span className="text-slate-400 text-[11px]">
                       รหัส: {layer.layer_id} • สี: {layerColor} • จำนวน {layer.geojson_data?.features?.length || 0}{" "}
                       สายทาง
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 font-heading font-medium flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> เปิดใช้งานบนแผนที่
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-emerald-400 font-heading font-medium leading-snug tracking-normal flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> เปิดใช้งานบนแผนที่
                   </span>
                   <button
                     type="button"
                     aria-label={`ลบเลเยอร์โครงข่าย ${layer.layer_name}`}
                     onClick={() => handleDeleteHighwayLayer(layer.layer_id, layer.layer_name)}
                     title="ลบเลเยอร์โครงข่าย"
-                    className="min-h-10 min-w-10 inline-flex items-center justify-center bg-slate-900 hover:bg-red-600 hover:text-white text-red-400 rounded-lg text-xs transition"
+                    className="min-h-10 min-w-10 inline-flex items-center justify-center bg-surface-panel border border-surface hover:bg-red-600 hover:border-red-500 hover:text-white text-red-400 rounded-lg text-xs transition cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>

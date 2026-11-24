@@ -497,35 +497,58 @@ export function MapManagementTab({
 
   return (
     <div className="space-y-5 max-w-4xl">
-      {/* Switcher: Flood vs Detour Header */}
-      <MapTabHeader
-        routeMode={routeMode}
-        onSelectRouteMode={(mode) => {
-          if (routeMode !== mode) {
-            handleClearRoute();
-            setRouteMode(mode);
-          }
-        }}
-      />
+      {/* Top Form Control Card: Mode Switcher, Edit Status, Draft Recovery & File Options */}
+      <div className="rounded-2xl border border-surface bg-surface-panel p-3.5 sm:p-4 space-y-3.5 shadow-lg">
+        {/* Switcher: Flood vs Detour Header */}
+        <MapTabHeader
+          routeMode={routeMode}
+          onSelectRouteMode={(mode) => {
+            if (routeMode !== mode) {
+              handleClearRoute();
+              setRouteMode(mode);
+            }
+          }}
+        />
 
-      {/* Phase 2.4: Draft Auto-Save Recovery Banner */}
-      <DraftRecoveryBanner
-        recoverableDraft={recoverableDraft}
-        routeEditId={routeEditId}
-        onRestore={handleRestoreSavedDraft}
-        onClear={() => {
-          clearAdminMapDraft();
-          setRecoverableDraft(null);
-          onToast("ลบร่างข้อมูลที่ค้างไว้แล้ว");
-        }}
-      />
+        {routeEditId && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-500/40 bg-sky-950/40 px-3 py-2 text-xs text-sky-100">
+            <span>
+              กำลังแก้ไขข้อมูล{routeMode === "DETOUR" ? "เส้นทางเลี่ยง" : "เหตุการณ์น้ำท่วม"}:{" "}
+              <strong className="font-heading text-white">{routeNo ? `ทล.${routeNo}` : routeEditId}</strong>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setRouteEditId("");
+                handleClearRoute();
+                if (onClearEditingRoute) onClearEditingRoute();
+              }}
+              className="min-h-8 rounded-lg border border-sky-400/50 bg-surface-card px-2.5 py-1 text-xs font-heading font-bold text-sky-200 hover:text-white transition cursor-pointer"
+            >
+              ออกจากโหมดแก้ไข
+            </button>
+          </div>
+        )}
 
-      {/* Save options: import a file, or keep the record hidden from citizens until it is reviewed */}
-      <RouteImportAndDraftOptions
-        saveAsDraft={saveAsDraft}
-        onSaveAsDraftChange={setSaveAsDraft}
-        onImportFile={handleRouteFileImport}
-      />
+        {/* Phase 2.4: Draft Auto-Save Recovery Banner */}
+        <DraftRecoveryBanner
+          recoverableDraft={recoverableDraft}
+          routeEditId={routeEditId}
+          onRestore={handleRestoreSavedDraft}
+          onClear={() => {
+            clearAdminMapDraft();
+            setRecoverableDraft(null);
+            onToast("ลบร่างข้อมูลที่ค้างไว้แล้ว");
+          }}
+        />
+
+        {/* Save options: import a file, or keep the record hidden from citizens until it is reviewed */}
+        <RouteImportAndDraftOptions
+          saveAsDraft={saveAsDraft}
+          onSaveAsDraftChange={setSaveAsDraft}
+          onImportFile={handleRouteFileImport}
+        />
+      </div>
 
       {/* Main Map Form Container */}
       <MapFormSections

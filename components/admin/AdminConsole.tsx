@@ -287,16 +287,16 @@ export function AdminConsole({
   ];
 
   return (
-    <div className="doh-readable flex h-full w-full bg-slate-950 text-slate-100 font-body overflow-hidden select-none">
+    <div className="doh-readable flex h-full w-full bg-surface-canvas text-slate-100 font-body overflow-hidden select-none">
       {/* ===================================================================== */}
       {/* 1. LEFT AUTHENTIC SIDEBAR (Matching reference site)                   */}
       {/* ===================================================================== */}
       <aside
-        className={`relative hidden shrink-0 flex-col text-white lg:flex ${isPaneCollapsed || isSidebarCollapsed ? "w-[4.5rem] transition-[width] duration-200" : ""}`}
-        style={{ background: "#071B3D", width: isPaneCollapsed || isSidebarCollapsed ? "4.5rem" : sidebarWidth }}
+        className={`relative hidden shrink-0 flex-col bg-surface-panel border-r border-surface text-white lg:flex ${isPaneCollapsed || isSidebarCollapsed ? "w-[4.5rem] transition-[width] duration-200" : ""}`}
+        style={{ width: isPaneCollapsed || isSidebarCollapsed ? "4.5rem" : sidebarWidth }}
       >
         {/* Sidebar Header Brand */}
-        <div className="flex h-16 items-center border-b border-white/10 gap-3 px-4">
+        <div className="flex h-16 items-center border-b border-surface gap-3 px-4">
           {systemData.systemSettings?.logoUrl ? (
             <img
               src={systemData.systemSettings.logoUrl}
@@ -305,13 +305,13 @@ export function AdminConsole({
             />
           ) : (
             <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/20 shadow">
-              <ShieldCheck className="h-5 w-5 text-yellow-300" />
+              <ShieldCheck className="h-5 w-5 text-amber-300" />
             </span>
           )}
           {!isPaneCollapsed && !isSidebarCollapsed && (
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-white">แขวงทางหลวงปัตตานี</p>
-              <p className="font-mono text-[0.75rem] text-yellow-300">Admin Console</p>
+              <p className="truncate text-sm font-bold leading-snug tracking-normal text-white">แขวงทางหลวงปัตตานี</p>
+              <p className="font-mono text-[0.75rem] text-amber-300">Admin Console</p>
             </div>
           )}
         </div>
@@ -321,9 +321,9 @@ export function AdminConsole({
           {NAV_GROUPS.map((group, groupIndex) => (
             <div key={group.title} className={groupIndex === 0 ? "" : "mt-4"}>
               {isPaneCollapsed || isSidebarCollapsed ? (
-                groupIndex > 0 && <div aria-hidden="true" className="mx-3 mb-3 border-t border-white/10" />
+                groupIndex > 0 && <div aria-hidden="true" className="mx-3 mb-3 border-t border-surface" />
               ) : (
-                <p className="px-2.5 pb-1.5 text-xs font-semibold tracking-wide text-slate-400">{group.title}</p>
+                <p className="px-2.5 pb-1.5 text-xs font-semibold tracking-normal leading-snug text-slate-400">{group.title}</p>
               )}
               <div className="space-y-1">
                 {group.ids.map((id) => NAV_ITEMS.find((entry) => entry.id === id)).filter((entry): entry is (typeof NAV_ITEMS)[number] => Boolean(entry)).map((item) => {
@@ -349,20 +349,25 @@ export function AdminConsole({
                           onTogglePaneCollapse();
                         }
                       }}
-                      className={`flex w-full items-center rounded-xl p-[0.833em] text-left transition ${isActive
+                      className={`flex w-full items-center rounded-xl p-[0.833em] text-left transition cursor-pointer ${isActive
                           ? "bg-amber-500 text-slate-950 font-bold shadow-md"
-                          : "text-slate-300 hover:bg-white/10 hover:text-white"
+                          : "text-slate-300 hover:bg-surface-card hover:text-white"
                         }`}
                     >
                       <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-slate-950" : "text-amber-400"}`} />
                       {!isPaneCollapsed && !isSidebarCollapsed && (
                         <div className="ml-3 min-w-0 flex-1">
                           <div className="flex items-center justify-between">
-                            <p className="truncate text-xs font-heading font-bold">{item.label}</p>
+                            <p className="truncate text-xs font-heading font-bold tracking-normal leading-snug">{item.label}</p>
                             {item.badge !== undefined && item.badge > 0 && (
                               <span
-                                className={`ml-[0.333em] rounded-full px-[0.5em] py-[0.067em] font-mono text-[0.75rem] ${isActive ? "bg-slate-950 text-white" : "bg-red-600 text-white"
-                                  }`}
+                                className={`ml-[0.333em] rounded-full px-[0.55em] py-[0.067em] font-mono text-[0.75rem] font-bold ${
+                                  isActive
+                                    ? "bg-slate-950 text-amber-300"
+                                    : item.id === "detours"
+                                      ? "bg-amber-400 text-slate-950"
+                                      : "bg-red-600 text-white"
+                                }`}
                               >
                                 {item.badge}
                               </span>
@@ -385,7 +390,7 @@ export function AdminConsole({
         </nav>
 
         {/* Sidebar Footer Actions */}
-        <div className="p-3 border-t border-white/10 space-y-2">
+        <div className="p-3 border-t border-surface space-y-2">
           {!HIDE_GOVERNOR_EXECUTIVE_UI && (
             <button
               type="button"
@@ -445,9 +450,9 @@ export function AdminConsole({
       {/* ===================================================================== */}
       {/* 2. MAIN WORKING PANE                                                  */}
       {/* ===================================================================== */}
-      <main className={`flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-950 ${isPaneCollapsed ? "hidden lg:hidden" : ""}`}>
+      <main className={`flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-surface-canvas ${isPaneCollapsed ? "hidden lg:hidden" : ""}`}>
         {/* Mobile / Tablet Horizontal Navigation Bar */}
-        <nav aria-label="เมนูจัดการแอดมินมือถือ" className="lg:hidden flex items-center overflow-x-auto border-b border-slate-800 p-2 gap-1.5 bg-slate-900 shrink-0">
+        <nav aria-label="เมนูจัดการแอดมินมือถือ" className="lg:hidden flex items-center overflow-x-auto border-b border-surface p-2 gap-1.5 bg-surface-panel shrink-0">
           {NAV_ITEMS.filter((item) => !(HIDE_GOVERNOR_EXECUTIVE_UI && item.id === "projects")).map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -462,9 +467,9 @@ export function AdminConsole({
                   if (item.id !== "map") setEditingRoute(null);
                   if (item.id !== "system") onOfficeEditModeChange?.(null);
                 }}
-                className={`min-h-10 px-3.5 py-2 rounded-lg text-xs font-heading font-bold shrink-0 flex items-center gap-1.5 transition cursor-pointer ${isActive
+                className={`min-h-10 px-3.5 py-2 rounded-lg text-xs font-heading font-bold tracking-normal leading-snug shrink-0 flex items-center gap-1.5 transition cursor-pointer ${isActive
                     ? "bg-amber-500 text-slate-950"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                    : "text-slate-300 hover:bg-surface-card hover:text-white"
                   }`}
               >
                 <Icon className="w-3.5 h-3.5" aria-hidden="true" />

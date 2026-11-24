@@ -20,9 +20,9 @@ const LongdoGisMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="h-full min-h-[22rem] w-full bg-[#0b1426] p-4" role="status" aria-live="polite">
+      <div className="h-full min-h-[22rem] w-full bg-surface-canvas p-4" role="status" aria-live="polite">
         <span className="sr-only">กำลังโหลดแผนที่ GIS ปัตตานี</span>
-        <div aria-hidden="true" className="h-full min-h-[20rem] rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <div aria-hidden="true" className="h-full min-h-[20rem] rounded-2xl border border-surface bg-slate-900/60 p-4">
           <div className="h-5 w-48 rounded-md bg-slate-700/70 animate-pulse motion-reduce:animate-none" />
           <div className="mt-4 h-8 w-64 rounded-xl bg-slate-800/80 animate-pulse motion-reduce:animate-none" />
           <div className="mt-6 grid h-[calc(100%-7rem)] grid-cols-3 gap-3 opacity-60">
@@ -39,7 +39,7 @@ import { OfflineSyncStatus } from "@/components/offline/OfflineSyncStatus";
 import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
 import Link from "next/link";
-import { ArrowLeft, RotateCw, FileText, PieChart, Settings, Smartphone, PanelLeftClose, PanelLeftOpen, MapPin } from "lucide-react";
+import { ArrowLeft, RotateCw, FileText, PieChart, Settings, Smartphone, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 const ExecutiveDashboard = dynamic(
   () => import("@/components/executive/ExecutiveDashboard").then((mod) => mod.ExecutiveDashboard),
@@ -310,15 +310,15 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col bg-slate-950 text-slate-100 font-body">
+    <div className="min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col bg-surface-canvas text-slate-100 font-body">
       {/* Official Thai Government Protected Top Header */}
-      <header className="bg-[#0f2347] border-b-2 border-amber-500 sticky top-0 z-50 min-h-16 px-3 sm:px-5 py-2 lg:py-0 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 shadow-xl">
+      <header className="doh-header bg-surface-panel border-b-2 border-amber-500 sticky top-0 z-50 min-h-16 px-3 sm:px-5 py-2 lg:py-0 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 shadow-xl">
         <div className="flex items-center gap-2.5 min-w-0 flex-1 lg:flex-none">
           <Link
             href="/"
             aria-label="หน้าประชาชน"
             title="กลับหน้าประชาชน"
-            className="min-h-[2.5rem] min-w-[2.5rem] flex items-center justify-center gap-[0.4em] text-[0.75rem] text-amber-300 hover:text-white bg-slate-900/90 px-[0.8em] py-[0.5em] rounded-lg border border-slate-700 transition font-heading font-bold shrink-0"
+            className="min-h-[2.5rem] min-w-[2.5rem] flex items-center justify-center gap-[0.4em] text-[0.75rem] text-amber-300 hover:text-white bg-slate-900/90 px-[0.8em] py-[0.5em] rounded-lg border border-surface transition font-heading font-bold shrink-0"
           >
             <ArrowLeft className="w-4 h-4" aria-hidden="true" /> <span className="hidden sm:inline">หน้าประชาชน</span>
           </Link>
@@ -327,7 +327,7 @@ export default function AdminPage() {
               <img
                 src={systemData.systemSettings.logoUrl}
                 alt="Logo"
-                className="w-8 h-8 rounded-lg object-contain shadow shrink-0 bg-slate-900 p-0.5 border border-slate-700"
+                className="w-8 h-8 rounded-lg object-contain shadow shrink-0 bg-slate-900 p-0.5 border border-surface"
               />
             ) : (
               <span className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-heading font-black text-[0.75rem] shadow shrink-0">
@@ -336,14 +336,14 @@ export default function AdminPage() {
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-[0.45em]">
-                <span className="bg-amber-400 text-slate-950 text-[0.75rem] font-heading font-black px-[0.5em] py-[0.1em] rounded uppercase shrink-0">
+                <span className="bg-amber-400 text-slate-950 text-[0.75rem] font-heading font-black tracking-normal px-[0.5em] py-[0.1em] rounded shrink-0">
                   ส่วนราชการ
                 </span>
-                <span className="text-[0.75rem] text-amber-300 font-heading font-medium hidden md:inline truncate">
+                <span className="text-[0.75rem] text-amber-300 font-heading font-medium tracking-normal hidden md:inline truncate">
                   {systemData.systemSettings?.org || "แขวงทางหลวงปัตตานี กรมทางหลวง"}
                 </span>
               </div>
-              <h1 className="font-heading text-[0.75rem] sm:text-[0.875rem] font-bold text-white whitespace-nowrap truncate">
+              <h1 className="font-heading text-[0.75rem] sm:text-[0.875rem] font-bold tracking-normal leading-snug text-white whitespace-nowrap truncate">
                 {systemData.systemSettings?.name || "ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย"}
               </h1>
             </div>
@@ -352,7 +352,7 @@ export default function AdminPage() {
 
         {/* View Switcher: (รายงานผู้ว่าฯ / KPI vs ระบบหลังบ้าน Admin) */}
         {!HIDE_EXECUTIVE_VIEW_SWITCHER && (
-          <div className="order-3 lg:order-none w-full lg:w-auto flex items-center justify-center lg:justify-start gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-700 shrink-0">
+          <div className="order-3 lg:order-none w-full lg:w-auto flex items-center justify-center lg:justify-start gap-1 bg-surface-canvas/80 p-1 rounded-xl border border-surface shrink-0">
             <button
               type="button"
               onClick={() => setAdminViewMode("executive")}
@@ -385,28 +385,12 @@ export default function AdminPage() {
           <button
             type="button"
             onClick={() => {
-              setMobileActivePane("map");
-              window.setTimeout(() => {
-                window.dispatchEvent(new Event("resize"));
-                mapContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }, 120);
-            }}
-            aria-label="เลื่อนลงไปดูแผนที่ GIS"
-            title="สลับไปดูแผนที่ GIS"
-            className="lg:hidden min-h-[2.5rem] px-[0.8em] py-[0.5em] rounded-lg border border-slate-700 bg-slate-900/90 text-[0.75rem] font-heading font-bold text-sky-300 hover:text-white hover:border-sky-500 flex items-center gap-[0.35em] shrink-0 transition"
-          >
-            <MapPin className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>ดูแผนที่</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
               void refreshAdminData("all");
               showToast("รีเฟรชฐานข้อมูลสารสนเทศเรียบร้อย");
             }}
             aria-label="รีเฟรชข้อมูล"
             title="รีเฟรชข้อมูล"
-            className="min-h-[2.5rem] min-w-[2.5rem] flex items-center justify-center rounded-lg text-slate-300 hover:text-amber-400 hover:bg-slate-900/70 shrink-0 transition"
+            className="min-h-[2.5rem] min-w-[2.5rem] flex items-center justify-center rounded-lg border border-surface bg-slate-900/70 text-slate-300 hover:text-amber-400 hover:bg-slate-800 shrink-0 transition cursor-pointer"
           >
             <RotateCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} aria-hidden="true" />
           </button>
@@ -418,7 +402,7 @@ export default function AdminPage() {
         <div
           role="group"
           aria-label="สลับมุมมองฟอร์มและแผนที่บนมือถือ"
-          className="lg:hidden sticky top-16 z-40 grid grid-cols-2 gap-[0.5em] border-b border-slate-800 bg-slate-900/95 px-3 py-2 backdrop-blur"
+          className="lg:hidden sticky top-16 z-40 grid grid-cols-2 gap-[0.5em] border-b border-surface bg-surface-floating px-3 py-2"
         >
           <button
             type="button"
@@ -427,7 +411,7 @@ export default function AdminPage() {
             className={`min-h-[2.5rem] rounded-lg border px-[0.85em] py-[0.45em] text-[0.8125rem] font-heading font-bold transition ${
               mobileActivePane === "form"
                 ? "border-amber-500 bg-amber-500 text-slate-950"
-                : "border-slate-700 bg-slate-800 text-slate-200 hover:text-white"
+                : "border-surface bg-surface-card text-slate-200 hover:text-white"
             }`}
           >
             ฟอร์มข้อมูล
@@ -442,7 +426,7 @@ export default function AdminPage() {
             className={`min-h-[2.5rem] rounded-lg border px-[0.85em] py-[0.45em] text-[0.8125rem] font-heading font-bold transition ${
               mobileActivePane === "map"
                 ? "border-sky-400 bg-sky-500 text-slate-950"
-                : "border-slate-700 bg-slate-800 text-slate-200 hover:text-white"
+                : "border-surface bg-surface-card text-slate-200 hover:text-white"
             }`}
           >
             แผนที่ GIS
@@ -452,7 +436,7 @@ export default function AdminPage() {
 
       {/* Main Content Area: Executive Dashboard (ภาพที่ 2) vs Admin Console + Map */}
       {adminViewMode === "executive" ? (
-        <main className="flex-1 overflow-y-auto p-2 sm:p-4 bg-slate-950">
+        <main className="flex-1 overflow-y-auto p-2 sm:p-4 bg-surface-canvas">
           <ExecutiveDashboard
             projects={systemData.mitigationProjects}
             onManageProjects={() => setAdminViewMode("console")}
@@ -465,7 +449,7 @@ export default function AdminPage() {
           <div
             ref={workspacePaneRef}
             style={!isSidebarCollapsed && workspacePaneWidth !== null ? { width: `${workspacePaneWidth}px`, maxWidth: "calc(100vw - 22rem)" } : undefined}
-            className={`transition-all duration-300 ease-in-out border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0 flex-col overflow-hidden ${
+            className={`transition-all duration-300 ease-in-out border-b lg:border-b-0 lg:border-r border-surface shrink-0 flex-col overflow-hidden ${
               mobileActivePane === "map" ? "hidden lg:flex" : "flex"
             } ${
               isSidebarCollapsed
@@ -531,7 +515,7 @@ export default function AdminPage() {
               }
             }}
             title="ลากแบ่งพื้นที่: แผงจัดการ ↔ แผนที่"
-            className="hidden lg:flex w-2 shrink-0 cursor-col-resize touch-none items-center justify-center bg-slate-800 hover:bg-amber-500 focus-visible:bg-amber-400 focus-visible:outline-none transition-colors"
+            className="hidden lg:flex w-2 shrink-0 cursor-col-resize touch-none items-center justify-center bg-surface-panel border-x border-surface hover:bg-amber-500 focus-visible:bg-amber-400 focus-visible:outline-none transition-colors"
           ><span aria-hidden="true" className="h-12 w-0.5 rounded-full bg-slate-500" /></div>}
 
           {/* Right: Interactive GIS Map */}
@@ -539,7 +523,7 @@ export default function AdminPage() {
             ref={mapContainerRef}
             className={`${
               mobileActivePane === "form" ? "hidden lg:block" : "block"
-            } h-[calc(100dvh-8.5rem)] min-h-[22.5rem] lg:h-auto lg:min-h-0 lg:flex-1 relative scroll-mt-16`}
+            } h-[calc(100dvh-8.5rem)] min-h-[22.5rem] lg:h-auto lg:min-h-0 lg:flex-1 relative scroll-mt-16 bg-surface-canvas`}
           >
             {/* Mobile Jump Back To Form Button */}
             <div className="lg:hidden absolute bottom-3 left-3 z-[450]">
@@ -556,7 +540,7 @@ export default function AdminPage() {
                   }
                 }}
                 aria-label="กลับไปส่วนกรอกฟอร์ม"
-                className="min-h-[2.5rem] rounded-xl border border-slate-700 bg-slate-900/95 px-[0.9em] py-[0.5em] text-[0.75rem] font-heading font-bold text-amber-300 shadow-xl backdrop-blur hover:bg-slate-800 hover:text-white transition"
+                className="min-h-[2.5rem] rounded-xl border border-surface bg-surface-floating px-[0.9em] py-[0.5em] text-[0.75rem] font-heading font-bold text-amber-300 shadow-xl hover:bg-surface-card hover:text-white transition"
               >
                 ↑ กลับไปฟอร์ม
               </button>
@@ -572,7 +556,7 @@ export default function AdminPage() {
                     window.dispatchEvent(new Event("resize"));
                   }, 350);
                 }}
-                className="min-h-[2.5rem] flex items-center gap-[0.45em] rounded-xl border border-slate-700 bg-slate-900/95 px-[0.9em] py-[0.5em] text-[0.75rem] font-heading font-bold text-slate-200 shadow-xl backdrop-blur hover:bg-slate-800 hover:text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                className="min-h-[2.5rem] flex items-center gap-[0.45em] rounded-xl border border-surface bg-surface-floating px-[0.9em] py-[0.5em] text-[0.75rem] font-heading font-bold text-slate-200 shadow-xl hover:bg-surface-card hover:text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer"
                 title={isSidebarCollapsed ? "เปิดแผงควบคุม (แสดงฟอร์ม)" : "พับแผงควบคุม (ขยายแผนที่เต็มจอ)"}
                 aria-label={isSidebarCollapsed ? "เปิดแผงควบคุม" : "พับแผงควบคุม"}
               >
@@ -654,7 +638,13 @@ export default function AdminPage() {
             />
 
             {adminPickMode && (
-              <div className="absolute top-16 left-3 right-3 sm:left-auto sm:right-3 z-[500] bg-amber-500 text-slate-950 px-4 py-2 rounded-xl text-xs font-heading font-extrabold shadow-2xl flex items-center justify-between gap-3 border border-slate-950">
+              <div
+                className={`absolute left-1/2 -translate-x-1/2 z-[500] w-[calc(100%-1.5rem)] sm:w-auto ${
+                  isSidebarCollapsed
+                    ? "top-28 sm:top-14 lg:top-3 lg:max-w-[min(32rem,calc(100%-34rem))]"
+                    : "top-28 sm:top-14 lg:max-w-[calc(100%-18rem)]"
+                } bg-amber-500 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-heading font-extrabold shadow-2xl flex items-center justify-between gap-3 border border-slate-950`}
+              >
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-slate-950 animate-ping" />
                   <span>

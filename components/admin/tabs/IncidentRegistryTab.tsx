@@ -120,22 +120,22 @@ export function IncidentRegistryTab({
 
   return (
     <div className="space-y-5 w-full">
-      {deleted && <div className="border border-slate-700 rounded-xl p-3 text-sm text-slate-300"><button type="button" onClick={() => setDeleted(null)}>ปิดรายการ</button>{deleted.length === 0 && <p>ไม่มีรายการที่ลบ</p>}{deleted.map((r) => <div key={r.id} className="flex justify-between py-2"><span>ทล.{r.route_no} {r.section_name}</span><button type="button" className="text-emerald-300" onClick={async () => { try { const res = await restoreRouteAction("FLOOD", r.id); onDataRefresh(res.systemData); setDeleted(await getDeletedRoutesAction()); } catch { onToast("กู้คืนไม่สำเร็จ"); } }}>กู้คืน</button></div>)}</div>}
+      {deleted && <div className="border border-surface bg-surface-panel rounded-xl p-3 text-sm text-slate-300"><button type="button" onClick={() => setDeleted(null)} className="underline text-amber-300 cursor-pointer">ปิดรายการ</button>{deleted.length === 0 && <p className="mt-1">ไม่มีรายการที่ลบ</p>}{deleted.map((r) => <div key={r.id} className="flex justify-between py-2 border-t border-surface mt-1"><span>ทล.{r.route_no} {r.section_name}</span><button type="button" className="text-emerald-300 cursor-pointer" onClick={async () => { try { const res = await restoreRouteAction("FLOOD", r.id); onDataRefresh(res.systemData); setDeleted(await getDeletedRoutesAction()); } catch { onToast("กู้คืนไม่สำเร็จ"); } }}>กู้คืน</button></div>)}</div>}
       {/* Incident Header Stats */}
-      <div className="border-b border-slate-800 pb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="border-b border-surface pb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-heading font-black text-lg text-white flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-amber-400" /> ทะเบียนเหตุการณ์น้ำท่วม
+          <h2 className="font-heading font-black text-lg leading-snug tracking-normal text-white flex items-center gap-2">
+            <ClipboardList className="w-5 h-5 text-amber-400 shrink-0" /> ทะเบียนเหตุการณ์น้ำท่วม
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
             กำลังเกิดเหตุ <strong className="text-red-400">{activeCount}</strong> จุด · ปกติแล้ว{" "}
             <strong className="text-emerald-400">{resolvedCount}</strong> จุด · ทั้งหมด{" "}
             <strong>{totalCount}</strong> รายการ
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="min-h-10 rounded-xl border border-slate-700 bg-slate-900 px-3 text-xs font-heading font-bold text-sky-300 transition hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400" onClick={async () => { try { setDeleted(await getDeletedRoutesAction()); } catch { onToast("โหลดรายการที่ลบไม่สำเร็จ"); } }}>รายการที่ลบ / กู้คืน</button>
-          <label className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-2 text-xs text-amber-300">
+          <button type="button" className="min-h-10 rounded-xl border border-surface bg-surface-card px-3 text-xs font-heading font-bold tracking-normal text-sky-300 transition hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer" onClick={async () => { try { setDeleted(await getDeletedRoutesAction()); } catch { onToast("โหลดรายการที่ลบไม่สำเร็จ"); } }}>รายการที่ลบ / กู้คืน</button>
+          <label className="flex items-center gap-1.5 rounded-xl border border-surface bg-surface-card px-2 text-xs text-amber-300">
             <FileText className="w-4 h-4" />
             <select aria-label="ขอบเขตส่งออกเหตุการณ์" value={exportScope} onChange={(e) => setExportScope(e.target.value as typeof exportScope)} className="min-h-10 max-w-28 bg-transparent font-heading outline-none">
               <option value="FILTERED">ตามตัวกรอง</option><option value="ALL">ทั้งหมด</option><option value="SELECTED">ที่เลือก</option>
@@ -148,7 +148,7 @@ export function IncidentRegistryTab({
           <button
             type="button"
             onClick={() => onAddFlood()}
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs min-h-10 px-4 rounded-xl flex items-center gap-1.5 shadow"
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold tracking-normal text-xs min-h-10 px-4 rounded-xl flex items-center gap-1.5 shadow cursor-pointer"
           >
             <Plus className="w-4 h-4" /> เพิ่มเหตุการณ์
           </button>
@@ -156,14 +156,14 @@ export function IncidentRegistryTab({
       </div>
 
       {/* Filters & Search */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950 p-3 rounded-2xl border border-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-surface-panel p-3.5 rounded-2xl border border-surface">
         <div role="group" aria-label="กรองสถานะเหตุการณ์" className="flex flex-wrap gap-1.5">
           <button
             type="button"
             onClick={() => setIncidentFilter("ACTIVE")}
-            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition ${incidentFilter === "ACTIVE"
-                ? "bg-red-600 text-white"
-                : "bg-slate-900 text-slate-300 hover:bg-slate-800"
+            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold tracking-normal transition cursor-pointer ${incidentFilter === "ACTIVE"
+                ? "bg-red-600 text-white shadow-sm"
+                : "border border-surface bg-surface-card text-slate-300 hover:bg-slate-800"
               }`}
           >
             กำลังเกิดเหตุ ({activeCount})
@@ -171,9 +171,9 @@ export function IncidentRegistryTab({
           <button
             type="button"
             onClick={() => setIncidentFilter("RESOLVED")}
-            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition ${incidentFilter === "RESOLVED"
-                ? "bg-emerald-600 text-white"
-                : "bg-slate-900 text-slate-300 hover:bg-slate-800"
+            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold tracking-normal transition cursor-pointer ${incidentFilter === "RESOLVED"
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "border border-surface bg-surface-card text-slate-300 hover:bg-slate-800"
               }`}
           >
             ปกติแล้ว ({resolvedCount})
@@ -181,9 +181,9 @@ export function IncidentRegistryTab({
           <button
             type="button"
             onClick={() => setIncidentFilter("ALL")}
-            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition ${incidentFilter === "ALL"
-                ? "bg-amber-500 text-slate-950"
-                : "bg-slate-900 text-slate-300 hover:bg-slate-800"
+            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold tracking-normal transition cursor-pointer ${incidentFilter === "ALL"
+                ? "bg-amber-500 text-slate-950 shadow-sm"
+                : "border border-surface bg-surface-card text-slate-300 hover:bg-slate-800"
               }`}
           >
             ทั้งหมด ({totalCount})
@@ -195,7 +195,7 @@ export function IncidentRegistryTab({
             aria-label="กรองตามสายทางหลวง"
             value={routeNoFilter}
             onChange={(e) => setRouteNoFilter(e.target.value)}
-            className="min-h-10 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:border-amber-400 focus:outline-none"
+            className="min-h-10 bg-surface-card border border-surface rounded-xl px-3 py-1.5 text-xs text-white focus:border-amber-400 focus:outline-none"
           >
             <option value="ALL">ทุกสายทาง</option>
             {availableRouteNumbers.map((rn) => (
@@ -209,7 +209,7 @@ export function IncidentRegistryTab({
             aria-label="กรองตามสถานะจราจร"
             value={trafficStatusFilter}
             onChange={(e) => setTrafficStatusFilter(e.target.value)}
-            className="min-h-10 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:border-amber-400 focus:outline-none"
+            className="min-h-10 bg-surface-card border border-surface rounded-xl px-3 py-1.5 text-xs text-white focus:border-amber-400 focus:outline-none"
           >
             <option value="ALL">ทุกสถานะจราจร</option>
             {TRAFFIC_STATUS_OPTIONS.map((opt) => (
@@ -227,7 +227,7 @@ export function IncidentRegistryTab({
               value={incidentSearch}
               onChange={(e) => setIncidentSearch(e.target.value)}
               placeholder="ค้นหาสายทาง 42, 43, หนองจิก..."
-              className="min-h-10 w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-sm text-white"
+              className="min-h-10 w-full bg-surface-card border border-surface rounded-xl pl-9 pr-3 py-1.5 text-sm text-white placeholder:text-slate-400 focus:border-amber-400 focus:outline-none"
             />
           </div>
 
@@ -239,7 +239,7 @@ export function IncidentRegistryTab({
                 setTrafficStatusFilter("ALL");
                 setIncidentSearch("");
               }}
-              className="min-h-10 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 px-3 text-xs text-slate-300 hover:text-white transition cursor-pointer"
+              className="min-h-10 rounded-xl border border-surface bg-surface-card hover:bg-slate-800 px-3 text-xs text-slate-300 hover:text-white transition cursor-pointer"
             >
               ล้างตัวกรอง
             </button>
@@ -250,7 +250,7 @@ export function IncidentRegistryTab({
       {/* Incident Table / Grouped Hierarchy List */}
       <div className="doh-incident-container space-y-3">
         {parentEvents.length === 0 ? (
-          <div className="text-center py-12 bg-slate-950 rounded-2xl border border-slate-800 text-slate-400 text-xs">
+          <div className="text-center py-12 bg-surface-panel rounded-2xl border border-surface text-slate-400 text-xs">
             ไม่พบรายการเหตุการณ์ตามเงื่อนไขที่เลือก
           </div>
         ) : (
@@ -268,15 +268,15 @@ export function IncidentRegistryTab({
             return (
               <div
                 key={ev.eventId}
-                className="rounded-2xl border border-slate-800 bg-slate-950 shadow-xl overflow-hidden"
+                className="rounded-2xl border border-surface bg-surface-panel shadow-xl overflow-hidden"
               >
                 {/* Parent Event Header Card */}
-                <div className="doh-incident-header p-4 bg-slate-900/80 border-b border-slate-800">
+                <div className="doh-incident-header p-4 bg-surface-card border-b border-surface">
                   <div className="flex flex-wrap items-center gap-2 min-w-0">
                     <span className="font-heading font-black text-xs text-sky-400 bg-sky-950/80 border border-sky-800 px-2 py-0.5 rounded-lg shrink-0">
                       ทล.{ev.routeNo}
                     </span>
-                    <h3 className="font-heading font-bold text-sm text-white break-words min-w-0">
+                    <h3 className="font-heading font-bold text-sm leading-snug tracking-normal text-white break-words min-w-0">
                       {ev.eventTitle || `ตอน${ev.sectionName}`}
                     </h3>
                     <span className={`text-[11px] font-heading font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap ${statusConfig.badgeClass}`}>
@@ -327,7 +327,7 @@ export function IncidentRegistryTab({
                           return next;
                         });
                       }}
-                      className="min-h-10 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
+                      className="min-h-10 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border border-surface bg-surface-panel text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer"
                       title={isCollapsed ? "กางดูช่วงย่อยทั้งหมด" : "ย่อเก็บช่วงย่อย"}
                     >
                       <span className="text-[11px] font-semibold whitespace-nowrap">{ev.segments.length} ช่วง</span>
@@ -338,7 +338,7 @@ export function IncidentRegistryTab({
 
                 {/* Child Segments Container */}
                 {!isCollapsed && (
-                  <div className="divide-y divide-slate-850 p-2 sm:p-3 space-y-2">
+                  <div className="p-2 sm:p-3 space-y-2">
                     {ev.segments.map((r) => {
                       const meta = r._meta || parseFloodDirectionMeta(r.direction_meta, r);
                       const segStatusConfig = getTrafficPresentation(
@@ -354,7 +354,7 @@ export function IncidentRegistryTab({
                       return (
                         <div
                           key={r.id}
-                          className="doh-incident-segment p-3 rounded-xl border border-slate-800/80 bg-slate-900/40 hover:bg-slate-900/80 transition min-w-0"
+                          className="doh-incident-segment p-3 rounded-xl border border-surface bg-surface-canvas/70 hover:bg-surface-card/70 transition min-w-0"
                         >
                           <div className="space-y-2 min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
@@ -527,7 +527,7 @@ export function IncidentRegistryTab({
 
                           {/* Action Buttons Per Segment: รองรับการปรับขยายทุกขนาดโดยไม่ทับข้อความ */}
                           <div className="doh-incident-actions shrink-0">
-                            <div className="inline-flex flex-wrap items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-700/60">
+                            <div className="inline-flex flex-wrap items-center gap-1 bg-surface-panel p-1 rounded-xl border border-surface">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -535,7 +535,7 @@ export function IncidentRegistryTab({
                                   setNewWaterLevel(r.water_level_cm);
                                   setNewTrafficStatus(r.traffic_status);
                                 }}
-                                className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-2.5 py-2 rounded-lg text-xs flex items-center gap-1 shadow transition whitespace-nowrap cursor-pointer"
+                                className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold tracking-normal px-2.5 py-2 rounded-lg text-xs flex items-center gap-1 shadow transition whitespace-nowrap cursor-pointer"
                                 title="อัปเดตระดับน้ำและสถานะจราจรด่วน"
                               >
                                 ⚡ อัปเดตด่วน
@@ -543,22 +543,22 @@ export function IncidentRegistryTab({
                               <button
                                 type="button"
                                 onClick={() => onEditFlood(r.id)}
-                                className="min-h-10 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-300 px-2.5 py-2 rounded-lg text-xs font-heading font-semibold transition whitespace-nowrap cursor-pointer"
+                                className="min-h-10 bg-surface-card border border-surface hover:bg-amber-500 hover:text-slate-950 text-amber-300 px-2.5 py-2 rounded-lg text-xs font-heading font-semibold tracking-normal transition whitespace-nowrap cursor-pointer"
                               >
                                 แก้ไข
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setViewingIncident(r)}
-                                className="min-h-10 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-700 whitespace-nowrap cursor-pointer"
+                                className="min-h-10 rounded-lg border border-surface bg-surface-card px-2.5 py-2 text-xs font-semibold tracking-normal text-slate-100 hover:bg-slate-800 whitespace-nowrap cursor-pointer"
                               >
                                 รายละเอียด
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleToggleIncidentStatus(r.id, r.is_active)}
-                                className={`min-h-10 px-2.5 py-2 rounded-lg text-xs font-heading font-semibold transition border whitespace-nowrap cursor-pointer ${r.is_active
-                                    ? "bg-slate-800 text-slate-300 hover:bg-emerald-950 hover:text-emerald-300 border-slate-700"
+                                className={`min-h-10 px-2.5 py-2 rounded-lg text-xs font-heading font-semibold tracking-normal transition border whitespace-nowrap cursor-pointer ${r.is_active
+                                    ? "bg-surface-card text-slate-300 hover:bg-emerald-950 hover:text-emerald-300 border-surface"
                                     : "bg-emerald-950 text-emerald-300 hover:bg-emerald-900 border-emerald-700"
                                   }`}
                               >
@@ -566,7 +566,7 @@ export function IncidentRegistryTab({
                               </button>
                             </div>
 
-                            <div className="inline-flex flex-wrap items-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800">
+                            <div className="inline-flex flex-wrap items-center gap-1 bg-surface-panel p-1 rounded-xl border border-surface">
                               <button
                                 type="button"
                                 onClick={() => {
