@@ -358,11 +358,11 @@ export function buildDetourPopupHtml(
         .join(" · ")
     : (detour.flood_id_ref ? "เชื่อมโยงจุดน้ำท่วม" : "ทางเลี่ยงอิสระ (โครงข่ายทางหลวง)");
 
-  const activeBtnClass = "min-h-[2.5rem] sm:min-h-[2.375rem] py-[0.5em] px-[0.833em] text-xs font-black rounded-lg transition cursor-pointer flex items-center justify-center gap-[0.333em] bg-[#f59e0b] text-slate-950 shadow-sm";
-  const inactiveBtnClass = "min-h-[2.5rem] sm:min-h-[2.375rem] py-[0.5em] px-[0.833em] text-xs font-semibold rounded-lg transition cursor-pointer flex items-center justify-center gap-[0.333em] text-slate-300 hover:bg-slate-800/70 hover:text-white";
+  const activeBtnClass = "min-h-[2.75rem] py-[0.5em] px-[0.833em] text-xs font-black rounded-lg transition cursor-pointer flex items-center justify-center gap-[0.333em] bg-[#f59e0b] text-slate-950 shadow-sm";
+  const inactiveBtnClass = "min-h-[2.75rem] py-[0.5em] px-[0.833em] text-xs font-semibold rounded-lg transition cursor-pointer flex items-center justify-center gap-[0.333em] text-slate-300 hover:bg-slate-800/70 hover:text-white";
 
   return `
-    <div class="doh-detour-popup text-xs p-[0.833em] sm:p-[1.167em] w-[min(20.25rem,calc(100vw-2rem))] sm:w-[23.75rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl select-text">
+    <div class="doh-detour-popup text-xs p-[0.833em] sm:p-[1.167em] w-[min(20.25rem,calc(100vw-2rem))] sm:w-[23.75rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl border-t-4 border-amber-400 select-text">
       <div class="flex items-center justify-between gap-[0.667em] pb-2 sm:pb-2.5 pr-9 border-b border-slate-800/80">
         <div class="flex items-center gap-[0.667em] min-w-0">
           <span style="color:${color}" class="text-base sm:text-lg font-black shrink-0 leading-none" aria-hidden="true">↔</span>
@@ -510,14 +510,14 @@ export function buildDetourPointPhotoPopupHtml(
           href="${escapeHtml(navUrl)}"
           target="_blank"
           rel="noopener noreferrer"
-          class="min-h-[2.75rem] sm:min-h-[2.5rem] px-[0.667em] sm:px-[0.833em] py-[0.5em] rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-heading font-black text-xs flex items-center justify-center gap-[0.333em] text-center shadow transition"
+          class="min-h-[2.75rem] px-[0.667em] sm:px-[0.833em] py-[0.5em] rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-heading font-black text-xs flex items-center justify-center gap-[0.333em] text-center shadow transition"
         >
           <span>🧭 นำทางไปจุดนี้</span>
         </a>
         <button
           type="button"
           onclick="window.__openDetourModal && window.__openDetourModal('${escapeHtml(detour.id)}')"
-          class="min-h-[2.75rem] sm:min-h-[2.5rem] px-[0.667em] sm:px-[0.833em] py-[0.5em] rounded-xl border border-slate-700 bg-[#13203c] hover:bg-[#1a2b50] text-white font-heading font-bold text-xs flex items-center justify-center gap-[0.333em] text-center transition cursor-pointer"
+          class="min-h-[2.75rem] px-[0.667em] sm:px-[0.833em] py-[0.5em] rounded-xl border border-slate-700 bg-[#13203c] hover:bg-[#1a2b50] text-white font-heading font-bold text-xs flex items-center justify-center gap-[0.333em] text-center transition cursor-pointer"
         >
           <span>ดูคำแนะนำทางเลี่ยง</span>
         </button>
@@ -572,13 +572,25 @@ export function resolveRecordedLanesText(flood: FloodRoute): string | null {
   return null;
 }
 
-export function resolvePopupTrafficStatus(flood: FloodRoute): { label: string; badgeClass: string } {
+const POPUP_ACCENT_COLOR_MAP: Record<string, string> = {
+  red: "#ef4444",
+  orange: "#f97316",
+  amber: "#f59e0b",
+  sky: "#38bdf8",
+  green: "#10b981",
+};
+
+export function resolvePopupTrafficStatus(flood: FloodRoute): { label: string; badgeClass: string; accentColor: string } {
   const presentation = getTrafficPresentation(
     flood.traffic_status,
     flood.water_level_cm ?? 0,
     flood.direction_meta?.trafficStatusDetail
   );
-  return { label: presentation.label, badgeClass: presentation.popupBadgeClass };
+  return {
+    label: presentation.label,
+    badgeClass: presentation.popupBadgeClass,
+    accentColor: POPUP_ACCENT_COLOR_MAP[presentation.color] ?? "#f59e0b",
+  };
 }
 
 export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0): string {
@@ -594,8 +606,8 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0):
   const safeId = escapeHtml(flood.id);
 
   return `
-    <div class="w-[min(20.25rem,calc(100vw-2rem))] sm:w-[21.25rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain p-[0.833em] sm:p-[1.167em] font-body text-slate-100 bg-[#081120]">
-      <div class="flex items-start justify-between gap-[0.667em] pr-9">
+    <div style="border-top: 4px solid ${statusInfo.accentColor};" class="w-[min(20.25rem,calc(100vw-2rem))] sm:w-[21.25rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain p-[0.833em] sm:p-[1.167em] font-body text-slate-100 bg-[#081120] rounded-2xl">
+      <div class="flex items-start justify-between gap-[0.667em] pb-2 pr-9 border-b border-slate-800/80">
         <div class="flex min-w-0 items-center gap-[0.5em] sm:gap-[0.667em] flex-wrap">
           <span class="shrink-0 rounded-lg bg-[#f59e0b] px-[0.667em] py-[0.167em] font-heading text-xs font-black text-slate-950 shadow">
             ${escapeHtml(routeBadge)}
@@ -662,14 +674,14 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0):
         <button
           type="button"
           onclick="window.__openFloodDossier && window.__openFloodDossier('${safeId}')"
-          class="min-h-[2.75rem] sm:min-h-10 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] px-[0.667em] sm:px-[1em] py-[0.667em] font-heading text-xs font-black text-slate-950 shadow transition cursor-pointer flex items-center justify-center gap-[0.333em] text-center leading-tight"
+          class="min-h-[2.75rem] rounded-xl bg-[#f59e0b] hover:bg-[#d97706] px-[0.667em] sm:px-[1em] py-[0.667em] font-heading text-xs font-black text-slate-950 shadow transition cursor-pointer flex items-center justify-center gap-[0.333em] text-center leading-tight"
         >
           <span>ดูรายละเอียด</span>
         </button>
         <button
           type="button"
           onclick="window.__focusFloodOnMap && window.__focusFloodOnMap('${safeId}')"
-          class="min-h-[2.75rem] sm:min-h-10 rounded-xl border border-slate-700 bg-[#13203c] hover:bg-[#1a2b50] px-[0.667em] sm:px-[1em] py-[0.667em] font-heading text-xs font-bold text-white shadow transition cursor-pointer flex items-center justify-center gap-[0.333em] text-center leading-tight"
+          class="min-h-[2.75rem] rounded-xl border border-slate-700 bg-[#13203c] hover:bg-[#1a2b50] px-[0.667em] sm:px-[1em] py-[0.667em] font-heading text-xs font-bold text-white shadow transition cursor-pointer flex items-center justify-center gap-[0.333em] text-center leading-tight"
         >
           <span>ดูตำแหน่งบนแผนที่</span>
         </button>
@@ -690,10 +702,10 @@ export function buildOfficePopupHtml(office: DohOfficeLocation): string {
       <h4 class="font-bold text-white text-sm font-heading break-words">${escapeHtml(office.name)}</h4>
       <p class="text-slate-300 text-[0.75rem] mt-1 break-words">${escapeHtml(office.address)}</p>
       <div class="mt-2 pt-1.5 border-t border-slate-700 flex items-center justify-between gap-[0.667em]">
-        <a href="tel:${String(office.phone ?? "").replace(/[^0-9]/g, "")}" class="text-amber-300 hover:underline font-bold text-xs flex items-center gap-[0.333em] min-h-[2.25rem]">
+        <a href="tel:${String(office.phone ?? "").replace(/[^0-9]/g, "")}" class="text-amber-300 hover:underline font-bold text-xs inline-flex items-center gap-[0.333em] min-h-[2.75rem]">
           📞 ${escapeHtml(office.phone)}
         </a>
-        <a href="https://www.google.com/maps/dir/?api=1&destination=${office.lat},${office.lon}" target="_blank" rel="noopener noreferrer" class="bg-amber-500 text-slate-950 px-[0.833em] py-[0.5em] rounded-lg text-xs font-bold hover:bg-amber-400 shrink-0">
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${office.lat},${office.lon}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center min-h-[2.75rem] bg-amber-500 text-slate-950 px-[0.833em] py-[0.5em] rounded-lg text-xs font-bold hover:bg-amber-400 shrink-0">
           นำทาง
         </a>
       </div>

@@ -43,7 +43,7 @@ export function FloodCard({
 
   return (
     <article
-      className={`relative w-full rounded-2xl border bg-[#101d33] px-3 py-2.5 text-left transition ${selected ? "border-amber-400 ring-1 ring-amber-400/50" : "border-slate-700/90 hover:border-amber-400/70"
+      className={`relative w-full rounded-2xl border bg-surface-card px-3.5 py-3 text-left transition ${selected ? "border-amber-400 ring-1 ring-amber-400/50" : "border-surface hover:border-amber-400/70"
         }`}
     >
       <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 rounded-l-2xl" style={{ backgroundColor: STATUS_BAR[status.color] }} />
@@ -57,10 +57,10 @@ export function FloodCard({
       >
         {/* Group 1: Route & Section + Traffic Status */}
         <span className="flex min-w-0 flex-wrap items-start justify-between gap-x-2 gap-y-1.5">
-          <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-heading text-sm font-bold leading-snug text-white">
+          <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-heading text-sm font-bold leading-snug tracking-normal text-white">
             {routeLabel} · {sectionLabel}
           </span>
-          <span className={`inline-flex shrink-0 items-center gap-[0.333em] rounded-md border px-[0.667em] py-[0.167em] text-[0.75rem]/[1.1rem] font-semibold ${STATUS_CHIP[status.color]}`}>
+          <span className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold leading-snug tracking-normal ${STATUS_CHIP[status.color]}`}>
             <span aria-hidden="true">{status.icon}</span>
             <span>{status.label}</span>
           </span>
@@ -80,25 +80,23 @@ export function FloodCard({
         )}
 
         {/* Group 4: Water Level & Flooded Side */}
-        <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-200">
-          <span className="inline-flex items-center gap-1">
+        <span className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-200">
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-950/50 px-2 py-0.5 text-sky-100">
             <Droplets aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-sky-300" />
-            <span>ระดับน้ำ</span>
-            <strong className="font-mono text-sm text-white">{waterDisplay}</strong>
+            <span className="text-xs text-sky-200/90">ระดับน้ำ</span>
+            <strong className="font-mono text-sm font-bold text-white">{waterDisplay}</strong>
           </span>
           {sideLabel && (
-            <>
-              <span aria-hidden="true" className="text-slate-600">|</span>
-              <span className="min-w-0 break-words text-sky-200">
-                ฝั่งน้ำท่วม <strong className="font-semibold text-white">{sideLabel}</strong>
-              </span>
-            </>
+            <span className="inline-flex min-w-0 items-center gap-1 rounded-lg border border-surface bg-slate-900/70 px-2 py-0.5 text-sky-200">
+              <span className="text-slate-400">ฝั่งน้ำท่วม</span>
+              <strong className="font-semibold text-white">{sideLabel}</strong>
+            </span>
           )}
         </span>
       </button>
 
       {/* Group 5: Last Updated & Clickable Detour Count */}
-      <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-slate-800/80 pt-2 text-xs text-slate-300">
+      <div className="mt-2.5 flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-surface pt-2 text-xs text-slate-300">
         <span className="inline-flex min-w-0 items-center gap-1 text-slate-400">
           <Clock aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{relativeUpdated}</span>
@@ -108,7 +106,7 @@ export function FloodCard({
           <button
             type="button"
             onClick={() => onOpenDetours(flood)}
-            className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-md border border-amber-400/50 bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+            className="inline-flex min-h-9 cursor-pointer items-center gap-1 rounded-lg border border-amber-400/50 bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
           >
             <span>เส้นทางเลี่ยง {detourCount} สาย</span>
           </button>
@@ -121,7 +119,7 @@ export function FloodCard({
       <button
         type="button"
         onClick={() => onSelect(flood)}
-        className="mt-2 flex min-h-9 w-full cursor-pointer items-center justify-center gap-1 rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-1.5 font-heading text-xs font-bold text-amber-300 transition hover:border-amber-400/60 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+        className="mt-2 flex min-h-10 w-full cursor-pointer items-center justify-center gap-1 rounded-xl border border-surface bg-slate-900/90 px-3 py-1.5 font-heading text-xs font-bold tracking-normal text-amber-300 transition hover:border-amber-400/60 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
       >
         <span>ดูรายละเอียด</span>
         <ChevronRight aria-hidden="true" className="h-3.5 w-3.5" />

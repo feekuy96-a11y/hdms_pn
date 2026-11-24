@@ -1102,11 +1102,13 @@ export function LongdoGisMap({
     <div data-public-filter-counts={`flood:${highlightFloodIds.length};detour:${highlightDetourIds.length}`} className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full min-h-[450px]`} style={{ minHeight: 450 }}>
       <div
         ref={mapContainerRef}
-        className="w-full h-full min-h-[350px] bg-[#0b1426] relative z-0"
+        className="w-full h-full min-h-[350px] bg-surface-canvas relative z-0"
         style={{ position: "absolute", inset: 0, minHeight: 450 }}
       />
 
       <MapLegendOverlay
+        publicMode={publicMode}
+        isSidebarCollapsed={isSidebarCollapsed}
         systemData={systemData}
         mapStyles={mapStyles}
         mapReady={mapReady}

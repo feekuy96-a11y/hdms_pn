@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
-import { Maximize2, Minimize2, Search, X } from "lucide-react";
+import { Droplets, Maximize2, Minimize2, Route, Search, X } from "lucide-react";
 import type { DetourRoute, FloodRoute } from "@/db/default-data";
 import type { StatusColor } from "@/lib/traffic-presentation";
+import { SUMMARY_ITEMS } from "@/components/public/public-route-helpers";
 import { SituationSummary } from "@/components/public/SituationSummary";
 import { FloodCard } from "@/components/public/FloodCard";
 
@@ -70,20 +71,33 @@ export function MobileCitizenDrawer({
 }: MobileCitizenDrawerProps) {
   return (
     <>
-      {/* 1. Situation bar on mobile when drawer & dossier are closed */}
+      {/* 1. Compact Situation bar on mobile when drawer & dossier are closed */}
       {!isMobileDrawerOpen && !showDossier && (
-        <div className="lg:hidden fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[450] rounded-2xl border border-amber-500/50 bg-[#091122]/95 p-3 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <p className="font-heading text-sm font-bold text-white">จุดเฝ้าระวังน้ำท่วม {activeFloodCount} จุด</p>
-              <SituationSummary counts={situationCounts} activeFilter={selectedStatusFilter} onFilter={handleStatusFilter} />
+        <div className="lg:hidden fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[450] rounded-2xl border border-amber-500/50 bg-surface-floating px-3 py-2.5 shadow-2xl">
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="font-heading text-sm font-bold leading-snug tracking-normal text-white truncate">
+                จุดเฝ้าระวังน้ำท่วม {activeFloodCount} จุด
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[0.75rem] text-slate-300">
+                {SUMMARY_ITEMS.filter((item) => situationCounts[item.color] > 0).length > 0 ? (
+                  SUMMARY_ITEMS.filter((item) => situationCounts[item.color] > 0).map((item) => (
+                    <span key={item.color} className="inline-flex items-center gap-1 whitespace-nowrap">
+                      <span aria-hidden="true" className={`h-2 w-2 rounded-full ${item.dot}`} />
+                      <strong className="font-mono text-white">{situationCounts[item.color]}</strong>
+                    </span>
+                  ))
+                ) : (
+                  <span className="truncate">ยังไม่มีจุดเฝ้าระวัง</span>
+                )}
+              </div>
             </div>
             <button
               type="button"
               onClick={() => setIsMobileDrawerOpen(true)}
-              className="min-h-12 shrink-0 rounded-xl bg-amber-500 px-4 font-heading text-sm font-black text-slate-950 shadow-lg transition hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white flex items-center gap-1.5"
+              className="min-h-11 shrink-0 rounded-xl bg-amber-500 px-3.5 font-heading text-xs sm:text-sm font-black tracking-normal text-slate-950 shadow-lg transition hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white flex items-center gap-1.5 cursor-pointer"
             >
-              <Search className="h-4 w-4" />
+              <Search className="h-4 w-4 shrink-0" />
               <span>ดูรายการสายทาง</span>
             </button>
           </div>
@@ -98,14 +112,21 @@ export function MobileCitizenDrawer({
             aria-modal="true"
             aria-label="รายการสายทางและจุดเฝ้าระวัง"
             onClick={(event) => event.stopPropagation()}
-            className={`flex w-full flex-col overflow-hidden rounded-t-3xl border-t border-amber-500/60 bg-[#0c1527] text-slate-100 shadow-2xl transition-[height] duration-200 motion-reduce:transition-none ${mobileDrawerStage === "full" ? "h-[95dvh]" : mobileDrawerStage === "peek" ? "h-[14.6875rem]" : "h-[78dvh]"
+            className={`flex w-full flex-col overflow-hidden rounded-t-3xl border-t border-amber-500/60 bg-surface-panel text-slate-100 shadow-2xl transition-[height] duration-200 motion-reduce:transition-none ${mobileDrawerStage === "full" ? "h-[95dvh]" : mobileDrawerStage === "peek" ? "h-[14.6875rem]" : "h-[78dvh]"
               }`}
           >
-            <div className="shrink-0 border-b border-slate-800 bg-[#0c1527] px-3 pb-3 pt-2.5">
-              <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-slate-600" aria-hidden="true" />
+            <div className="shrink-0 border-b border-surface bg-surface-panel px-3 pb-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setMobileDrawerStage((stage) => stage === "peek" ? "list" : stage === "list" ? "full" : "peek")}
+                aria-label="สลับความสูงหน้าต่างรายการ"
+                className="mx-auto mb-1.5 flex h-5 w-16 items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer"
+              >
+                <span className="h-1.5 w-10 rounded-full bg-slate-600" aria-hidden="true" />
+              </button>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 py-0.5">
-                  <h2 className="font-heading text-lg font-bold leading-snug text-white break-words [overflow-wrap:anywhere]">สถานการณ์ทางหลวง</h2>
+                  <h2 className="font-heading text-lg font-bold leading-snug tracking-normal text-white break-words [overflow-wrap:anywhere]">สถานการณ์ทางหลวง</h2>
                   <p className="mt-0.5 text-xs text-slate-300">ข้อมูลน้ำท่วมและเส้นทางเลี่ยง</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
@@ -139,24 +160,26 @@ export function MobileCitizenDrawer({
                   </button>
                 </div>
               )}
-              <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-slate-700/80 bg-slate-900/90 p-1 text-xs font-heading font-bold" role="group" aria-label="ประเภทข้อมูล">
+              <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-surface bg-slate-900/90 p-1 text-xs font-heading font-bold" role="group" aria-label="ประเภทข้อมูล">
                 {([
-                  { id: "FLOOD", label: "น้ำท่วม", count: filteredFloods.length },
-                  { id: "DETOUR", label: "ทางเลี่ยง", count: filteredDetours.length },
-                ] as const).map((item) => (
+                  { id: "FLOOD", label: "น้ำท่วม", count: filteredFloods.length, Icon: Droplets },
+                  { id: "DETOUR", label: "ทางเลี่ยง", count: filteredDetours.length, Icon: Route },
+                ] as const).map(({ id, label, count, Icon }) => (
                   <button
-                    key={item.id}
+                    key={id}
                     type="button"
-                    aria-pressed={sidebarTab === item.id}
-                    onClick={() => { setSidebarTab(item.id); setMobileDrawerStage((stage) => stage === "peek" ? "list" : stage); }}
-                    className={`min-h-11 rounded-lg px-1 py-1.5 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white ${sidebarTab === item.id ? "bg-amber-500 text-slate-950" : "text-slate-300 hover:bg-slate-800"}`}
+                    aria-pressed={sidebarTab === id}
+                    onClick={() => { setSidebarTab(id); setMobileDrawerStage((stage) => stage === "peek" ? "list" : stage); }}
+                    className={`min-h-11 rounded-lg px-1 py-1.5 transition flex items-center justify-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white ${sidebarTab === id ? "bg-amber-500 text-slate-950" : "text-slate-300 hover:bg-slate-800"}`}
                   >
-                    {item.label} <span className="tabular-nums">({item.count})</span>
+                    <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                    <span>{label} <span className="tabular-nums">({count})</span></span>
                   </button>
                 ))}
               </div>
               {mobileDrawerStage !== "peek" && (
                 <div className="mt-3 space-y-2">
+                  <SituationSummary counts={situationCounts} activeFilter={selectedStatusFilter} onFilter={handleStatusFilter} />
                   <div className="relative">
                     <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
@@ -165,7 +188,7 @@ export function MobileCitizenDrawer({
                       onChange={(event) => setSearchQuery(event.target.value)}
                       placeholder="ค้นหาสายทางหรือชื่อพื้นที่..."
                       aria-label="ค้นหาหมายเลขทางหลวงหรือพื้นที่"
-                      className="min-h-11 w-full rounded-xl border border-slate-700 bg-slate-900 pl-10 pr-3 text-sm text-white placeholder-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                      className="min-h-11 w-full rounded-xl border border-surface bg-slate-900 pl-10 pr-3 text-sm text-white placeholder-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -174,7 +197,7 @@ export function MobileCitizenDrawer({
                       id="citizen-highway-filter"
                       value={selectedRouteFilter}
                       onChange={(event) => setSelectedRouteFilter(event.target.value)}
-                      className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                      className="min-h-11 min-w-0 flex-1 rounded-lg border border-surface bg-slate-900 px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                     >
                       {routeChips.map((chip) => <option key={chip.id} value={chip.id}>{chip.label}</option>)}
                     </select>

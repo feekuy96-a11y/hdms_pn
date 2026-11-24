@@ -14,7 +14,7 @@ const LongdoGisMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="h-full min-h-[350px] w-full bg-[#0b1426] p-4" role="status" aria-live="polite">
+      <div className="h-full min-h-[350px] w-full bg-surface-canvas p-4" role="status" aria-live="polite">
         <span className="sr-only">กำลังโหลดแผนที่ GIS ปัตตานี</span>
         <div aria-hidden="true" className="h-full min-h-[318px] rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <div className="h-5 w-40 rounded-md bg-slate-700/70 animate-pulse motion-reduce:animate-none" />
@@ -343,7 +343,7 @@ export default function HomePage() {
           <button
             key={route.id}
             type="button"
-            className="group block min-h-12 w-full rounded-2xl border border-slate-700/90 bg-[#101d33] px-3.5 py-3 text-left text-white transition hover:border-amber-400/70 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+            className="group block min-h-12 w-full rounded-2xl border border-surface bg-surface-card px-3.5 py-3 text-left text-white transition hover:border-amber-400/70 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
             onClick={() => {
               setReturnToDetourList(isMobileDrawerOpen);
               setIsMobileDrawerOpen(false);
@@ -385,17 +385,17 @@ export default function HomePage() {
 
 
   return (
-    <div className="doh-readable min-h-dvh flex flex-col bg-slate-950 text-slate-100 font-body">
+    <div className="doh-readable min-h-dvh flex flex-col bg-surface-canvas text-slate-100 font-body">
       {/* =================================================================== */}
       {/* 1. TOP NAVBAR (Official DOH Brand + Status + Hotline)               */}
       {/* =================================================================== */}
-      <header className="doh-header border-b-2 border-amber-500 sticky top-0 z-50 h-16 px-3 sm:px-6 flex items-center justify-between gap-2 shadow-xl bg-[#091122]">
+      <header className="doh-header border-b-2 border-amber-500 sticky top-0 z-50 h-16 px-3 sm:px-6 flex items-center justify-between gap-2 shadow-xl">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           {systemData.systemSettings?.logoUrl ? (
             <img
               src={systemData.systemSettings.logoUrl}
               alt="Logo"
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-contain shadow-md shrink-0 bg-slate-900 border border-slate-700 p-0.5"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-contain shadow-md shrink-0 bg-slate-900 border border-surface p-0.5"
             />
           ) : (
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl gold-gradient flex items-center justify-center shadow-md shrink-0">
@@ -404,17 +404,17 @@ export default function HomePage() {
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="truncate font-heading font-black text-amber-400 text-[0.8125rem] sm:text-sm tracking-wide">
+              <span className="truncate font-heading font-black text-amber-400 text-[0.8125rem] sm:text-sm tracking-normal">
                 {systemData.systemSettings?.name || "ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย"}
               </span>
-              <span className="hidden md:inline-block shrink-0 bg-amber-400 text-slate-950 text-[0.75rem]/[1.1rem] font-heading font-extrabold px-[0.5em] rounded">
+              <span className="hidden md:inline-block shrink-0 bg-amber-400 text-slate-950 text-[0.75rem]/[1.1rem] font-heading font-extrabold tracking-normal px-[0.5em] rounded">
                 ศูนย์ปฏิบัติการฉุกเฉิน 24 ชม.
               </span>
               <span className="text-[0.75rem]/[1.1rem] bg-emerald-950/80 text-emerald-400 border border-emerald-800 px-[0.667em] py-[0.167em] rounded font-bold hidden md:inline-flex items-center gap-[0.333em]">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse motion-reduce:animate-none"></span> <span className="tracking-wide">LIVE</span>
               </span>
             </div>
-            <h1 className="font-heading text-xs sm:text-sm font-semibold text-slate-300 truncate">
+            <h1 className="font-heading text-xs sm:text-sm font-semibold tracking-normal text-slate-300 truncate">
               {systemData.systemSettings?.org || "แขวงทางหลวงปัตตานี กรมทางหลวง"}
             </h1>
           </div>
@@ -443,14 +443,14 @@ export default function HomePage() {
         {/* ================================================================= */}
         <div
           className={`${isSidebarCollapsed ? "hidden" : "hidden lg:flex"
-            } order-2 lg:order-1 w-full lg:w-[min(35%,25.625rem)] xl:w-[min(35%,27.5rem)] bg-[#0c1527] border-t lg:border-t-0 lg:border-r border-slate-800 flex-col shrink-0 z-20 lg:h-full overflow-hidden transition-all duration-300`}
+            } order-2 lg:order-1 w-full lg:w-[min(35%,25.625rem)] xl:w-[min(35%,27.5rem)] bg-surface-panel border-t lg:border-t-0 lg:border-r border-surface flex-col shrink-0 z-20 lg:h-full overflow-hidden transition-all duration-300`}
         >
           {/* Sidebar Header & Search */}
-          <div className="p-3.5 bg-[#091122] border-b border-slate-800 space-y-2.5 shrink-0">
+          <div className="p-3.5 bg-surface-panel border-b border-surface space-y-2.5 shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse motion-reduce:animate-none" />
-                <h2 className="font-heading font-bold text-xs sm:text-sm text-white">
+                <h2 className="font-heading font-bold text-xs sm:text-sm tracking-normal text-white">
                   จุดเฝ้าระวังและน้ำท่วมทางหลวง ({filteredFloods.length} จุด)
                 </h2>
               </div>
@@ -477,28 +477,30 @@ export default function HomePage() {
             )}
 
             {/* View Switcher Sub-tabs: Floods / Detours */}
-            <div className="grid grid-cols-2 gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs font-heading font-bold">
+            <div className="grid grid-cols-2 gap-1 bg-slate-900/90 p-1 rounded-xl border border-surface text-xs font-heading font-bold">
               <button
                 type="button"
                 aria-pressed={sidebarTab === "FLOOD"}
                 onClick={() => setSidebarTab("FLOOD")}
-                className={`py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer ${sidebarTab === "FLOOD"
+                className={`min-h-10 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${sidebarTab === "FLOOD"
                   ? "bg-amber-500 text-slate-950 shadow-md font-black"
                   : "text-slate-300 hover:text-white"
                   }`}
               >
-                <span>🌊 น้ำท่วม ({filteredFloods.length})</span>
+                <Droplets aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                <span>น้ำท่วม ({filteredFloods.length})</span>
               </button>
               <button
                 type="button"
                 aria-pressed={sidebarTab === "DETOUR"}
                 onClick={() => setSidebarTab("DETOUR")}
-                className={`py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer ${sidebarTab === "DETOUR"
+                className={`min-h-10 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${sidebarTab === "DETOUR"
                   ? "bg-amber-500 text-slate-950 shadow-md font-black"
                   : "text-slate-300 hover:text-white"
                   }`}
               >
-                <span>🔄 ทางเลี่ยง ({filteredDetours.length})</span>
+                <Route aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                <span>ทางเลี่ยง ({filteredDetours.length})</span>
               </button>
             </div>
 
@@ -629,7 +631,7 @@ export default function HomePage() {
           </div>
 
           {/* Sidebar Bottom Footer: Call Contact */}
-          <div className="p-3 bg-[#091122] border-t border-slate-800 text-xs flex items-center justify-between text-slate-400 shrink-0">
+          <div className="p-3 bg-surface-panel border-t border-surface text-xs flex items-center justify-between text-slate-400 shrink-0">
             <span className="text-[0.75rem]/[1.1rem] flex items-center gap-1.5">
               <Phone className="w-3.5 h-3.5 text-amber-400" /> ติดต่อศูนย์ความปลอดภัย: 073-336-000
             </span>
@@ -640,7 +642,7 @@ export default function HomePage() {
         {/* ================================================================= */}
         {/* B. MAIN GIS MAP VIEWPORT                                          */}
         {/* ================================================================= */}
-        <div className="order-1 lg:order-2 relative h-[calc(100dvh-4rem)] lg:h-full flex-1 w-full overflow-hidden bg-[#0b1426]">
+        <div className="order-1 lg:order-2 relative h-[calc(100dvh-4rem)] lg:h-full flex-1 w-full overflow-hidden bg-surface-canvas">
           {isPending && (
             <div role="status" aria-live="polite" className="absolute left-1/2 top-4 z-[600] -translate-x-1/2 rounded-xl border border-slate-700 bg-slate-950/95 px-4 py-3 text-sm text-white shadow-xl">
               กำลังโหลดข้อมูลสถานการณ์ล่าสุด…
@@ -710,9 +712,9 @@ export default function HomePage() {
             className="h-full w-full"
           />
           {selectedRouteFilter !== "ALL" && activeRouteChip && (
-            <div className="pointer-events-auto absolute right-3 top-3 z-[400] flex items-center gap-2 rounded-lg border border-amber-400/60 bg-slate-950/95 px-3 py-2 text-xs font-semibold text-amber-100 shadow-lg">
+            <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 top-14 sm:top-3 z-[405] flex items-center gap-2 rounded-xl border border-amber-400/60 bg-surface-floating px-3 py-1.5 text-xs font-semibold text-amber-100 shadow-lg whitespace-nowrap">
               <span>กำลังกรอง: {activeRouteChip.label}</span>
-              <button type="button" onClick={() => setSelectedRouteFilter("ALL")} className="min-h-8 rounded px-[0.667em] py-[0.333em] text-amber-300 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">ล้าง</button>
+              <button type="button" onClick={() => setSelectedRouteFilter("ALL")} className="min-h-8 rounded px-2 py-1 text-amber-300 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white cursor-pointer">ล้าง</button>
             </div>
           )}
 
