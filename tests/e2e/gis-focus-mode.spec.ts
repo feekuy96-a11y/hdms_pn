@@ -659,6 +659,26 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
     expect(layoutCheck.hitFloatingList).toEqual({ present: true, hitSelf: true });
     expect(layoutCheck.hitExitBtn).toEqual({ present: true, hitSelf: true });
 
+    // Toggle linked detour overlay -> verify fitBounds places endpoints cleanly above mobile Focus Bar
+    await page.getByTestId("gis-focus-toggle-linked-detour").click();
+    await page.waitForTimeout(550);
+
+    const focusClearance = await page.evaluate(() => {
+      const barRect = document.querySelector('[data-testid="gis-focus-mode-bar"]')?.getBoundingClientRect();
+      const endpoints = Array.from(document.querySelectorAll(".hdms-focus-endpoint")).map((el) =>
+        el.getBoundingClientRect()
+      );
+      return {
+        barTop: barRect?.top ?? 0,
+        endpointCount: endpoints.length,
+        allAboveFocusBar: endpoints.length > 0 && Boolean(barRect) && endpoints.every((r) => r.top < barRect!.top),
+        maxEndpointTop: endpoints.reduce((m, r) => Math.max(m, r.top), 0),
+      };
+    });
+
+    expect(focusClearance.endpointCount).toBeGreaterThanOrEqual(2);
+    expect(focusClearance.allAboveFocusBar).toBe(true);
+
     await page.getByTestId("gis-focus-exit-btn").click();
     await expect(focusBar).toHaveCount(0);
     await expect(floodDialog).toHaveCount(0);

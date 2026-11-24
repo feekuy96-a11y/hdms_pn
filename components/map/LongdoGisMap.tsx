@@ -1332,13 +1332,35 @@ export function LongdoGisMap({
       map.closePopup();
 
       const boundsPoints = collectFocusBoundsPoints(allPolylines, allPoints);
+      const isMobileViewport = typeof window !== "undefined" && window.innerWidth < 640;
+      const mapEl = mapContainerRef.current;
+      const mapRect = mapEl?.getBoundingClientRect();
+      const focusBarRect = document
+        .querySelector('[data-testid="gis-focus-mode-bar"]')
+        ?.getBoundingClientRect();
+
+      const leftPadding = isMobileViewport ? 58 : 24;
+      const rightPadding = isMobileViewport ? 44 : 24;
+      let topPadding = isMobileViewport ? 108 : 132;
+      let bottomPadding = isMobileViewport ? 240 : 40;
+      if (mapRect && focusBarRect && mapRect.height > 0) {
+        const barCenterY = focusBarRect.top + focusBarRect.height / 2;
+        const mapCenterY = mapRect.top + mapRect.height / 2;
+        if (isMobileViewport && barCenterY > mapCenterY) {
+          const neededBottom = Math.ceil(mapRect.bottom - focusBarRect.top) + 16;
+          bottomPadding = Math.min(Math.max(120, neededBottom), Math.max(120, mapRect.height - topPadding - 96));
+        } else if (!isMobileViewport && barCenterY < mapCenterY) {
+          const neededTop = Math.ceil(focusBarRect.bottom - mapRect.top) + 16;
+          topPadding = Math.min(Math.max(132, neededTop), Math.max(132, mapRect.height - bottomPadding - 120));
+        }
+      }
+
       if (boundsPoints.length >= 2) {
-        const isMobileViewport = typeof window !== "undefined" && window.innerWidth < 640;
         isProgrammaticMoveRef.current = true;
         map.stop();
         map.fitBounds(L.latLngBounds(boundsPoints.map(toLeafletLatLng)), {
-          paddingTopLeft: [24, isMobileViewport ? 168 : 132],
-          paddingBottomRight: [24, isMobileViewport ? 56 : 40],
+          paddingTopLeft: [leftPadding, topPadding],
+          paddingBottomRight: [rightPadding, bottomPadding],
           maxZoom: 15,
           animate: true,
         });
@@ -1348,7 +1370,14 @@ export function LongdoGisMap({
       } else if (boundsPoints.length === 1) {
         isProgrammaticMoveRef.current = true;
         map.stop();
-        map.setView(toLeafletLatLng(boundsPoints[0]), 14, { animate: true });
+        const targetZoom = 14;
+        const targetLatLng = toLeafletLatLng(boundsPoints[0]);
+        const offsetY = Math.round((bottomPadding - topPadding) / 2);
+        const targetCenter =
+          offsetY !== 0 && typeof map.project === "function" && typeof map.unproject === "function"
+            ? map.unproject(map.project(targetLatLng, targetZoom).add([0, offsetY]), targetZoom)
+            : targetLatLng;
+        map.setView(targetCenter, targetZoom, { animate: true });
         window.setTimeout(() => {
           isProgrammaticMoveRef.current = false;
         }, 400);
