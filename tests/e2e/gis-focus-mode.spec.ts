@@ -680,6 +680,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
     expect(layoutCheck.hitExitBtn).toEqual({ present: true, hitSelf: true });
 
     // Toggle linked detour overlay -> verify fitBounds places endpoints cleanly above mobile Focus Bar
+    await page.getByRole("button", { name: "ตัวเลือกเส้นทาง" }).click();
     await page.getByTestId("gis-focus-toggle-linked-detour").click();
     await page.waitForTimeout(550);
 

@@ -45,6 +45,7 @@ export function GisFocusModeBar({
   onToggleLinkedDetour,
 }: GisFocusModeBarProps) {
   const [isTimelineOpen, setIsTimelineOpen] = React.useState(false);
+  const [isCompactControlsOpen, setIsCompactControlsOpen] = React.useState(false);
   if (focusState.status !== "focused" || !focusState.targetType || !focusState.targetId) {
     return null;
   }
@@ -161,7 +162,7 @@ export function GisFocusModeBar({
               <span>{isDetour ? "โหมดโฟกัส: เส้นทางเลี่ยง" : "โหมดโฟกัส: เหตุการณ์น้ำท่วม"}</span>
             </span>
 
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900/90 px-2 py-0.5 text-[0.6875rem] text-slate-300 whitespace-nowrap">
+            <span className="hidden items-center gap-1 rounded-full border border-slate-700 bg-slate-900/90 px-2 py-0.5 text-[0.6875rem] text-slate-300 whitespace-nowrap sm:inline-flex">
               <EyeOff aria-hidden="true" className="h-3 w-3 shrink-0 text-amber-300" />
               <span>ซ่อนชั้นข้อมูลอื่นชั่วคราว</span>
             </span>
@@ -198,10 +199,10 @@ export function GisFocusModeBar({
                     ระดับน้ำ {floodData.maxWaterLevelCm} ซม.
                   </span>
                   {floodData.sideSummary && (
-                    <span className="text-sky-200">{floodData.sideSummary}</span>
+                    <span className="hidden text-sky-200 sm:inline">{floodData.sideSummary}</span>
                   )}
                   {floodStatus && (
-                    <span className="rounded-md border border-amber-500/40 bg-slate-900 px-1.5 py-0.5 font-semibold text-amber-200">
+                    <span className="hidden rounded-md border border-amber-500/40 bg-slate-900 px-1.5 py-0.5 font-semibold text-amber-200 sm:inline">
                       {floodStatus.label}
                     </span>
                   )}
@@ -240,9 +241,25 @@ export function GisFocusModeBar({
         </button>
       </div>
 
+      {!targetMissing && (showDirectionToggle || (!isDetour && linkedDetour) || timeline) && (
+        <button
+          type="button"
+          aria-expanded={isCompactControlsOpen}
+          aria-controls="gis-focus-extra-controls"
+          onClick={() => setIsCompactControlsOpen((open) => !open)}
+          className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-2.5 py-1 font-heading text-xs font-bold text-slate-100 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 sm:hidden"
+        >
+          <Route aria-hidden="true" className="h-3.5 w-3.5 text-amber-300" />
+          {isCompactControlsOpen ? "ซ่อนตัวเลือกเส้นทาง" : "ตัวเลือกเส้นทาง"}
+        </button>
+      )}
+
       {/* Action Controls Row: Linked Detour Overlay + A→B / B→A Switch */}
       {!targetMissing && (showDirectionToggle || (!isDetour && linkedDetour)) && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-800/90 pt-2">
+        <div
+          id="gis-focus-extra-controls"
+          className={`mt-2 flex flex-wrap items-center gap-2 border-t border-slate-800/90 pt-2 ${isCompactControlsOpen ? "flex" : "hidden"} sm:flex`}
+        >
           {!isDetour && linkedDetour && (
             <button
               type="button"
@@ -303,7 +320,7 @@ export function GisFocusModeBar({
         </div>
       )}
       {timeline && (
-        <div className="mt-2 border-t border-slate-800/90 pt-2">
+        <div className={`mt-2 border-t border-slate-800/90 pt-2 ${isCompactControlsOpen ? "block" : "hidden"} sm:block`}>
           <button
             type="button"
             aria-expanded={isTimelineOpen}

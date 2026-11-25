@@ -1303,7 +1303,7 @@ export function LongdoGisMap({
         const marker = L.marker([lat, lon], {
           interactive: Boolean(photo?.url),
           zIndexOffset: 900,
-          icon: L.divIcon(buildDetourPhotoBadgeSpec(point)),
+          icon: L.divIcon(buildDetourPhotoBadgeSpec(point, "FULL", true)),
         }).addTo(group);
         allPoints.push([lon, lat]);
         if (!photo?.url) return;
@@ -1423,10 +1423,13 @@ export function LongdoGisMap({
         const barCenterY = focusBarRect.top + focusBarRect.height / 2;
         const mapCenterY = mapRect.top + mapRect.height / 2;
         if (isMobileViewport && barCenterY > mapCenterY) {
-          const neededBottom = Math.ceil(mapRect.bottom - focusBarRect.top) + 16;
+          // Photo A/B markers have a visible 30px footprint, unlike the
+          // former zero-size endpoint labels. Keep their full icon clear of
+          // the Focus Bar rather than fitting only their coordinate center.
+          const neededBottom = Math.ceil(mapRect.bottom - focusBarRect.top) + 48;
           bottomPadding = Math.min(Math.max(120, neededBottom), Math.max(120, mapRect.height - topPadding - 96));
         } else if (!isMobileViewport && barCenterY < mapCenterY) {
-          const neededTop = Math.ceil(focusBarRect.bottom - mapRect.top) + 16;
+          const neededTop = Math.ceil(focusBarRect.bottom - mapRect.top) + 48;
           topPadding = Math.min(Math.max(132, neededTop), Math.max(132, mapRect.height - bottomPadding - 120));
         }
       }

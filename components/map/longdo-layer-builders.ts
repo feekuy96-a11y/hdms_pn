@@ -236,7 +236,8 @@ export function buildDetourSymbolIconSpec(dColor: string): DivIconSpec {
 /** สร้างสเปกไอคอนป้ายกล้องจุดเริ่มต้น A / จุดสิ้นสุด B ของทางเลี่ยง */
 export function buildDetourPhotoBadgeSpec(
   point: "START" | "END",
-  variant: "COMPACT" | "FULL" = "FULL"
+  variant: "COMPACT" | "FULL" = "FULL",
+  isFocusEndpoint = false
 ): DivIconSpec {
   const compact = variant === "COMPACT";
   const size = compact ? 22 : 30;
@@ -244,14 +245,14 @@ export function buildDetourPhotoBadgeSpec(
   if (point === "START") {
     return {
       html: `<div class="doh-detour-photo-badge" style="width:${size}px;height:${size}px;border-radius:999px;background:#064e3b;color:#a7f3d0;border:2px solid #10b981;display:flex;align-items:center;justify-content:center;gap:${compact ? 0 : 2}px;font-weight:900;font-size:${compact ? 11 : 10}px;box-shadow:0 3px 10px rgba(0,0,0,0.6)"><span>📷</span>${label}</div>`,
-      className: "doh-detour-photo-point doh-detour-photo-start",
+      className: `doh-detour-photo-point doh-detour-photo-start${isFocusEndpoint ? " hdms-focus-endpoint" : ""}`,
       iconSize: [size, size],
       iconAnchor: [size / 2, size / 2],
     };
   }
   return {
     html: `<div class="doh-detour-photo-badge" style="width:${size}px;height:${size}px;border-radius:999px;background:#0c4a6e;color:#bae6fd;border:2px solid #38bdf8;display:flex;align-items:center;justify-content:center;gap:${compact ? 0 : 2}px;font-weight:900;font-size:${compact ? 11 : 10}px;box-shadow:0 3px 10px rgba(0,0,0,0.6)"><span>📷</span>${label}</div>`,
-    className: "doh-detour-photo-point doh-detour-photo-end",
+    className: `doh-detour-photo-point doh-detour-photo-end${isFocusEndpoint ? " hdms-focus-endpoint" : ""}`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   };
