@@ -3,13 +3,38 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { SystemDataPayload } from "@/db/default-data";
 import { clearAdminMapDraft } from "@/components/admin/tabs/map-draft-storage";
-import { compressImageToAdaptiveBase64 } from "@/lib/gis-utils";
+import { compressImageToAdaptiveBase64, localArea } from "@/lib/gis-utils";
 import type { DetourDirectionModeType } from "@/lib/constants";
 import {
   FloodDirectionCode,
   FloodPhotoItem,
   groupFloodRoutesIntoEvents,
 } from "@/lib/flood-event-schema";
+
+export interface DetourPhotoLocationState {
+  lat: string;
+  lon: string;
+  subdistrict: string;
+  district: string;
+  province: string;
+}
+
+export const EMPTY_DETOUR_PHOTO_LOCATION: DetourPhotoLocationState = {
+  lat: "",
+  lon: "",
+  subdistrict: "",
+  district: "",
+  province: "",
+};
+
+function parseValidCoordNumber(lat: number | string, lon: number | string): { lat: number; lon: number } | null {
+  const nLat = typeof lat === "number" ? lat : Number(String(lat).trim());
+  const nLon = typeof lon === "number" ? lon : Number(String(lon).trim());
+  if (!Number.isFinite(nLat) || !Number.isFinite(nLon)) return null;
+  if (Math.abs(nLat) > 90 || Math.abs(nLon) > 180) return null;
+  if (nLat === 0 && nLon === 0) return null;
+  return { lat: nLat, lon: nLon };
+}
 
 interface UseMapRouteFormStateParams {
   systemData: SystemDataPayload;
@@ -94,8 +119,17 @@ export function useMapRouteFormState({
   const editOriginalFloodDirRef = useRef<FloodDirectionCode>("UNKNOWN");
   const [detourStartPhotoUrl, setDetourStartPhotoUrl] = useState("");
   const [detourStartPhotoCaption, setDetourStartPhotoCaption] = useState("");
+  const [detourStartPhotoLocation, setDetourStartPhotoLocation] = useState<DetourPhotoLocationState>(
+    EMPTY_DETOUR_PHOTO_LOCATION
+  );
   const [detourEndPhotoUrl, setDetourEndPhotoUrl] = useState("");
   const [detourEndPhotoCaption, setDetourEndPhotoCaption] = useState("");
+  const [detourEndPhotoLocation, setDetourEndPhotoLocation] = useState<DetourPhotoLocationState>(
+    EMPTY_DETOUR_PHOTO_LOCATION
+  );
+  const startPhotoLocManualRef = useRef(false);
+  const endPhotoLocManualRef = useRef(false);
+  const photoAreaRequestRef = useRef({ START: 0, END: 0 });
   const [forceStraightThrough, setForceStraightThrough] = useState(false);
   const [detourDirectionMode, setDetourDirectionMode] = useState<DetourDirectionModeType>("TWO_WAY");
   const [detourDistanceMeters, setDetourDistanceMeters] = useState<{ forward: number; reverse: number }>({
@@ -161,6 +195,79 @@ export function useMapRouteFormState({
     [systemData.floodRoutes]
   );
 
+  const resolveDetourPhotoArea = async (
+    target: "START" | "END",
+    latVal: number | string,
+    lonVal: number | string,
+    options?: { manual?: boolean; areaHint?: { subdistrict?: string; district?: string; province?: string } | null }
+  ) => {
+    const coords = parseValidCoordNumber(latVal, lonVal);
+    if (!coords) return;
+    const isStart = target === "START";
+    const setLoc = isStart ? setDetourStartPhotoLocation : setDetourEndPhotoLocation;
+    const manualRef = isStart ? startPhotoLocManualRef : endPhotoLocManualRef;
+    if (options?.manual) {
+      manualRef.current = true;
+    }
+
+    const formattedLat = coords.lat.toFixed(6);
+    const formattedLon = coords.lon.toFixed(6);
+    const hintSub = options?.areaHint?.subdistrict?.trim() || "";
+    const hintDist = options?.areaHint?.district?.trim() || "";
+    const hintProv = options?.areaHint?.province?.trim() || "";
+
+    setLoc((prev) => ({
+      lat: formattedLat,
+      lon: formattedLon,
+      subdistrict: hintSub || prev.subdistrict,
+      district: hintDist || prev.district,
+      province: hintProv || prev.province || "ปัตตานี",
+    }));
+
+    if (hintSub && hintDist) return;
+
+    const reqId = ++photoAreaRequestRef.current[target];
+    try {
+      const loc = await localArea(coords.lon, coords.lat);
+      if (photoAreaRequestRef.current[target] !== reqId) return;
+      if (!options?.manual && manualRef.current) return;
+      setLoc((prev) => ({
+        ...prev,
+        lat: prev.lat || formattedLat,
+        lon: prev.lon || formattedLon,
+        subdistrict: loc.tambon || prev.subdistrict,
+        district: loc.amphoe || prev.district,
+        province: loc.province || prev.province || "ปัตตานี",
+      }));
+    } catch {
+      // Keep coordinates even if offline/area lookup fails
+    }
+  };
+
+  const updateDetourPhotoLocation = (
+    target: "START" | "END",
+    patch: Partial<DetourPhotoLocationState>,
+    manual = true
+  ) => {
+    const manualRef = target === "START" ? startPhotoLocManualRef : endPhotoLocManualRef;
+    if (manual) manualRef.current = true;
+    const setLoc = target === "START" ? setDetourStartPhotoLocation : setDetourEndPhotoLocation;
+    setLoc((prev) => ({ ...prev, ...patch }));
+  };
+
+  // Auto-sync default A/B photo coordinates + area from route endpoints when not manually edited
+  useEffect(() => {
+    if (routeMode !== "DETOUR" || !detourStartPhotoUrl || startPhotoLocManualRef.current) return;
+    if (!parseValidCoordNumber(startLat, startLon)) return;
+    void resolveDetourPhotoArea("START", startLat, startLon, { areaHint: startArea });
+  }, [routeMode, detourStartPhotoUrl, startLat, startLon, startArea]);
+
+  useEffect(() => {
+    if (routeMode !== "DETOUR" || !detourEndPhotoUrl || endPhotoLocManualRef.current) return;
+    if (!parseValidCoordNumber(endLat, endLon)) return;
+    void resolveDetourPhotoArea("END", endLat, endLon, { areaHint: endArea });
+  }, [routeMode, detourEndPhotoUrl, endLat, endLon, endArea]);
+
   const handleDetourPointPhotoUpload = async (
     target: "START" | "END",
     e: React.ChangeEvent<HTMLInputElement>
@@ -172,9 +279,15 @@ export function useMapRouteFormState({
       const { dataUrl } = await compressImageToAdaptiveBase64(file, 250 * 1024);
       if (target === "START") {
         setDetourStartPhotoUrl(dataUrl);
+        if (!startPhotoLocManualRef.current) {
+          void resolveDetourPhotoArea("START", startLat, startLon, { areaHint: startArea });
+        }
         onToast("แนบภาพบริเวณทางเข้าจุดเริ่มต้น (A) เรียบร้อย");
       } else {
         setDetourEndPhotoUrl(dataUrl);
+        if (!endPhotoLocManualRef.current) {
+          void resolveDetourPhotoArea("END", endLat, endLon, { areaHint: endArea });
+        }
         onToast("แนบภาพบริเวณทางเข้าจุดสิ้นสุด (B) เรียบร้อย");
       }
     } catch {
@@ -193,10 +306,16 @@ export function useMapRouteFormState({
     setPassabilityWarnings([]);
     durationFwdManualRef.current = false;
     durationRevManualRef.current = false;
+    startPhotoLocManualRef.current = false;
+    endPhotoLocManualRef.current = false;
+    photoAreaRequestRef.current.START += 1;
+    photoAreaRequestRef.current.END += 1;
     editOriginalFloodDirRef.current = "UNKNOWN";
     sectionNameManuallyEdited.current = false;
     setStartArea(null);
     setEndArea(null);
+    setDetourStartPhotoLocation(EMPTY_DETOUR_PHOTO_LOCATION);
+    setDetourEndPhotoLocation(EMPTY_DETOUR_PHOTO_LOCATION);
     [
       setSnappingStatusText,
       setStartLat, setStartLon, setEndLat, setEndLon,
@@ -258,8 +377,14 @@ export function useMapRouteFormState({
     editOriginalFloodDirRef,
     detourStartPhotoUrl, setDetourStartPhotoUrl,
     detourStartPhotoCaption, setDetourStartPhotoCaption,
+    detourStartPhotoLocation, setDetourStartPhotoLocation,
     detourEndPhotoUrl, setDetourEndPhotoUrl,
     detourEndPhotoCaption, setDetourEndPhotoCaption,
+    detourEndPhotoLocation, setDetourEndPhotoLocation,
+    startPhotoLocManualRef,
+    endPhotoLocManualRef,
+    resolveDetourPhotoArea,
+    updateDetourPhotoLocation,
     forceStraightThrough, setForceStraightThrough,
     detourDirectionMode, setDetourDirectionMode,
     detourDistanceMeters, setDetourDistanceMeters,

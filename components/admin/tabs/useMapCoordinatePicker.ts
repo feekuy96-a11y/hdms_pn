@@ -24,6 +24,15 @@ export interface UseMapCoordinatePickerParams {
   setRevEndLon: (v: string | number) => void;
   setStartArea: (v: { subdistrict: string; district: string } | null) => void;
   setEndArea: (v: { subdistrict: string; district: string } | null) => void;
+  resolveDetourPhotoArea?: (
+    target: "START" | "END",
+    latVal: number | string,
+    lonVal: number | string,
+    options?: {
+      manual?: boolean;
+      areaHint?: { subdistrict?: string; district?: string; province?: string } | null;
+    }
+  ) => Promise<void> | void;
   setIsGeocoding: (v: boolean) => void;
   setAdminPickMode: (mode: string | null) => void;
   freeEditEnabled: boolean;
@@ -63,7 +72,7 @@ export function useMapCoordinatePicker(params: UseMapCoordinatePickerParams) {
     revStartLat, revStartLon, revEndLat, revEndLon,
     setStartLat, setStartLon, setEndLat, setEndLon,
     setRevStartLat, setRevStartLon, setRevEndLat, setRevEndLon,
-    setStartArea, setEndArea, setIsGeocoding,
+    setStartArea, setEndArea, resolveDetourPhotoArea, setIsGeocoding,
     setAdminPickMode,
     freeEditEnabled, setFreeEditEnabled,
     activeEditTarget,
@@ -77,14 +86,23 @@ export function useMapCoordinatePicker(params: UseMapCoordinatePickerParams) {
   } = params;
 
   // Auto Geocode (lon, lat order preserved)
-  const handleAutoGeocode = async (lon: number, lat: number, endpoint: "START" | "END") => {
+  const handleAutoGeocode = async (
+    lon: number,
+    lat: number,
+    endpoint: "START" | "END" | "PHOTO_START" | "PHOTO_END"
+  ) => {
     setIsGeocoding(true);
     try {
       const location = await reverseGeocodeTambonAmphoe(lon, lat);
       if (location) {
         const area = { subdistrict: location.subdistrict, district: location.district };
         if (endpoint === "START") setStartArea(area);
-        else setEndArea(area);
+        else if (endpoint === "END") setEndArea(area);
+        else if (endpoint === "PHOTO_START") {
+          void resolveDetourPhotoArea?.("START", lat, lon, { manual: true, areaHint: area });
+        } else {
+          void resolveDetourPhotoArea?.("END", lat, lon, { manual: true, areaHint: area });
+        }
         onToast(`ระบุพื้นที่อัตโนมัติ: ต.${location.subdistrict} อ.${location.district}`);
       }
     } catch {
@@ -122,6 +140,16 @@ export function useMapCoordinatePicker(params: UseMapCoordinatePickerParams) {
         setDraftReverseCoordinates?.([]);
         void triggerDualRoadSnapping(startLat, startLon, pickedCoordinate.lat, pickedCoordinate.lon);
       }
+    } else if (pickedCoordinate.mode === "PICK_DETOUR_PHOTO_START") {
+      setAdminPickMode(null);
+      onToast(`ปักหมุดภาพจุดเริ่มต้น (A): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
+      void resolveDetourPhotoArea?.("START", pickedCoordinate.lat, pickedCoordinate.lon, { manual: true });
+      void handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat, "PHOTO_START");
+    } else if (pickedCoordinate.mode === "PICK_DETOUR_PHOTO_END") {
+      setAdminPickMode(null);
+      onToast(`ปักหมุดภาพจุดสิ้นสุด (B): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
+      void resolveDetourPhotoArea?.("END", pickedCoordinate.lat, pickedCoordinate.lon, { manual: true });
+      void handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat, "PHOTO_END");
     } else if (pickedCoordinate.mode === "PICK_REV_START") {
       setRevStartLat(pickedCoordinate.lat);
       setRevStartLon(pickedCoordinate.lon);

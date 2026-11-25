@@ -1,7 +1,15 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { DetourRoute, SystemDataPayload } from "@/db/default-data";
+import { type DetourPointPhoto, DetourRoute, SystemDataPayload } from "@/db/default-data";
+import {
+  buildDetourPointPhotoPayload,
+  type DetourPointPhotoLocationInput,
+} from "@/components/admin/tabs/map-management-helpers";
+import {
+  EMPTY_DETOUR_PHOTO_LOCATION,
+  type DetourPhotoLocationState,
+} from "@/components/admin/tabs/useMapRouteFormState";
 import {
   deleteRouteAction,
   toggleDetourStatusAction,
@@ -14,6 +22,7 @@ import {
   extractDirectionalAdvice,
   extractDirectionalAdviceForEdit,
   generateAutoDetourAdvice,
+  localArea,
 } from "@/lib/gis-utils";
 import {
   calculatePolylineRoadDistanceKm,
@@ -60,8 +69,13 @@ export function useDetourManagement({
   const [editDetourDurationMinRev, setEditDetourDurationMinRev] = useState("");
   const [editDetourStartPhotoUrl, setEditDetourStartPhotoUrl] = useState("");
   const [editDetourStartPhotoCaption, setEditDetourStartPhotoCaption] = useState("");
+  const [editDetourStartPhotoLocation, setEditDetourStartPhotoLocation] =
+    useState<DetourPhotoLocationState>(EMPTY_DETOUR_PHOTO_LOCATION);
   const [editDetourEndPhotoUrl, setEditDetourEndPhotoUrl] = useState("");
   const [editDetourEndPhotoCaption, setEditDetourEndPhotoCaption] = useState("");
+  const [editDetourEndPhotoLocation, setEditDetourEndPhotoLocation] =
+    useState<DetourPhotoLocationState>(EMPTY_DETOUR_PHOTO_LOCATION);
+  const modalEditDetourIdRef = useRef<string | null>(null);
   const [editDetourRoadCondition, setEditDetourRoadCondition] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -241,8 +255,72 @@ export function useDetourManagement({
     }
   };
 
+  const resolveEditPhotoDefaults = (
+    d: DetourRoute,
+    endpoint: "START" | "END",
+    photo?: DetourPointPhoto
+  ) => {
+    const isStart = endpoint === "START";
+    const setLoc = isStart ? setEditDetourStartPhotoLocation : setEditDetourEndPhotoLocation;
+    const coords = parseLineCoordinates(d.coordinates_json);
+    const fallbackLat = isStart
+      ? Number(d.lat_start) || coords[0]?.[1] || 0
+      : Number(d.lat_end) || coords[coords.length - 1]?.[1] || 0;
+    const fallbackLon = isStart
+      ? Number(d.lon_start) || coords[0]?.[0] || 0
+      : Number(d.lon_end) || coords[coords.length - 1]?.[0] || 0;
+    const hasSavedCoord =
+      typeof photo?.lat === "number" &&
+      typeof photo?.lon === "number" &&
+      Number.isFinite(photo.lat) &&
+      Number.isFinite(photo.lon) &&
+      Math.abs(photo.lat) <= 90 &&
+      Math.abs(photo.lon) <= 180 &&
+      (photo.lat !== 0 || photo.lon !== 0);
+    const targetLat = hasSavedCoord ? photo!.lat! : fallbackLat;
+    const targetLon = hasSavedCoord ? photo!.lon! : fallbackLon;
+    const validTarget =
+      Number.isFinite(targetLat) &&
+      Number.isFinite(targetLon) &&
+      Math.abs(targetLat) <= 90 &&
+      Math.abs(targetLon) <= 180 &&
+      (targetLat !== 0 || targetLon !== 0);
+
+    const savedSub = photo?.subdistrict?.trim() || "";
+    const savedDist = photo?.district?.trim() || "";
+    const savedProv = photo?.province?.trim() || "";
+    const shouldPopulate = Boolean(photo?.url || hasSavedCoord || savedSub || savedDist || savedProv);
+
+    if (!shouldPopulate || (!validTarget && !savedSub && !savedDist && !savedProv)) {
+      setLoc(EMPTY_DETOUR_PHOTO_LOCATION);
+      return;
+    }
+
+    setLoc({
+      lat: validTarget ? targetLat.toFixed(6) : "",
+      lon: validTarget ? targetLon.toFixed(6) : "",
+      subdistrict: savedSub || (isStart ? d.subdistrict || "" : ""),
+      district: savedDist || (isStart ? d.district || "" : ""),
+      province: savedProv || (validTarget ? "ปัตตานี" : ""),
+    });
+
+    if (validTarget && (!savedSub || !savedDist)) {
+      const targetId = d.id;
+      void localArea(targetLon, targetLat).then((loc) => {
+        if (modalEditDetourIdRef.current !== targetId) return;
+        setLoc((prev) => ({
+          ...prev,
+          subdistrict: prev.subdistrict || loc.tambon || "",
+          district: prev.district || loc.amphoe || "",
+          province: prev.province || loc.province || "ปัตตานี",
+        }));
+      });
+    }
+  };
+
   // Open Quick Edit Modal
   const handleOpenEditModal = (d: DetourRoute) => {
+    modalEditDetourIdRef.current = d.id;
     setEditingDetour(d);
     setEditDetourName(d.route_name);
     setEditDetourRefId(d.flood_id_ref || "");
@@ -257,8 +335,10 @@ export function useDetourManagement({
     setEditDetourDurationMinRev(revSec ? String(Math.max(1, Math.round(revSec / 60))) : "");
     setEditDetourStartPhotoUrl(d.detour_meta?.start_point_photo?.url || "");
     setEditDetourStartPhotoCaption(d.detour_meta?.start_point_photo?.caption || "");
+    resolveEditPhotoDefaults(d, "START", d.detour_meta?.start_point_photo);
     setEditDetourEndPhotoUrl(d.detour_meta?.end_point_photo?.url || "");
     setEditDetourEndPhotoCaption(d.detour_meta?.end_point_photo?.caption || "");
+    resolveEditPhotoDefaults(d, "END", d.detour_meta?.end_point_photo);
     setEditDetourRoadCondition(d.detour_meta?.road_condition || "");
   };
 
@@ -273,9 +353,15 @@ export function useDetourManagement({
       const { dataUrl } = await compressImageToAdaptiveBase64(file, 250 * 1024);
       if (target === "START") {
         setEditDetourStartPhotoUrl(dataUrl);
+        if (editingDetour && !editDetourStartPhotoLocation.lat && !editDetourStartPhotoLocation.lon) {
+          resolveEditPhotoDefaults(editingDetour, "START", { url: dataUrl });
+        }
         onToast("แนบภาพบริเวณทางเข้าจุดเริ่มต้น (A) เรียบร้อย");
       } else {
         setEditDetourEndPhotoUrl(dataUrl);
+        if (editingDetour && !editDetourEndPhotoLocation.lat && !editDetourEndPhotoLocation.lon) {
+          resolveEditPhotoDefaults(editingDetour, "END", { url: dataUrl });
+        }
         onToast("แนบภาพบริเวณทางเข้าจุดสิ้นสุด (B) เรียบร้อย");
       }
     } catch {
@@ -332,8 +418,19 @@ export function useDetourManagement({
   };
 
   // Save Detour from Modal
-  const handleSaveModal = async () => {
+  const handleSaveModal = async (photoLocations?: {
+    start?: DetourPhotoLocationState;
+    end?: DetourPhotoLocationState;
+  }) => {
     if (!editingDetour) return;
+    const overrideLocations =
+      photoLocations && typeof photoLocations === "object" && ("start" in photoLocations || "end" in photoLocations)
+        ? photoLocations
+        : undefined;
+    const effectiveStartPhotoLoc: DetourPointPhotoLocationInput =
+      overrideLocations?.start ?? editDetourStartPhotoLocation;
+    const effectiveEndPhotoLoc: DetourPointPhotoLocationInput =
+      overrideLocations?.end ?? editDetourEndPhotoLocation;
     if (!editDetourName.trim()) {
       onToast("กรุณาระบุชื่อเส้นทางเลี่ยง");
       return;
@@ -446,10 +543,12 @@ export function useDetourManagement({
         }
       }
       if (resolvedStartPhotoUrl) {
-        updatedDetourMeta.start_point_photo = {
+        updatedDetourMeta.start_point_photo = buildDetourPointPhotoPayload({
           url: resolvedStartPhotoUrl,
-          ...(editDetourStartPhotoCaption.trim() ? { caption: editDetourStartPhotoCaption.trim() } : {}),
-        };
+          caption: editDetourStartPhotoCaption,
+          location: effectiveStartPhotoLoc,
+          existingPhoto: existingMeta.start_point_photo,
+        });
       } else {
         delete updatedDetourMeta.start_point_photo;
       }
@@ -469,10 +568,12 @@ export function useDetourManagement({
         }
       }
       if (resolvedEndPhotoUrl) {
-        updatedDetourMeta.end_point_photo = {
+        updatedDetourMeta.end_point_photo = buildDetourPointPhotoPayload({
           url: resolvedEndPhotoUrl,
-          ...(editDetourEndPhotoCaption.trim() ? { caption: editDetourEndPhotoCaption.trim() } : {}),
-        };
+          caption: editDetourEndPhotoCaption,
+          location: effectiveEndPhotoLoc,
+          existingPhoto: existingMeta.end_point_photo,
+        });
       } else {
         delete updatedDetourMeta.end_point_photo;
       }
@@ -663,10 +764,14 @@ export function useDetourManagement({
     setEditDetourStartPhotoUrl,
     editDetourStartPhotoCaption,
     setEditDetourStartPhotoCaption,
+    editDetourStartPhotoLocation,
+    setEditDetourStartPhotoLocation,
     editDetourEndPhotoUrl,
     setEditDetourEndPhotoUrl,
     editDetourEndPhotoCaption,
     setEditDetourEndPhotoCaption,
+    editDetourEndPhotoLocation,
+    setEditDetourEndPhotoLocation,
     editDetourRoadCondition,
     setEditDetourRoadCondition,
     editIsActive,

@@ -13,11 +13,15 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { DetourRoute, FloodRoute } from "@/db/default-data";
+import type { DetourPointPhoto, DetourRoute, FloodRoute } from "@/db/default-data";
 import { DirectionSwitch } from "@/components/ui/DirectionSwitch";
 import { calculatePolylineRoadDistanceKm } from "@/lib/detour-presentation";
 import { normalizeMediaUrl } from "@/lib/flood-event-schema";
-import { composeDirectionalAdvice, extractDirectionalAdviceForEdit } from "@/lib/gis-utils";
+import { composeDirectionalAdvice, extractDirectionalAdviceForEdit, localArea } from "@/lib/gis-utils";
+import {
+  EMPTY_DETOUR_PHOTO_LOCATION,
+  type DetourPhotoLocationState,
+} from "@/components/admin/tabs/useMapRouteFormState";
 
 export interface DetourEditModalProps {
   editingDetour: DetourRoute | null;
@@ -46,10 +50,14 @@ export interface DetourEditModalProps {
   setEditDetourStartPhotoUrl: (value: string) => void;
   editDetourStartPhotoCaption: string;
   setEditDetourStartPhotoCaption: (value: string) => void;
+  editDetourStartPhotoLocation?: DetourPhotoLocationState;
+  setEditDetourStartPhotoLocation?: React.Dispatch<React.SetStateAction<DetourPhotoLocationState>>;
   editDetourEndPhotoUrl: string;
   setEditDetourEndPhotoUrl: (value: string) => void;
   editDetourEndPhotoCaption: string;
   setEditDetourEndPhotoCaption: (value: string) => void;
+  editDetourEndPhotoLocation?: DetourPhotoLocationState;
+  setEditDetourEndPhotoLocation?: React.Dispatch<React.SetStateAction<DetourPhotoLocationState>>;
   editDetourRoadCondition: string;
   setEditDetourRoadCondition: (value: string) => void;
   editIsActive: boolean;
@@ -59,7 +67,150 @@ export interface DetourEditModalProps {
   onGenerateAdvice: () => void;
   onPointPhotoUpload: (point: "START" | "END", e: React.ChangeEvent<HTMLInputElement>) => void;
   onEditOnMap: (detourId: string) => void;
-  onSave: () => void;
+  onSave: (photoLocations?: {
+    start?: DetourPhotoLocationState;
+    end?: DetourPhotoLocationState;
+  }) => void;
+}
+
+function parseDetourEndpointCoords(detour: DetourRoute, endpoint: "START" | "END"): { lat: number; lon: number } {
+  const isStart = endpoint === "START";
+  let coords: [number, number][] = [];
+  if (Array.isArray(detour.coordinates_json)) {
+    coords = detour.coordinates_json as [number, number][];
+  } else if (typeof detour.coordinates_json === "string") {
+    try {
+      coords = JSON.parse(detour.coordinates_json);
+    } catch {
+      coords = [];
+    }
+  }
+  const lat = isStart
+    ? Number(detour.lat_start) || coords[0]?.[1] || 0
+    : Number(detour.lat_end) || coords[coords.length - 1]?.[1] || 0;
+  const lon = isStart
+    ? Number(detour.lon_start) || coords[0]?.[0] || 0
+    : Number(detour.lon_end) || coords[coords.length - 1]?.[0] || 0;
+  return { lat, lon };
+}
+
+function ModalPhotoLocationFields({
+  pointLabel,
+  pointName,
+  location,
+  onChange,
+  onSyncFromEndpoint,
+  onResolveFromCoords,
+}: {
+  pointLabel: "A" | "B";
+  pointName: string;
+  location: DetourPhotoLocationState;
+  onChange: (patch: Partial<DetourPhotoLocationState>) => void;
+  onSyncFromEndpoint: () => void;
+  onResolveFromCoords: (lat: number, lon: number) => void;
+}) {
+  const focusCoordRef = React.useRef("");
+
+  const handleCoordBlur = () => {
+    if (`${location.lat},${location.lon}` === focusCoordRef.current) return;
+    const nLat = Number(location.lat);
+    const nLon = Number(location.lon);
+    if (
+      Number.isFinite(nLat) &&
+      Number.isFinite(nLon) &&
+      Math.abs(nLat) <= 90 &&
+      Math.abs(nLon) <= 180 &&
+      (nLat !== 0 || nLon !== 0)
+    ) {
+      onResolveFromCoords(nLat, nLon);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5 rounded-md border border-slate-800 bg-slate-900/70 p-2">
+      <div className="flex flex-wrap items-center justify-between gap-1.5">
+        <span className="text-[10px] font-heading font-semibold text-slate-300">
+          พิกัด &amp; พื้นที่ภาพ{pointName}
+        </span>
+        <button
+          type="button"
+          onClick={onSyncFromEndpoint}
+          className="rounded border border-slate-700 bg-slate-950 px-2 py-0.5 text-[10px] font-heading font-semibold text-slate-200 hover:border-amber-400/60 hover:text-amber-300 transition cursor-pointer"
+        >
+          ดึงจากจุด {pointLabel}
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        <label className="space-y-0.5">
+          <span className="block text-[10px] text-slate-400">ละติจูด (Lat)</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            aria-label={`ละติจูดภาพ${pointName}`}
+            value={location.lat}
+            onFocus={() => {
+              focusCoordRef.current = `${location.lat},${location.lon}`;
+            }}
+            onChange={(e) => onChange({ lat: e.target.value })}
+            onBlur={handleCoordBlur}
+            placeholder="เช่น 6.834000"
+            className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-[10px] text-white placeholder:text-slate-600"
+          />
+        </label>
+        <label className="space-y-0.5">
+          <span className="block text-[10px] text-slate-400">ลองจิจูด (Lon)</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            aria-label={`ลองจิจูดภาพ${pointName}`}
+            value={location.lon}
+            onFocus={() => {
+              focusCoordRef.current = `${location.lat},${location.lon}`;
+            }}
+            onChange={(e) => onChange({ lon: e.target.value })}
+            onBlur={handleCoordBlur}
+            placeholder="เช่น 101.186000"
+            className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-[10px] text-white placeholder:text-slate-600"
+          />
+        </label>
+      </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        <label className="space-y-0.5">
+          <span className="block text-[10px] text-slate-400">ตำบล</span>
+          <input
+            type="text"
+            aria-label={`ตำบลภาพ${pointName}`}
+            value={location.subdistrict}
+            onChange={(e) => onChange({ subdistrict: e.target.value })}
+            placeholder="ตำบล"
+            className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-[10px] text-white placeholder:text-slate-600"
+          />
+        </label>
+        <label className="space-y-0.5">
+          <span className="block text-[10px] text-slate-400">อำเภอ</span>
+          <input
+            type="text"
+            aria-label={`อำเภอภาพ${pointName}`}
+            value={location.district}
+            onChange={(e) => onChange({ district: e.target.value })}
+            placeholder="อำเภอ"
+            className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-[10px] text-white placeholder:text-slate-600"
+          />
+        </label>
+        <label className="space-y-0.5">
+          <span className="block text-[10px] text-slate-400">จังหวัด</span>
+          <input
+            type="text"
+            aria-label={`จังหวัดภาพ${pointName}`}
+            value={location.province}
+            onChange={(e) => onChange({ province: e.target.value })}
+            placeholder="ปัตตานี"
+            className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-[10px] text-white placeholder:text-slate-600"
+          />
+        </label>
+      </div>
+    </div>
+  );
 }
 
 /** Modal แก้ไขข้อมูลเส้นทางเลี่ยงแบบรวดเร็ว (คำแนะนำไป-กลับ, ภาพจุดเข้า A/B, เวลาเดินทาง, ลิงก์ Google Maps) */
@@ -87,10 +238,14 @@ export function DetourEditModal({
   setEditDetourStartPhotoUrl,
   editDetourStartPhotoCaption,
   setEditDetourStartPhotoCaption,
+  editDetourStartPhotoLocation,
+  setEditDetourStartPhotoLocation,
   editDetourEndPhotoUrl,
   setEditDetourEndPhotoUrl,
   editDetourEndPhotoCaption,
   setEditDetourEndPhotoCaption,
+  editDetourEndPhotoLocation,
+  setEditDetourEndPhotoLocation,
   editDetourRoadCondition,
   setEditDetourRoadCondition,
   editIsActive,
@@ -102,6 +257,121 @@ export function DetourEditModal({
   onEditOnMap,
   onSave,
 }: DetourEditModalProps) {
+  const [localStartLoc, setLocalStartLoc] = React.useState<DetourPhotoLocationState>(
+    EMPTY_DETOUR_PHOTO_LOCATION
+  );
+  const [localEndLoc, setLocalEndLoc] = React.useState<DetourPhotoLocationState>(
+    EMPTY_DETOUR_PHOTO_LOCATION
+  );
+  const effectiveStartLoc = editDetourStartPhotoLocation ?? localStartLoc;
+  const setEffectiveStartLoc = setEditDetourStartPhotoLocation ?? setLocalStartLoc;
+  const effectiveEndLoc = editDetourEndPhotoLocation ?? localEndLoc;
+  const setEffectiveEndLoc = setEditDetourEndPhotoLocation ?? setLocalEndLoc;
+  const activeDetourIdRef = React.useRef<string | null>(null);
+
+  const resolveEndpointArea = React.useCallback(
+    (
+      endpoint: "START" | "END",
+      lat: number,
+      lon: number,
+      saved?: Partial<DetourPointPhoto>,
+      targetDetourId?: string
+    ) => {
+      const setLoc = endpoint === "START" ? setEffectiveStartLoc : setEffectiveEndLoc;
+      const validCoord =
+        Number.isFinite(lat) &&
+        Number.isFinite(lon) &&
+        Math.abs(lat) <= 90 &&
+        Math.abs(lon) <= 180 &&
+        (lat !== 0 || lon !== 0);
+      const savedSub = saved?.subdistrict?.trim() || "";
+      const savedDist = saved?.district?.trim() || "";
+      const savedProv = saved?.province?.trim() || "";
+      setLoc({
+        lat: validCoord ? lat.toFixed(6) : "",
+        lon: validCoord ? lon.toFixed(6) : "",
+        subdistrict: savedSub,
+        district: savedDist,
+        province: savedProv || (validCoord ? "ปัตตานี" : ""),
+      });
+      if (validCoord && (!savedSub || !savedDist)) {
+        void localArea(lon, lat).then((loc) => {
+          if (targetDetourId && activeDetourIdRef.current !== targetDetourId) return;
+          setLoc((prev) => ({
+            ...prev,
+            subdistrict: prev.subdistrict || loc.tambon || "",
+            district: prev.district || loc.amphoe || "",
+            province: prev.province || loc.province || "ปัตตานี",
+          }));
+        });
+      }
+    },
+    [setEffectiveEndLoc, setEffectiveStartLoc]
+  );
+
+  React.useEffect(() => {
+    if (!editingDetour) {
+      activeDetourIdRef.current = null;
+      return;
+    }
+    if (activeDetourIdRef.current === editingDetour.id) return;
+    activeDetourIdRef.current = editingDetour.id;
+
+    const initEndpoint = (endpoint: "START" | "END", photo?: DetourPointPhoto) => {
+      const setLoc = endpoint === "START" ? setEffectiveStartLoc : setEffectiveEndLoc;
+      const hasSavedCoord =
+        typeof photo?.lat === "number" &&
+        typeof photo?.lon === "number" &&
+        Number.isFinite(photo.lat) &&
+        Number.isFinite(photo.lon) &&
+        Math.abs(photo.lat) <= 90 &&
+        Math.abs(photo.lon) <= 180 &&
+        (photo.lat !== 0 || photo.lon !== 0);
+      const fallback = parseDetourEndpointCoords(editingDetour, endpoint);
+      const targetLat = hasSavedCoord ? photo!.lat! : fallback.lat;
+      const targetLon = hasSavedCoord ? photo!.lon! : fallback.lon;
+      if (!photo?.url && !hasSavedCoord && !photo?.subdistrict && !photo?.district && !photo?.province) {
+        setLoc(EMPTY_DETOUR_PHOTO_LOCATION);
+        return;
+      }
+      resolveEndpointArea(
+        endpoint,
+        targetLat,
+        targetLon,
+        {
+          subdistrict: photo?.subdistrict || (endpoint === "START" ? editingDetour.subdistrict : ""),
+          district: photo?.district || (endpoint === "START" ? editingDetour.district : ""),
+          province: photo?.province,
+        },
+        editingDetour.id
+      );
+    };
+
+    initEndpoint("START", editingDetour.detour_meta?.start_point_photo);
+    initEndpoint("END", editingDetour.detour_meta?.end_point_photo);
+  }, [editingDetour, resolveEndpointArea, setEffectiveEndLoc, setEffectiveStartLoc]);
+
+  // Fill defaults when a new photo is uploaded inside the modal
+  React.useEffect(() => {
+    if (!editingDetour || !editDetourStartPhotoUrl) return;
+    if (effectiveStartLoc.lat || effectiveStartLoc.lon) return;
+    const { lat, lon } = parseDetourEndpointCoords(editingDetour, "START");
+    resolveEndpointArea(
+      "START",
+      lat,
+      lon,
+      { subdistrict: editingDetour.subdistrict, district: editingDetour.district },
+      editingDetour.id
+    );
+  }, [editDetourStartPhotoUrl, editingDetour, effectiveStartLoc.lat, effectiveStartLoc.lon, resolveEndpointArea]);
+
+  React.useEffect(() => {
+    if (!editingDetour || !editDetourEndPhotoUrl) return;
+    if (effectiveEndLoc.lat || effectiveEndLoc.lon) return;
+    const { lat, lon } = parseDetourEndpointCoords(editingDetour, "END");
+    resolveEndpointArea("END", lat, lon, undefined, editingDetour.id);
+  }, [editDetourEndPhotoUrl, editingDetour, effectiveEndLoc.lat, effectiveEndLoc.lon, resolveEndpointArea]);
+
   if (!editingDetour) return null;
 
   const editParts = extractDirectionalAdviceForEdit(editDetourDesc);
@@ -338,6 +608,7 @@ export function DetourEditModal({
                         onClick={() => {
                           setEditDetourStartPhotoUrl("");
                           setEditDetourStartPhotoCaption("");
+                          setEffectiveStartLoc(EMPTY_DETOUR_PHOTO_LOCATION);
                         }}
                         aria-label="ลบภาพจุดเริ่มต้น A"
                         className="absolute top-1 right-1 rounded-full bg-slate-950/90 p-1 text-rose-400 hover:bg-rose-950 hover:text-white border border-rose-500/40"
@@ -352,6 +623,25 @@ export function DetourEditModal({
                       onChange={(e) => setEditDetourStartPhotoCaption(e.target.value)}
                       placeholder="คำอธิบายทางเข้าจุดเริ่ม A..."
                       className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-white"
+                    />
+                    <ModalPhotoLocationFields
+                      pointLabel="A"
+                      pointName="จุดเริ่มต้น A"
+                      location={effectiveStartLoc}
+                      onChange={(patch) => setEffectiveStartLoc((prev) => ({ ...prev, ...patch }))}
+                      onSyncFromEndpoint={() => {
+                        const { lat, lon } = parseDetourEndpointCoords(editingDetour, "START");
+                        resolveEndpointArea(
+                          "START",
+                          lat,
+                          lon,
+                          { subdistrict: editingDetour.subdistrict, district: editingDetour.district },
+                          editingDetour.id
+                        );
+                      }}
+                      onResolveFromCoords={(lat, lon) =>
+                        resolveEndpointArea("START", lat, lon, undefined, editingDetour.id)
+                      }
                     />
                   </div>
                 )}
@@ -386,6 +676,7 @@ export function DetourEditModal({
                         onClick={() => {
                           setEditDetourEndPhotoUrl("");
                           setEditDetourEndPhotoCaption("");
+                          setEffectiveEndLoc(EMPTY_DETOUR_PHOTO_LOCATION);
                         }}
                         aria-label="ลบภาพจุดสิ้นสุด B"
                         className="absolute top-1 right-1 rounded-full bg-slate-950/90 p-1 text-rose-400 hover:bg-rose-950 hover:text-white border border-rose-500/40"
@@ -400,6 +691,19 @@ export function DetourEditModal({
                       onChange={(e) => setEditDetourEndPhotoCaption(e.target.value)}
                       placeholder="คำอธิบายทางเข้าจุดสิ้นสุด B (ฝั่งขากลับ)..."
                       className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-white"
+                    />
+                    <ModalPhotoLocationFields
+                      pointLabel="B"
+                      pointName="จุดสิ้นสุด B"
+                      location={effectiveEndLoc}
+                      onChange={(patch) => setEffectiveEndLoc((prev) => ({ ...prev, ...patch }))}
+                      onSyncFromEndpoint={() => {
+                        const { lat, lon } = parseDetourEndpointCoords(editingDetour, "END");
+                        resolveEndpointArea("END", lat, lon, undefined, editingDetour.id);
+                      }}
+                      onResolveFromCoords={(lat, lon) =>
+                        resolveEndpointArea("END", lat, lon, undefined, editingDetour.id)
+                      }
                     />
                   </div>
                 )}
@@ -520,7 +824,7 @@ export function DetourEditModal({
           <button
             type="button"
             disabled={isSubmitting}
-            onClick={onSave}
+            onClick={() => onSave({ start: effectiveStartLoc, end: effectiveEndLoc })}
             className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-5 py-2 rounded-xl text-xs shadow-lg transition flex items-center gap-1.5 disabled:opacity-50"
           >
             <Save className="w-4 h-4" aria-hidden="true" />

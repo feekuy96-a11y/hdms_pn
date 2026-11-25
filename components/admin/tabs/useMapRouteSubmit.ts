@@ -8,6 +8,7 @@ import {
   sliceBranchByKmRange,
   buildAffectedPartSummary,
   buildDetourMetaPayload,
+  type DetourPointPhotoLocationInput,
 } from "@/components/admin/tabs/map-management-helpers";
 import { calculatePolylineRoadDistanceKm } from "@/lib/detour-presentation";
 import {
@@ -83,8 +84,10 @@ export interface UseMapRouteSubmitParams {
   detourGoogleMapsUrlRev: string;
   detourStartPhotoUrl: string;
   detourStartPhotoCaption: string;
+  detourStartPhotoLocation?: DetourPointPhotoLocationInput | null;
   detourEndPhotoUrl: string;
   detourEndPhotoCaption: string;
+  detourEndPhotoLocation?: DetourPointPhotoLocationInput | null;
   routeNo: string;
   sectionName: string;
   kmStart: string;
@@ -135,7 +138,8 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
     closedRoadConflicts, setClosedRoadConflicts, detourName, detourRefId, detourDesc, detourDirectionMode,
     detourRoadCondition, detourDurationMinFwd, detourDurationMinRev,
     detourDistanceMeters, detourGoogleMapsUrlFwd, detourGoogleMapsUrlRev,
-    detourStartPhotoUrl, detourStartPhotoCaption, detourEndPhotoUrl, detourEndPhotoCaption,
+    detourStartPhotoUrl, detourStartPhotoCaption, detourStartPhotoLocation,
+    detourEndPhotoUrl, detourEndPhotoCaption, detourEndPhotoLocation,
     routeNo, sectionName, kmStart, kmEnd, directionCode, roadSide, isDividedBothFlood,
     affectedParts, reverseAffectedParts, routeWaterLevel, reverseRouteWaterLevel,
     waterLevelKnown, reverseWaterLevelKnown, routeStatus, reverseRouteStatus,
@@ -148,6 +152,39 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
 
   const handleSubmitRoute = async () => {
     // Never silently turn a missing/legacy direction into bidirectional traffic.
+    const hasPhotoLocationValues = (loc?: DetourPointPhotoLocationInput | null) =>
+      Boolean(
+        loc &&
+          (String(loc.lat ?? "").trim() ||
+            String(loc.lon ?? "").trim() ||
+            loc.subdistrict?.trim() ||
+            loc.district?.trim() ||
+            loc.province?.trim())
+      );
+
+    const resolveSubmitPhotoLocation = (
+      loc: DetourPointPhotoLocationInput | null | undefined,
+      fallbackLat: number,
+      fallbackLon: number,
+      fallbackArea?: { subdistrict: string; district: string; province?: string } | null
+    ): DetourPointPhotoLocationInput | undefined => {
+      if (hasPhotoLocationValues(loc)) return loc ?? undefined;
+      if (
+        Number.isFinite(fallbackLat) &&
+        Number.isFinite(fallbackLon) &&
+        (fallbackLat !== 0 || fallbackLon !== 0)
+      ) {
+        return {
+          lat: fallbackLat,
+          lon: fallbackLon,
+          subdistrict: fallbackArea?.subdistrict,
+          district: fallbackArea?.district,
+          province: fallbackArea?.province || "ปัตตานี",
+        };
+      }
+      return undefined;
+    };
+
     if (routeMode === "DETOUR" && !["FORWARD_ONLY", "REVERSE_ONLY", "TWO_WAY"].includes(detourDirectionMode)) {
       onToast("ไม่พบค่าทิศทางเดินรถที่ถูกต้อง กรุณาเลือก A → B, B → A หรือสองทิศทางก่อนบันทึก");
       return;
@@ -560,8 +597,20 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
               detourRoadCondition,
               resolvedDetourStartPhotoUrl,
               detourStartPhotoCaption,
+              detourStartPhotoLocation: resolveSubmitPhotoLocation(
+                detourStartPhotoLocation,
+                numSLat,
+                numSLon,
+                startArea
+              ),
               resolvedDetourEndPhotoUrl,
               detourEndPhotoCaption,
+              detourEndPhotoLocation: resolveSubmitPhotoLocation(
+                detourEndPhotoLocation,
+                numELat,
+                numELon,
+                endArea
+              ),
               fwdPolyKm: calculatePolylineRoadDistanceKm(coords),
               revPolyKm: calculatePolylineRoadDistanceKm(
                 detourDirectionMode === "TWO_WAY" && resolvedDetourReverseCoords.length >= 2 ? resolvedDetourReverseCoords : coords

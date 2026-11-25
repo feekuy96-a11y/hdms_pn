@@ -476,7 +476,15 @@ export function buildDetourPopupHtml(
 export function buildDetourPointPhotoPopupHtml(
   detour: DetourRoute,
   role: "START" | "END",
-  photo: { url: string; caption?: string },
+  photo: {
+    url: string;
+    caption?: string;
+    lat?: number;
+    lon?: number;
+    subdistrict?: string;
+    district?: string;
+    province?: string;
+  },
   lat: number,
   lon: number
 ): string {
@@ -487,9 +495,33 @@ export function buildDetourPointPhotoPopupHtml(
   const defaultCaption = isStart
     ? "บริเวณทางเข้าเส้นทางเลี่ยง ฝั่งจุดเริ่มต้น A (สำหรับผู้ใช้ทางขาไป A → B)"
     : "บริเวณทางเข้าเส้นทางเลี่ยง ฝั่งจุดสิ้นสุด B (สำหรับผู้ใช้ทางที่มาจากอีกฝั่ง B → A)";
+  const hasPhotoCoord =
+    typeof photo.lat === "number" &&
+    typeof photo.lon === "number" &&
+    Number.isFinite(photo.lat) &&
+    Number.isFinite(photo.lon) &&
+    Math.abs(photo.lat) <= 90 &&
+    Math.abs(photo.lon) <= 180 &&
+    (photo.lat !== 0 || photo.lon !== 0);
+  const effectiveLat = hasPhotoCoord ? photo.lat! : lat;
+  const effectiveLon = hasPhotoCoord ? photo.lon! : lon;
+  const hasValidCoord =
+    Number.isFinite(effectiveLat) &&
+    Number.isFinite(effectiveLon) &&
+    (effectiveLat !== 0 || effectiveLon !== 0);
+  const coordText = hasValidCoord
+    ? `${Number(effectiveLat).toFixed(6)}, ${Number(effectiveLon).toFixed(6)}`
+    : null;
+  const areaParts = [
+    formatPopupAreaSegment("ต.", photo.subdistrict),
+    formatPopupAreaSegment("อ.", photo.district),
+    formatPopupAreaSegment("จ.", photo.province),
+  ].filter((part): part is string => Boolean(part));
+  const areaLine = areaParts.length > 0 ? areaParts.join(" ") : null;
+
   const normalizedUrl = escapeHtml(normalizeMediaUrl(photo.url));
   const captionText = escapeHtml(photo.caption?.trim() || defaultCaption);
-  const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${Number(lat).toFixed(6)},${Number(lon).toFixed(6)}&travelmode=driving`;
+  const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${Number(effectiveLat).toFixed(6)},${Number(effectiveLon).toFixed(6)}&travelmode=driving`;
 
   return `
     <div class="doh-detour-point-photo-popup text-xs p-[0.833em] sm:p-[1.167em] w-[min(20.25rem,calc(100vw-2rem))] sm:w-[21.25rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl select-text space-y-2 sm:space-y-2.5">
@@ -503,16 +535,24 @@ export function buildDetourPointPhotoPopupHtml(
           <span>${escapeHtml(badgeText)}</span>
         </span>
       </div>
-      <div>
+      <div class="space-y-1">
         <h5 class="font-bold text-white text-sm font-heading leading-snug break-words">${escapeHtml(detour.route_name)}</h5>
-        <p class="text-xs text-amber-200/95 mt-1 leading-relaxed break-words">${captionText}</p>
+        ${
+          areaLine || coordText
+            ? `<div class="rounded-lg border border-slate-800/90 bg-slate-900/75 px-2.5 py-1.5 space-y-0.5">
+                ${areaLine ? `<p class="text-[0.75rem] font-medium text-sky-200 leading-snug break-words">📍 ${escapeHtml(areaLine)}</p>` : ""}
+                ${coordText ? `<p class="font-mono text-[0.6875rem] text-slate-300 leading-tight">พิกัด: ${escapeHtml(coordText)}</p>` : ""}
+              </div>`
+            : ""
+        }
+        <p class="text-xs text-amber-200/95 leading-relaxed break-words">${captionText}</p>
       </div>
       <div class="relative flex items-center justify-center overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950">
         <img
           src="${normalizedUrl}"
           alt="${escapeHtml(`${badgeText} ${detour.route_name}`)}"
           onclick="window.__openDetourPointPhoto && window.__openDetourPointPhoto(this.src, this.alt)"
-          class="w-full h-auto max-h-[min(42dvh,18rem)] object-contain cursor-zoom-in hover:opacity-95 transition"
+          class="w-full h-auto max-h-[min(36dvh,16rem)] object-contain cursor-zoom-in hover:opacity-95 transition"
         />
         <span class="pointer-events-none absolute bottom-2 right-2 rounded-lg bg-slate-950/85 border border-slate-700 px-[0.667em] py-[0.167em] text-[0.75rem] text-slate-200">
           แตะที่ภาพเพื่อขยายเต็มจอ

@@ -59,6 +59,11 @@ export interface DetourPointPhoto {
   url: string;
   caption?: string;
   mediaId?: string;
+  lat?: number;
+  lon?: number;
+  subdistrict?: string;
+  district?: string;
+  province?: string;
 }
 
 export interface DetourMeta {

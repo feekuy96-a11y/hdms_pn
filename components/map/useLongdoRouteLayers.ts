@@ -365,13 +365,33 @@ export function useLongdoRouteLayers({
       const startPhoto = detour.detour_meta?.start_point_photo;
       const endPhoto = detour.detour_meta?.end_point_photo;
       const { startLat, startLon, endLat, endLon } = resolveDetourPhotoPointCoords(detour, fwdCoords);
+      const resolvePhotoPinCoords = (
+        photo: typeof startPhoto,
+        fallbackLat: number,
+        fallbackLon: number
+      ): { lat: number; lon: number } => {
+        const hasCustom =
+          photo &&
+          typeof photo.lat === "number" &&
+          typeof photo.lon === "number" &&
+          Number.isFinite(photo.lat) &&
+          Number.isFinite(photo.lon) &&
+          Math.abs(photo.lat) <= 90 &&
+          Math.abs(photo.lon) <= 180 &&
+          (photo.lat !== 0 || photo.lon !== 0);
+        return hasCustom
+          ? { lat: photo.lat!, lon: photo.lon! }
+          : { lat: fallbackLat, lon: fallbackLon };
+      };
+      const startPin = resolvePhotoPinCoords(startPhoto, startLat, startLon);
+      const endPin = resolvePhotoPinCoords(endPhoto, endLat, endLon);
 
-      if (startPhoto?.url && Number.isFinite(startLat) && Number.isFinite(startLon)) {
+      if (startPhoto?.url && Number.isFinite(startPin.lat) && Number.isFinite(startPin.lon)) {
         const startPhotoIcon = L.divIcon(buildDetourPhotoBadgeSpec("START"));
-        const startMarker = L.marker([startLat, startLon], { icon: startPhotoIcon, interactive: true, zIndexOffset: 200 })
+        const startMarker = L.marker([startPin.lat, startPin.lon], { icon: startPhotoIcon, interactive: true, zIndexOffset: 200 })
           .bindTooltip(`📷 ภาพทางเข้าจุดเริ่มต้น A (${detour.route_name})`, { direction: "top" })
           .bindPopup(
-            () => buildDetourPointPhotoPopupHtml(detour, "START", startPhoto, startLat, startLon),
+            () => buildDetourPointPhotoPopupHtml(detour, "START", startPhoto, startPin.lat, startPin.lon),
             getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
           )
           .addTo(group);
@@ -385,12 +405,12 @@ export function useLongdoRouteLayers({
         });
       }
 
-      if (endPhoto?.url && Number.isFinite(endLat) && Number.isFinite(endLon)) {
+      if (endPhoto?.url && Number.isFinite(endPin.lat) && Number.isFinite(endPin.lon)) {
         const endPhotoIcon = L.divIcon(buildDetourPhotoBadgeSpec("END"));
-        const endMarker = L.marker([endLat, endLon], { icon: endPhotoIcon, interactive: true, zIndexOffset: 200 })
+        const endMarker = L.marker([endPin.lat, endPin.lon], { icon: endPhotoIcon, interactive: true, zIndexOffset: 200 })
           .bindTooltip(`📷 ภาพทางเข้าจุดสิ้นสุด B - ฝั่งขากลับ (${detour.route_name})`, { direction: "top" })
           .bindPopup(
-            () => buildDetourPointPhotoPopupHtml(detour, "END", endPhoto, endLat, endLon),
+            () => buildDetourPointPhotoPopupHtml(detour, "END", endPhoto, endPin.lat, endPin.lon),
             getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
           )
           .addTo(group);

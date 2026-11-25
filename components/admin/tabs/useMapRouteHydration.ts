@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import { SystemDataPayload } from "@/db/default-data";
+import { type DetourPointPhoto, SystemDataPayload } from "@/db/default-data";
+import {
+  EMPTY_DETOUR_PHOTO_LOCATION,
+  type DetourPhotoLocationState,
+} from "@/components/admin/tabs/useMapRouteFormState";
 import {
   findBestHighwayGroupForSelection,
   sliceBranchByKmRange,
@@ -97,8 +101,12 @@ export interface UseMapRouteHydrationParams {
   setPassabilityWarnings: (v: string[]) => void;
   setDetourStartPhotoUrl: (v: string) => void;
   setDetourStartPhotoCaption: (v: string) => void;
+  setDetourStartPhotoLocation?: React.Dispatch<React.SetStateAction<DetourPhotoLocationState>>;
   setDetourEndPhotoUrl: (v: string) => void;
   setDetourEndPhotoCaption: (v: string) => void;
+  setDetourEndPhotoLocation?: React.Dispatch<React.SetStateAction<DetourPhotoLocationState>>;
+  startPhotoLocManualRef?: React.MutableRefObject<boolean>;
+  endPhotoLocManualRef?: React.MutableRefObject<boolean>;
 }
 
 export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
@@ -170,8 +178,12 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
     setPassabilityWarnings,
     setDetourStartPhotoUrl,
     setDetourStartPhotoCaption,
+    setDetourStartPhotoLocation,
     setDetourEndPhotoUrl,
     setDetourEndPhotoCaption,
+    setDetourEndPhotoLocation,
+    startPhotoLocManualRef,
+    endPhotoLocManualRef,
   } = params;
 
   // Hydrate an existing record only once per editing session. Refetches of public/full
@@ -189,6 +201,10 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
       const flood = systemData.floodRoutes.find((r) => r.id === id);
       if (!flood) return;
       hydratedRouteKey.current = key;
+      if (startPhotoLocManualRef) startPhotoLocManualRef.current = false;
+      if (endPhotoLocManualRef) endPhotoLocManualRef.current = false;
+      setDetourStartPhotoLocation?.(EMPTY_DETOUR_PHOTO_LOCATION);
+      setDetourEndPhotoLocation?.(EMPTY_DETOUR_PHOTO_LOCATION);
       setRouteNo(flood.route_no);
       setKmStart(flood.km_start);
       setKmEnd(flood.km_end);
@@ -359,6 +375,121 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
       let coords: [number, number][] = [];
       if (Array.isArray(detour.coordinates_json)) coords = detour.coordinates_json as [number, number][];
       else if (typeof detour.coordinates_json === "string") coords = JSON.parse(detour.coordinates_json);
+
+      const hydratePhotoLocation = (
+        photo: DetourPointPhoto | undefined,
+        fallbackLat: number,
+        fallbackLon: number,
+        areaHint: { subdistrict?: string; district?: string } | null,
+        manualRef: React.MutableRefObject<boolean> | undefined,
+        setLoc: React.Dispatch<React.SetStateAction<DetourPhotoLocationState>> | undefined
+      ) => {
+        if (!setLoc) return;
+        const hasPhotoCoord =
+          typeof photo?.lat === "number" &&
+          typeof photo?.lon === "number" &&
+          Number.isFinite(photo.lat) &&
+          Number.isFinite(photo.lon) &&
+          Math.abs(photo.lat) <= 90 &&
+          Math.abs(photo.lon) <= 180 &&
+          (photo.lat !== 0 || photo.lon !== 0);
+        const savedSub = photo?.subdistrict?.trim() || "";
+        const savedDist = photo?.district?.trim() || "";
+        const savedProv = photo?.province?.trim() || "";
+        const hasSavedMeta = hasPhotoCoord || Boolean(savedSub || savedDist || savedProv);
+
+        if (hasSavedMeta) {
+          if (manualRef) manualRef.current = true;
+          const targetLat = hasPhotoCoord ? photo!.lat! : fallbackLat;
+          const targetLon = hasPhotoCoord ? photo!.lon! : fallbackLon;
+          const validTarget =
+            Number.isFinite(targetLat) &&
+            Number.isFinite(targetLon) &&
+            Math.abs(targetLat) <= 90 &&
+            Math.abs(targetLon) <= 180 &&
+            (targetLat !== 0 || targetLon !== 0);
+          setLoc({
+            lat: validTarget ? targetLat.toFixed(6) : "",
+            lon: validTarget ? targetLon.toFixed(6) : "",
+            subdistrict: savedSub,
+            district: savedDist,
+            province: savedProv || (validTarget ? "ปัตตานี" : ""),
+          });
+          if (validTarget && (!savedSub || !savedDist)) {
+            void localArea(targetLon, targetLat).then((loc) => {
+              if (hydratedRouteKey.current !== key) return;
+              setLoc((prev) => ({
+                ...prev,
+                subdistrict: prev.subdistrict || loc.tambon || "",
+                district: prev.district || loc.amphoe || "",
+                province: prev.province || loc.province || "ปัตตานี",
+              }));
+            });
+          }
+          return;
+        }
+
+        if (manualRef) manualRef.current = false;
+        const hasFallback =
+          Boolean(photo?.url) &&
+          Number.isFinite(fallbackLat) &&
+          Number.isFinite(fallbackLon) &&
+          Math.abs(fallbackLat) <= 90 &&
+          Math.abs(fallbackLon) <= 180 &&
+          (fallbackLat !== 0 || fallbackLon !== 0);
+        if (!hasFallback) {
+          setLoc(EMPTY_DETOUR_PHOTO_LOCATION);
+          return;
+        }
+
+        const hintSub = areaHint?.subdistrict?.trim() || "";
+        const hintDist = areaHint?.district?.trim() || "";
+        setLoc({
+          lat: fallbackLat.toFixed(6),
+          lon: fallbackLon.toFixed(6),
+          subdistrict: hintSub,
+          district: hintDist,
+          province: "ปัตตานี",
+        });
+        if (!hintSub || !hintDist) {
+          void localArea(fallbackLon, fallbackLat).then((loc) => {
+            if (hydratedRouteKey.current !== key || manualRef?.current) return;
+            setLoc((prev) => ({
+              ...prev,
+              subdistrict: prev.subdistrict || loc.tambon || "",
+              district: prev.district || loc.amphoe || "",
+              province: prev.province || loc.province || "ปัตตานี",
+            }));
+          });
+        }
+      };
+
+      const startPhoto = detour.detour_meta?.start_point_photo;
+      const endPhoto = detour.detour_meta?.end_point_photo;
+      const fallbackStartLat = Number(detour.lat_start) || coords[0]?.[1] || 0;
+      const fallbackStartLon = Number(detour.lon_start) || coords[0]?.[0] || 0;
+      const fallbackEndLat = Number(detour.lat_end) || coords[coords.length - 1]?.[1] || 0;
+      const fallbackEndLon = Number(detour.lon_end) || coords[coords.length - 1]?.[0] || 0;
+
+      hydratePhotoLocation(
+        startPhoto,
+        fallbackStartLat,
+        fallbackStartLon,
+        detour.subdistrict && detour.district
+          ? { subdistrict: detour.subdistrict, district: detour.district }
+          : null,
+        startPhotoLocManualRef,
+        setDetourStartPhotoLocation
+      );
+      hydratePhotoLocation(
+        endPhoto,
+        fallbackEndLat,
+        fallbackEndLon,
+        null,
+        endPhotoLocManualRef,
+        setDetourEndPhotoLocation
+      );
+
       originalRouteCoordinates.current = coords.map((coordinate) => [...coordinate] as [number, number]);
       setDraftCoordinates(coords);
 

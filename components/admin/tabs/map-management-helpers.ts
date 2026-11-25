@@ -1,4 +1,4 @@
-import { SystemDataPayload } from "@/db/default-data";
+import { type DetourPointPhoto, SystemDataPayload } from "@/db/default-data";
 import { slicePolylineByKmRange } from "@/lib/gis-utils";
 import { AffectedShoulderType } from "@/lib/constants";
 import {
@@ -131,6 +131,76 @@ export function buildAffectedPartSummary(parts: AffectedRoadPart[]): { lanesSumm
   return { lanesSummary, shoulderSummary };
 }
 
+export interface DetourPointPhotoLocationInput {
+  lat?: number | string | null;
+  lon?: number | string | null;
+  subdistrict?: string | null;
+  district?: string | null;
+  province?: string | null;
+}
+
+function parseValidPhotoCoord(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(String(value).trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeAreaText(value: string | null | undefined): string | undefined {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed || trimmed === "-") return undefined;
+  return trimmed;
+}
+
+export function buildDetourPointPhotoPayload(params: {
+  url: string;
+  caption?: string;
+  mediaId?: string;
+  location?: DetourPointPhotoLocationInput | null;
+  existingPhoto?: DetourPointPhoto;
+}): DetourPointPhoto {
+  const { url, caption, mediaId, location, existingPhoto } = params;
+  const trimmedCaption = String(caption ?? "").trim();
+  const resolvedMediaId =
+    mediaId || (existingPhoto && existingPhoto.url === url ? existingPhoto.mediaId : undefined);
+
+  const hasExplicitLocation = location !== undefined;
+  const rawLat = hasExplicitLocation ? location?.lat : existingPhoto?.lat;
+  const rawLon = hasExplicitLocation ? location?.lon : existingPhoto?.lon;
+  const parsedLat = parseValidPhotoCoord(rawLat);
+  const parsedLon = parseValidPhotoCoord(rawLon);
+  const hasValidCoord =
+    parsedLat !== null &&
+    parsedLon !== null &&
+    Math.abs(parsedLat) <= 90 &&
+    Math.abs(parsedLon) <= 180 &&
+    (parsedLat !== 0 || parsedLon !== 0);
+
+  const subdistrict = normalizeAreaText(
+    hasExplicitLocation ? location?.subdistrict : existingPhoto?.subdistrict
+  );
+  const district = normalizeAreaText(
+    hasExplicitLocation ? location?.district : existingPhoto?.district
+  );
+  const province = normalizeAreaText(
+    hasExplicitLocation ? location?.province : existingPhoto?.province
+  );
+
+  return {
+    url,
+    ...(trimmedCaption ? { caption: trimmedCaption } : {}),
+    ...(resolvedMediaId ? { mediaId: resolvedMediaId } : {}),
+    ...(hasValidCoord
+      ? {
+          lat: Number(parsedLat!.toFixed(6)),
+          lon: Number(parsedLon!.toFixed(6)),
+        }
+      : {}),
+    ...(subdistrict ? { subdistrict } : {}),
+    ...(district ? { district } : {}),
+    ...(province ? { province } : {}),
+  };
+}
+
 export interface BuildDetourMetaPayloadParams {
   routeEditId: string;
   detourRefId: string;
@@ -149,8 +219,10 @@ export interface BuildDetourMetaPayloadParams {
   detourRoadCondition: string;
   resolvedDetourStartPhotoUrl: string;
   detourStartPhotoCaption: string;
+  detourStartPhotoLocation?: DetourPointPhotoLocationInput | null;
   resolvedDetourEndPhotoUrl: string;
   detourEndPhotoCaption: string;
+  detourEndPhotoLocation?: DetourPointPhotoLocationInput | null;
   fwdPolyKm: number;
   revPolyKm: number;
 }
@@ -172,8 +244,10 @@ export function buildDetourMetaPayload(params: BuildDetourMetaPayloadParams): Re
     detourRoadCondition,
     resolvedDetourStartPhotoUrl,
     detourStartPhotoCaption,
+    detourStartPhotoLocation,
     resolvedDetourEndPhotoUrl,
     detourEndPhotoCaption,
+    detourEndPhotoLocation,
     fwdPolyKm,
     revPolyKm,
   } = params;
@@ -250,18 +324,22 @@ export function buildDetourMetaPayload(params: BuildDetourMetaPayloadParams): Re
     delete nextMeta.reverse_duration_s;
   }
   if (resolvedDetourStartPhotoUrl) {
-    nextMeta.start_point_photo = {
+    nextMeta.start_point_photo = buildDetourPointPhotoPayload({
       url: resolvedDetourStartPhotoUrl,
-      ...(detourStartPhotoCaption.trim() ? { caption: detourStartPhotoCaption.trim() } : {}),
-    };
+      caption: detourStartPhotoCaption,
+      location: detourStartPhotoLocation,
+      existingPhoto: existingMeta?.start_point_photo,
+    });
   } else {
     delete nextMeta.start_point_photo;
   }
   if (resolvedDetourEndPhotoUrl) {
-    nextMeta.end_point_photo = {
+    nextMeta.end_point_photo = buildDetourPointPhotoPayload({
       url: resolvedDetourEndPhotoUrl,
-      ...(detourEndPhotoCaption.trim() ? { caption: detourEndPhotoCaption.trim() } : {}),
-    };
+      caption: detourEndPhotoCaption,
+      location: detourEndPhotoLocation,
+      existingPhoto: existingMeta?.end_point_photo,
+    });
   } else {
     delete nextMeta.end_point_photo;
   }
