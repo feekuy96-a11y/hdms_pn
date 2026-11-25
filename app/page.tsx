@@ -699,12 +699,12 @@ export default function HomePage() {
         {/* ================================================================= */}
         <div className="order-1 lg:order-2 relative h-[calc(100dvh-4rem)] lg:h-full flex-1 w-full overflow-hidden bg-surface-canvas">
           {isPending && (
-            <div role="status" aria-live="polite" className="absolute left-1/2 top-4 z-[600] -translate-x-1/2 rounded-xl border border-slate-700 bg-slate-950/95 px-4 py-3 text-sm text-white shadow-xl">
+            <div role="status" aria-live="polite" className="absolute left-1/2 top-[6.75rem] sm:top-14 z-[600] -translate-x-1/2 max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-17.5rem)] rounded-xl border border-slate-700 bg-slate-950/95 px-4 py-2.5 text-sm text-white shadow-xl">
               กำลังโหลดข้อมูลสถานการณ์ล่าสุด…
             </div>
           )}
           {isError && systemData.floodRoutes.length === 0 && systemData.detourRoutes.length === 0 && (
-            <div role="alert" className="absolute left-1/2 top-4 z-[600] flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-red-500/60 bg-slate-950/95 px-4 py-3 text-sm text-white shadow-xl">
+            <div role="alert" className="absolute left-1/2 top-[6.75rem] sm:top-14 z-[600] flex max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-17.5rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-red-500/60 bg-slate-950/95 px-4 py-2.5 text-sm text-white shadow-xl">
               <span>โหลดข้อมูลสถานการณ์ไม่สำเร็จ</span>
               <button type="button" onClick={() => void refetch()} className="min-h-11 rounded-lg bg-amber-400 px-3 font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">ลองอีกครั้ง</button>
             </div>
@@ -714,7 +714,7 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => setIsSidebarCollapsed(false)}
-              className="hidden lg:flex absolute top-4 left-4 z-[400] bg-slate-950/95 hover:bg-slate-900 text-amber-400 border border-amber-400/50 px-3 py-2 rounded-xl shadow-2xl items-center gap-2 text-xs font-heading font-bold transition"
+              className="hidden lg:flex absolute top-3 left-3 z-[400] min-h-9 bg-slate-950/95 hover:bg-slate-900 text-amber-400 border border-amber-400/50 px-3 py-1.5 rounded-xl shadow-2xl items-center gap-1.5 text-xs font-heading font-bold transition cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" /> แสดงรายการสายทาง
             </button>
@@ -786,9 +786,12 @@ export default function HomePage() {
             }
           />
           {selectedRouteFilter !== "ALL" && activeRouteChip && (
-            <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 top-14 sm:top-3 z-[405] flex items-center gap-2 rounded-xl border border-amber-400/60 bg-surface-floating px-3 py-1.5 text-xs font-semibold text-amber-100 shadow-lg whitespace-nowrap">
-              <span>กำลังกรอง: {activeRouteChip.label}</span>
-              <button type="button" onClick={() => setSelectedRouteFilter("ALL")} className="min-h-8 rounded px-2 py-1 text-amber-300 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white cursor-pointer">ล้าง</button>
+            <div
+              data-testid="public-active-filter-chip"
+              className="pointer-events-auto absolute top-[8.25rem] left-3 sm:top-auto sm:bottom-[5.75rem] lg:bottom-4 z-[405] flex w-fit max-w-[calc(100%-1.5rem)] sm:max-w-[24rem] items-center gap-2 rounded-xl border border-amber-400/60 bg-surface-floating/95 px-3 py-1.5 text-xs font-semibold text-amber-100 shadow-lg backdrop-blur-md"
+            >
+              <span className="truncate">กำลังกรอง: {activeRouteChip.label}</span>
+              <button type="button" onClick={() => setSelectedRouteFilter("ALL")} className="min-h-8 shrink-0 rounded-lg px-2 py-1 text-amber-300 underline underline-offset-2 hover:bg-amber-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white cursor-pointer">ล้าง</button>
             </div>
           )}
 

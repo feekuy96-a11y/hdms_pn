@@ -602,7 +602,7 @@ export default function AdminPage() {
                     window.dispatchEvent(new Event("resize"));
                   }, 350);
                 }}
-                className="min-h-[2.5rem] flex items-center gap-[0.45em] rounded-xl border border-surface bg-surface-floating px-[0.9em] py-[0.5em] text-[0.75rem] font-heading font-bold text-slate-200 shadow-xl hover:bg-surface-card hover:text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer"
+                className="min-h-9 flex items-center gap-1.5 rounded-xl border border-surface bg-surface-floating px-3 py-1.5 text-xs font-heading font-bold text-slate-200 shadow-xl hover:bg-surface-card hover:text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer"
                 title={isSidebarCollapsed ? "เปิดแผงควบคุม (แสดงฟอร์ม)" : "พับแผงควบคุม (ขยายแผนที่เต็มจอ)"}
                 aria-label={isSidebarCollapsed ? "เปิดแผงควบคุม" : "พับแผงควบคุม"}
               >
@@ -713,11 +713,7 @@ export default function AdminPage() {
 
             {adminPickMode && (
               <div
-                className={`absolute left-1/2 -translate-x-1/2 z-[500] w-[calc(100%-1.5rem)] sm:w-auto ${
-                  isSidebarCollapsed
-                    ? "top-28 sm:top-14 lg:top-3 lg:max-w-[min(32rem,calc(100%-34rem))]"
-                    : "top-28 sm:top-14 lg:max-w-[calc(100%-18rem)]"
-                } bg-amber-500 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-heading font-extrabold shadow-2xl flex items-center justify-between gap-3 border border-slate-950`}
+                className="absolute left-1/2 -translate-x-1/2 z-[500] w-[calc(100%-1.5rem)] sm:w-auto top-[6.75rem] sm:top-14 sm:max-w-[min(34rem,calc(100%-17.5rem))] bg-amber-500 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-heading font-extrabold shadow-2xl flex items-center justify-between gap-3 border border-slate-950"
               >
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-slate-950 animate-ping" />
