@@ -1,5 +1,5 @@
 import { SystemDataPayload } from "@/db/default-data";
-import { LAYER_CONFIG } from "@/lib/constants";
+import { LAYER_CONFIG, type MapLineStyleItem } from "@/lib/constants";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import {
   geoJsonFeatures,
@@ -8,6 +8,11 @@ import {
 } from "./longdo-map-popups";
 
 const MAX_ARROWS = 160;
+
+// The saved legacy "arrows" style retains its configured badge background.
+export function usesCompactDetourArrows(animation?: MapLineStyleItem["animation"]): boolean {
+  return animation === "flow" || animation === "chevrons";
+}
 
 export function placeArrowsOnLine(
   L: any,
@@ -20,7 +25,8 @@ export function placeArrowsOnLine(
   spacingPx: number,
   bgBadge: string | null,
   viewport: any,
-  counter: { count: number }
+  counter: { count: number },
+  compact = false
 ) {
   if (direction === "UNKNOWN" || coords.length < 2 || counter.count >= MAX_ARROWS) return;
   const latLngs = coords.map(toLeafletLatLng);
@@ -54,14 +60,16 @@ export function placeArrowsOnLine(
         let angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
         if (direction === "REVERSE") angleDeg += 180;
 
-        const svgHtml =
-          direction === "TWO_WAY"
+        const compactPath = direction === "TWO_WAY" ? "M8 7l-4 5 4 5m8-10 4 5-4 5" : "M9 6l6 6-6 6";
+        const svgHtml = compact
+          ? `<div style="transform:rotate(${angleDeg.toFixed(1)}deg);width:${scaledSizePx + 6}px;height:${scaledSizePx + 6}px;display:grid;place-items:center;"><svg width="${scaledSizePx}" height="${scaledSizePx}" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="${compactPath}" stroke="${bgBadge || "#fff3d3"}" stroke-width="7.5"/><path d="${compactPath}" stroke="${color}" stroke-width="3.3"/></svg></div>`
+          : direction === "TWO_WAY"
             ? `<div style="transform:rotate(${angleDeg.toFixed(1)}deg);width:${scaledSizePx + 6}px;height:${scaledSizePx + 6}px;display:flex;align-items:center;justify-content:center;${bgBadge ? `background:${bgBadge};border-radius:999px;border:1px solid rgba(255,255,255,0.75);box-shadow:0 1px 4px rgba(0,0,0,0.45);` : "filter:drop-shadow(0 1px 2px rgba(0,0,0,0.85));"}"><svg width="${scaledSizePx}" height="${scaledSizePx}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8l4 4-4 4"/><path d="M7 16l-4-4 4-4"/><path d="M3 12h18"/></svg></div>`
             : `<div style="transform:rotate(${angleDeg.toFixed(1)}deg);width:${scaledSizePx + 4}px;height:${scaledSizePx + 4}px;display:flex;align-items:center;justify-content:center;${bgBadge ? `background:${bgBadge};border-radius:999px;border:1px solid rgba(255,255,255,0.8);box-shadow:0 1px 4px rgba(0,0,0,0.45);` : "filter:drop-shadow(0 1px 2px rgba(0,0,0,0.85));"}"><svg width="${scaledSizePx}" height="${scaledSizePx}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>`;
 
         const icon = L.divIcon({
           html: svgHtml,
-          className: "doh-dir-arrow-icon",
+          className: compact ? "doh-dir-arrow-icon doh-detour-chevron" : "doh-dir-arrow-icon",
           iconSize: [scaledSizePx + 6, scaledSizePx + 6],
           iconAnchor: [(scaledSizePx + 6) / 2, (scaledSizePx + 6) / 2],
         });
@@ -176,6 +184,7 @@ export function renderDirectionalArrows({
   if (showDetourLayer && showDetourArrows && (isFilterOrFocusActive || z >= detourMinZoom)) {
     const dBadgeBg = detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
     const dArrowColor = resolveVisibleArrowColor(dBadgeBg, detourStyle?.arrowColor || "#0f172a");
+    const compact = usesCompactDetourArrows(detourStyle?.animation);
     const dArrowSize = detourStyle?.arrowSize || 12;
     const dArrowSpacing = detourStyle?.arrowSpacingPx || 120;
 
@@ -188,7 +197,7 @@ export function renderDirectionalArrows({
       const rev = parseRouteCoordinates(detour.reverse_coordinates_json);
 
       if (dirMode === "FORWARD_ONLY") {
-        placeArrowsOnLine(L, map, group, fwd, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
+        placeArrowsOnLine(L, map, group, fwd, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter, compact);
       } else if (dirMode === "REVERSE_ONLY") {
         const target = rev.length >= 2 ? rev : fwd;
         placeArrowsOnLine(
@@ -202,13 +211,14 @@ export function renderDirectionalArrows({
           dArrowSpacing,
           dBadgeBg,
           viewport,
-          counter
+          counter,
+          compact
         );
       } else if (rev.length >= 2) {
-        placeArrowsOnLine(L, map, group, fwd, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
-        placeArrowsOnLine(L, map, group, rev, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
+        placeArrowsOnLine(L, map, group, fwd, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter, compact);
+        placeArrowsOnLine(L, map, group, rev, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter, compact);
       } else {
-        placeArrowsOnLine(L, map, group, fwd, "TWO_WAY", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter);
+        placeArrowsOnLine(L, map, group, fwd, "TWO_WAY", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter, compact);
       }
     });
   }

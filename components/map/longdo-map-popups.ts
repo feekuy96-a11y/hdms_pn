@@ -95,6 +95,7 @@ export interface FloodLineEntry {
 
 export interface AnimatedLineEntry {
   line: any;
+  motionDirection?: "forward" | "reverse" | "both";
   baseWeight: number;
   baseOpacity: number;
 }
@@ -148,7 +149,7 @@ export function parseRouteCoordinates(value: unknown): [number, number][] {
   return [];
 }
 
-export function lineAnimationClasses(style: { animation?: string; animationSpeed?: string } | undefined, allow: boolean): string {
+export function lineAnimationClasses(style: { animation?: string; animationSpeed?: string | number } | undefined, allow: boolean): string {
   const animation = allow && style?.animation === "chaser" ? "doh-line-chaser"
     : allow && style?.animation === "pulse" ? "doh-line-pulse"
       : allow && style?.animation === "blink" ? "doh-line-blink"

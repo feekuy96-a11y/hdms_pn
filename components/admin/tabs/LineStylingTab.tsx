@@ -5,7 +5,8 @@ import { SystemDataPayload } from "@/db/default-data";
 import { DEFAULT_MAP_STYLES, LINE_STYLE_PRESET_THEMES, MapLineStyleItem } from "@/lib/constants";
 import { Palette, Save, Sparkles } from "lucide-react";
 import { updateMapStyleAction } from "@/app/actions/doh-actions";
-import { routeMotionEffect, routeMotionPeriod, routeMotionToggle } from "@/lib/route-motion";
+import { routeMotionEffect, routeMotionSpeedPercent, routeMotionToggle } from "@/lib/route-motion";
+import { RouteMotionPreview } from "@/components/map/RouteMotionPreview";
 
 interface LineStylingTabProps {
   systemData: SystemDataPayload;
@@ -72,9 +73,7 @@ export function LineStylingTab({
 
   const currentItem = lineStyles[selectedStyleKey] || DEFAULT_MAP_STYLES[selectedStyleKey];
   const incidentLayer = selectedStyleKey === "flood" || selectedStyleKey === "detour" ? selectedStyleKey : null;
-  const previewEffect = routeMotionEffect(currentItem);
-  const previewPeriod = `${routeMotionPeriod(previewEffect, currentItem.animationSpeed)}ms`;
-  const previewPath = "M 30 45 Q 160 10 300 45 T 570 45";
+  const speed = routeMotionSpeedPercent(currentItem.animationSpeed);
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -172,7 +171,7 @@ export function LineStylingTab({
         <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="font-heading font-bold text-amber-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" /> ตัวอย่างเส้นจริงแบบ Real-time (Live SVG Preview):
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" /> ตัวอย่างเส้นจริงแบบ Real-time (Live Map Preview):
             </span>
             <span className="text-[10px] text-slate-400 font-mono">
               {selectedStyleKey.toUpperCase()} • {currentItem.color} • {currentItem.weight}px
@@ -182,73 +181,9 @@ export function LineStylingTab({
           <div className="h-24 w-full bg-slate-900/90 rounded-xl border border-slate-800 relative flex items-center justify-center overflow-hidden">
             <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:12px_12px]" />
 
-            <svg className="w-full h-full" viewBox="0 0 600 90">
-              <defs>
-                {currentItem.glow && (
-                  <filter id="preview-glow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur
-                      stdDeviation={(currentItem.glowWidth || 8) / 2}
-                      result="blur"
-                    />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                )}
-              </defs>
+            <RouteMotionPreview style={currentItem} layer={incidentLayer} />
 
-              {currentItem.borderActive && (
-                <path
-                  d={previewPath}
-                  stroke={currentItem.borderColor || "#ffffff"}
-                  strokeWidth={(currentItem.weight || 5) + (currentItem.borderWidth || 2) * 2}
-                  strokeOpacity={currentItem.opacity ?? 0.9}
-                  fill="none"
-                  strokeLinecap="round"
-                />
-              )}
-
-              <path
-                d={previewPath}
-                stroke={currentItem.color}
-                strokeWidth={currentItem.weight || 5}
-                strokeOpacity={currentItem.opacity ?? 0.9}
-                strokeDasharray={
-                  currentItem.pattern === "dash"
-                    ? (currentItem.dashArray || "8, 6")
-                    : currentItem.pattern === "dot"
-                    ? "2, 6"
-                    : currentItem.pattern === "long-dash-dot"
-                    ? "14, 6, 3, 6"
-                    : undefined
-                }
-                className={previewEffect === "pulse" || previewEffect === "blink" ? `doh-line-${previewEffect}` : ""}
-                style={{ animationDuration: previewPeriod }}
-                filter={currentItem.glow ? "url(#preview-glow)" : undefined}
-                fill="none"
-                strokeLinecap="round"
-              />
-              {(previewEffect === "wave" || previewEffect === "flow" || previewEffect === "arrows" || previewEffect === "chaser") && (
-                <g className="doh-route-motion-preview" key={`${previewEffect}-${previewPeriod}`} aria-hidden="true">
-                  {(previewEffect === "flow" ? [0, 1] : [0]).map((index) => (
-                    <path
-                      key={index}
-                      d={previewEffect === "wave" ? "M -15 0 Q -8 -10 0 0 T 15 0" : previewEffect === "chaser" ? "M -12 0 H 8" : "M -8 -5 L 0 0 L -8 5"}
-                      stroke="#fff"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      fill="none"
-                    >
-                      <animateMotion path={previewPath} dur={previewPeriod} begin={index ? `-${parseInt(previewPeriod, 10) / 2}ms` : "0s"} rotate="auto" repeatCount="indefinite" />
-                    </path>
-                  ))}
-                </g>
-              )}
-            </svg>
-
-            <div className="absolute bottom-2 right-3 bg-slate-950/80 px-2 py-0.5 rounded text-[10px] text-slate-300 font-mono border border-slate-800">
+            <div className="absolute z-[500] bottom-2 right-3 bg-slate-950/80 px-2 py-0.5 rounded text-[10px] text-slate-300 font-mono border border-slate-800">
               เอฟเฟกต์: {currentItem.animation} • ลวดลาย: {currentItem.pattern}
             </div>
           </div>
@@ -388,27 +323,34 @@ export function LineStylingTab({
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
               >
                 <option value="none">ไม่มีอนิเมชัน (Static)</option>
-                <option value="chaser">ไฟวิ่งเลียบลายเส้น (Light Chaser)</option>
+                <option value="chaser">{incidentLayer === "flood" ? "แถบสถานะน้ำท่วม (ค่าเดิม: ไฟวิ่ง)" : "แสงไล่ตามทาง (Light Chaser)"}</option>
                 <option value="pulse">กระพริบเตือนชีพจร (Pulsing)</option>
                 <option value="blink">กระพริบฉุกเฉิน (Warning Blink)</option>
-                <option value="arrows">ลูกศรไหลตามทิศทาง (Flowing Arrows)</option>
-                {(incidentLayer || currentItem.animation === "wave") && <option value="wave">คลื่นไหลตามแนวเส้น (Traveling Wave)</option>}
-                {(incidentLayer || currentItem.animation === "flow") && <option value="flow">ลูกศรคู่ไหลเป็นจังหวะ (Staggered Arrow Flow)</option>}
+                <option value="arrows">{incidentLayer === "flood" ? "แถบสถานะน้ำท่วม (ค่าเดิม: ลูกศร)" : "ลูกศรคงที่ + แสงไล่ตามทาง"}</option>
+                {(incidentLayer || currentItem.animation === "wave") && <option value="wave">แบบ B: แถบสถานะสว่างขึ้นเป็นจังหวะ</option>}
+                {(incidentLayer || currentItem.animation === "flow") && <option value="flow">แบบ B: ลูกศรคงที่ + แสงสลับจังหวะ</option>}
+                {(incidentLayer === "flood" || currentItem.animation === "extent") &&
+                  <option value="extent">แบบ C: แถบขอบเขตน้ำท่วมและหมุดหัว–ท้าย</option>}
+                {(incidentLayer === "flood" || currentItem.animation === "spotlight") &&
+                  <option value="spotlight">แบบ A: จุดเน้นสว่างขึ้นเป็นจังหวะ</option>}
+                {(incidentLayer === "detour" || currentItem.animation === "chevrons") &&
+                  <option value="chevrons">แบบ A: ลูกศรเล็กเคลื่อนตามทาง</option>}
               </select>
             </div>
 
             <div>
-              <label htmlFor="line-style-speed-select" className="text-xs text-slate-300 block mb-1.5 font-heading font-medium">ความเร็วการเคลื่อนไหว (Speed)</label>
-              <select
-                id="line-style-speed-select"
-                value={currentItem.animationSpeed || "normal"}
-                onChange={(e: any) => handleUpdateCurrentStyle({ animationSpeed: e.target.value })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-              >
-                <option value="slow">ช้า นุ่มนวล (Slow)</option>
-                <option value="normal">ปานกลาง เหมาะสม (Normal)</option>
-                <option value="fast">เร็ว ฉุกเฉิน (Fast)</option>
-              </select>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <label htmlFor="line-style-speed-range" className="text-xs text-slate-300 font-heading font-medium">ความเร็วการเคลื่อนไหว</label>
+                <output htmlFor="line-style-speed-range" className="text-xs text-amber-300 font-mono tabular-nums">{speed}%</output>
+              </div>
+              <input
+                type="range" id="line-style-speed-range" min={0} max={100} step={1} value={speed}
+                aria-valuetext={speed === 0 ? "0% หยุดการเคลื่อนไหว" : `${speed}%`}
+                aria-describedby="line-style-speed-hint"
+                onChange={(e) => handleUpdateCurrentStyle({ animationSpeed: e.currentTarget.valueAsNumber })}
+                className="min-h-8 w-full accent-amber-400"
+              />
+              <p id="line-style-speed-hint" className="text-[11px] text-slate-400">0% คงสไตล์เส้นไว้โดยไม่เคลื่อนไหว · 100% เร็วที่สุด</p>
             </div>
           </div>
 

@@ -107,9 +107,9 @@ export interface MapLineStyleItem {
   glowWidth?: number;
   pattern: "solid" | "dash" | "dot" | "long-dash-dot";
   dashArray?: string;
-  animation: "none" | "chaser" | "arrows" | "pulse" | "blink" | "wave" | "flow";
+  animation: "none" | "chaser" | "arrows" | "pulse" | "blink" | "wave" | "flow" | "spotlight" | "chevrons" | "extent";
   animationEnabled?: boolean;
-  animationSpeed?: "slow" | "normal" | "fast";
+  animationSpeed?: number | "slow" | "normal" | "fast";
   showArrows?: boolean;
   arrowColor?: string;
   arrowSize?: number;
