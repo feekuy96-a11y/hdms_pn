@@ -103,7 +103,7 @@ export function useDetourManagement({
   const linkedEventsByDetourId = React.useMemo(() => {
     const map = new Map<string, LinkedFloodEventEntry[]>();
     for (const d of detourList) {
-      map.set(d.id, getLinkedEventsForDetour(d, systemData, { includeInactiveFloods: true }));
+      map.set(d.id, getLinkedEventsForDetour(d, systemData, { includeInactiveFloods: true, includeOrder: true }));
     }
     return map;
   }, [detourList, systemData]);
@@ -163,7 +163,7 @@ export function useDetourManagement({
   };
 
   const handleMoveDetourOrder = async (item: DetourRoute, direction: "UP" | "DOWN") => {
-    if (reorderingId) return;
+    if (reorderingId || linkedEventsByDetourId.get(item.id)?.some((event) => event.links.length > 0)) return;
     const siblings = getReorderSiblings(item);
     const currentIndex = siblings.findIndex((d) => d.id === item.id);
     if (currentIndex === -1) return;

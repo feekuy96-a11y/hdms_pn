@@ -8,6 +8,7 @@ interface MockLink {
   eventDirection: "A_TO_B" | "B_TO_A" | "BOTH" | "UNKNOWN";
   detourDirection: "FORWARD" | "REVERSE" | "TWO_WAY" | "UNKNOWN";
   position: number;
+  eventPosition?: number;
   recommendation: "PENDING" | "RECOMMENDED" | "UNAVAILABLE" | "WITHDRAWN";
   reviewedGeometryVersion: number | null;
 }
@@ -224,6 +225,7 @@ test("admin links multiple detours to one event using two-way defaults, KM range
     .locator('option[value="TWO_WAY"]');
   await expect(twoWayOptOnForwardOnly).toBeDisabled();
 
+  await dialog.getByLabel("ทิศทางเหตุการณ์ของ ทางเลี่ยงสาย 4092").selectOption("A_TO_B");
   await dialog.getByRole("button", { name: "เลื่อนลำดับ ทางเลี่ยงสาย 4092 ขึ้น" }).click();
   // Test toggling status to INACTIVE on one link, then keeping the other ACTIVE
   await dialog.getByLabel("สถานะของ ทางเลี่ยงสาย 4092").selectOption("INACTIVE");
@@ -240,16 +242,18 @@ test("admin links multiple detours to one event using two-way defaults, KM range
   expect(lastSavedPayload!.links).toHaveLength(2);
   expect(lastSavedPayload!.links[0]).toMatchObject({
     detourId: "D-2",
-    eventDirection: "BOTH",
+    eventDirection: "A_TO_B",
     detourDirection: "FORWARD",
     position: 1,
+    eventPosition: 1,
     recommendation: "WITHDRAWN",
   });
   expect(lastSavedPayload!.links[1]).toMatchObject({
     detourId: "D-1",
     eventDirection: "BOTH",
     detourDirection: "TWO_WAY",
-    position: 2,
+    position: 1,
+    eventPosition: 2,
     recommendation: "RECOMMENDED",
     reviewedGeometryVersion: 3,
   });
@@ -297,8 +301,9 @@ test("admin links one detour to multiple events with KM ranges and recovers from
     const action = body.action;
     const arg = body.args?.[0];
 
-    if (action === "getSystemDataAction") {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(createSystemData()) });
+    if (action === "getSystemDataAction" || action === "getPublicSystemDataAction") {
+      const eventDetourLinks = Object.values(store).flatMap((entry) => entry.links).reverse();
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(createSystemData({ eventDetourLinks })) });
       return;
     }
     if (action === "getEventDetourLinksAction") {
@@ -376,9 +381,10 @@ test("admin links one detour to multiple events with KM ranges and recovers from
     eventDirection: "BOTH",
     detourDirection: "TWO_WAY",
     recommendation: "RECOMMENDED",
+    eventPosition: 1,
   });
   expect(store["EV-F-2"].version).toBe(3);
-  expect(store["EV-F-2"].links.map((l) => l.detourId)).toEqual(["D-2", "D-1"]);
+  expect(store["EV-F-2"].links.map((l) => [l.detourId, l.eventPosition])).toEqual([["D-2", 1], ["D-1", 2]]);
 
   const saveAndReloadSeq = callLog.slice(beforeSaveIdx);
   expect(saveAndReloadSeq).toEqual([
@@ -408,6 +414,24 @@ test("admin links one detour to multiple events with KM ranges and recovers from
     { action: "getEventDetourLinksAction", eventId: "EV-F-1" },
     { action: "getEventDetourLinksAction", eventId: "EV-F-2" },
   ]);
+
+  await page.goto(`${base}/`);
+  if ((page.viewportSize()?.width ?? 1280) < 1024) {
+    await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
+  }
+  const card = page.locator("article").filter({ hasText: "หนองจิก" }).filter({ visible: true }).first();
+  await card.getByRole("button", { name: /ดูรายละเอียด/ }).click();
+  const dossier = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+  await expect(dossier.getByText("ทางเลี่ยงที่ 1 – ทางเลี่ยงสาย 4092")).toBeVisible();
+  await expect(dossier.getByText("ทางเลี่ยงที่ 2 – ทางเลี่ยงสาย 418")).toBeVisible();
+
+  await page.reload();
+  const marker = page.locator('.leaflet-marker-icon[aria-label^="ทล.43"][aria-label*="ซม."]')
+    .or(page.locator('.leaflet-marker-icon[aria-label^="ทล.43"][aria-label*="หนองจิก"]')).first();
+  await marker.click();
+  await page.locator(".leaflet-popup").getByRole("button", { name: /ทางเลี่ยง 2 สาย/ }).click();
+  await expect(dossier.getByText("ทางเลี่ยงที่ 1 – ทางเลี่ยงสาย 4092")).toBeVisible();
+  await expect(dossier.getByText("ทางเลี่ยงที่ 2 – ทางเลี่ยงสาย 418")).toBeVisible();
 });
 
 test("admin and citizen detail views render all linked detours and linked flood events from doh_event_detour_links", async ({ page }) => {

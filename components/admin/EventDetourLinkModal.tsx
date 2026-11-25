@@ -305,7 +305,7 @@ export function EventDetourLinkModal({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="font-heading font-bold text-sm text-white">
-                      ทางเลี่ยงที่เชื่อมโยงกับเหตุการณ์นี้ ({draftLinks.length} รายการ)
+                      ทางเลี่ยงที่เชื่อมโยงกับเหตุการณ์นี้ ({new Set(draftLinks.map((link) => link.detourId)).size} เส้น)
                     </h3>
                   </div>
 
@@ -318,14 +318,11 @@ export function EventDetourLinkModal({
                       {draftLinks.map((link) => {
                         const detour = detourMap.get(link.detourId);
                         const detourName = detour?.route_name || link.detourId;
-                        const scopeLinks = draftLinks.filter(
-                          (l) => l.eventDirection === link.eventDirection
-                        );
-                        const scopeIdx = scopeLinks.findIndex(
-                          (l) => l.detourId === link.detourId
-                        );
-                        const canUp = scopeIdx > 0;
-                        const canDown = scopeIdx >= 0 && scopeIdx < scopeLinks.length - 1;
+                        const rank = link.eventPosition ?? 1;
+                        const count = new Set(draftLinks.map((row) => row.detourId)).size;
+                        const isFirstDirection = draftLinks.find((row) => row.detourId === link.detourId) === link;
+                        const canUp = rank > 1;
+                        const canDown = rank < count;
                         const statusMode = recommendationToLinkStatus(link.recommendation);
                         const blockers = getRecommendationReviewBlockers(
                           { ...link, recommendation: "RECOMMENDED" },
@@ -341,7 +338,7 @@ export function EventDetourLinkModal({
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2 min-w-0">
                                 <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-slate-950 font-mono font-black">
-                                  #{link.position}
+                                  {isFirstDirection ? `#${rank}` : "ทิศเพิ่มเติม"}
                                 </span>
                                 <span className="font-heading font-bold text-sm text-white break-words">
                                   {detourName}
@@ -359,30 +356,30 @@ export function EventDetourLinkModal({
                               </div>
 
                               <div className="flex items-center gap-1.5 shrink-0">
-                                <button
+                                {isFirstDirection && <button
                                   type="button"
                                   aria-label={`เลื่อนลำดับ ${detourName} ขึ้น`}
                                   disabled={!canUp}
                                   onClick={() =>
-                                    handleMoveLink(link.detourId, link.eventDirection, "UP")
+                                    handleMoveLink(link.detourId, "UP")
                                   }
                                   className="min-h-10 min-w-10 flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 disabled:opacity-35 disabled:cursor-not-allowed"
                                   title="เลื่อนลำดับขึ้น"
                                 >
                                   <ArrowUp className="w-4 h-4" />
-                                </button>
-                                <button
+                                </button>}
+                                {isFirstDirection && <button
                                   type="button"
                                   aria-label={`เลื่อนลำดับ ${detourName} ลง`}
                                   disabled={!canDown}
                                   onClick={() =>
-                                    handleMoveLink(link.detourId, link.eventDirection, "DOWN")
+                                    handleMoveLink(link.detourId, "DOWN")
                                   }
                                   className="min-h-10 min-w-10 flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 disabled:opacity-35 disabled:cursor-not-allowed"
                                   title="เลื่อนลำดับลง"
                                 >
                                   <ArrowDown className="w-4 h-4" />
-                                </button>
+                                </button>}
                                 <button
                                   type="button"
                                   aria-label={`นำทางเลี่ยง ${detourName} ออกจากเหตุการณ์`}
@@ -690,7 +687,7 @@ export function EventDetourLinkModal({
                             </label>
                             <span className="text-slate-400 font-mono">
                               {state?.status === "ok"
-                                ? `v${state.version} · ${state.links.length} ทางเลี่ยง`
+                                ? `v${state.version} · ${new Set(state.links.map((row) => row.detourId)).size} ทางเลี่ยง`
                                 : state?.error || "โหลดไม่สำเร็จ"}
                             </span>
                           </div>
