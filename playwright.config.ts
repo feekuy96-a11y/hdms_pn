@@ -12,7 +12,9 @@ export default defineConfig({
   workers: process.env.CI ? undefined : process.platform === "win32" ? 2 : undefined,
   retries: process.env.CI && !focusedLocalRun ? 2 : 0,
   maxFailures: focusedLocalRun ? 1 : 0,
-  reporter: process.env.CI ? "github" : "list",
+  reporter: process.env.CI
+    ? [["github"], ["junit", { includeProjectInTestName: true }]]
+    : "list",
   use: {
     baseURL,
     trace: "retain-on-failure",
