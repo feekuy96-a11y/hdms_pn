@@ -16,7 +16,9 @@ const readPublicLayerOpacities = async (page: Page) =>
     JSON.parse((element as HTMLElement).dataset.publicLayerOpacities || "{}") as PublicLayerOpacities
   );
 
-test("highway popup focuses one of two features sharing the same route number", async ({ page }) => {
+for (const admin of [false, true]) {
+test(`${admin ? "admin" : "public"} highway popup restores the search filter after closing`, async ({ page, isMobile }) => {
+  test.skip(admin && isMobile, "Admin map verification on desktop");
   await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({
     status: 200, contentType: "application/json",
     body: JSON.stringify({
@@ -27,11 +29,16 @@ test("highway popup focuses one of two features sharing the same route number", 
         geojson_data: { type: "FeatureCollection", features: [
           { type: "Feature", properties: { route_no: "42", section_name: "ช่วงทดสอบ A" }, geometry: { type: "LineString", coordinates: [[101.18, 6.85], [101.22, 6.85]] } },
           { type: "Feature", properties: { route_no: "42", section_name: "ช่วงทดสอบ B" }, geometry: { type: "LineString", coordinates: [[101.18, 6.90], [101.22, 6.90]] } },
+          { type: "Feature", properties: { route_no: "43" }, geometry: { type: "LineString", coordinates: [[101.18, 6.88], [101.22, 6.88]] } },
         ] } }],
     }),
   }));
-  await page.goto(`${base}/`);
-  await expect.poll(async () => Object.keys((await readPublicLayerOpacities(page)).highwayFeatures || {}).length).toBe(2);
+  await page.goto(`${base}/${admin ? "admin/" : ""}`);
+  await expect.poll(async () => Object.keys((await readPublicLayerOpacities(page)).highwayFeatures || {}).length).toBe(3);
+  if (!isMobile) {
+    await page.locator('input[type="search"], input[placeholder*="ค้นหาสายทาง"]').first().fill("42");
+    await expect.poll(async () => (await readPublicLayerOpacities(page)).highwayFeatures["MAIN_HIGHWAY:2"].opacity).toBe(0);
+  }
   for (const [selected, other, title] of [
     ["MAIN_HIGHWAY:0", "MAIN_HIGHWAY:1", "ช่วงทดสอบ A"],
     ["MAIN_HIGHWAY:1", "MAIN_HIGHWAY:0", "ช่วงทดสอบ B"],
@@ -47,8 +54,16 @@ test("highway popup focuses one of two features sharing the same route number", 
     await page.locator(".leaflet-popup-close-button").click();
     await expect(page.locator(".leaflet-popup")).toHaveCount(0);
     await expect.poll(async () => (await readPublicLayerOpacities(page)).highwayFeatures[other].opacity).toBeGreaterThan(0);
+    if (!isMobile) {
+      await expect.poll(async () => (await readPublicLayerOpacities(page)).highwayFeatures["MAIN_HIGHWAY:2"].opacity).toBe(0);
+    }
+  }
+  if (admin) {
+    await page.getByRole("button", { name: "เลือกจุด A", exact: true }).click();
+    await expect.poll(async () => (await readPublicLayerOpacities(page)).highwayFeatures["MAIN_HIGHWAY:2"].opacity).toBeGreaterThan(0);
   }
 });
+}
 
 test("citizen route sheet filters floods and detours and returns from details without stacking sheets", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) >= 1024, "Citizen sheet is a mobile-only view");

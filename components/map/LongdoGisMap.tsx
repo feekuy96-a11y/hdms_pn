@@ -94,6 +94,7 @@ interface LongdoGisMapProps {
   incomingGisLines?: [number, number][][];
   className?: string;
   publicMode?: boolean;
+  suspendRouteFiltering?: boolean;
   isSidebarCollapsed?: boolean;
   /** Public-list filter: keep non-matching safety routes visible but de-emphasized. */
   highlightFloodIds?: string[];
@@ -141,6 +142,7 @@ export function LongdoGisMap({
   incomingGisLines = EMPTY_LINES,
   className = "h-full w-full",
   publicMode = false,
+  suspendRouteFiltering,
   isSidebarCollapsed = false,
   highlightFloodIds = EMPTY_IDS,
   highlightDetourIds = EMPTY_IDS,
@@ -183,6 +185,11 @@ export function LongdoGisMap({
   const [mapReady, setMapReady] = useState(false);
   const [isMapPopupOpen, setIsMapPopupOpen] = useState(false);
   const [activePopupEntity, setActivePopupEntity] = useState<{ type: "HIGHWAY" | "FLOOD" | "DETOUR"; id: string } | null>(null);
+  const routeFilteringEnabled = publicMode || suspendRouteFiltering === false;
+
+  useEffect(() => {
+    if (suspendRouteFiltering) leafletMapRef.current?.closePopup();
+  }, [suspendRouteFiltering]);
   const [currentZoom, setCurrentZoom] = useState<number>(APP_CONFIG.DEFAULT_ZOOM);
   const [forceShowAllHighways, setForceShowAllHighways] = useState(false);
   const isFocusMode = gisFocus?.status === "focused";
@@ -945,15 +952,15 @@ export function LongdoGisMap({
   // Public filters reuse the existing Canvas paths. Non-matching routes remain
   // visible at 25% opacity so a traveler can still notice nearby safety data.
   useEffect(() => {
-    if (!publicMode) return;
-    const popupFocus = activePopupEntity ? {
+    if (!publicMode && suspendRouteFiltering === undefined) return;
+    const popupFocus = routeFilteringEnabled && activePopupEntity ? {
       floodIds: activePopupEntity.type === "FLOOD" ? [activePopupEntity.id] : [],
       detourIds: activePopupEntity.type === "DETOUR" ? [activePopupEntity.id] : [],
       highwayRouteNos: activePopupEntity.type === "HIGHWAY" ? [activePopupEntity.id] : [],
     } : null;
-    const focus = popupFocus ?? activeCardFocus;
+    const focus = routeFilteringEnabled ? popupFocus ?? activeCardFocus : null;
     const hasFocus = focus !== null;
-    const active = hasFocus || isFilterActive || Boolean(searchQuery.trim());
+    const active = routeFilteringEnabled && (hasFocus || isFilterActive || Boolean(searchQuery.trim()));
     const floodMatches = new Set(focus?.floodIds ?? highlightFloodIds);
     const detourMatches = new Set(focus?.detourIds ?? highlightDetourIds);
     Object.entries(floodLinesRef.current).forEach(([id, entry]) => {
@@ -1045,7 +1052,7 @@ export function LongdoGisMap({
         },
       });
     }
-  }, [publicMode, highlightFloodIds, highlightDetourIds, isFilterActive, searchQuery, highlightHighwayRouteNos, activeCardFocus, activePopupEntity, mapReady, systemData.floodRoutes, systemData.detourRoutes, systemData.highwayLayers, mapStyles, showMainHwy, showSecHwy, showRoadLabels, showSecondaryAtCurrentZoom, criticalHighwayRouteNos, currentZoom, showFloodLayer, showDetourLayer]);
+  }, [publicMode, suspendRouteFiltering, routeFilteringEnabled, highlightFloodIds, highlightDetourIds, isFilterActive, searchQuery, highlightHighwayRouteNos, activeCardFocus, activePopupEntity, mapReady, systemData.floodRoutes, systemData.detourRoutes, systemData.highwayLayers, mapStyles, showMainHwy, showSecHwy, showRoadLabels, showSecondaryAtCurrentZoom, criticalHighwayRouteNos, currentZoom, showFloodLayer, showDetourLayer]);
 
   // 4f. Admin draft route (A->B and B->A), conflict alerts, imported-GIS preview and draggable markers.
   useEffect(() => {
@@ -1119,7 +1126,7 @@ export function LongdoGisMap({
         vertexEditable,
         visibleDetourIds,
         visibleHighwayKeys,
-        isFilterOrFocusActive: publicMode && (isFilterActive || Boolean(searchQuery.trim()) || Boolean(activeCardFocus) || Boolean(activePopupEntity)),
+        isFilterOrFocusActive: routeFilteringEnabled && (isFilterActive || Boolean(searchQuery.trim()) || Boolean(activeCardFocus) || Boolean(activePopupEntity)),
       });
     };
 
@@ -1135,7 +1142,7 @@ export function LongdoGisMap({
       map.off("moveend zoomend", schedule);
       group.clearLayers();
     };
-  }, [mapReady, systemData.highwayLayers, systemData.detourRoutes, systemData.floodRoutes, mapStyles, effectiveShowMainHwy, effectiveShowSecHwy, effectiveShowDetourLayer, effectiveShowFloodLayer, showSecondaryAtCurrentZoom, currentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode, vertexEditable, publicMode, isFilterActive, searchQuery, activeCardFocus, activePopupEntity, highlightDetourIds, highlightHighwayRouteNos]);
+  }, [mapReady, systemData.highwayLayers, systemData.detourRoutes, systemData.floodRoutes, mapStyles, effectiveShowMainHwy, effectiveShowSecHwy, effectiveShowDetourLayer, effectiveShowFloodLayer, showSecondaryAtCurrentZoom, currentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode, vertexEditable, routeFilteringEnabled, isFilterActive, searchQuery, activeCardFocus, activePopupEntity, highlightDetourIds, highlightHighwayRouteNos]);
 
   // 4h. Freeform vertex editor: draggable handle on every vertex + "+" handle on every segment middle.
   // Only vertices inside the viewport are drawn (at most MAX_VERTEX_HANDLES), so long lines stay fast.

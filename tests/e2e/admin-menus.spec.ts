@@ -98,6 +98,61 @@ test("route editor keeps A and B markers visible and permits a map bend point", 
   await expect(page.getByRole("button", { name: /คลิกถนนเพื่อดัด/ })).toBeVisible();
 });
 
+async function dragFirstInteriorVertex(page: import("@playwright/test").Page, touch = false) {
+  const handle = page.locator(".doh-vertex-handle").nth(1);
+  await expect(handle).toBeVisible();
+  const box = await handle.boundingBox();
+  if (!box) throw new Error("ไม่พบตำแหน่งจุดดัด");
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  if (touch) {
+    const session = await page.context().newCDPSession(page);
+    try {
+      await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+      for (const distance of [6, 12, 20]) {
+        await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x + distance, y: y + distance }] });
+      }
+      await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    } finally {
+      await session.detach();
+    }
+  } else {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 10, y + 8, { steps: 4 });
+    await page.mouse.up();
+  }
+  await expect.poll(async () => (await handle.boundingBox())?.x ?? x).toBeGreaterThan(box.x + 4);
+}
+
+test("short flood draft allows adding and dragging an interior vertex at default zoom", async ({ page, isMobile }) => {
+  await page.route("**/functions/v1/hdms-api*", (route) => route.fulfill({ json: {
+    floodRoutes: [], detourRoutes: [], highwayLayers: [], offices: [], timelineUpdates: [],
+    mitigationProjects: [], mapStyles: null,
+    systemSettings: { name: "ระบบทดสอบ", org: "แขวงทางหลวง", phone: "1586" },
+  } }));
+  await page.goto(`${base}/admin/`);
+  if (isMobile) {
+    await page.getByRole("navigation", { name: "เมนูจัดการแอดมินมือถือ" }).getByRole("button", { name: /จัดการแผนที่/ }).tap();
+  } else {
+    await openMenu(page, "จัดการแผนที่");
+  }
+  for (const [label, value] of [["พิกัดจุด A", "6.8340, 101.1860"], ["พิกัดจุด B", "6.8390, 101.1920"]]) {
+    await page.getByLabel(label).fill(value);
+    await page.getByLabel(label).blur();
+  }
+  await page.getByRole("button", { name: "ดัดเส้นอิสระ", exact: true }).click();
+  const midpoint = page.locator(".doh-vertex-mid").first();
+  if (isMobile) {
+    await page.getByRole("button", { name: "แผนที่ GIS", exact: true }).tap();
+    await midpoint.tap({ timeout: 5_000 });
+  } else {
+    await midpoint.click({ timeout: 5_000 });
+  }
+  await expect(page.locator(".doh-vertex-handle")).toHaveCount(3);
+  await dragFirstInteriorVertex(page, isMobile);
+});
+
 test("route editor lists and removes an individual bend point", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Map editing is verified in the desktop workspace");
   await page.goto(`${base}/admin/`);
@@ -609,8 +664,7 @@ test("two-way detour uses configured line style color for both directions and ar
   expect(badgeColors).not.toContain("rgb(56, 189, 248)");
 });
 
-test("two-way detour supports separate B->A pins and freeform endpoint/vertex customization", async ({ page }) => {
-  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Map editing is verified in the desktop workspace");
+test("two-way detour supports separate B->A pins and freeform endpoint/vertex customization", async ({ page, isMobile }) => {
   const savedPayloads: any[] = [];
   const requestedRoutes: string[] = [];
 
@@ -650,7 +704,11 @@ test("two-way detour supports separate B->A pins and freeform endpoint/vertex cu
   });
 
   await page.goto(`${base}/admin/`);
-  await openMenu(page, "จัดการแผนที่");
+  if (isMobile) {
+    await page.getByRole("navigation", { name: "เมนูจัดการแอดมินมือถือ" }).getByRole("button", { name: /จัดการแผนที่/ }).tap();
+  } else {
+    await openMenu(page, "จัดการแผนที่");
+  }
   await page.getByRole("button", { name: "ทางเลี่ยง", exact: true }).click();
   await page.getByPlaceholder("เช่น ทางเลี่ยง ทล.4092 สายหนองจิก - โคกโพธิ์").fill("ทางเลี่ยงทดสอบแยกหมุดสองทิศทาง");
 
@@ -676,22 +734,33 @@ test("two-way detour supports separate B->A pins and freeform endpoint/vertex cu
 
   // Enter free edit mode and verify both directions switch cleanly without endpoint lock errors
   await page.getByRole("button", { name: "ดัดเส้นอิสระ", exact: true }).click();
+  const mapPane = page.getByRole("button", { name: "แผนที่ GIS", exact: true });
+  const formPane = page.getByRole("button", { name: "ฟอร์มข้อมูล", exact: true });
+  if (isMobile) await mapPane.tap();
   await expect(page.locator(".doh-vertex-handle")).toHaveCount(3);
+  await dragFirstInteriorVertex(page, isMobile);
+  if (isMobile) await formPane.tap();
 
   const dirSwitch = page.getByLabel("เลือกทิศทางสำหรับดัดเส้น");
   await dirSwitch.getByRole("button", { name: "ขากลับ B → A" }).click();
   await expect(page.getByText(/กำลังดัดเส้น:.*ขากลับ \(B → A\)/)).toBeVisible();
+  if (isMobile) await mapPane.tap();
   await expect(page.locator(".doh-vertex-handle")).toHaveCount(3);
 
   // Insert a midpoint vertex on reverse B -> A line via midpoint handle click
-  await page.locator(".doh-vertex-mid").first().click();
+  const midpoint = page.locator(".doh-vertex-mid").first();
+  if (isMobile) await midpoint.tap({ timeout: 5000 });
+  else await midpoint.click({ timeout: 5000 });
   await expect(page.locator(".doh-vertex-handle")).toHaveCount(4);
+  await dragFirstInteriorVertex(page, isMobile);
+  if (isMobile) await formPane.tap();
 
   // Save and verify both forward and reverse geometries are preserved
   await page.getByRole("button", { name: /บันทึกทางเลี่ยงเข้าสู่ระบบสารสนเทศ/ }).click();
   await expect.poll(() => savedPayloads.length).toBe(1);
   expect(savedPayloads[0].directionMode).toBe("TWO_WAY");
   expect(savedPayloads[0].coordinates).toHaveLength(3);
+  expect(savedPayloads[0].coordinates[1][0]).toBeGreaterThan(101.26);
   expect(savedPayloads[0].reverseCoordinates).toHaveLength(4);
   expect(savedPayloads[0].reverseCoordinates[0][0]).toBeCloseTo(101.31, 3);
   expect(savedPayloads[0].reverseCoordinates[3][0]).toBeCloseTo(101.20, 3);
