@@ -1,9 +1,10 @@
 import { closeSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const workspace = realpathSync(fileURLToPath(new URL("..", import.meta.url)));
@@ -25,14 +26,71 @@ const env = {
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: publicConfig.supabasePublishableKey,
 };
 
-const run = (command, args) => {
-  const result = spawnSync(command, args, { cwd: workspace, stdio: "inherit", env, shell: process.platform === "win32" });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    process.exitCode = result.status ?? 1;
-    throw new Error(`${command} ${args.slice(0, 2).join(" ")} failed`);
+const windows = process.platform === "win32";
+const exitCodes = { SIGINT: 130, SIGTERM: 143 };
+let activeChild;
+let interrupted;
+let stopping;
+
+async function stopTree(child, signal) {
+  if (child.pid === undefined) return;
+  if (windows) {
+    await new Promise((resolve, reject) => {
+      execFile("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true }, (error) => {
+        if (error && child.exitCode === null && child.signalCode === null) reject(error);
+        else resolve();
+      });
+    });
+    return;
   }
-};
+
+  // The spawned command owns a separate process group, including npm/Playwright descendants.
+  const group = -child.pid;
+  const signalGroup = (value) => {
+    try {
+      process.kill(group, value);
+      return true;
+    } catch (error) {
+      if (error.code === "ESRCH") return false;
+      throw error;
+    }
+  };
+  if (!signalGroup(signal)) return;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (!signalGroup(0)) return;
+    await delay(50);
+  }
+  signalGroup("SIGKILL");
+}
+
+function interrupt(signal) {
+  if (interrupted) return;
+  interrupted = signal;
+  const child = activeChild;
+  // Attach a rejection handler immediately; the command may still need to close.
+  if (child) stopping = stopTree(child, signal).catch((error) => error);
+}
+
+async function run(command, args) {
+  if (interrupted) throw new Error(`Interrupted by ${interrupted}`);
+  const child = spawn(command, args, {
+    cwd: workspace, stdio: "inherit", env, shell: windows, detached: true, windowsHide: true,
+  });
+  activeChild = child;
+  try {
+    const status = await new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", resolve);
+    });
+    if (interrupted) throw new Error(`Interrupted by ${interrupted}`);
+    if (status !== 0) {
+      process.exitCode = status ?? 1;
+      throw new Error(`${command} ${args.slice(0, 2).join(" ")} failed`);
+    }
+  } finally {
+    activeChild = undefined;
+  }
+}
 
 function selectPort() {
   return new Promise((resolve, reject) => {
@@ -96,6 +154,10 @@ try {
   throw new Error(`E2E workspace is locked: ${lockPath}. Wait for the other run, or remove a stale lock after confirming no run is active.`);
 }
 
+const onInterrupt = () => interrupt("SIGINT");
+const onTerminate = () => interrupt("SIGTERM");
+process.on("SIGINT", onInterrupt);
+process.on("SIGTERM", onTerminate);
 try {
   env.PORT ||= await selectPort();
   env.HDMS_E2E_MANAGED = "1";
@@ -107,8 +169,8 @@ try {
   }
   console.log(`E2E port: ${env.PORT}; default output: ${env.HDMS_E2E_OUTPUT_DIR}`);
   if (full) {
-    run("npm", ["run", "lint"]);
-    run("npm", ["run", "typecheck"]);
+    await run("npm", ["run", "lint"]);
+    await run("npm", ["run", "typecheck"]);
   }
   const manifestPath = ".next/hdms-e2e-build.json";
   const inputs = buildFingerprint();
@@ -120,14 +182,27 @@ try {
   } else {
     console.log("E2E build: rebuilding (1 build)");
     rmSync(join(workspace, manifestPath), { force: true });
-    run("npm", ["run", env.PLAYWRIGHT_STATIC ? "build:pages" : "build"]);
+    await run("npm", ["run", env.PLAYWRIGHT_STATIC ? "build:pages" : "build"]);
     const builtArtifacts = artifactFingerprint();
     if (builtArtifacts && inputs === buildFingerprint()) {
       writeFileSync(join(workspace, manifestPath), manifest(builtArtifacts));
     }
   }
-  run("npx", ["playwright", "test", ...playwrightArgs]);
+  await run("npx", ["playwright", "test", ...playwrightArgs]);
+} catch (error) {
+  if (!interrupted) throw error;
 } finally {
-  closeSync(lock);
-  unlinkSync(lockPath);
+  try {
+    const stopError = await stopping;
+    if (interrupted) {
+      process.exitCode = exitCodes[interrupted];
+      if (stopError) throw stopError;
+      console.error(`E2E cancelled (${interrupted}).`);
+    }
+  } finally {
+    closeSync(lock);
+    unlinkSync(lockPath);
+    process.off("SIGINT", onInterrupt);
+    process.off("SIGTERM", onTerminate);
+  }
 }
