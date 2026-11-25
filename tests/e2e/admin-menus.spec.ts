@@ -11,6 +11,25 @@ const menus = [
   ["งานเบื้องหลัง", "งานส่งข้อมูลเบื้องหลัง"],
 ] as const;
 const base = process.env.BASE_PATH || "";
+const mockHighwayAndOffice = async (page: import("@playwright/test").Page) => {
+  await page.route("**/functions/v1/hdms-api*", (route) => route.fulfill({ json: {
+    updatedAt: "2026-11-25T00:00:00.000Z",
+    floodRoutes: [], detourRoutes: [], timelineUpdates: [], mitigationProjects: [], mapStyles: null,
+    systemSettings: { name: "ระบบทดสอบ", org: "แขวงทางหลวงปัตตานี", phone: "1586" },
+    offices: [{
+      id: "OFFICE-QA-1", name: "สำนักงานทดสอบ", type: "HEADQUARTERS", address: "ปัตตานี",
+      phone: "1586", lat: 6.84, lon: 101.20, is_active: true,
+    }],
+    highwayLayers: [{
+      layer_id: "MAIN_HIGHWAY", layer_name: "ทางหลวงสายหลัก", is_visible: true, metadata: {},
+      geojson_data: { type: "FeatureCollection", features: [{
+        type: "Feature",
+        properties: { route_no: "42", section_name: "ตอนทดสอบแก้แนว", km_start: "0+000", km_end: "1+000", lanes: "4" },
+        geometry: { type: "LineString", coordinates: [[101.20, 6.84], [101.26, 6.88], [101.32, 6.92]] },
+      }] },
+    }],
+  } }));
+};
 const openMenu = async (page: import("@playwright/test").Page, menu: string) => {
   await page.getByRole("complementary").getByRole("button", { name: new RegExp(menu) }).click();
 };
@@ -49,10 +68,12 @@ test("highway specifications use kilometer posts, office data, and calculated di
 
 test("route geometry editor opens with coordinate selection and export controls", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Geometry editor is covered in desktop layout");
+  await mockHighwayAndOffice(page);
   await page.goto(`${base}/admin/`);
   await openMenu(page, "โครงข่ายสายทาง");
-  const editRoute = page.getByRole("button", { name: "แนวถนน", exact: true }).first();
-  test.skip(await editRoute.count() === 0, "No imported highway geometry is currently available");
+  const routeRow = page.getByRole("row").filter({ hasText: "ตอนทดสอบแก้แนว" }).first();
+  await expect(routeRow).toBeVisible();
+  const editRoute = routeRow.getByRole("button", { name: "แนวถนน", exact: true });
   await editRoute.click();
   await expect(page.getByRole("heading", { name: "ปรับแนวถนนทางหลวง" })).toBeVisible();
   await expect(page.getByRole("button", { name: "เกาะแนวถนน" })).toBeVisible();
@@ -201,10 +222,11 @@ test("detour routing can force a straight heading through a selected intersectio
 
 test("office markers unlock only while their record is being edited", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Office map editing is verified in the desktop workspace");
+  await mockHighwayAndOffice(page);
   await page.goto(`${base}/admin/`);
   await openMenu(page, "จัดการระบบ");
-  const editOffice = page.getByRole("button", { name: /แก้ไขสำนักงาน/ }).first();
-  test.skip(await editOffice.count() === 0, "No office record is currently available");
+  const editOffice = page.getByRole("button", { name: "แก้ไขสำนักงาน สำนักงานทดสอบ" });
+  await expect(editOffice).toBeVisible();
   await expect(page.locator(".doh-office-marker.leaflet-marker-draggable")).toHaveCount(0);
   await editOffice.click();
   await expect(page.getByText("หมุดของรายการนี้ปลดล็อกแล้ว", { exact: false })).toBeVisible();
