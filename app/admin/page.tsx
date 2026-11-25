@@ -37,6 +37,7 @@ const LongdoGisMap = dynamic(
 );
 import type { GisMapViewportApi } from "@/components/map/LongdoGisMap";
 import { useSharedGisFocus } from "@/components/map/useSharedGisFocus";
+import { computeGisFilterHighlights } from "@/lib/gis-filter-rules";
 import { OfflineSyncStatus } from "@/components/offline/OfflineSyncStatus";
 import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
@@ -51,6 +52,7 @@ import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
 
 export default function AdminPage() {
+  const [mapSearch, setMapSearch] = useState("");
   const isPollingActive = usePollingActivity();
   const [selectedFloodId, setSelectedFloodId] = useState<string>("");
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
@@ -214,6 +216,12 @@ export default function AdminPage() {
     mapStyles: staticGisQuery.data?.mapStyles ?? bootstrapQuery.data?.mapStyles ?? INITIAL_SYSTEM_DATA.mapStyles,
     systemSettings: staticGisQuery.data?.systemSettings ?? bootstrapQuery.data?.systemSettings ?? INITIAL_SYSTEM_DATA.systemSettings,
   }), [bootstrapQuery.data, operationalQuery.data, staticGisQuery.data]);
+  const mapHighlights = useMemo(() => computeGisFilterHighlights(systemData, {
+    searchQuery: mapSearch,
+    routeFilter: "ALL",
+    statusFilter: "ALL",
+    includeInactive: true,
+  }), [systemData, mapSearch]);
 
   const isFetching = bootstrapQuery.isFetching || operationalQuery.isFetching || staticGisQuery.isFetching;
   const isError = bootstrapQuery.isError || operationalQuery.isError || staticGisQuery.isError;
@@ -619,8 +627,23 @@ export default function AdminPage() {
                 )}
               </button>
             </div>
+            <input
+              type="search"
+              aria-label="ค้นหาสายทางบนแผนที่"
+              placeholder="ค้นหาสายทางบนแผนที่"
+              value={mapSearch}
+              disabled={isEditingBlocked}
+              onChange={(event) => setMapSearch(event.target.value)}
+              className="absolute bottom-4 left-4 z-[410] max-w-[calc(100%-2rem)] rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white disabled:hidden"
+            />
             <LongdoGisMap
               systemData={systemData}
+              isFilterActive={mapHighlights.isFilterActive}
+              highlightFloodIds={mapHighlights.highlightFloodIds}
+              highlightDetourIds={mapHighlights.highlightDetourIds}
+              highlightHighwayRouteNos={mapHighlights.highlightHighwayRouteNos}
+              searchQuery={mapSearch}
+              suspendRouteFiltering={isEditingBlocked}
               selectedFloodId={selectedFloodId}
               onSelectFlood={(id) => {
                 setSelectedFloodId(id);

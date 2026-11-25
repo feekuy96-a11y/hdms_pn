@@ -56,7 +56,7 @@ export function renderVertexEditHandles({
       iconSize: [14, 14],
       iconAnchor: [7, 7],
     });
-    const handle = L.marker(working[index], { icon, draggable: true, zIndexOffset: 1100, keyboard: false }).addTo(group);
+    const handle = L.marker(working[index], { icon, draggable: true, zIndexOffset: isEnd ? 1100 : 1500, keyboard: false }).addTo(group);
     handle.bindTooltip(`จุดที่ ${index + 1} · ลากเพื่อย้าย · คลิกขวา/กดค้างเพื่อลบ`, { direction: "top", offset: [0, -8] });
     handle.on("drag", (event: any) => {
       const position = event.target.getLatLng();
@@ -93,7 +93,8 @@ export function renderVertexEditHandles({
         iconSize: [10, 10],
         iconAnchor: [5, 5],
       });
-      const midHandle = L.marker(mid, { icon, draggable: true, zIndexOffset: 900, keyboard: false }).addTo(group);
+      // Keep insertion reachable when endpoint handles overlap on short segments.
+      const midHandle = L.marker(mid, { icon, draggable: true, zIndexOffset: 1300, keyboard: false }).addTo(group);
       midHandle.bindTooltip("คลิกหรือลากเพื่อเพิ่มจุด", { direction: "top", offset: [0, -6] });
       midHandle.on("click", (event: any) => {
         L.DomEvent.stopPropagation(event);
