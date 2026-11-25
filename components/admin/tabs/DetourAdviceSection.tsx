@@ -93,7 +93,7 @@ export const DetourAdviceSection = React.memo(function DetourAdviceSection({
   };
 
   return (
-    <FormSection step={3} tone="amber" title="คำแนะนำสำหรับประชาชน" description="ข้อความที่ประชาชนจะเห็นในหน้าหลัก แยกทิศทางขาไปและขากลับ">
+    <FormSection step={3} tone="amber" title="คำแนะนำสำหรับประชาชน" description="ตรวจคำแนะนำ ทิศทาง และข้อมูลนำทางที่ประชาชนจะเห็น">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <label htmlFor="detour-advice-textarea" className="text-xs font-heading font-bold text-amber-300">
@@ -147,6 +147,7 @@ export const DetourAdviceSection = React.memo(function DetourAdviceSection({
         className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-mono leading-relaxed"
       />
 
+      <h4 className="border-t border-surface pt-3 text-sm font-bold text-white">ตัวอย่างและตรวจเส้นทาง</h4>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label htmlFor="detour-advice-preset" className="text-xs text-slate-300">
@@ -215,7 +216,8 @@ export const DetourAdviceSection = React.memo(function DetourAdviceSection({
         </button>
       </div>
 
-      <div className="pt-2 border-t border-slate-800/80 space-y-3">
+      <div className="space-y-3 border-t border-surface pt-3">
+        <h4 className="text-sm font-bold text-white">เวลา สภาพทาง และลิงก์นำทาง</h4>
         <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-heading font-bold text-sky-300 flex items-center gap-1.5">

@@ -44,6 +44,7 @@ export function useIncidentRegistry({
   const [incidentFilter, setIncidentFilter] = useState<"ALL" | "ACTIVE" | "RESOLVED">("ACTIVE");
   const [routeNoFilter, setRouteNoFilter] = useState<string>("ALL");
   const [trafficStatusFilter, setTrafficStatusFilter] = useState<string>("ALL");
+  const [subdivisionFilter, setSubdivisionFilter] = useState("ALL");
   const [incidentSearch, setIncidentSearch] = useState("");
   const [deleted, setDeleted] = useState<{ id: string; route_no: string; section_name: string }[] | null>(null);
   const [updateModalIncident, setUpdateModalIncident] = useState<FloodRoute | null>(null);
@@ -90,11 +91,25 @@ export function useIncidentRegistry({
     return Array.from(routes).sort((a, b) => a.localeCompare(b, "th", { numeric: true }));
   }, [systemData.floodRoutes]);
 
+  const normalizeOfficeName = (name: string) => name.normalize("NFC").trim().replace(/\s+/g, " ");
+  const subdivisionOptions = Array.from(new Set((systemData.offices || [])
+    .filter((office) => office.type === "SUBDIVISION")
+    .map((office) => normalizeOfficeName(office.name))
+    .filter(Boolean))).sort((a, b) => a.localeCompare(b, "th"));
+  const verifiedSubdivisionNames = new Set(subdivisionOptions);
+
   const filteredIncidents = (systemData.floodRoutes || []).filter((r) => {
     if (incidentFilter === "ACTIVE" && !r.is_active) return false;
     if (incidentFilter === "RESOLVED" && r.is_active) return false;
     if (routeNoFilter !== "ALL" && r.route_no !== routeNoFilter) return false;
     if (trafficStatusFilter !== "ALL" && r.traffic_status !== trafficStatusFilter) return false;
+    if (subdivisionFilter !== "ALL") {
+      // The schema parser prefers structured subdivisionName; its legacy reporter fallback
+      // is accepted only if it is the exact verified name of a configured subdivision.
+      const stored = normalizeOfficeName(parseFloodDirectionMeta(r.direction_meta, r).subdivisionName);
+      const matched = verifiedSubdivisionNames.has(stored) ? `office:${stored}` : "UNASSIGNED";
+      if (matched !== subdivisionFilter) return false;
+    }
     if (incidentSearch.trim()) {
       const q = incidentSearch.toLowerCase().trim();
       return (
@@ -552,6 +567,9 @@ export function useIncidentRegistry({
     setRouteNoFilter,
     trafficStatusFilter,
     setTrafficStatusFilter,
+    subdivisionOptions,
+    subdivisionFilter,
+    setSubdivisionFilter,
     incidentSearch,
     setIncidentSearch,
     deleted,

@@ -14,6 +14,15 @@ import {
 } from "@/app/actions/doh-actions";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload } from "@/db/default-data";
 import { AdminConsole } from "@/components/admin/AdminConsole";
+import workspace from "@/components/admin/AdminWorkspace.module.css";
+import { useAdminMotionPresence } from "@/components/admin/useAdminMotionPresence";
+
+const ADMIN_THEME_KEY = "hdms-admin-workspace-theme";
+type AdminTheme = "system" | "light" | "dark";
+
+function isAdminTheme(value: string | null): value is AdminTheme {
+  return value === "system" || value === "light" || value === "dark";
+}
 
 const LongdoGisMap = dynamic(
   () => import("@/components/map/LongdoGisMap").then((mod) => mod.LongdoGisMap),
@@ -42,7 +51,7 @@ import { OfflineSyncStatus } from "@/components/offline/OfflineSyncStatus";
 import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
 import Link from "next/link";
-import { ArrowLeft, RotateCw, FileText, PieChart, Settings, Smartphone, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
+import { ArrowLeft, RotateCw, FileText, PieChart, Settings, Smartphone, PanelLeftClose, PanelLeftOpen, X, Sun, Moon, Monitor } from "lucide-react";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 const ExecutiveDashboard = dynamic(
   () => import("@/components/executive/ExecutiveDashboard").then((mod) => mod.ExecutiveDashboard),
@@ -88,6 +97,41 @@ export default function AdminPage() {
   const stopWorkspaceDrag = () => {
     workspaceDrag.current = null;
     window.dispatchEvent(new Event("resize"));
+  };
+  const [adminTheme, setAdminTheme] = useState<AdminTheme>("system");
+  const [themeChoicesOpen, setThemeChoicesOpen] = useState(false);
+  const themeButton = useRef<HTMLButtonElement>(null);
+  const adminShell = useRef<HTMLDivElement>(null);
+  const adminHeader = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const shell = adminShell.current;
+    const header = adminHeader.current;
+    if (!shell || !header) return;
+    const updateHeaderOffset = () => {
+      shell.style.setProperty("--admin-header-height", `${Math.ceil(header.getBoundingClientRect().height)}px`);
+    };
+    updateHeaderOffset();
+    const observer = new ResizeObserver(updateHeaderOffset);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
+  const themeChoicesPresent = useAdminMotionPresence(themeChoicesOpen);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(ADMIN_THEME_KEY);
+      if (isAdminTheme(saved)) setAdminTheme(saved);
+    } catch {
+      // Theme remains available for the session if browser storage is blocked.
+    }
+  }, []);
+  const changeAdminTheme = (value: string) => {
+    if (!isAdminTheme(value)) return;
+    setAdminTheme(value);
+    try {
+      localStorage.setItem(ADMIN_THEME_KEY, value);
+    } catch {
+      // The in-memory choice is still applied.
+    }
   };
   const [adminPickMode, setAdminPickMode] = useState<string | null>(null);
   const [draftCoordinates, setDraftCoordinates] = useState<[number, number][]>([]);
@@ -364,9 +408,9 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col bg-surface-canvas text-slate-100 font-body">
+    <div ref={adminShell} data-admin-theme={adminTheme} className={`${workspace.theme} min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col bg-surface-canvas text-slate-100 font-body`}>
       {/* Official Thai Government Protected Top Header */}
-      <header className="doh-header bg-surface-panel border-b-2 border-amber-500 sticky top-0 z-50 min-h-16 px-3 sm:px-5 py-2 lg:py-0 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 shadow-xl">
+      <header ref={adminHeader} className={`${workspace.chrome} ${workspace.topbar} doh-header bg-surface-panel border-b sticky top-0 ${themeChoicesPresent ? "z-[1020]" : "z-50"} min-h-16 px-3 sm:px-5 py-2 lg:py-0 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2`}>
         <div className="flex items-center gap-2.5 min-w-0 flex-1 lg:flex-none">
           <Link
             href="/"
@@ -390,7 +434,7 @@ export default function AdminPage() {
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-[0.45em]">
-                <span className="bg-amber-400 text-slate-950 text-[0.75rem] font-heading font-black tracking-normal px-[0.5em] py-[0.1em] rounded shrink-0">
+                <span className="sr-only min-[360px]:not-sr-only min-w-0 max-w-full min-[360px]:truncate sm:shrink-0 rounded bg-amber-400 px-[0.5em] py-[0.1em] text-[0.75rem] font-heading font-black tracking-normal text-slate-950">
                   ส่วนราชการ
                 </span>
                 <span className="text-[0.75rem] text-amber-300 font-heading font-medium tracking-normal hidden md:inline truncate">
@@ -436,6 +480,42 @@ export default function AdminPage() {
 
         <div className="flex items-center gap-[0.45em] sm:gap-[0.55em] shrink-0">
           {isError && <span role="status" className="rounded-lg border border-red-700/70 bg-red-950/80 px-[0.6em] py-[0.25em] text-[0.75rem] text-red-200">โหลดข้อมูลฐานข้อมูลไม่สำเร็จ</span>}
+          {adminViewMode === "console" && (
+            <div className="relative"
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setThemeChoicesOpen(false);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape" || !themeChoicesOpen) return;
+                event.stopPropagation();
+                setThemeChoicesOpen(false);
+                themeButton.current?.focus();
+              }}>
+              <button type="button" ref={themeButton} className={workspace.themeChooser}
+                aria-label="รูปแบบสีพื้นที่จัดการ" aria-expanded={themeChoicesOpen}
+                aria-controls="admin-theme-choices" title="เปลี่ยนธีมพื้นที่จัดการ"
+                onClick={() => setThemeChoicesOpen((open) => !open)}>
+                <Sun className={workspace.themeSun} aria-hidden="true" size={18} />
+                <Moon className={workspace.themeMoon} aria-hidden="true" size={18} />
+              </button>
+              <div id="admin-theme-choices" role="group" aria-label="เลือกธีมพื้นที่จัดการ"
+                className={workspace.themeChoices} data-motion-open={themeChoicesOpen}
+                hidden={!themeChoicesPresent} inert={!themeChoicesOpen} aria-hidden={themeChoicesOpen ? undefined : true}>
+                {([
+                  ["system", "ตามอุปกรณ์", Monitor], ["light", "ธีมสว่าง", Sun], ["dark", "ธีมมืด", Moon],
+                ] as const).map(([mode, label, Icon]) => (
+                  <button key={mode} type="button" aria-pressed={adminTheme === mode}
+                    onClick={() => {
+                      changeAdminTheme(mode);
+                      setThemeChoicesOpen(false);
+                      themeButton.current?.focus();
+                    }}>
+                    <Icon aria-hidden="true" size={16} /> {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -456,7 +536,7 @@ export default function AdminPage() {
         <div
           role="group"
           aria-label="สลับมุมมองฟอร์มและแผนที่บนมือถือ"
-          className="lg:hidden sticky top-16 z-40 grid grid-cols-2 gap-[0.5em] border-b border-surface bg-surface-floating px-3 py-2"
+          className={`${workspace.chrome} ${workspace.paneSwitch} lg:hidden sticky top-[var(--admin-header-height,4rem)] z-40 grid grid-cols-2 gap-[0.5em] border-b border-surface px-3 py-2`}
         >
           <button
             type="button"
@@ -781,7 +861,7 @@ export default function AdminPage() {
       />
 
       {toastMessage && (
-        <div className="fixed bottom-4 right-4 z-[9999] bg-slate-950 border-2 border-amber-400 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-heading flex items-center gap-2.5 max-w-sm">
+        <div className={`fixed right-4 z-[9999] bg-slate-950 border-2 border-amber-400 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-heading flex items-center gap-2.5 max-w-[min(24rem,calc(100vw-2rem))] ${adminViewMode === "console" && mobileActivePane === "form" ? "bottom-[calc(7rem+env(safe-area-inset-bottom))] lg:bottom-4" : "bottom-4"}`}>
           <span className="w-2 h-2 rounded-full bg-amber-400" />
           <span>{toastMessage}</span>
         </div>

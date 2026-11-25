@@ -138,7 +138,8 @@ export function FloodSituationSection({
   };
 
   return (
-    <FormSection step={3} title="สถานการณ์น้ำและมาตรการ" description="ทิศทาง เส้นทางที่ได้รับผลกระทบ ระดับน้ำ สถานะจราจร ๕ สถานะ วันเวลา และภาพถ่ายหน้างาน (สูงสุด ๕ ภาพ)">
+    <FormSection step={3} title="สถานการณ์น้ำและมาตรการ" description="ระบุฝั่งถนน ผลกระทบต่อการเดินทาง และข้อมูลจากหน้างาน">
+      <h4 className="text-sm font-bold text-white">ผลกระทบต่อการเดินทาง</h4>
       {/* Direction and Highway Carriageway Info */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-3">
         <div>
@@ -546,6 +547,7 @@ export function FloodSituationSection({
         </div>
       )}
 
+      <h4 className="border-t border-surface pt-3 text-sm font-bold text-white">เวลา ผู้รายงาน และมาตรการ</h4>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
           <label htmlFor="flood-started-at-input" className="text-xs text-slate-300 block mb-1">วันและเวลาเริ่มเกิดเหตุ</label>
@@ -604,11 +606,9 @@ export function FloodSituationSection({
       </div>
 
       {/* Image Upload Gallery (Max 5 photos, <= 300 KB each) */}
-      <div>
+      <div className="border-t border-surface pt-3">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-slate-300">
-            ภาพถ่ายหน้างาน (สูงสุด ๕ ภาพ)
-          </span>
+          <h4 className="text-sm font-bold text-white">ภาพถ่ายหน้างาน (สูงสุด ๕ ภาพ)</h4>
           <span className="text-[11px] text-amber-300 font-mono">
             {detailedPhotos.length} / 5 ภาพ
           </span>

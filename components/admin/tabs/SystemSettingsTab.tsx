@@ -1,5 +1,8 @@
 "use client";
 
+import { focusUtility } from "../utility-navigation";
+import workspace from "../AdminWorkspace.module.css";
+
 import React, { useState, useEffect } from "react";
 import { SystemDataPayload, DohOfficeLocation } from "@/db/default-data";
 import { APP_CONFIG } from "@/lib/constants";
@@ -140,18 +143,22 @@ export function SystemSettingsTab({
   };
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div className="border-b border-slate-800 pb-3">
+    <div className={`${workspace.registry} max-w-3xl space-y-3`}>
+      <div className={workspace.registryHeading}>
         <h2 className="font-heading font-black text-lg text-white flex items-center gap-2">
           <Settings className="w-5 h-5 text-amber-400" /> ข้อมูลระบบและหน่วยงาน
         </h2>
         <p className="text-xs text-slate-400 mt-0.5">
-          กำหนดชื่อระบบ ข้อมูลติดต่อส่วนราชการ และปักหมุดสำนักงานแขวงและหมวดทางหลวง
+          แก้ข้อมูลที่ประชาชนเห็น หรือจัดการตำแหน่งสำนักงานและจุดบริการบนแผนที่
         </p>
+        <nav aria-label="ส่วนงานข้อมูลระบบ" className="mt-3 flex flex-wrap gap-2">
+          <button type="button" className={workspace.utilityJump} onClick={() => focusUtility("agency-data")}>ข้อมูลหน่วยงาน</button>
+          <button type="button" className={workspace.utilityJump} onClick={() => focusUtility("office-points")}>หมุดสำนักงานและจุดบริการ</button>
+        </nav>
       </div>
 
       {/* System Metadata Form */}
-      <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+      <div id="agency-data" tabIndex={-1} className={`${workspace.utilitySection} space-y-3 rounded-2xl border border-surface bg-surface-panel p-4`}>
         <h3 className="font-heading font-bold text-sm text-amber-300">ข้อมูลทั่วไปและเบอร์โทรฉุกเฉิน</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -249,7 +256,7 @@ export function SystemSettingsTab({
       </div>
 
       {/* Office & Service Points Management */}
-      <div className="space-y-3">
+      <div id="office-points" tabIndex={-1} className={`${workspace.utilitySection} space-y-3 rounded-2xl border border-surface bg-surface-panel p-4`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="font-heading font-bold text-sm text-white flex items-center gap-2">

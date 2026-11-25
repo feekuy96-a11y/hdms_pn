@@ -1,12 +1,13 @@
 "use client";
 
+import workspace from "../AdminWorkspace.module.css";
+
 import React from "react";
 import { SystemDataPayload } from "@/db/default-data";
 import { clearAdminMapDraft } from "@/components/admin/tabs/map-draft-storage";
 import {
   MapTabHeader,
   DraftRecoveryBanner,
-  RouteImportAndDraftOptions,
   MapFormSections,
 } from "@/components/admin/tabs/MapFormSections";
 import { useDualRoadSnapping } from "@/components/admin/tabs/useDualRoadSnapping";
@@ -27,7 +28,7 @@ interface MapManagementTabProps {
   systemData: SystemDataPayload;
   onDataRefresh: (data?: any) => Promise<any> | void;
   onToast: (msg: string) => void;
-  showConfirmModal?: (title: string, message: string, onConfirm: () => void) => void;
+  showConfirmModal?: (title: string, message: string, onConfirm: () => void, labels?: { confirmLabel: string; cancelLabel: string }) => void;
   showSuccessModal: (title: string, message: string) => void;
   showErrorModal?: (title: string, message: string) => void;
   onNavigateToIncidents?: () => void;
@@ -65,6 +66,9 @@ interface MapManagementTabProps {
   // Editing state passed from parent
   editingRoute?: { type: "FLOOD" | "DETOUR"; id: string } | null;
   onClearEditingRoute?: () => void;
+  onCancelFloodEdit?: () => void;
+  onAbandonFloodReturn?: () => void;
+  registerFloodExitGuard?: (guard: ((leave: () => void) => void) | null) => void;
 }
 
 export function MapManagementTab({
@@ -97,6 +101,9 @@ export function MapManagementTab({
   onVertexEditTargetChange,
   editingRoute,
   onClearEditingRoute,
+  onCancelFloodEdit,
+  onAbandonFloodReturn,
+  registerFloodExitGuard,
 }: MapManagementTabProps) {
   const {
     routeMode, setRouteMode, routingRequest, originalRouteCoordinates, originalReverseRouteCoordinates,
@@ -446,7 +453,7 @@ export function MapManagementTab({
   const handleClearRoute = () => {
     resetFreeGeometryHistory(true);
     resetFloodSituationState();
-    resetBaseFormState();
+    resetBaseFormState(editingRoute?.type === "FLOOD" && Boolean(routeEditId));
     setFreeEditTarget("FORWARD");
     setRecoverableDraft(null);
     onToast("ล้างเส้นทางร่างและแบบฟอร์มแล้ว");
@@ -488,6 +495,67 @@ export function MapManagementTab({
     handleClearRoute();
   };
 
+  // Compare editable state only after the saved flood record is hydrated. Async area hints,
+  // focus and tool selection are not edits; route geometry and newly staged media are.
+  const editingExistingFlood = routeMode === "FLOOD" && Boolean(routeEditId) && editingRoute?.type === "FLOOD";
+  const editableFloodState = [
+    routeNo, sectionName, kmStart, kmEnd, roadSide, directionCode, affectedParts,
+    reverseAffectedParts, affectedLanes, affectedShoulder, routeWaterLevel,
+    reverseRouteWaterLevel, waterLevelKnown, reverseWaterLevelKnown, routeStatus,
+    reverseRouteStatus, parentEventMode, selectedParentEventId, eventCode, eventTitle, villageOrLandmark, useCarriagewaySnapping,
+    startedAt, selectedMeasure, reporterName, causeAndNote, saveAsDraft,
+    startLat, startLon, endLat, endLon, revStartLat, revStartLon, revEndLat, revEndLon,
+    draftCoordinates, draftReverseCoordinates, draftWaypoints, draftReverseWaypoints,
+    detailedPhotos, fieldImages,
+  ];
+  const floodEditBaseline = React.useRef<{ id: string; values: unknown[] } | null>(null);
+  React.useLayoutEffect(() => {
+    if (!editingExistingFlood || !routeEditId) {
+      floodEditBaseline.current = null;
+    } else if (floodEditBaseline.current?.id !== routeEditId) {
+      floodEditBaseline.current = { id: routeEditId, values: editableFloodState };
+    }
+  });
+  const requestExitFloodEdit = (leave: () => void) => {
+    if (isSubmitting) return;
+    const exit = () => {
+      setAdminPickMode(null);
+      resetFreeGeometryHistory(true);
+      resetFloodSituationState();
+      resetBaseFormState(true);
+      setFreeEditTarget("FORWARD");
+      setRouteEditId("");
+      leave();
+    };
+    const baseline = floodEditBaseline.current;
+    if (baseline?.values.some((value, index) => !Object.is(value, editableFloodState[index]))) {
+      if (showConfirmModal) {
+        showConfirmModal(
+          "ออกจากการแก้ไขโดยไม่บันทึก?",
+          "การเปลี่ยนแปลงครั้งนี้จะถูกละทิ้ง ข้อมูลและรูปที่บันทึกไว้ยังคงเดิม",
+          exit,
+          { confirmLabel: "ละทิ้งการเปลี่ยนแปลง", cancelLabel: "แก้ไขต่อ" }
+        );
+      }
+      return;
+    }
+    exit();
+  };
+  React.useLayoutEffect(() => {
+    registerFloodExitGuard?.(editingExistingFlood ? requestExitFloodEdit : null);
+    return () => registerFloodExitGuard?.(null);
+  });
+  const cancelEditingRoute = () => {
+    if (isSubmitting) return;
+    if (editingExistingFlood && onCancelFloodEdit) {
+      requestExitFloodEdit(onCancelFloodEdit);
+    } else {
+      setRouteEditId("");
+      handleClearRoute();
+      onClearEditingRoute?.();
+    }
+  };
+
   // Submit Flood or Detour Route
   const { handleSubmitRoute } = useMapRouteSubmit({
     systemData, onDataRefresh, onToast, showSuccessModal, showErrorModal,
@@ -512,14 +580,21 @@ export function MapManagementTab({
   });
 
   return (
-    <div className="space-y-5 max-w-4xl">
-      {/* Top Form Control Card: Mode Switcher, Edit Status, Draft Recovery & File Options */}
-      <div className="rounded-2xl border border-surface bg-surface-panel p-3.5 sm:p-4 space-y-3.5 shadow-lg">
+    <div className={`${workspace.editor} space-y-3 max-w-4xl`}>
+      {/* Workspace introduction, draft recovery and current edit state */}
+      <div className={`${workspace.intro} rounded-2xl border border-surface bg-surface-panel space-y-2.5`}>
         {/* Switcher: Flood vs Detour Header */}
         <MapTabHeader
           routeMode={routeMode}
           onSelectRouteMode={(mode) => {
-            if (routeMode !== mode) {
+            if (routeMode === mode || isSubmitting) return;
+            if (editingExistingFlood) {
+              requestExitFloodEdit(() => {
+                onClearEditingRoute?.();
+                onAbandonFloodReturn?.();
+                setRouteMode(mode);
+              });
+            } else {
               handleClearRoute();
               setRouteMode(mode);
             }
@@ -534,11 +609,8 @@ export function MapManagementTab({
             </span>
             <button
               type="button"
-              onClick={() => {
-                setRouteEditId("");
-                handleClearRoute();
-                if (onClearEditingRoute) onClearEditingRoute();
-              }}
+              onClick={cancelEditingRoute}
+              disabled={isSubmitting}
               className="min-h-8 rounded-lg border border-sky-400/50 bg-surface-card px-2.5 py-1 text-xs font-heading font-bold text-sky-200 hover:text-white transition cursor-pointer"
             >
               ออกจากโหมดแก้ไข
@@ -558,12 +630,6 @@ export function MapManagementTab({
           }}
         />
 
-        {/* Save options: import a file, or keep the record hidden from citizens until it is reviewed */}
-        <RouteImportAndDraftOptions
-          saveAsDraft={saveAsDraft}
-          onSaveAsDraftChange={setSaveAsDraft}
-          onImportFile={handleRouteFileImport}
-        />
       </div>
 
       {/* Main Map Form Container */}
@@ -658,13 +724,11 @@ export function MapManagementTab({
           causeAndNote, setCauseAndNote, detailedPhotos, setDetailedPhotos,
           setFieldImages, handleImageUpload,
         }}
+        onImportFile={handleRouteFileImport}
+        onSaveAsDraftChange={setSaveAsDraft}
         submitBarProps={{
           saveAsDraft, isSubmitting, onSubmit: handleSubmitRoute, routeEditId,
-          onCancelEdit: () => {
-            setRouteEditId("");
-            handleClearRoute();
-            if (onClearEditingRoute) onClearEditingRoute();
-          },
+          onCancelEdit: cancelEditingRoute,
         }}
       />
     </div>

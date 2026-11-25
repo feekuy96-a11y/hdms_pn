@@ -1,5 +1,7 @@
 "use client";
 
+import workspace from "../AdminWorkspace.module.css";
+import { RegistryUpdateTime } from "../RegistryUpdateTime";
 import React from "react";
 import {
   ChevronDown,
@@ -116,7 +118,7 @@ export function DetourListCard({
   return (
     <div
       onClick={() => onViewDetour(item)}
-      className={`p-3.5 rounded-2xl border border-surface bg-surface-card shadow-md space-y-2.5 cursor-pointer hover:border-amber-400/60 transition ${
+      className={`${workspace.registryCard} space-y-2 rounded-2xl border border-surface bg-surface-card p-3 cursor-pointer hover:border-amber-400/60 transition ${
         !item.is_active ? "opacity-60" : ""
       }`}
     >
@@ -158,6 +160,7 @@ export function DetourListCard({
         <span className="text-sky-300 font-medium">
           {getDirectionModeText(item.direction_mode)}
         </span>
+        <RegistryUpdateTime updatedAt={item.updated_at} />
         {linkedEvents.map((ev) => (
           <span
             key={ev.eventId}
@@ -172,7 +175,7 @@ export function DetourListCard({
 
       <DetourDirectionalPreview description={item.description} variant="card" />
 
-      <div className="pt-2 border-t border-surface flex items-center justify-between gap-2 text-[11px]">
+      <div className="pt-2 border-t border-surface flex flex-wrap items-center justify-between gap-2 text-[11px]">
         <span className="text-slate-400 font-mono">
           {!linkedEvents.some((event) => event.links.length > 0) && `ลำดับที่ ${groupPos + 1} · `}
           {Array.isArray(item.coordinates_json) ? item.coordinates_json.length : 0} จุดโหนด
@@ -307,8 +310,8 @@ export function DetourListSection({
 
       {/* Desktop & Tablet Table View */}
       {tableLayoutMode !== "cards" && (
-        <div className="doh-auto-table-desktop hidden md:block overflow-x-auto rounded-2xl border border-surface bg-surface-panel shadow-xl">
-          <table className="w-full min-w-[880px] table-auto text-left text-xs text-slate-300">
+        <div className={`${workspace.registryCard} doh-auto-table-desktop hidden overflow-x-auto rounded-2xl border border-surface bg-surface-panel md:block`}>
+          <table className="w-full min-w-[780px] table-auto text-left text-xs text-slate-300">
             <thead className="bg-surface-card text-slate-300 font-heading tracking-normal border-b border-surface">
               <tr>
                 <th className="p-3 w-10 text-center">#</th>
@@ -317,7 +320,6 @@ export function DetourListSection({
                 <th className="p-3 min-w-[150px] whitespace-nowrap">ผูกกับจุดน้ำท่วม</th>
                 <th className="p-3 min-w-[200px]">คำแนะนำการเดินทาง (ไป-กลับ)</th>
                 <th className="p-3 w-20 text-center whitespace-nowrap">พิกัด/โหนด</th>
-                <th className="p-3 w-20 text-center whitespace-nowrap">อัปเดต</th>
                 <th className="p-3 text-right min-w-[130px] whitespace-nowrap">การจัดการ</th>
               </tr>
             </thead>
@@ -380,6 +382,7 @@ export function DetourListSection({
                           <span className="block text-[10px] font-normal text-sky-300 mt-0.5">
                             {getDirectionModeText(item.direction_mode)}
                           </span>
+                          <RegistryUpdateTime updatedAt={item.updated_at} />
                         </div>
                       </div>
                     </td>
@@ -419,10 +422,6 @@ export function DetourListSection({
                           {item.lat_start.toFixed(2)}, {item.lon_start.toFixed(2)}
                         </div>
                       )}
-                    </td>
-
-                    <td className="p-3 text-center text-[10px] text-slate-400 whitespace-nowrap">
-                      {item.updated_at ? new Date(item.updated_at).toLocaleDateString("th-TH") : "-"}
                     </td>
 
                     <td className="p-3 text-right whitespace-nowrap" onClick={(event) => event.stopPropagation()}>

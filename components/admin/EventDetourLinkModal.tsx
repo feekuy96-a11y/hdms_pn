@@ -1,5 +1,8 @@
 "use client";
 
+import workspace from "./AdminWorkspace.module.css";
+import { useAdminMotionPresence } from "./useAdminMotionPresence";
+
 import React from "react";
 import {
   AlertTriangle,
@@ -30,9 +33,6 @@ import {
 } from "@/lib/event-detour-links";
 import { useModalAccessibility } from "@/components/ui/use-modal-accessibility";
 import { useEventDetourLinkModal } from "./useEventDetourLinkModal";
-
-// Stillness is the design: modal uses instant visibility without custom keyframe animations,
-// keeping focus management predictable and respecting prefers-reduced-motion.
 
 interface EventDetourLinkModalProps {
   isOpen: boolean;
@@ -82,6 +82,7 @@ export function EventDetourLinkModal({
   onToast,
 }: EventDetourLinkModalProps) {
   const dialog = useModalAccessibility(isOpen, onClose);
+  const present = useAdminMotionPresence(isOpen);
   const {
     parentEvents,
     detourList,
@@ -134,11 +135,14 @@ export function EventDetourLinkModal({
     onToast,
   });
 
-  if (!isOpen) return null;
+  if (!present) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[1050] flex items-end justify-center bg-black/80 backdrop-blur-sm p-2 sm:items-center sm:p-4"
+      className={`${workspace.backdrop} fixed inset-0 z-[1050] flex items-end justify-center p-2 sm:items-center sm:p-4 [@media(max-height:540px)]:p-2`}
+      data-motion-open={isOpen}
+      inert={!isOpen}
+      aria-hidden={isOpen ? undefined : true}
       onClick={onClose}
     >
       <div
@@ -149,31 +153,32 @@ export function EventDetourLinkModal({
         tabIndex={-1}
         onKeyDown={dialog.onKeyDown}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl border border-amber-500/50 bg-[#0c162c] text-slate-100 shadow-2xl overflow-hidden"
+        className={`${workspace.ranked} flex max-h-[calc(100dvh-1rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border sm:max-h-[min(92dvh,calc(100dvh-2rem))] [@media(max-height:540px)]:max-h-[calc(100dvh-1rem)]`}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 border-b border-slate-800 px-4 py-3.5 sm:px-6 bg-slate-950/70">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/70 px-3 py-2 sm:px-6 sm:py-3.5 [@media(max-height:540px)]:py-1">
           <div className="min-w-0">
             <h2 className="font-heading font-black text-base sm:text-lg text-white flex items-center gap-2">
               <Link2 className="w-5 h-5 text-amber-400 shrink-0" />
-              <span>จัดการความสัมพันธ์เหตุการณ์ ↔ ทางเลี่ยง (Many-to-Many)</span>
+              <span>เชื่อมเหตุการณ์กับทางเลี่ยง</span>
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              บันทึกผ่าน Atomic API และตรวจสอบข้อมูลกลับจากฐานข้อมูลจริง โดยไม่เขียนทับโครงสร้างเดิม
+            <p className="mt-0.5 text-xs text-slate-400 [@media(max-height:540px)]:hidden">
+              เลือกเหตุการณ์ จัดอันดับทางเลี่ยง แล้วบันทึกการเชื่อมโยง
             </p>
           </div>
           <button
             type="button"
             aria-label="ปิดหน้าต่างจัดการความสัมพันธ์"
             onClick={onClose}
-            className="min-h-10 min-w-10 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 shrink-0"
+            className="min-h-11 min-w-11 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Mode Switcher */}
-        <div className="px-4 pt-3 sm:px-6 border-b border-slate-800/80 pb-3 bg-slate-900/40 flex flex-wrap gap-2">
+        <div role="group" aria-label="มุมมองการเชื่อมโยง"
+          className="grid shrink-0 grid-cols-2 gap-1.5 border-b border-slate-800/80 bg-slate-900/40 px-3 py-2 sm:flex sm:px-6 [@media(max-height:540px)]:py-1">
           <button
             type="button"
             onClick={() => {
@@ -181,13 +186,14 @@ export function EventDetourLinkModal({
               setSaveError(null);
               setVerifiedNotice(null);
             }}
-            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
+            aria-pressed={mode === "BY_EVENT"}
+            className={`min-h-11 px-2.5 rounded-xl text-xs sm:px-3.5 font-heading font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
               mode === "BY_EVENT"
                 ? "bg-amber-500 text-slate-950 shadow"
                 : "bg-slate-900 text-slate-300 border border-slate-700 hover:bg-slate-800"
             }`}
           >
-            จัดการตามเหตุการณ์ (1 เหตุการณ์ → หลายทางเลี่ยง)
+            จัดการตามเหตุการณ์
           </button>
           <button
             type="button"
@@ -196,18 +202,20 @@ export function EventDetourLinkModal({
               setSaveError(null);
               setVerifiedNotice(null);
             }}
-            className={`min-h-10 px-3.5 rounded-xl text-xs font-heading font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
+            aria-pressed={mode === "BY_DETOUR"}
+            className={`min-h-11 px-2.5 rounded-xl text-xs sm:px-3.5 font-heading font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
               mode === "BY_DETOUR"
                 ? "bg-amber-500 text-slate-950 shadow"
                 : "bg-slate-900 text-slate-300 border border-slate-700 hover:bg-slate-800"
             }`}
           >
-            ผูกตามทางเลี่ยง (1 ทางเลี่ยง → หลายเหตุการณ์)
+            ผูกตามทางเลี่ยง
           </button>
         </div>
 
         {/* Main Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+        <div role="region" aria-label="รายละเอียดการเชื่อมโยง"
+          className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-3 text-xs sm:p-6 [@media(max-height:540px)]:py-2">
           {/* Status Feedback Banners */}
           {saveError && (
             <div
@@ -303,10 +311,11 @@ export function EventDetourLinkModal({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-heading font-bold text-sm text-white">
+                  <div>
+                    <h3 className="font-heading text-sm font-bold text-white">
                       ทางเลี่ยงที่เชื่อมโยงกับเหตุการณ์นี้ ({new Set(draftLinks.map((link) => link.detourId)).size} เส้น)
                     </h3>
+                    <p className="mt-0.5 leading-snug text-slate-400">อันดับเดียวต่อเส้น ไม่ขึ้นอยู่กับทิศทาง ใช้ลูกศรขึ้นหรือลงเพื่อจัดอันดับ</p>
                   </div>
 
                   {draftLinks.length === 0 ? (
@@ -333,14 +342,14 @@ export function EventDetourLinkModal({
                         return (
                           <div
                             key={`${link.eventDirection}::${link.detourId}`}
-                            className="p-3.5 rounded-2xl border border-slate-800 bg-slate-950/90 space-y-3"
+                            className="min-w-0 space-y-2.5 rounded-2xl border border-slate-800 bg-slate-950/90 p-2.5 sm:p-3.5"
                           >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex flex-wrap items-center gap-2 min-w-0">
-                                <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-slate-950 font-mono font-black">
-                                  {isFirstDirection ? `#${rank}` : "ทิศเพิ่มเติม"}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/70 pb-2">
+                              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-bold ${isFirstDirection ? "bg-amber-400/15 text-amber-200 ring-1 ring-inset ring-amber-400/35" : "bg-slate-800 text-slate-300"}`}>
+                                  {isFirstDirection ? `อันดับ ${rank}` : "ทิศเพิ่มเติม"}
                                 </span>
-                                <span className="font-heading font-bold text-sm text-white break-words">
+                                <span className="min-w-0 break-words font-heading text-sm font-bold text-white">
                                   {detourName}
                                 </span>
                                 {detour && !detour.is_active && (
@@ -363,7 +372,7 @@ export function EventDetourLinkModal({
                                   onClick={() =>
                                     handleMoveLink(link.detourId, "UP")
                                   }
-                                  className="min-h-10 min-w-10 flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 disabled:opacity-35 disabled:cursor-not-allowed"
+                                  className="min-h-11 min-w-11 flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 disabled:opacity-35 disabled:cursor-not-allowed"
                                   title="เลื่อนลำดับขึ้น"
                                 >
                                   <ArrowUp className="w-4 h-4" />
@@ -375,7 +384,7 @@ export function EventDetourLinkModal({
                                   onClick={() =>
                                     handleMoveLink(link.detourId, "DOWN")
                                   }
-                                  className="min-h-10 min-w-10 flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 disabled:opacity-35 disabled:cursor-not-allowed"
+                                  className="min-h-11 min-w-11 flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 disabled:opacity-35 disabled:cursor-not-allowed"
                                   title="เลื่อนลำดับลง"
                                 >
                                   <ArrowDown className="w-4 h-4" />
@@ -386,7 +395,7 @@ export function EventDetourLinkModal({
                                   onClick={() =>
                                     handleRemoveLink(link.detourId, link.eventDirection)
                                   }
-                                  className="min-h-10 min-w-10 flex items-center justify-center rounded-xl border border-rose-800/60 bg-rose-950/50 hover:bg-rose-900 text-rose-300"
+                                  className="min-h-11 min-w-11 flex items-center justify-center rounded-xl border border-rose-800/60 bg-rose-950/50 hover:bg-rose-900 text-rose-300"
                                   title="นำออกจากเหตุการณ์"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -514,7 +523,7 @@ export function EventDetourLinkModal({
                       </select>
                     </div>
 
-                    <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                    <div className="space-y-1.5 sm:max-h-52 sm:overflow-y-auto sm:pr-1 [@media(max-height:540px)]:max-h-none [@media(max-height:540px)]:overflow-visible">
                       {filteredAvailableDetours.length === 0 ? (
                         <p className="text-slate-400 py-2 text-center">ไม่พบทางเลี่ยงที่ค้นหา</p>
                       ) : (
@@ -528,7 +537,7 @@ export function EventDetourLinkModal({
                               className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950/90 border border-slate-800/80"
                             >
                               <div className="min-w-0">
-                                <span className="font-heading font-bold text-white block truncate">
+                                <span className="font-heading font-bold text-white block [overflow-wrap:anywhere]">
                                   {d.route_name}
                                 </span>
                                 <span className="text-slate-400">
@@ -803,25 +812,28 @@ export function EventDetourLinkModal({
         </div>
 
         {/* Footer Actions — primary save button MUST be last focusable element */}
-        <div className="border-t border-slate-800 px-4 py-3.5 sm:px-6 bg-slate-950/90 flex flex-wrap items-center justify-between gap-2">
+        <div className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-1.5 border-t border-slate-800 bg-slate-950/90 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 sm:flex sm:justify-between sm:gap-2 sm:px-6 sm:py-3.5 [@media(max-height:540px)]:py-1">
           <button
             type="button"
+            aria-label="โหลดข้อมูลล่าสุดจากฐานข้อมูล"
             disabled={isSaving || eventLoading || byDetourLoading}
             onClick={() =>
               mode === "BY_EVENT"
                 ? void loadSingleEvent(selectedEventId)
                 : void loadAllEventsForDetourMode(selectedDetourId)
             }
-            className="min-h-10 px-3.5 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-sky-300 font-heading font-bold text-xs inline-flex items-center gap-1.5 disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-slate-700 bg-slate-900 px-2 text-xs font-bold text-sky-300 hover:bg-slate-800 disabled:opacity-50 sm:gap-1.5 sm:px-3.5"
           >
-            <RefreshCw className="w-3.5 h-3.5" /> โหลดข้อมูลล่าสุดจากฐานข้อมูล
+            <RefreshCw className="h-3.5 w-3.5 shrink-0" />
+            <span className="sm:hidden">โหลดล่าสุด</span>
+            <span className="hidden sm:inline">โหลดข้อมูลล่าสุดจากฐานข้อมูล</span>
           </button>
 
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex min-w-0 items-center justify-end gap-1.5 sm:ml-auto sm:gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="min-h-10 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-heading font-bold text-xs"
+              className="min-h-11 shrink-0 rounded-xl bg-slate-800 px-2.5 text-xs font-bold text-slate-200 hover:bg-slate-700 sm:px-4"
             >
               ปิด
             </button>
@@ -834,10 +846,12 @@ export function EventDetourLinkModal({
               onClick={() =>
                 mode === "BY_EVENT" ? void handleSaveByEvent() : void handleSaveByDetour()
               }
-              className="min-h-10 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold text-xs shadow-lg inline-flex items-center gap-1.5 disabled:opacity-50"
+              aria-label={isSaving ? "กำลังบันทึกและตรวจสอบ" : "บันทึกความสัมพันธ์"}
+              className={`${workspace.primary} inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl px-2.5 text-xs font-bold leading-tight disabled:opacity-50 sm:flex-none sm:gap-1.5 sm:px-5`}
             >
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span>{isSaving ? "กำลังบันทึกและตรวจสอบ..." : "บันทึกความสัมพันธ์"}</span>
+              {isSaving ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <Save className="h-4 w-4 shrink-0" />}
+              <span className="min-[360px]:hidden">{isSaving ? "กำลังบันทึก" : "บันทึก"}</span>
+              <span className="hidden min-[360px]:inline">{isSaving ? "กำลังบันทึกและตรวจสอบ..." : "บันทึกความสัมพันธ์"}</span>
             </button>
           </div>
         </div>
