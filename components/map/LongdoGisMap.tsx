@@ -25,15 +25,20 @@ import {
   getResponsivePopupOptions,
   buildHighwayPopupHtml,
   buildOfficePopupHtml,
+  buildDetourPointPhotoPopupHtml,
+  parseRouteCoordinates,
 } from "./longdo-map-popups";
 import {
+  buildDetourPhotoBadgeSpec,
   collectCriticalHighwayRouteNos,
   collectHighwayShieldCandidates,
   collectLegendRoutes,
   resolveHighwayForegroundStyle,
   shouldShowHighwayFeature,
+  resolveDetourPhotoPointCoords,
 } from "./longdo-layer-builders";
 import { placeArrowsOnLine, renderDirectionalArrows } from "./longdo-arrow-layer";
+import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import { renderVertexEditHandles } from "./longdo-vertex-handles";
 import { renderDraftAndConflictLayer } from "./longdo-draft-layer";
 import { useLongdoPopupBridge, useLongdoRouteLayers } from "./useLongdoRouteLayers";
@@ -1238,23 +1243,27 @@ export function LongdoGisMap({
       isPrimary: boolean
     ) => {
       const geom = resolveDetourFocusGeometry(detour, direction);
-      const color = isPrimary ? "#f59e0b" : "#38bdf8";
-      const weight = isPrimary ? 6.5 : 5;
+      const style = mapStyles.detour;
+      const color = style?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
+      const weight = (style?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight) + (isPrimary ? 1.5 : 0);
+      const borderColor = style?.borderActive ? style.borderColor || "#ffffff" : "#091326";
+      const borderWidth = style?.borderActive ? Math.max(1, Number(style.borderWidth) || 1) : 2;
+      const arrowColor = resolveVisibleArrowColor(color, style?.arrowColor || "#0f172a");
 
       if (geom.coords.length >= 2) {
         const latLngs = geom.coords.map(toLeafletLatLng);
         L.polyline(latLngs, {
           renderer,
-          color: "#091326",
-          weight: weight + 4,
-          opacity: 0.92,
+          color: borderColor,
+          weight: weight + borderWidth * 2,
+          opacity: style?.opacity ?? 0.95,
         }).addTo(group);
         const line = L.polyline(latLngs, {
           renderer,
           color,
           weight,
-          opacity: 1,
-          dashArray: isPrimary ? undefined : "10, 6",
+          opacity: style?.opacity ?? 0.95,
+          dashArray: isPrimary ? dashArrayFor(style) : "10, 6",
         }).addTo(group);
         raisePathLayers(line);
         allPolylines.push(geom.coords);
@@ -1266,9 +1275,9 @@ export function LongdoGisMap({
           group,
           geom.coords,
           "FORWARD",
-          "#091326",
-          14,
-          72,
+          arrowColor,
+          style?.arrowSize || 14,
+          style?.arrowSpacingPx || 96,
           color,
           viewport,
           { count: 0 }
@@ -1277,34 +1286,36 @@ export function LongdoGisMap({
         allPoints.push(geom.startCoord);
       }
 
-      const startLabel = direction === "REVERSE" ? "B" : "A";
-      const endLabel = direction === "REVERSE" ? "A" : "B";
+      // Keep the A/B photos on their canonical coordinates, regardless of the
+      // currently displayed travel direction. This replaces the old floating
+      // endpoint labels and keeps each marker attached to its real map point.
+      const photoPoints = resolveDetourPhotoPointCoords(
+        detour,
+        parseRouteCoordinates(detour.coordinates_json)
+      );
+      const endpoints = [
+        { point: "START" as const, lat: photoPoints.startLat, lon: photoPoints.startLon, photo: detour.detour_meta?.start_point_photo },
+        { point: "END" as const, lat: photoPoints.endLat, lon: photoPoints.endLon, photo: detour.detour_meta?.end_point_photo },
+      ];
 
-      if (geom.startCoord) {
-        allPoints.push(geom.startCoord);
-        L.marker(toLeafletLatLng(geom.startCoord), {
-          interactive: false,
+      endpoints.forEach(({ point, lat, lon, photo }) => {
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        const marker = L.marker([lat, lon], {
+          interactive: Boolean(photo?.url),
           zIndexOffset: 900,
-          icon: L.divIcon({
-            className: "hdms-focus-endpoint",
-            html: `<div style="transform:translate(-50%,-50%)" class="flex items-center gap-1 rounded-full border-2 border-white bg-emerald-600 px-2 py-0.5 text-[11px] font-black text-white shadow-lg whitespace-nowrap">จุดเริ่ม ${startLabel}</div>`,
-            iconSize: [0, 0],
-          }),
+          icon: L.divIcon(buildDetourPhotoBadgeSpec(point)),
         }).addTo(group);
-      }
-
-      if (geom.endCoord) {
-        allPoints.push(geom.endCoord);
-        L.marker(toLeafletLatLng(geom.endCoord), {
-          interactive: false,
-          zIndexOffset: 900,
-          icon: L.divIcon({
-            className: "hdms-focus-endpoint",
-            html: `<div style="transform:translate(-50%,-50%)" class="flex items-center gap-1 rounded-full border-2 border-white bg-sky-600 px-2 py-0.5 text-[11px] font-black text-white shadow-lg whitespace-nowrap">จุดสิ้นสุด ${endLabel}</div>`,
-            iconSize: [0, 0],
-          }),
-        }).addTo(group);
-      }
+        allPoints.push([lon, lat]);
+        if (!photo?.url) return;
+        marker.bindPopup(
+          () => buildDetourPointPhotoPopupHtml(detour, point, photo, lat, lon),
+          getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
+        );
+        marker.on("click", (event: any) => {
+          L.DomEvent.stopPropagation(event);
+          marker.openPopup();
+        });
+      });
     };
 
     if (gisFocus.targetType === "DETOUR") {
@@ -1332,23 +1343,26 @@ export function LongdoGisMap({
       const floodData = resolveFloodFocusData(gisFocus.targetId, systemData);
       if (floodData.primaryFlood && !floodData.isResolved) {
         // Draw all active segments (including LT/RT siblings) exempt from zoom-dependent hiding
+        const style = mapStyles.flood;
+        const color = style?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
+        const borderColor = style?.borderActive ? style.borderColor || "#ffffff" : "#091326";
+        const borderWidth = style?.borderActive ? Math.max(1, Number(style.borderWidth) || 1) : 2;
+        const weight = (style?.weight || LAYER_CONFIG.FLOOD_RED_LINE.weight) + 0.5;
         floodData.activeSegments.forEach((seg) => {
-          const segStatus = getTrafficPresentation(seg.traffic_status);
-          const segColor = segStatus.color === "red" ? "#ef4444" : segStatus.color === "amber" ? "#f59e0b" : "#38bdf8";
           const segCoords = (floodData.coordsList.find((_, idx) => floodData.activeSegments[idx]?.id === seg.id)) || [];
           if (segCoords.length >= 2) {
             const latLngs = segCoords.map(toLeafletLatLng);
             L.polyline(latLngs, {
               renderer,
-              color: "#ffffff",
-              weight: 10,
-              opacity: 0.9,
+              color: borderColor,
+              weight: weight + borderWidth * 2,
+              opacity: style?.opacity ?? 0.95,
             }).addTo(group);
             const line = L.polyline(latLngs, {
               renderer,
-              color: segColor,
-              weight: 6.5,
-              opacity: 1,
+              color,
+              weight,
+              opacity: style?.opacity ?? 0.95,
             }).addTo(group);
             raisePathLayers(line);
             allPolylines.push(segCoords);
@@ -1357,10 +1371,10 @@ export function LongdoGisMap({
             L.circleMarker([seg.lat_start, seg.lon_start], {
               renderer,
               radius: 10,
-              color: "#ffffff",
-              weight: 2.5,
-              fillColor: segColor,
-              fillOpacity: 0.95,
+              color: borderColor,
+              weight: borderWidth,
+              fillColor: color,
+              fillOpacity: style?.opacity ?? 0.95,
             }).addTo(group);
           }
         });
@@ -1397,9 +1411,12 @@ export function LongdoGisMap({
       const focusBarRect = document
         .querySelector('[data-testid="gis-focus-mode-bar"]')
         ?.getBoundingClientRect();
+      const focusTimelineRect = document
+        .querySelector('[data-testid="gis-focus-timeline-panel"]')
+        ?.getBoundingClientRect();
 
       const leftPadding = isMobileViewport ? 58 : 24;
-      const rightPadding = isMobileViewport ? 44 : 24;
+      let rightPadding = isMobileViewport ? 44 : 24;
       let topPadding = isMobileViewport ? 108 : 132;
       let bottomPadding = isMobileViewport ? 240 : 40;
       if (mapRect && focusBarRect && mapRect.height > 0) {
@@ -1411,6 +1428,21 @@ export function LongdoGisMap({
         } else if (!isMobileViewport && barCenterY < mapCenterY) {
           const neededTop = Math.ceil(focusBarRect.bottom - mapRect.top) + 16;
           topPadding = Math.min(Math.max(132, neededTop), Math.max(132, mapRect.height - bottomPadding - 120));
+        }
+      }
+      if (mapRect && focusTimelineRect && mapRect.width > 0 && mapRect.height > 0) {
+        if (isMobileViewport) {
+          const neededBottom = Math.ceil(mapRect.bottom - focusTimelineRect.top) + 16;
+          bottomPadding = Math.min(
+            Math.max(bottomPadding, neededBottom),
+            Math.max(120, mapRect.height - topPadding - 96)
+          );
+        } else {
+          const neededRight = Math.ceil(mapRect.right - focusTimelineRect.left) + 16;
+          rightPadding = Math.min(
+            Math.max(rightPadding, neededRight),
+            Math.max(80, mapRect.width - leftPadding - 160)
+          );
         }
       }
 
@@ -1446,7 +1478,7 @@ export function LongdoGisMap({
     return () => {
       group.clearLayers();
     };
-  }, [mapReady, gisFocus, systemData]);
+  }, [mapReady, gisFocus, systemData, mapStyles]);
 
   return (
     <div data-public-filter-counts={`flood:${highlightFloodIds.length};detour:${highlightDetourIds.length}`} className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full min-h-[450px]`} style={{ minHeight: 450 }}>

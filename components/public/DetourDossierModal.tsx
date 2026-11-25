@@ -173,13 +173,13 @@ export function DetourDossierModal({
                 </summary>
                 <div className="space-y-2 p-2 bg-slate-950 rounded-b-xl">
                   {photoFloods.map((linked) => (
-                    <div key={linked.id} className="relative overflow-hidden rounded-lg bg-slate-950">
+                    <div key={linked.id} className="overflow-hidden rounded-lg bg-slate-950">
                       <img
                         src={normalizeMediaUrl(linked.latest_photo_url)}
                         alt="ภาพจุดน้ำท่วมที่ผูกกับทางเลี่ยง"
-                        className="w-full h-40 object-cover"
+                        className="h-auto max-h-[min(42dvh,20rem)] w-full object-contain"
                       />
-                      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/90 via-slate-950/60 to-transparent p-2 text-xs text-white">
+                      <div className="border-t border-slate-800 bg-slate-950/95 p-2 text-xs text-white">
                         <span className="font-bold text-amber-300">จุดเกิดเหตุ:</span> ทล.{linked.route_no} {linked.section_name} (กม.{linked.km_start} - {linked.km_end})
                       </div>
                     </div>
@@ -238,7 +238,7 @@ export function DetourDossierModal({
                   <img
                     src={normalizeMediaUrl(activePointPhoto.url)}
                     alt={activePointPhoto.caption || pointLabel}
-                    className="w-full h-36 rounded-lg object-cover border border-slate-800"
+                    className="h-auto max-h-[min(42dvh,20rem)] w-full rounded-lg border border-slate-800 object-contain bg-slate-950"
                   />
                   {activePointPhoto.caption && (
                     <p className="text-xs text-slate-300 leading-snug">{activePointPhoto.caption}</p>

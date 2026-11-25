@@ -24,7 +24,13 @@ export function placeArrowsOnLine(
 ) {
   if (direction === "UNKNOWN" || coords.length < 2 || counter.count >= MAX_ARROWS) return;
   const latLngs = coords.map(toLeafletLatLng);
-  let accumPx = spacingPx * 0.45;
+  // Arrow markers are screen-space elements. Scale both their visual size and
+  // density from the map zoom so a focused route remains legible without
+  // becoming noisy in a wide overview.
+  const zoomScale = Math.max(0.72, Math.min(1.35, 1 + (map.getZoom() - 12) * 0.08));
+  const scaledSizePx = Math.max(8, Math.round(sizePx * zoomScale));
+  const scaledSpacingPx = Math.max(64, Math.round(spacingPx / zoomScale));
+  let accumPx = scaledSpacingPx * 0.45;
 
   for (let i = 0; i < latLngs.length - 1 && counter.count < MAX_ARROWS; i++) {
     const p1 = latLngs[i];
@@ -38,8 +44,8 @@ export function placeArrowsOnLine(
     const segLenPx = Math.hypot(dx, dy);
     if (segLenPx < 6) continue;
 
-    while (accumPx + segLenPx >= spacingPx && counter.count < MAX_ARROWS) {
-      const remain = spacingPx - accumPx;
+    while (accumPx + segLenPx >= scaledSpacingPx && counter.count < MAX_ARROWS) {
+      const remain = scaledSpacingPx - accumPx;
       const ratio = Math.max(0, Math.min(1, remain / segLenPx));
       const lat = p1[0] + (p2[0] - p1[0]) * ratio;
       const lng = p1[1] + (p2[1] - p1[1]) * ratio;
@@ -50,19 +56,19 @@ export function placeArrowsOnLine(
 
         const svgHtml =
           direction === "TWO_WAY"
-            ? `<div style="transform:rotate(${angleDeg.toFixed(1)}deg);width:${sizePx + 6}px;height:${sizePx + 6}px;display:flex;align-items:center;justify-content:center;${bgBadge ? `background:${bgBadge};border-radius:999px;border:1px solid rgba(255,255,255,0.75);box-shadow:0 1px 4px rgba(0,0,0,0.45);` : "filter:drop-shadow(0 1px 2px rgba(0,0,0,0.85));"}"><svg width="${sizePx}" height="${sizePx}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8l4 4-4 4"/><path d="M7 16l-4-4 4-4"/><path d="M3 12h18"/></svg></div>`
-            : `<div style="transform:rotate(${angleDeg.toFixed(1)}deg);width:${sizePx + 4}px;height:${sizePx + 4}px;display:flex;align-items:center;justify-content:center;${bgBadge ? `background:${bgBadge};border-radius:999px;border:1px solid rgba(255,255,255,0.8);box-shadow:0 1px 4px rgba(0,0,0,0.45);` : "filter:drop-shadow(0 1px 2px rgba(0,0,0,0.85));"}"><svg width="${sizePx}" height="${sizePx}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>`;
+            ? `<div style="transform:rotate(${angleDeg.toFixed(1)}deg);width:${scaledSizePx + 6}px;height:${scaledSizePx + 6}px;display:flex;align-items:center;justify-content:center;${bgBadge ? `background:${bgBadge};border-radius:999px;border:1px solid rgba(255,255,255,0.75);box-shadow:0 1px 4px rgba(0,0,0,0.45);` : "filter:drop-shadow(0 1px 2px rgba(0,0,0,0.85));"}"><svg width="${scaledSizePx}" height="${scaledSizePx}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8l4 4-4 4"/><path d="M7 16l-4-4 4-4"/><path d="M3 12h18"/></svg></div>`
+            : `<div style="transform:rotate(${angleDeg.toFixed(1)}deg);width:${scaledSizePx + 4}px;height:${scaledSizePx + 4}px;display:flex;align-items:center;justify-content:center;${bgBadge ? `background:${bgBadge};border-radius:999px;border:1px solid rgba(255,255,255,0.8);box-shadow:0 1px 4px rgba(0,0,0,0.45);` : "filter:drop-shadow(0 1px 2px rgba(0,0,0,0.85));"}"><svg width="${scaledSizePx}" height="${scaledSizePx}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>`;
 
         const icon = L.divIcon({
           html: svgHtml,
           className: "doh-dir-arrow-icon",
-          iconSize: [sizePx + 6, sizePx + 6],
-          iconAnchor: [(sizePx + 6) / 2, (sizePx + 6) / 2],
+          iconSize: [scaledSizePx + 6, scaledSizePx + 6],
+          iconAnchor: [(scaledSizePx + 6) / 2, (scaledSizePx + 6) / 2],
         });
         L.marker([lat, lng], { icon, interactive: false, keyboard: false }).addTo(group);
         counter.count++;
       }
-      accumPx -= spacingPx;
+      accumPx -= scaledSpacingPx;
     }
     accumPx += segLenPx;
   }

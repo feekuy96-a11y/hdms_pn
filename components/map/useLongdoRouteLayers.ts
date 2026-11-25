@@ -27,6 +27,7 @@ import {
 import {
   buildDetourPhotoBadgeSpec,
   buildDetourSymbolIconSpec,
+  type FloodMarkerCandidate,
   buildFloodMarkerCandidates,
   buildZoomAdaptiveFloodPinSpec,
   clusterFloodMarkerCandidates,
@@ -228,11 +229,37 @@ export function useLongdoRouteLayers({
 }: UseLongdoRouteLayersParams) {
   const activationRef = React.useRef(onActivateMapEntity);
   activationRef.current = onActivateMapEntity;
+  const detourPhotoMarkerRefs = React.useRef<Array<{ marker: any; point: "START" | "END" }>>([]);
+  // Segment capsule markers are retained across zoom changes. Replacing only
+  // their icon preserves an open Leaflet popup instead of destroying its layer.
+  const floodSegmentMarkerRefs = React.useRef<Array<{
+    marker: any;
+    item: FloodMarkerCandidate;
+    color: string;
+    waveIcon: string;
+    waveBadge: string;
+  }>>([]);
+
+  const syncDetourPhotoMarker = (L: any, marker: any, point: "START" | "END", zoom: number) => {
+    const visible = zoom >= 12;
+    const variant = zoom >= 14 ? "FULL" : "COMPACT";
+    // Leaflet binds DOM listeners while creating the icon. Set this before
+    // setIcon so a marker revealed after zooming is clickable immediately.
+    marker.options.interactive = visible;
+    marker.setIcon(L.divIcon(buildDetourPhotoBadgeSpec(point, variant)));
+    marker.setOpacity(visible ? 1 : 0);
+    const element = marker.getElement?.();
+    if (element) {
+      element.style.display = visible ? "" : "none";
+      element.style.pointerEvents = visible ? "" : "none";
+    }
+  };
   // 4c. Detour routes + bidirectional symbol & entrance photo markers
   useEffect(() => {
     const L = leafletRef.current;
     const group = detourGroupRef.current;
     detourLinesRef.current = [];
+    detourPhotoMarkerRefs.current = [];
     if (!mapReady || !L || !group) return;
     group.clearLayers();
     if (!effectiveShowDetourLayer) return;
@@ -348,6 +375,8 @@ export function useLongdoRouteLayers({
             getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
           )
           .addTo(group);
+        detourPhotoMarkerRefs.current.push({ marker: startMarker, point: "START" });
+        syncDetourPhotoMarker(L, startMarker, "START", currentZoom);
         startMarker.__dohFilterId = detour.id;
         startMarker.on("click", (e: any) => {
           activationRef.current?.({ type: "DETOUR", id: detour.id });
@@ -365,6 +394,8 @@ export function useLongdoRouteLayers({
             getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
           )
           .addTo(group);
+        detourPhotoMarkerRefs.current.push({ marker: endMarker, point: "END" });
+        syncDetourPhotoMarker(L, endMarker, "END", currentZoom);
         endMarker.__dohFilterId = detour.id;
         endMarker.on("click", (e: any) => {
           activationRef.current?.({ type: "DETOUR", id: detour.id });
@@ -378,15 +409,28 @@ export function useLongdoRouteLayers({
     raisePathLayers(group, floodGroupRef.current, draftGroupRef.current);
     return () => {
       detourLinesRef.current = [];
+      detourPhotoMarkerRefs.current = [];
       group.clearLayers();
     };
   }, [mapReady, systemData.detourRoutes, effectiveShowDetourLayer, mapStyles]);
+
+  // A/B photo markers reveal progressively without recreating detour layers or
+  // their open popups: hidden at the default overview, compact at mid zoom,
+  // then labelled A/B when the user is close enough to inspect the route.
+  useEffect(() => {
+    const L = leafletRef.current;
+    if (!mapReady || !L) return;
+    detourPhotoMarkerRefs.current.forEach(({ marker, point }) => {
+      syncDetourPhotoMarker(L, marker, point, currentZoom);
+    });
+  }, [mapReady, currentZoom, leafletRef]);
 
   // 4d. Flood routes + capsule markers (Hide flood line when confirmed water_level_cm === 0 while preserving DB history).
   useEffect(() => {
     const L = leafletRef.current;
     const group = floodGroupRef.current;
     floodLinesRef.current = {};
+    floodSegmentMarkerRefs.current = [];
     if (!mapReady || !L || !group) return;
     group.clearLayers();
     if (!effectiveShowFloodLayer) return;
@@ -504,6 +548,13 @@ export function useLongdoRouteLayers({
           }).addTo(group);
           marker.__dohFilterId = item.flood.id;
           marker.getElement()?.setAttribute("aria-label", markerAriaLabel);
+          floodSegmentMarkerRefs.current.push({
+            marker,
+            item,
+            color: fColor,
+            waveIcon: floodWaveIcon,
+            waveBadge: floodWaveBadge,
+          });
 
           marker.bindPopup(() => buildFloodPopupHtml(item.flood, countDetoursForFlood(item.flood)), floodPopupOpts);
           marker.on("click", (e: any) => {
@@ -519,6 +570,20 @@ export function useLongdoRouteLayers({
     return () => {
       group.clearLayers();
       floodLinesRef.current = {};
+      floodSegmentMarkerRefs.current = [];
     };
-  }, [mapReady, systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, floodDisplayMode, mapStyles, currentZoom]);
+  }, [mapReady, systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, floodDisplayMode, mapStyles]);
+
+  // Zoom must never recreate flood layers: an open popup belongs to the marker,
+  // so update only its responsive icon in-place.
+  useEffect(() => {
+    const L = leafletRef.current;
+    if (!mapReady || !L || floodDisplayMode !== "SEGMENTS") return;
+
+    floodSegmentMarkerRefs.current.forEach(({ marker, item, color, waveIcon, waveBadge }) => {
+      marker.setIcon(
+        L.divIcon(buildZoomAdaptiveFloodPinSpec(item, currentZoom, color, waveIcon, waveBadge))
+      );
+    });
+  }, [mapReady, floodDisplayMode, currentZoom, leafletRef]);
 }
