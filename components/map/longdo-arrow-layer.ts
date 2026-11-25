@@ -1,5 +1,5 @@
 import { SystemDataPayload } from "@/db/default-data";
-import { LAYER_CONFIG } from "@/lib/constants";
+import { LAYER_CONFIG, type MapLineStyleItem } from "@/lib/constants";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import {
   geoJsonFeatures,
@@ -8,6 +8,11 @@ import {
 } from "./longdo-map-popups";
 
 const MAX_ARROWS = 160;
+
+// The saved legacy "arrows" style retains its configured badge background.
+export function usesCompactDetourArrows(animation?: MapLineStyleItem["animation"]): boolean {
+  return animation === "flow" || animation === "chevrons";
+}
 
 export function placeArrowsOnLine(
   L: any,
@@ -179,7 +184,7 @@ export function renderDirectionalArrows({
   if (showDetourLayer && showDetourArrows && (isFilterOrFocusActive || z >= detourMinZoom)) {
     const dBadgeBg = detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
     const dArrowColor = resolveVisibleArrowColor(dBadgeBg, detourStyle?.arrowColor || "#0f172a");
-    const compact = detourStyle?.animation === "arrows" || detourStyle?.animation === "flow" || detourStyle?.animation === "chevrons";
+    const compact = usesCompactDetourArrows(detourStyle?.animation);
     const dArrowSize = detourStyle?.arrowSize || 12;
     const dArrowSpacing = detourStyle?.arrowSpacingPx || 120;
 

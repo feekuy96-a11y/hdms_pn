@@ -5,7 +5,7 @@ import type * as Leaflet from "leaflet";
 import type { MapLineStyleItem } from "@/lib/constants";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import { addLineCasing, dashArrayFor } from "./longdo-map-popups";
-import { placeArrowsOnLine } from "./longdo-arrow-layer";
+import { placeArrowsOnLine, usesCompactDetourArrows } from "./longdo-arrow-layer";
 import { installRouteMotion } from "./longdo-route-motion";
 
 // Use the actual map painter on an isolated, tile-free viewport. There is no
@@ -81,7 +81,7 @@ export function RouteMotionPreview({ style, layer }: {
         placeArrowsOnLine(L, map, groups, latLngs.map(({ lat, lng }) => [lng, lat]), "FORWARD",
           resolveVisibleArrowColor(style.color, style.arrowColor || "#0f172a"), style.arrowSize || 12,
           style.arrowSpacingPx || 120, style.color, map.getBounds(), { count: 0 },
-          style.animation === "arrows" || style.animation === "flow" || style.animation === "chevrons");
+          usesCompactDetourArrows(style.animation));
       }
       if (layer) stopMotion = installRouteMotion(L, map, [{ name: layer, style,
         sources: () => [{ line, baseOpacity: opacity, filterOpacity: 1 }],
