@@ -16,7 +16,8 @@ export interface EventDetourLink {
   detourId: string;
   eventDirection: EventTravelDirection;
   detourDirection: DetourTravelDirection;
-  position: number;
+  position: number; // Compatibility: per-direction order.
+  eventPosition?: number; // One rank per distinct detour in the flood event.
   recommendation: DetourRecommendation;
   reviewedGeometryVersion: number | null;
 }
@@ -46,6 +47,7 @@ export interface LinkedFloodEventEntry {
   floodRoutes: FloodRoute[];
   links: EventDetourLink[];
   primaryFlood: FloodRoute;
+  position: number | null;
   isActiveLink: boolean;
 }
 
@@ -169,39 +171,33 @@ export function validateEventDetourLinks(input: unknown): string[] {
   return [...new Set(errors)];
 }
 
-/**
- * Deduplicate links by (detourId, eventDirection) and resequence positions 1..N per direction.
- */
+/** Sort saved ranks first; legacy ties have a stable, explicit fallback. */
+export function compareEventDetourLinks(a: EventDetourLink, b: EventDetourLink): number {
+  return (a.eventPosition ?? Infinity) - (b.eventPosition ?? Infinity) ||
+    a.position - b.position ||
+    EVENT_DIRECTIONS.indexOf(a.eventDirection) - EVENT_DIRECTIONS.indexOf(b.eventDirection) ||
+    (a.detourId < b.detourId ? -1 : a.detourId > b.detourId ? 1 : 0);
+}
+
+/** Sort only when hydrating; edited drafts retain the operator's input order. */
 export function resequenceEventDetourLinks(links: EventDetourLink[]): EventDetourLink[] {
   const seen = new Set<string>();
-  const grouped = new Map<EventTravelDirection, EventDetourLink[]>([
-    ["BOTH", []],
-    ["A_TO_B", []],
-    ["B_TO_A", []],
-    ["UNKNOWN", []],
-  ]);
-
+  const grouped = new Map<string, EventDetourLink[]>();
   for (const link of links) {
     const key = `${link.eventDirection}::${link.detourId}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const bucket = grouped.get(link.eventDirection);
-    if (bucket) {
-      bucket.push(link);
-    }
+    const rows = grouped.get(link.detourId) ?? [];
+    rows.push(link);
+    grouped.set(link.detourId, rows);
   }
 
-  const ordered: EventDetourLink[] = [];
-  for (const dir of EVENT_DIRECTIONS) {
-    const bucket = grouped.get(dir) ?? [];
-    bucket.forEach((link, idx) => {
-      ordered.push({
-        ...link,
-        position: idx + 1,
-      });
-    });
-  }
-  return ordered;
+  const directionPositions = new Map<EventTravelDirection, number>();
+  return [...grouped.values()].flatMap((rows, index) => rows.map((link) => {
+    const position = (directionPositions.get(link.eventDirection) ?? 0) + 1;
+    directionPositions.set(link.eventDirection, position);
+    return { ...link, position, eventPosition: index + 1 };
+  }));
 }
 
 /**
@@ -380,7 +376,7 @@ export function getLinkedDetoursForFlood(
   if (isEventManagedByLinkTable(eventId, systemData)) {
     const activeLinks = (systemData.eventDetourLinks || [])
       .filter((l) => l.eventId === eventId && isEventDetourLinkVisible(l.recommendation))
-      .sort((a, b) => a.position - b.position);
+      .sort(compareEventDetourLinks);
 
     const grouped = new Map<string, EventDetourLink[]>();
     for (const link of activeLinks) {
@@ -398,7 +394,7 @@ export function getLinkedDetoursForFlood(
       entries.push({
         detour,
         links,
-        position: first.position,
+        position: first.eventPosition ?? entries.length + 1,
         effectiveEventDirection:
           links.length > 1 || first.eventDirection === "BOTH" ? "BOTH" : first.eventDirection,
         effectiveDetourDirection: first.detourDirection,
@@ -434,7 +430,7 @@ export function getLinkedDetoursForFlood(
 export function getLinkedEventsForDetour(
   detour: DetourRoute | null | undefined,
   systemData: SystemDataPayload,
-  options?: { includeInactiveFloods?: boolean }
+  options?: { includeInactiveFloods?: boolean; includeOrder?: boolean }
 ): LinkedFloodEventEntry[] {
   if (!detour) return [];
   const includeInactive = Boolean(options?.includeInactiveFloods);
@@ -492,6 +488,10 @@ export function getLinkedEventsForDetour(
       floodRoutes: segments,
       links: matchedLinksByEvent.get(eventId) || [],
       primaryFlood: primary,
+      position: options?.includeOrder
+        ? getLinkedDetoursForFlood(primary, systemData, { includeInactiveDetours: includeInactive })
+          .find((entry) => entry.detour.id === detour.id)?.position ?? null
+        : null,
       isActiveLink: true,
     });
   }

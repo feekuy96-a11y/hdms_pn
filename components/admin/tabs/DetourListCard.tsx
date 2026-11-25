@@ -164,6 +164,7 @@ export function DetourListCard({
             className="bg-amber-400/20 text-amber-300 border border-amber-500/40 text-[10px] px-1.5 py-0.2 rounded font-bold"
           >
             ผูก ทล.{ev.routeNo} ({ev.sectionName})
+            {ev.position != null && ` · อันดับ ${ev.position}`}
             {ev.kmRangeLabel ? ` ${ev.kmRangeLabel}` : ""}
           </span>
         ))}
@@ -173,11 +174,11 @@ export function DetourListCard({
 
       <div className="pt-2 border-t border-surface flex items-center justify-between gap-2 text-[11px]">
         <span className="text-slate-400 font-mono">
-          ลำดับที่ {groupPos + 1} ·{" "}
+          {linkedEvents.length === 0 && `ลำดับที่ ${groupPos + 1} · `}
           {Array.isArray(item.coordinates_json) ? item.coordinates_json.length : 0} จุดโหนด
         </span>
         <div className="flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-          <button
+          {linkedEvents.length === 0 && <button
             type="button"
             aria-label={`เลื่อนทางเลี่ยง ${item.route_name} ขึ้น`}
             disabled={!canMoveUp}
@@ -186,8 +187,8 @@ export function DetourListCard({
             className="min-h-9 px-2 rounded-lg border border-surface bg-surface-panel text-slate-200 hover:bg-slate-800 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
           >
             <ChevronUp className="w-3.5 h-3.5" />
-          </button>
-          <button
+          </button>}
+          {linkedEvents.length === 0 && <button
             type="button"
             aria-label={`เลื่อนทางเลี่ยง ${item.route_name} ลง`}
             disabled={!canMoveDown}
@@ -196,7 +197,7 @@ export function DetourListCard({
             className="min-h-9 px-2 rounded-lg border border-surface bg-surface-panel text-slate-200 hover:bg-slate-800 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
           >
             <ChevronDown className="w-3.5 h-3.5" />
-          </button>
+          </button>}
           <button
             type="button"
             onClick={() => onViewDetour(item)}
@@ -390,6 +391,7 @@ export function DetourListSection({
                             <div key={ev.eventId}>
                               <span className="bg-amber-400/20 text-amber-300 border border-amber-500/40 text-[10px] font-heading font-bold px-1.5 py-0.5 rounded">
                                 ทล.{ev.routeNo}
+                                {ev.position != null && ` · อันดับ ${ev.position}`}
                               </span>
                               <span
                                 className="block text-[11px] text-slate-200 mt-0.5 truncate max-w-[180px]"
@@ -425,7 +427,7 @@ export function DetourListSection({
 
                     <td className="p-3 text-right whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
                       <div className="inline-flex items-center gap-1">
-                        <button
+                        {linkedEvents.length === 0 && <button
                           type="button"
                           aria-label={`เลื่อนทางเลี่ยง ${item.route_name} ขึ้น`}
                           disabled={!canMoveUp}
@@ -434,8 +436,8 @@ export function DetourListSection({
                           className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-surface-card hover:bg-slate-800 text-slate-200 border border-surface transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
                         >
                           <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
-                        </button>
-                        <button
+                        </button>}
+                        {linkedEvents.length === 0 && <button
                           type="button"
                           aria-label={`เลื่อนทางเลี่ยง ${item.route_name} ลง`}
                           disabled={!canMoveDown}
@@ -444,7 +446,7 @@ export function DetourListSection({
                           className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg bg-surface-card hover:bg-slate-800 text-slate-200 border border-surface transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
                         >
                           <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
-                        </button>
+                        </button>}
 
                         {/* Longdo Map focus coordinates must stay [lon, lat] */}
                         {item.lat_start && item.lon_start && onFocusCoordinates && (

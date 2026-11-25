@@ -13,6 +13,7 @@ import {
   isDetourDirectionAllowed,
   recommendationToLinkStatus,
   resequenceEventDetourLinks,
+  compareEventDetourLinks,
   resolveDefaultDetourDirection,
   resolveDefaultEventDirection,
   validateEventDetourLinks,
@@ -183,7 +184,7 @@ export function useEventDetourLinkModal({
     try {
       const res: EventDetourLinksResult = await getEventDetourLinksAction(eventId);
       setEventVersion(res.version);
-      setDraftLinks(resequenceEventDetourLinks(res.links || []));
+      setDraftLinks(resequenceEventDetourLinks([...(res.links || [])].sort(compareEventDetourLinks)));
     } catch (err: any) {
       setEventError(err?.message || "ไม่สามารถโหลดความสัมพันธ์จากฐานข้อมูลได้");
     } finally {
@@ -255,7 +256,7 @@ export function useEventDetourLinkModal({
             nextStates[ev.eventId] = {
               status: "ok",
               version: result.value.version,
-              links: resequenceEventDetourLinks(result.value.links || []),
+              links: resequenceEventDetourLinks([...(result.value.links || [])].sort(compareEventDetourLinks)),
             };
           } else {
             failureCount++;
@@ -354,23 +355,14 @@ export function useEventDetourLinkModal({
     setSaveError(null);
   };
 
-  const handleMoveLink = (
-    detourId: string,
-    eventDirection: EventTravelDirection,
-    dir: "UP" | "DOWN"
-  ) => {
+  const handleMoveLink = (detourId: string, dir: "UP" | "DOWN") => {
     setDraftLinks((prev) => {
-      const scopeLinks = prev.filter((l) => l.eventDirection === eventDirection);
-      const otherLinks = prev.filter((l) => l.eventDirection !== eventDirection);
-      const idx = scopeLinks.findIndex((l) => l.detourId === detourId);
-      if (idx === -1) return prev;
-      const targetIdx = dir === "UP" ? idx - 1 : idx + 1;
-      if (targetIdx < 0 || targetIdx >= scopeLinks.length) return prev;
-
-      const updatedScope = [...scopeLinks];
-      const [moved] = updatedScope.splice(idx, 1);
-      updatedScope.splice(targetIdx, 0, moved);
-      return resequenceEventDetourLinks([...otherLinks, ...updatedScope]);
+      const ids = [...new Set(prev.map((link) => link.detourId))];
+      const index = ids.indexOf(detourId);
+      const target = index + (dir === "UP" ? -1 : 1);
+      if (index < 0 || target < 0 || target >= ids.length) return prev;
+      [ids[index], ids[target]] = [ids[target], ids[index]];
+      return resequenceEventDetourLinks(ids.flatMap((id) => prev.filter((link) => link.detourId === id)));
     });
     setVerifiedNotice(null);
     setSaveError(null);
@@ -466,7 +458,7 @@ export function useEventDetourLinkModal({
     try {
       await replaceEventDetourLinksAction(payload);
       const reloaded = await getEventDetourLinksAction(selectedEventId);
-      const reloadedLinks = resequenceEventDetourLinks(reloaded.links || []);
+      const reloadedLinks = resequenceEventDetourLinks([...(reloaded.links || [])].sort(compareEventDetourLinks));
       setEventVersion(reloaded.version);
       setDraftLinks(reloadedLinks);
       await onDataRefresh?.();
@@ -542,10 +534,12 @@ export function useEventDetourLinkModal({
           eventDirection: draft.eventDirection,
           detourDirection: draft.detourDirection,
           position: existing?.position ?? candidateLinks.length + 1,
+          eventPosition: existing?.eventPosition,
           recommendation: resolved.recommendation,
           reviewedGeometryVersion: resolved.reviewedGeometryVersion,
         };
-        candidateLinks.push(newOrUpdated);
+        const originalIndex = loaded.links.findIndex((row) => row.detourId === selectedDetourId);
+        candidateLinks.splice(originalIndex < 0 ? candidateLinks.length : originalIndex, 0, newOrUpdated);
       }
 
       const mergedLinks = resequenceEventDetourLinks(candidateLinks);
@@ -584,7 +578,7 @@ export function useEventDetourLinkModal({
           links: item.mergedLinks,
         });
         const reloaded = await getEventDetourLinksAction(item.ev.eventId);
-        const reloadedLinks = resequenceEventDetourLinks(reloaded.links || []);
+        const reloadedLinks = resequenceEventDetourLinks([...(reloaded.links || [])].sort(compareEventDetourLinks));
         totalReloadedLinks += reloadedLinks.length;
         savedCount++;
         updatedStates[item.ev.eventId] = {
