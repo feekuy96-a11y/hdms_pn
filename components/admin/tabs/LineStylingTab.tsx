@@ -5,6 +5,7 @@ import { SystemDataPayload } from "@/db/default-data";
 import { DEFAULT_MAP_STYLES, LINE_STYLE_PRESET_THEMES, MapLineStyleItem } from "@/lib/constants";
 import { Palette, Save, Sparkles } from "lucide-react";
 import { updateMapStyleAction } from "@/app/actions/doh-actions";
+import { routeMotionEffect, routeMotionPeriod, routeMotionToggle } from "@/lib/route-motion";
 
 interface LineStylingTabProps {
   systemData: SystemDataPayload;
@@ -70,6 +71,10 @@ export function LineStylingTab({
   };
 
   const currentItem = lineStyles[selectedStyleKey] || DEFAULT_MAP_STYLES[selectedStyleKey];
+  const incidentLayer = selectedStyleKey === "flood" || selectedStyleKey === "detour" ? selectedStyleKey : null;
+  const previewEffect = routeMotionEffect(currentItem);
+  const previewPeriod = `${routeMotionPeriod(previewEffect, currentItem.animationSpeed)}ms`;
+  const previewPath = "M 30 45 Q 160 10 300 45 T 570 45";
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -195,7 +200,7 @@ export function LineStylingTab({
 
               {currentItem.borderActive && (
                 <path
-                  d="M 30 45 Q 160 10 300 45 T 570 45"
+                  d={previewPath}
                   stroke={currentItem.borderColor || "#ffffff"}
                   strokeWidth={(currentItem.weight || 5) + (currentItem.borderWidth || 2) * 2}
                   strokeOpacity={currentItem.opacity ?? 0.9}
@@ -205,7 +210,7 @@ export function LineStylingTab({
               )}
 
               <path
-                d="M 30 45 Q 160 10 300 45 T 570 45"
+                d={previewPath}
                 stroke={currentItem.color}
                 strokeWidth={currentItem.weight || 5}
                 strokeOpacity={currentItem.opacity ?? 0.9}
@@ -218,21 +223,29 @@ export function LineStylingTab({
                     ? "14, 6, 3, 6"
                     : undefined
                 }
-                className={
-                  currentItem.animation === "chaser"
-                    ? "doh-line-chaser"
-                    : currentItem.animation === "pulse"
-                    ? "doh-line-pulse"
-                    : currentItem.animation === "blink"
-                    ? "doh-line-blink"
-                    : currentItem.animation === "arrows"
-                    ? "doh-line-arrows"
-                    : ""
-                }
+                className={previewEffect === "pulse" || previewEffect === "blink" ? `doh-line-${previewEffect}` : ""}
+                style={{ animationDuration: previewPeriod }}
                 filter={currentItem.glow ? "url(#preview-glow)" : undefined}
                 fill="none"
                 strokeLinecap="round"
               />
+              {(previewEffect === "wave" || previewEffect === "flow" || previewEffect === "arrows" || previewEffect === "chaser") && (
+                <g className="doh-route-motion-preview" key={`${previewEffect}-${previewPeriod}`} aria-hidden="true">
+                  {(previewEffect === "flow" ? [0, 1] : [0]).map((index) => (
+                    <path
+                      key={index}
+                      d={previewEffect === "wave" ? "M -15 0 Q -8 -10 0 0 T 15 0" : previewEffect === "chaser" ? "M -12 0 H 8" : "M -8 -5 L 0 0 L -8 5"}
+                      stroke="#fff"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      fill="none"
+                    >
+                      <animateMotion path={previewPath} dur={previewPeriod} begin={index ? `-${parseInt(previewPeriod, 10) / 2}ms` : "0s"} rotate="auto" repeatCount="indefinite" />
+                    </path>
+                  ))}
+                </g>
+              )}
             </svg>
 
             <div className="absolute bottom-2 right-3 bg-slate-950/80 px-2 py-0.5 rounded text-[10px] text-slate-300 font-mono border border-slate-800">
@@ -353,12 +366,25 @@ export function LineStylingTab({
               </select>
             </div>
 
+            {incidentLayer && (
+              <label className="flex items-center gap-2 text-xs text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={routeMotionEffect(currentItem) !== "none"}
+                  onChange={(e) => handleUpdateCurrentStyle(routeMotionToggle(currentItem, incidentLayer, e.target.checked))}
+                />
+                เปิดแอนิเมชันชั้นนี้
+              </label>
+            )}
             <div>
               <label htmlFor="line-style-animation-select" className="text-xs text-slate-300 block mb-1.5 font-heading font-medium">อนิเมชันลูกเล่น (Animation Effect)</label>
               <select
                 id="line-style-animation-select"
                 value={currentItem.animation}
-                onChange={(e: any) => handleUpdateCurrentStyle({ animation: e.target.value })}
+                onChange={(e) => {
+                  const animation = e.target.value as MapLineStyleItem["animation"];
+                  handleUpdateCurrentStyle(incidentLayer ? { animation, animationEnabled: animation !== "none" } : { animation });
+                }}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
               >
                 <option value="none">ไม่มีอนิเมชัน (Static)</option>
@@ -366,6 +392,8 @@ export function LineStylingTab({
                 <option value="pulse">กระพริบเตือนชีพจร (Pulsing)</option>
                 <option value="blink">กระพริบฉุกเฉิน (Warning Blink)</option>
                 <option value="arrows">ลูกศรไหลตามทิศทาง (Flowing Arrows)</option>
+                {(incidentLayer || currentItem.animation === "wave") && <option value="wave">คลื่นไหลตามแนวเส้น (Traveling Wave)</option>}
+                {(incidentLayer || currentItem.animation === "flow") && <option value="flow">ลูกศรคู่ไหลเป็นจังหวะ (Staggered Arrow Flow)</option>}
               </select>
             </div>
 

@@ -19,7 +19,6 @@ import {
   routeCodeOf,
   routeNameOf,
   geoJsonFeatures,
-  lineAnimationClasses,
   dashArrayFor,
   raisePathLayers,
   getResponsivePopupOptions,
@@ -40,6 +39,7 @@ import {
   resolveDetourPhotoPointCoords,
 } from "./longdo-layer-builders";
 import { placeArrowsOnLine, renderDirectionalArrows } from "./longdo-arrow-layer";
+import { installRouteMotion } from "./longdo-route-motion";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import { renderVertexEditHandles } from "./longdo-vertex-handles";
 import { renderDraftAndConflictLayer } from "./longdo-draft-layer";
@@ -645,20 +645,6 @@ export function LongdoGisMap({
   // Each layer group below redraws ONLY when its own data/toggles change. Previously one effect
   // cleared and rebuilt everything (all highways, floods, detours, drafts, labels) on every zoom,
   // click, drag or selection, and created a brand-new <canvas> renderer each time.
-  const highwayFeatureCount = useMemo(
-    () => (systemData.highwayLayers || []).reduce((count, layer) => count + geoJsonFeatures(layer.geojson_data).length, 0),
-    [systemData.highwayLayers]
-  );
-  const animatedRouteCount = useMemo(
-    () => (systemData.floodRoutes || []).filter((route) => route.is_active).length + (systemData.detourRoutes || []).filter((route) => route.is_active).length,
-    [systemData.floodRoutes, systemData.detourRoutes]
-  );
-  const allowLineAnimation = animationsEnabled && highwayFeatureCount <= 250 && animatedRouteCount <= 80;
-  // Read through a ref so hiding/showing the browser tab (which flips animationsEnabled) does not
-  // rebuild every layer. Note: Leaflet ignores className for canvas-rendered paths anyway.
-  const allowLineAnimationRef = useRef(allowLineAnimation);
-  allowLineAnimationRef.current = allowLineAnimation;
-
   const shieldCandidates = useMemo(
     () => collectHighwayShieldCandidates(systemData.highwayLayers),
     [systemData.highwayLayers]
@@ -691,7 +677,6 @@ export function LongdoGisMap({
       const color = style?.color || (isMain ? "#1B5E20" : "#0284c7");
       const weight = style?.weight || (isMain ? 5 : 3.5);
       const opacity = style?.opacity ?? 0.85;
-      const className = lineAnimationClasses(style, allowLineAnimationRef.current);
 
     const shouldShowFeature = (feature: any) =>
       shouldShowHighwayFeature(
@@ -742,7 +727,6 @@ export function LongdoGisMap({
               weight: featureWeight,
               opacity: featureStyle?.opacity ?? opacity,
               dashArray: dashArrayFor(featureStyle),
-              className,
             };
           },
           onEachFeature: (feature: any, featureLayer: any) => {
@@ -887,58 +871,24 @@ export function LongdoGisMap({
     draftGroupRef,
     detourLinesRef,
     floodLinesRef,
-    allowLineAnimationRef,
     selectedFloodIdRef,
   });
 
-  // Leaflet's Canvas renderer intentionally ignores CSS class animation. Animate only
-  // the already-drawn flood/detour paths at a low fixed rate, so the style editor's
-  // motion settings are visible without changing renderer or rebuilding GIS layers.
+  // Animate only visible incident overlays; a large highway dataset does not disable them.
   useEffect(() => {
-    if (!mapReady || !allowLineAnimation || isFocusMode) return;
-    const floodStyle = mapStyles.flood;
-    const detourStyle = mapStyles.detour;
-    const floodAnimation = floodStyle?.animation || "none";
-    const detourAnimation = detourStyle?.animation || "none";
-    if (floodAnimation === "none" && detourAnimation === "none") return;
-
-    const entries = [
-      ...Object.values(floodLinesRef.current).map((entry) => ({
-        ...entry,
-        baseOpacity: floodStyle?.opacity ?? LAYER_CONFIG.FLOOD_RED_LINE.opacity,
-        animation: floodAnimation,
-      })),
-      ...detourLinesRef.current.map((entry) => ({ ...entry, animation: detourAnimation })),
-    ].filter((entry) => entry.line && entry.animation !== "none");
-    if (entries.length === 0) return;
-
-    let phase = 0;
-    const tick = () => {
-      phase = (phase + 1) % 200;
-      entries.forEach((entry) => {
-        const liveEntry = detourLinesRef.current.find((item) => item.line === entry.line) ?? Object.values(floodLinesRef.current).find((item) => item.line === entry.line);
-        if (!liveEntry || liveEntry.filterOpacity === 0) return;
-        entry.filterOpacity = liveEntry.filterOpacity;
-        const speed = entry.animation === "blink" ? 1.8 : entry.animation === "pulse" ? 0.7 : 1.2;
-        const wave = (Math.sin(phase * speed * 0.35) + 1) / 2;
-        if (entry.animation === "pulse") {
-          entry.line.setStyle({ opacity: Math.max(0.35 * entry.filterOpacity, entry.baseOpacity * entry.filterOpacity * (0.62 + wave * 0.38)), weight: entry.baseWeight + wave * 0.8 });
-        } else if (entry.animation === "blink") {
-          entry.line.setStyle({ opacity: wave > 0.45 ? entry.baseOpacity * entry.filterOpacity : Math.max(0.25 * entry.filterOpacity, entry.baseOpacity * entry.filterOpacity * 0.42) });
-        } else {
-          // Chaser/arrows move the existing dash pattern; Canvas supports dashOffset
-          // while avoiding a new DOM/SVG element per route.
-          entry.line.setStyle({ dashOffset: String(-phase * (entry.animation === "arrows" ? 2 : 1.2)) });
-        }
-      });
-    };
-    tick();
-    const timer = window.setInterval(tick, 140);
-    return () => {
-      window.clearInterval(timer);
-      entries.forEach((entry) => entry.line.setStyle({ opacity: entry.baseOpacity * entry.filterOpacity, weight: entry.baseWeight, dashOffset: "0" }));
-    };
-  }, [mapReady, allowLineAnimation, isFocusMode, mapStyles, systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, effectiveShowDetourLayer]);
+    const L = leafletRef.current;
+    const map = leafletMapRef.current;
+    if (!mapReady || !L || !map || !animationsEnabled || isFocusMode || vertexEditable) return;
+    return installRouteMotion(L, map, [
+      { name: "flood", style: mapStyles.flood ?? DEFAULT_MAP_STYLES.flood,
+        sources: () => effectiveShowFloodLayer ? Object.values(floodLinesRef.current) : [] },
+      { name: "detour", style: mapStyles.detour ?? DEFAULT_MAP_STYLES.detour,
+        sources: () => effectiveShowDetourLayer ? detourLinesRef.current : [] },
+    ]);
+  }, [mapReady, animationsEnabled, isFocusMode, vertexEditable, mapStyles,
+    systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, effectiveShowDetourLayer,
+    floodDisplayMode, activeCardFocus, activePopupEntity, isFilterActive, searchQuery,
+    highlightFloodIds, highlightDetourIds, routeFilteringEnabled]);
 
   // 4e. Selected flood: restyle one polyline in place instead of redrawing the map.
   useEffect(() => {
