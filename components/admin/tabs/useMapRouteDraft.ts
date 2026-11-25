@@ -7,6 +7,7 @@ import {
   writeAdminMapDraft,
   type AdminMapDraftSnapshot,
 } from "@/components/admin/tabs/map-draft-storage";
+import type { DetourPhotoLocationState } from "@/components/admin/tabs/useMapRouteFormState";
 
 export interface UseMapRouteDraftParams {
   routeEditId: string | null;
@@ -49,6 +50,20 @@ export interface UseMapRouteDraftParams {
   setDetourDurationMinRev: (v: string) => void;
   detourDirectionMode: AdminMapDraftSnapshot["detourDirectionMode"];
   setDetourDirectionMode: (v: AdminMapDraftSnapshot["detourDirectionMode"]) => void;
+  detourStartPhotoUrl: string;
+  setDetourStartPhotoUrl: (v: string) => void;
+  detourStartPhotoCaption: string;
+  setDetourStartPhotoCaption: (v: string) => void;
+  detourStartPhotoLocation: DetourPhotoLocationState;
+  setDetourStartPhotoLocation: (v: DetourPhotoLocationState) => void;
+  detourEndPhotoUrl: string;
+  setDetourEndPhotoUrl: (v: string) => void;
+  detourEndPhotoCaption: string;
+  setDetourEndPhotoCaption: (v: string) => void;
+  detourEndPhotoLocation: DetourPhotoLocationState;
+  setDetourEndPhotoLocation: (v: DetourPhotoLocationState) => void;
+  startPhotoLocManualRef?: { current: boolean };
+  endPhotoLocManualRef?: { current: boolean };
   saveAsDraft: boolean;
   setSaveAsDraft: (v: boolean) => void;
   draftCoordinates: [number, number][];
@@ -85,6 +100,14 @@ export function useMapRouteDraft(params: UseMapRouteDraftParams) {
     detourDurationMinFwd, setDetourDurationMinFwd,
     detourDurationMinRev, setDetourDurationMinRev,
     detourDirectionMode, setDetourDirectionMode,
+    detourStartPhotoUrl, setDetourStartPhotoUrl,
+    detourStartPhotoCaption, setDetourStartPhotoCaption,
+    detourStartPhotoLocation, setDetourStartPhotoLocation,
+    detourEndPhotoUrl, setDetourEndPhotoUrl,
+    detourEndPhotoCaption, setDetourEndPhotoCaption,
+    detourEndPhotoLocation, setDetourEndPhotoLocation,
+    startPhotoLocManualRef,
+    endPhotoLocManualRef,
     saveAsDraft, setSaveAsDraft,
     draftCoordinates, setDraftCoordinates,
     draftWaypoints, setDraftWaypoints,
@@ -126,6 +149,12 @@ export function useMapRouteDraft(params: UseMapRouteDraftParams) {
       detourDurationMinFwd,
       detourDurationMinRev,
       detourDirectionMode,
+      detourStartPhotoUrl,
+      detourStartPhotoCaption,
+      detourStartPhotoLocation,
+      detourEndPhotoUrl,
+      detourEndPhotoCaption,
+      detourEndPhotoLocation,
       saveAsDraft,
       draftCoordinates,
       draftWaypoints,
@@ -159,6 +188,12 @@ export function useMapRouteDraft(params: UseMapRouteDraftParams) {
     detourDurationMinFwd,
     detourDurationMinRev,
     detourDirectionMode,
+    detourStartPhotoUrl,
+    detourStartPhotoCaption,
+    detourStartPhotoLocation,
+    detourEndPhotoUrl,
+    detourEndPhotoCaption,
+    detourEndPhotoLocation,
     saveAsDraft,
     draftCoordinates,
     draftWaypoints,
@@ -168,6 +203,16 @@ export function useMapRouteDraft(params: UseMapRouteDraftParams) {
 
   const handleRestoreSavedDraft = () => {
     if (!recoverableDraft) return;
+    if (startPhotoLocManualRef) {
+      startPhotoLocManualRef.current =
+        recoverableDraft.detourStartPhotoLocation.locationSource === "MAP" ||
+        recoverableDraft.detourStartPhotoLocation.locationSource === "MANUAL";
+    }
+    if (endPhotoLocManualRef) {
+      endPhotoLocManualRef.current =
+        recoverableDraft.detourEndPhotoLocation.locationSource === "MAP" ||
+        recoverableDraft.detourEndPhotoLocation.locationSource === "MANUAL";
+    }
     setRouteMode(recoverableDraft.routeMode);
     setRouteNo(recoverableDraft.routeNo);
     setKmStart(recoverableDraft.kmStart);
@@ -187,6 +232,12 @@ export function useMapRouteDraft(params: UseMapRouteDraftParams) {
     setDetourDurationMinFwd(recoverableDraft.detourDurationMinFwd);
     setDetourDurationMinRev(recoverableDraft.detourDurationMinRev);
     setDetourDirectionMode(recoverableDraft.detourDirectionMode);
+    setDetourStartPhotoUrl(recoverableDraft.detourStartPhotoUrl);
+    setDetourStartPhotoCaption(recoverableDraft.detourStartPhotoCaption);
+    setDetourStartPhotoLocation(recoverableDraft.detourStartPhotoLocation);
+    setDetourEndPhotoUrl(recoverableDraft.detourEndPhotoUrl);
+    setDetourEndPhotoCaption(recoverableDraft.detourEndPhotoCaption);
+    setDetourEndPhotoLocation(recoverableDraft.detourEndPhotoLocation);
     setSaveAsDraft(recoverableDraft.saveAsDraft);
     if (recoverableDraft.draftCoordinates.length >= 2) {
       setDraftCoordinates(recoverableDraft.draftCoordinates);
