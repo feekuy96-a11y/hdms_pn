@@ -294,6 +294,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
     await expect(focusBar).toContainText("โหมดโฟกัส: เส้นทางเลี่ยง");
     await expect(focusBar).toContainText("ซ่อนชั้นข้อมูลอื่นชั่วคราว");
 
+    await page.getByRole("button", { name: "ตัวเลือกเส้นทาง" }).click();
     await page.getByTestId("gis-focus-dir-reverse").click();
     await expect(focusBar).toContainText("ขากลับ (B → A)");
 
