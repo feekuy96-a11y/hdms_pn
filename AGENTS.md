@@ -39,7 +39,7 @@ Report changed paths, validation actually run, remaining risks, and rollback (no
    - **ข้อห้ามเด็ดขาด:** ระหว่างเขียนหัวข้อ Next Steps **ห้าม**เปิดอ่านเนื้อหาภายในไฟล์สกิลทั้งหมด ให้ระบุเพียง `@ชื่อสกิล` หรือ `ใช้สกิล: [ชื่อสกิล]` ลงไปใน Master Prompt เพื่อให้โหลดใช้งานเฉพาะตอนที่ผู้ใช้ก๊อปปี้คำสั่งนั้นไปรันจริงเท่านั้น
    - ระบุเหตุผลสั้นๆ (ไม่เกิน 1 บรรทัด) ไว้นอกกล่องโค้ดว่าทำไมถึงแนะนำสกิลนี้
 3. **ล็อกขอบเขตไฟล์และประหยัดโควตา Token:** ในทุก Prompt ที่เสนอ ต้องระบุเงื่อนไขต่อไปนี้เสมอ:
-   - ชื่อไฟล์เป้าหมายที่เจาะจง (ไม่เกิน 2 ไฟล์ต่อครั้ง)
+   - ชื่อไฟล์เป้าหมายที่เจาะจงตามขอบเขตงานจริงของเฟส/หน่วยงานนั้น (Atomic Unit ที่จบในตัวเองและคอมไพล์/เทสต์ผ่านได้ โดยแยกเฟสเมื่อข้าม Domain ใหญ่)
    - ขอบเขตการห้ามอ่านไฟล์เกินจำเป็น (เช่น ห้ามอ่าน `docs/archive/`, `lib/gis-data.ts`, `supabase/migrations/`)
    - รูปแบบการแสดงผลโค้ด (แสดงเฉพาะ Unified Diff หรือจุดที่แก้ไข ห้ามเขียนทับทั้งไฟล์)
    - ข้อควรระวังเฉพาะทางของระบบ (เช่น พิกัด Longdo Map `{ lon, lat }`, PostGIS `POINT(lng lat)`, สิทธิ์ RLS, การป้องกันระบบเดิมพัง)
@@ -57,7 +57,7 @@ Report changed paths, validation actually run, remaining risks, and rollback (no
 | :--- | :--- | :--- |
 | `master-developer-rules-description` | Core Architecture | วิเคราะห์โครงสร้าง แตกไฟล์ Monolith ขนาดใหญ่ และแก้บั๊กซับซ้อนข้ามชั้นระบบ |
 | `systematic-debugging` | Debugging | สืบหา Root Cause ของบั๊กใน Longdo Map, Supabase RPC หรือ Offline Sync |
-| `writing-plans` | Planning | วางแผนการทำงานเป็นขั้นตอนย่อยก่อนแก้ไขไฟล์เกิน 2 ไฟล์หรือปรับโครงสร้าง |
+| `writing-plans` | Planning | วางแผนการทำงานเป็นขั้นตอนย่อยก่อนแก้ไขงานที่ข้ามหลาย Domain หรือปรับโครงสร้างใหญ่ |
 | `verification-before-completion` | Verification | รัน `npx tsc --noEmit`, `npm run build` หรือตรวจความถูกต้องก่อนส่งมอบงาน |
 | `playwright-cli` | E2E Testing | สั่งรันหรือซ่อมไฟล์เทสต์ใน `tests/e2e/` แบบเจาะจงทีละ Spec |
 | `playwright-trace` | E2E Diagnostics | เปิดวิเคราะห์ Trace, Network Request และ Console Error เมื่อเทสต์ไม่ผ่าน |
