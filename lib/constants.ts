@@ -107,7 +107,8 @@ export interface MapLineStyleItem {
   glowWidth?: number;
   pattern: "solid" | "dash" | "dot" | "long-dash-dot";
   dashArray?: string;
-  animation: "none" | "chaser" | "arrows" | "pulse" | "blink";
+  animation: "none" | "chaser" | "arrows" | "pulse" | "blink" | "wave" | "flow";
+  animationEnabled?: boolean;
   animationSpeed?: "slow" | "normal" | "fast";
   showArrows?: boolean;
   arrowColor?: string;
@@ -165,7 +166,7 @@ export const DEFAULT_MAP_STYLES: Record<"flood" | "detour" | "primary" | "second
     glowColor: "#D32F2F",
     glowWidth: 8,
     pattern: "solid",
-    animation: "pulse",
+    animation: "wave",
     animationSpeed: "normal",
     showArrows: false,
     arrowColor: "#ffffff",
@@ -185,7 +186,7 @@ export const DEFAULT_MAP_STYLES: Record<"flood" | "detour" | "primary" | "second
     glowWidth: 6,
     pattern: "dash",
     dashArray: "8, 6",
-    animation: "chaser",
+    animation: "flow",
     animationSpeed: "normal",
     showArrows: true,
     arrowColor: "#0f172a",

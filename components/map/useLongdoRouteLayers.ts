@@ -19,7 +19,6 @@ import {
   getResponsivePopupOptions,
   hasDetourPointMetadata,
   isFloodLineVisibleOnCurrentMap,
-  lineAnimationClasses,
   parseRouteCoordinates,
   raisePathLayers,
   resolveDetourPointPinCoord,
@@ -203,7 +202,6 @@ export interface UseLongdoRouteLayersParams {
   draftGroupRef: React.MutableRefObject<any>;
   detourLinesRef: React.MutableRefObject<Array<AnimatedLineEntry & { id: string; filterOpacity: number }>>;
   floodLinesRef: React.MutableRefObject<Record<string, FloodLineEntry & { baseOpacity: number; filterOpacity: number }>>;
-  allowLineAnimationRef: React.MutableRefObject<boolean>;
   selectedFloodIdRef: React.MutableRefObject<string | null | undefined>;
 }
 
@@ -226,7 +224,6 @@ export function useLongdoRouteLayers({
   draftGroupRef,
   detourLinesRef,
   floodLinesRef,
-  allowLineAnimationRef,
   selectedFloodIdRef,
   onActivateMapEntity,
 }: UseLongdoRouteLayersParams) {
@@ -282,7 +279,6 @@ export function useLongdoRouteLayers({
     const detourStyle = mapStyles.detour;
     const dColor = detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
     const dDash = dashArrayFor(detourStyle);
-    const className = lineAnimationClasses(detourStyle, allowLineAnimationRef.current);
 
     (systemData.detourRoutes || []).forEach((detour) => {
       if (!detour.is_active) return;
@@ -306,7 +302,6 @@ export function useLongdoRouteLayers({
           weight: forwardWeight,
           dashArray: dDash,
           opacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
-          className,
           renderer,
         }).addTo(group);
         polyline.__dohFilterId = detour.id;
@@ -355,7 +350,6 @@ export function useLongdoRouteLayers({
             weight: reverseWeight,
             dashArray: dDash,
             opacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
-            className,
             renderer,
           }).addTo(group);
           revPolyline.__dohFilterId = detour.id;
@@ -463,7 +457,6 @@ export function useLongdoRouteLayers({
     const fBaseWeight = floodStyle?.weight || LAYER_CONFIG.FLOOD_RED_LINE.weight;
     const fOpacity = floodStyle?.opacity ?? LAYER_CONFIG.FLOOD_RED_LINE.opacity;
     const fDash = dashArrayFor(floodStyle);
-    const className = lineAnimationClasses(floodStyle, allowLineAnimationRef.current);
 
     const countDetoursForFlood = (flood: FloodRoute) => getLinkedDetoursForFlood(flood, systemData).length;
     const floodPopupOpts = getResponsivePopupOptions(L, 370, 300, "doh-flood-leaflet-popup");
@@ -486,7 +479,6 @@ export function useLongdoRouteLayers({
           weight: selectedWeight,
           opacity: fOpacity,
           dashArray: fDash,
-          className,
           renderer,
         }).addTo(group);
         polyline.__dohFilterId = flood.id;
