@@ -174,11 +174,11 @@ export function DetourListCard({
 
       <div className="pt-2 border-t border-surface flex items-center justify-between gap-2 text-[11px]">
         <span className="text-slate-400 font-mono">
-          {linkedEvents.length === 0 && `ลำดับที่ ${groupPos + 1} · `}
+          {!linkedEvents.some((event) => event.links.length > 0) && `ลำดับที่ ${groupPos + 1} · `}
           {Array.isArray(item.coordinates_json) ? item.coordinates_json.length : 0} จุดโหนด
         </span>
         <div className="flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-          {linkedEvents.length === 0 && <button
+          {!linkedEvents.some((event) => event.links.length > 0) && <button
             type="button"
             aria-label={`เลื่อนทางเลี่ยง ${item.route_name} ขึ้น`}
             disabled={!canMoveUp}
@@ -188,7 +188,7 @@ export function DetourListCard({
           >
             <ChevronUp className="w-3.5 h-3.5" />
           </button>}
-          {linkedEvents.length === 0 && <button
+          {!linkedEvents.some((event) => event.links.length > 0) && <button
             type="button"
             aria-label={`เลื่อนทางเลี่ยง ${item.route_name} ลง`}
             disabled={!canMoveDown}
@@ -427,7 +427,7 @@ export function DetourListSection({
 
                     <td className="p-3 text-right whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
                       <div className="inline-flex items-center gap-1">
-                        {linkedEvents.length === 0 && <button
+                        {!linkedEvents.some((event) => event.links.length > 0) && <button
                           type="button"
                           aria-label={`เลื่อนทางเลี่ยง ${item.route_name} ขึ้น`}
                           disabled={!canMoveUp}
@@ -437,7 +437,7 @@ export function DetourListSection({
                         >
                           <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>}
-                        {linkedEvents.length === 0 && <button
+                        {!linkedEvents.some((event) => event.links.length > 0) && <button
                           type="button"
                           aria-label={`เลื่อนทางเลี่ยง ${item.route_name} ลง`}
                           disabled={!canMoveDown}

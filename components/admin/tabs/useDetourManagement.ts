@@ -163,7 +163,7 @@ export function useDetourManagement({
   };
 
   const handleMoveDetourOrder = async (item: DetourRoute, direction: "UP" | "DOWN") => {
-    if (reorderingId || (linkedEventsByDetourId.get(item.id)?.length ?? 0) > 0) return;
+    if (reorderingId || linkedEventsByDetourId.get(item.id)?.some((event) => event.links.length > 0)) return;
     const siblings = getReorderSiblings(item);
     const currentIndex = siblings.findIndex((d) => d.id === item.id);
     if (currentIndex === -1) return;
