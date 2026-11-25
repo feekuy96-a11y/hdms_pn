@@ -897,7 +897,6 @@ test.describe("Admin Shared GIS Focus Mode", () => {
     await expect(adminExitBar).toContainText("โฟกัส: ทล.42 นาจวก - ดอนยาง");
     await expect(page.getByTestId("gis-focus-mode-bar")).toHaveCount(0);
     await expect(page.locator(".leaflet-popup")).toHaveCount(0);
-    await expect(page.locator(".hdms-focus-endpoint").first()).toBeVisible();
 
     const exitHitCheck = await page.evaluate(() => {
       const bar = document.querySelector('[data-testid="admin-gis-focus-exit-bar"]');
@@ -939,6 +938,7 @@ test.describe("Admin Shared GIS Focus Mode", () => {
 
     await expect(adminExitBar).toBeVisible();
     await expect(adminExitBar).toContainText("เส้นทางเลี่ยง ปน.2043 (B → A)");
+    await expect(page.locator(".hdms-focus-endpoint")).toHaveCount(2);
     await page.keyboard.press("Escape");
     await expect(adminExitBar).toHaveCount(0);
 
