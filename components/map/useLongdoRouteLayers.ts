@@ -308,6 +308,7 @@ export function useLongdoRouteLayers({
         detourLinesRef.current.push({
           id: detour.id,
           line: polyline,
+          motionDirection: dirMode === "TWO_WAY" && revCoords.length < 2 ? "both" : "forward",
           baseWeight: detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight,
           baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
           filterOpacity: 1,
@@ -356,6 +357,7 @@ export function useLongdoRouteLayers({
           detourLinesRef.current.push({
             id: detour.id,
             line: revPolyline,
+            motionDirection: revCoords.length >= 2 ? "forward" : "reverse",
             baseWeight: reverseWeight,
             baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
             filterOpacity: 1,

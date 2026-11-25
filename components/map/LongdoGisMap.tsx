@@ -878,13 +878,13 @@ export function LongdoGisMap({
   useEffect(() => {
     const L = leafletRef.current;
     const map = leafletMapRef.current;
-    if (!mapReady || !L || !map || !animationsEnabled || isFocusMode || vertexEditable) return;
+    if (!mapReady || !L || !map || isFocusMode || vertexEditable) return;
     return installRouteMotion(L, map, [
       { name: "flood", style: mapStyles.flood ?? DEFAULT_MAP_STYLES.flood,
         sources: () => effectiveShowFloodLayer ? Object.values(floodLinesRef.current) : [] },
       { name: "detour", style: mapStyles.detour ?? DEFAULT_MAP_STYLES.detour,
         sources: () => effectiveShowDetourLayer ? detourLinesRef.current : [] },
-    ]);
+    ], animationsEnabled);
   }, [mapReady, animationsEnabled, isFocusMode, vertexEditable, mapStyles,
     systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, effectiveShowDetourLayer,
     floodDisplayMode, activeCardFocus, activePopupEntity, isFilterActive, searchQuery,
