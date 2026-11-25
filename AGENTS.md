@@ -9,6 +9,19 @@
 - Output diffs and concise verification results only; do not paste full source files or claim checks not run.
 - Do not commit, push, deploy, alter production data, rotate secrets, or relax authentication/RLS unless explicitly asked.
 
+## Efficient investigation and verification
+
+- For follow-ups, start with the current branch and `git diff --stat`. Use the codebase map and scoped `rg -n` searches for a UI label, identifier, or test ID. Read nearby lines first and widen to callers or contracts only when needed.
+- Before changing shared UI behavior, search its labels and test IDs in the related specs. Run the affected cases together with Playwright project and grep filters.
+- Run `npm run test:e2e:local -- --full` before opening a PR that changes the E2E runner. It runs lint, typecheck, one fresh Pages build under `BASE_PATH=/hdms_pn` by default, and all Playwright projects in order. The managed runner locks the workspace through test completion and allocates a port and output directory by default. Avoid running standalone builds against the same output while it runs.
+- Use `--reuse-build` for focused test-only edits. The managed runner verifies the app inputs, build environment (including `BASE_PATH`), and artifact identity before reuse. A mismatch triggers one fresh build. `--full` always builds fresh.
+- On E2E failure, inspect the first failing assertion and relevant trace before retrying. Check data readiness, viewport, overlays and server identity. Use action-specific timeouts for steps that should resolve quickly.
+- Run the shared flood and detour vertex-edit cases with `npm run test:e2e:local -- --reuse-build tests/e2e/admin-menus.spec.ts --grep @vertex-edit --workers=1`. Focused local runs stop at the first failure by default. Open the reported trace with `npx playwright show-trace <trace.zip>` before rerunning a narrowed case.
+- Poll CI with a compact status query. Fetch failed steps and the first actionable error instead of streaming repeated job lists or full logs. Keep the full pre-release checks.
+- When measuring workflow cost, record substantive files opened, builds, E2E retries, and timeout time separately. These are workload indicators rather than account quota measurements.
+
+Workflow validation: the initial mobile detour baseline took 34.2 s with one build. The reuse validation took 26.4 s with one build and 9.3 s with zero builds after a test-only edit. Changing the Admin source or `BASE_PATH` triggered a rebuild in separate checks. Build-cache conditions varied between rounds. The shared vertex-edit group passed four Desktop/Mobile cases, and an intentional failure check confirmed that the first failure retained a trace without retrying or starting the second serial case.
+
 ## Required references
 
 Read only relevant parts of these authoritative contracts before changing their domain:

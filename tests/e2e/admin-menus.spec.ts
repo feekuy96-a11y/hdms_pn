@@ -125,7 +125,7 @@ async function dragFirstInteriorVertex(page: import("@playwright/test").Page, to
   await expect.poll(async () => (await handle.boundingBox())?.x ?? x).toBeGreaterThan(box.x + 4);
 }
 
-test("short flood draft allows adding and dragging an interior vertex at default zoom", async ({ page, isMobile }) => {
+test("short flood draft allows adding and dragging an interior vertex at default zoom", { tag: "@vertex-edit" }, async ({ page, isMobile }) => {
   await page.route("**/functions/v1/hdms-api*", (route) => route.fulfill({ json: {
     floodRoutes: [], detourRoutes: [], highwayLayers: [], offices: [], timelineUpdates: [],
     mitigationProjects: [], mapStyles: null,
@@ -169,7 +169,9 @@ test("route editor lists and removes an individual bend point", async ({ page })
 
 test("detour routing can force a straight heading through a selected intersection", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Map editing is verified in the desktop workspace");
+  const routingRequests: URL[] = [];
   await page.route("**/route/v1/driving/**", async (route) => {
+    routingRequests.push(new URL(route.request().url()));
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -188,14 +190,13 @@ test("detour routing can force a straight heading through a selected intersectio
   await page.getByLabel("พิกัดจุด B").blur();
   await page.getByRole("checkbox", { name: /บังคับตรงผ่านสามแยก\/สี่แยก/ }).check();
   await page.getByRole("button", { name: "แตะจุดกลางเส้นเพื่อเพิ่มจุด" }).click();
-  const routingRequest = page.waitForRequest((request) => request.url().includes("/route/v1/driving/") && request.url().includes("continue_straight=true"));
   await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
-  const request = await routingRequest;
-  const url = new URL(request.url());
-  expect(url.searchParams.get("continue_straight")).toBe("true");
-  expect(url.searchParams.get("alternatives")).toBe("false");
-  expect(url.searchParams.get("bearings")).toMatch(/^;\d{1,3},45;$/);
   await expect(page.getByText("คำนวณแนวตรงผ่านแยกตามจุดควบคุมสำเร็จ", { exact: false })).toBeVisible();
+  expect(routingRequests.some(({ searchParams }) =>
+    searchParams.get("continue_straight") === "true" &&
+    searchParams.get("alternatives") === "false" &&
+    /^;\d{1,3},45;$/.test(searchParams.get("bearings") ?? "")
+  )).toBe(true);
 });
 
 test("office markers unlock only while their record is being edited", async ({ page }) => {
@@ -664,7 +665,7 @@ test("two-way detour uses configured line style color for both directions and ar
   expect(badgeColors).not.toContain("rgb(56, 189, 248)");
 });
 
-test("two-way detour supports separate B->A pins and freeform endpoint/vertex customization", async ({ page, isMobile }) => {
+test("two-way detour supports separate B->A pins and freeform endpoint/vertex customization", { tag: "@vertex-edit" }, async ({ page, isMobile }) => {
   const savedPayloads: any[] = [];
   const requestedRoutes: string[] = [];
 
