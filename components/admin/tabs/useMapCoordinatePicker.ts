@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect } from "react";
+import type { DetourPointLocationSource } from "@/db/default-data";
+import type { DetourPhotoLocationState } from "@/components/admin/tabs/useMapRouteFormState";
 import { reverseGeocodeTambonAmphoe } from "@/lib/gis-utils";
 import { insertVertex, nearestInsertIndex } from "@/lib/line-edit";
 
@@ -30,9 +32,15 @@ export interface UseMapCoordinatePickerParams {
     lonVal: number | string,
     options?: {
       manual?: boolean;
+      source?: DetourPointLocationSource;
       areaHint?: { subdistrict?: string; district?: string; province?: string } | null;
     }
   ) => Promise<void> | void;
+  updateDetourPhotoLocation?: (
+    target: "START" | "END",
+    patch: Partial<DetourPhotoLocationState>,
+    manual?: boolean
+  ) => void;
   setIsGeocoding: (v: boolean) => void;
   setAdminPickMode: (mode: string | null) => void;
   freeEditEnabled: boolean;
@@ -99,14 +107,28 @@ export function useMapCoordinatePicker(params: UseMapCoordinatePickerParams) {
         if (endpoint === "START") setStartArea(area);
         else if (endpoint === "END") setEndArea(area);
         else if (endpoint === "PHOTO_START") {
-          void resolveDetourPhotoArea?.("START", lat, lon, { manual: true, areaHint: area });
+          void resolveDetourPhotoArea?.("START", lat, lon, {
+            manual: true,
+            source: "MAP",
+            areaHint: area,
+          });
         } else {
-          void resolveDetourPhotoArea?.("END", lat, lon, { manual: true, areaHint: area });
+          void resolveDetourPhotoArea?.("END", lat, lon, {
+            manual: true,
+            source: "MAP",
+            areaHint: area,
+          });
         }
         onToast(`ระบุพื้นที่อัตโนมัติ: ต.${location.subdistrict} อ.${location.district}`);
+      } else if (endpoint === "PHOTO_START" || endpoint === "PHOTO_END") {
+        onToast("บันทึกพิกัดจุดภาพแล้ว (หากไม่พบข้อมูลพื้นที่ สามารถกรอก ต./อ./จ. เองได้)");
       }
     } catch {
-      onToast("ไม่สามารถดึงข้อมูลตำบล/อำเภออัตโนมัติได้");
+      onToast(
+        endpoint === "PHOTO_START" || endpoint === "PHOTO_END"
+          ? "ยังไม่พบข้อมูลพื้นที่อัตโนมัติ สามารถกรอก ต./อ./จ. เอง หรือบันทึกพิกัดได้ทันที"
+          : "ไม่สามารถดึงข้อมูลตำบล/อำเภออัตโนมัติได้"
+      );
     } finally {
       setIsGeocoding(false);
     }
@@ -142,13 +164,19 @@ export function useMapCoordinatePicker(params: UseMapCoordinatePickerParams) {
       }
     } else if (pickedCoordinate.mode === "PICK_DETOUR_PHOTO_START") {
       setAdminPickMode(null);
-      onToast(`ปักหมุดภาพจุดเริ่มต้น (A): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
-      void resolveDetourPhotoArea?.("START", pickedCoordinate.lat, pickedCoordinate.lon, { manual: true });
+      onToast(`ปักหมุดจุดเริ่มต้น (A): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
+      void resolveDetourPhotoArea?.("START", pickedCoordinate.lat, pickedCoordinate.lon, {
+        manual: true,
+        source: "MAP",
+      });
       void handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat, "PHOTO_START");
     } else if (pickedCoordinate.mode === "PICK_DETOUR_PHOTO_END") {
       setAdminPickMode(null);
-      onToast(`ปักหมุดภาพจุดสิ้นสุด (B): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
-      void resolveDetourPhotoArea?.("END", pickedCoordinate.lat, pickedCoordinate.lon, { manual: true });
+      onToast(`ปักหมุดจุดสิ้นสุด (B): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
+      void resolveDetourPhotoArea?.("END", pickedCoordinate.lat, pickedCoordinate.lon, {
+        manual: true,
+        source: "MAP",
+      });
       void handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat, "PHOTO_END");
     } else if (pickedCoordinate.mode === "PICK_REV_START") {
       setRevStartLat(pickedCoordinate.lat);

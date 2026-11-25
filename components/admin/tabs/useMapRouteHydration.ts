@@ -397,6 +397,8 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
         const savedDist = photo?.district?.trim() || "";
         const savedProv = photo?.province?.trim() || "";
         const hasSavedMeta = hasPhotoCoord || Boolean(savedSub || savedDist || savedProv);
+        const savedSource = photo?.locationSource;
+        const savedResolvedAt = photo?.resolvedAt;
 
         if (hasSavedMeta) {
           if (manualRef) manualRef.current = true;
@@ -408,30 +410,47 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
             Math.abs(targetLat) <= 90 &&
             Math.abs(targetLon) <= 180 &&
             (targetLat !== 0 || targetLon !== 0);
+          const hasAreaText = Boolean(savedSub || savedDist);
           setLoc({
             lat: validTarget ? targetLat.toFixed(6) : "",
             lon: validTarget ? targetLon.toFixed(6) : "",
             subdistrict: savedSub,
             district: savedDist,
             province: savedProv || (validTarget ? "ปัตตานี" : ""),
+            locationSource: savedSource ?? (hasPhotoCoord ? "MANUAL" : "ROUTE_ENDPOINT"),
+            resolvedAt: savedResolvedAt,
+            areaStatus: hasAreaText ? "resolved" : validTarget ? "resolving" : "idle",
           });
           if (validTarget && (!savedSub || !savedDist)) {
-            void localArea(targetLon, targetLat).then((loc) => {
-              if (hydratedRouteKey.current !== key) return;
-              setLoc((prev) => ({
-                ...prev,
-                subdistrict: prev.subdistrict || loc.tambon || "",
-                district: prev.district || loc.amphoe || "",
-                province: prev.province || loc.province || "ปัตตานี",
-              }));
-            });
+            void localArea(targetLon, targetLat)
+              .then((loc) => {
+                if (hydratedRouteKey.current !== key) return;
+                setLoc((prev) => {
+                  const nextSub = prev.subdistrict || loc.tambon || "";
+                  const nextDist = prev.district || loc.amphoe || "";
+                  return {
+                    ...prev,
+                    subdistrict: nextSub,
+                    district: nextDist,
+                    province: prev.province || loc.province || "ปัตตานี",
+                    areaStatus: nextSub || nextDist ? "resolved" : "not_found",
+                  };
+                });
+              })
+              .catch(() => {
+                if (hydratedRouteKey.current !== key) return;
+                setLoc((prev) => ({
+                  ...prev,
+                  areaStatus: prev.subdistrict || prev.district ? "resolved" : "not_found",
+                }));
+              });
           }
           return;
         }
 
         if (manualRef) manualRef.current = false;
         const hasFallback =
-          Boolean(photo?.url) &&
+          Boolean(photo?.url || photo?.caption) &&
           Number.isFinite(fallbackLat) &&
           Number.isFinite(fallbackLon) &&
           Math.abs(fallbackLat) <= 90 &&
@@ -450,17 +469,33 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
           subdistrict: hintSub,
           district: hintDist,
           province: "ปัตตานี",
+          locationSource: savedSource ?? "ROUTE_ENDPOINT",
+          resolvedAt: savedResolvedAt,
+          areaStatus: hintSub || hintDist ? "resolved" : "resolving",
         });
         if (!hintSub || !hintDist) {
-          void localArea(fallbackLon, fallbackLat).then((loc) => {
-            if (hydratedRouteKey.current !== key || manualRef?.current) return;
-            setLoc((prev) => ({
-              ...prev,
-              subdistrict: prev.subdistrict || loc.tambon || "",
-              district: prev.district || loc.amphoe || "",
-              province: prev.province || loc.province || "ปัตตานี",
-            }));
-          });
+          void localArea(fallbackLon, fallbackLat)
+            .then((loc) => {
+              if (hydratedRouteKey.current !== key || manualRef?.current) return;
+              setLoc((prev) => {
+                const nextSub = prev.subdistrict || loc.tambon || "";
+                const nextDist = prev.district || loc.amphoe || "";
+                return {
+                  ...prev,
+                  subdistrict: nextSub,
+                  district: nextDist,
+                  province: prev.province || loc.province || "ปัตตานี",
+                  areaStatus: nextSub || nextDist ? "resolved" : "not_found",
+                };
+              });
+            })
+            .catch(() => {
+              if (hydratedRouteKey.current !== key || manualRef?.current) return;
+              setLoc((prev) => ({
+                ...prev,
+                areaStatus: prev.subdistrict || prev.district ? "resolved" : "not_found",
+              }));
+            });
         }
       };
 

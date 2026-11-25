@@ -10,16 +10,19 @@ import { groupFloodRoutesIntoEvents } from "@/lib/flood-event-schema";
 import { getTrafficPresentation } from "@/lib/traffic-presentation";
 import {
   addLineCasing,
+  buildDetourFallbackPinSpec,
   buildDetourPointPhotoPopupHtml,
   buildDetourPopupHtml,
   buildFloodPopupHtml,
   dashArrayFor,
   escapeHtml,
   getResponsivePopupOptions,
+  hasDetourPointMetadata,
   isFloodLineVisibleOnCurrentMap,
   lineAnimationClasses,
   parseRouteCoordinates,
   raisePathLayers,
+  resolveDetourPointPinCoord,
   toLeafletLatLng,
   type AnimatedLineEntry,
   type FloodLineEntry,
@@ -229,7 +232,7 @@ export function useLongdoRouteLayers({
 }: UseLongdoRouteLayersParams) {
   const activationRef = React.useRef(onActivateMapEntity);
   activationRef.current = onActivateMapEntity;
-  const detourPhotoMarkerRefs = React.useRef<Array<{ marker: any; point: "START" | "END" }>>([]);
+  const detourPhotoMarkerRefs = React.useRef<Array<{ marker: any; point: "START" | "END"; hasPhoto: boolean }>>([]);
   // Segment capsule markers are retained across zoom changes. Replacing only
   // their icon preserves an open Leaflet popup instead of destroying its layer.
   const floodSegmentMarkerRefs = React.useRef<Array<{
@@ -240,13 +243,25 @@ export function useLongdoRouteLayers({
     waveBadge: string;
   }>>([]);
 
-  const syncDetourPhotoMarker = (L: any, marker: any, point: "START" | "END", zoom: number) => {
+  const syncDetourPhotoMarker = (
+    L: any,
+    marker: any,
+    point: "START" | "END",
+    zoom: number,
+    hasPhoto: boolean
+  ) => {
     const visible = zoom >= 12;
     const variant = zoom >= 14 ? "FULL" : "COMPACT";
     // Leaflet binds DOM listeners while creating the icon. Set this before
     // setIcon so a marker revealed after zooming is clickable immediately.
     marker.options.interactive = visible;
-    marker.setIcon(L.divIcon(buildDetourPhotoBadgeSpec(point, variant)));
+    marker.setIcon(
+      L.divIcon(
+        hasPhoto
+          ? buildDetourPhotoBadgeSpec(point, variant)
+          : buildDetourFallbackPinSpec(point, variant)
+      )
+    );
     marker.setOpacity(visible ? 1 : 0);
     const element = marker.getElement?.();
     if (element) {
@@ -361,68 +376,54 @@ export function useLongdoRouteLayers({
         }
       }
 
-      // Draw Start Point A & End Point B Entrance Photo Markers if photos are attached
+      // Draw Start Point A & End Point B markers when photo or point-first metadata exists
       const startPhoto = detour.detour_meta?.start_point_photo;
       const endPhoto = detour.detour_meta?.end_point_photo;
       const { startLat, startLon, endLat, endLon } = resolveDetourPhotoPointCoords(detour, fwdCoords);
-      const resolvePhotoPinCoords = (
-        photo: typeof startPhoto,
-        fallbackLat: number,
-        fallbackLon: number
-      ): { lat: number; lon: number } => {
-        const hasCustom =
-          photo &&
-          typeof photo.lat === "number" &&
-          typeof photo.lon === "number" &&
-          Number.isFinite(photo.lat) &&
-          Number.isFinite(photo.lon) &&
-          Math.abs(photo.lat) <= 90 &&
-          Math.abs(photo.lon) <= 180 &&
-          (photo.lat !== 0 || photo.lon !== 0);
-        return hasCustom
-          ? { lat: photo.lat!, lon: photo.lon! }
-          : { lat: fallbackLat, lon: fallbackLon };
-      };
-      const startPin = resolvePhotoPinCoords(startPhoto, startLat, startLon);
-      const endPin = resolvePhotoPinCoords(endPhoto, endLat, endLon);
+      const endpointEntries = [
+        {
+          point: "START" as const,
+          photo: startPhoto,
+          pin: resolveDetourPointPinCoord(startPhoto, startLat, startLon),
+          photoTooltip: `📷 ภาพทางเข้าจุดเริ่มต้น A (${detour.route_name})`,
+          fallbackTooltip: `📍 จุดเริ่มต้น A (${detour.route_name})`,
+        },
+        {
+          point: "END" as const,
+          photo: endPhoto,
+          pin: resolveDetourPointPinCoord(endPhoto, endLat, endLon),
+          photoTooltip: `📷 ภาพทางเข้าจุดสิ้นสุด B - ฝั่งขากลับ (${detour.route_name})`,
+          fallbackTooltip: `📍 จุดสิ้นสุด B - ฝั่งขากลับ (${detour.route_name})`,
+        },
+      ];
 
-      if (startPhoto?.url && Number.isFinite(startPin.lat) && Number.isFinite(startPin.lon)) {
-        const startPhotoIcon = L.divIcon(buildDetourPhotoBadgeSpec("START"));
-        const startMarker = L.marker([startPin.lat, startPin.lon], { icon: startPhotoIcon, interactive: true, zIndexOffset: 200 })
-          .bindTooltip(`📷 ภาพทางเข้าจุดเริ่มต้น A (${detour.route_name})`, { direction: "top" })
+      endpointEntries.forEach(({ point, photo, pin, photoTooltip, fallbackTooltip }) => {
+        if (!hasDetourPointMetadata(photo)) return;
+        if (!Number.isFinite(pin.lat) || !Number.isFinite(pin.lon)) return;
+        const hasPhoto = Boolean(typeof photo?.url === "string" && photo.url.trim());
+        const markerIcon = L.divIcon(
+          hasPhoto ? buildDetourPhotoBadgeSpec(point) : buildDetourFallbackPinSpec(point)
+        );
+        const marker = L.marker([pin.lat, pin.lon], {
+          icon: markerIcon,
+          interactive: true,
+          zIndexOffset: 200,
+        })
+          .bindTooltip(hasPhoto ? photoTooltip : fallbackTooltip, { direction: "top" })
           .bindPopup(
-            () => buildDetourPointPhotoPopupHtml(detour, "START", startPhoto, startPin.lat, startPin.lon),
+            () => buildDetourPointPhotoPopupHtml(detour, point, photo, pin.lat, pin.lon),
             getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
           )
           .addTo(group);
-        detourPhotoMarkerRefs.current.push({ marker: startMarker, point: "START" });
-        syncDetourPhotoMarker(L, startMarker, "START", currentZoom);
-        startMarker.__dohFilterId = detour.id;
-        startMarker.on("click", (e: any) => {
+        detourPhotoMarkerRefs.current.push({ marker, point, hasPhoto });
+        syncDetourPhotoMarker(L, marker, point, currentZoom, hasPhoto);
+        marker.__dohFilterId = detour.id;
+        marker.on("click", (e: any) => {
           activationRef.current?.({ type: "DETOUR", id: detour.id });
           L.DomEvent.stopPropagation(e);
-          startMarker.openPopup();
+          marker.openPopup();
         });
-      }
-
-      if (endPhoto?.url && Number.isFinite(endPin.lat) && Number.isFinite(endPin.lon)) {
-        const endPhotoIcon = L.divIcon(buildDetourPhotoBadgeSpec("END"));
-        const endMarker = L.marker([endPin.lat, endPin.lon], { icon: endPhotoIcon, interactive: true, zIndexOffset: 200 })
-          .bindTooltip(`📷 ภาพทางเข้าจุดสิ้นสุด B - ฝั่งขากลับ (${detour.route_name})`, { direction: "top" })
-          .bindPopup(
-            () => buildDetourPointPhotoPopupHtml(detour, "END", endPhoto, endPin.lat, endPin.lon),
-            getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
-          )
-          .addTo(group);
-        detourPhotoMarkerRefs.current.push({ marker: endMarker, point: "END" });
-        syncDetourPhotoMarker(L, endMarker, "END", currentZoom);
-        endMarker.__dohFilterId = detour.id;
-        endMarker.on("click", (e: any) => {
-          activationRef.current?.({ type: "DETOUR", id: detour.id });
-          L.DomEvent.stopPropagation(e);
-          endMarker.openPopup();
-        });
-      }
+      });
     });
 
     // Keep stacking order: highways (bottom) < detours < floods < drafts.
@@ -440,8 +441,8 @@ export function useLongdoRouteLayers({
   useEffect(() => {
     const L = leafletRef.current;
     if (!mapReady || !L) return;
-    detourPhotoMarkerRefs.current.forEach(({ marker, point }) => {
-      syncDetourPhotoMarker(L, marker, point, currentZoom);
+    detourPhotoMarkerRefs.current.forEach(({ marker, point, hasPhoto }) => {
+      syncDetourPhotoMarker(L, marker, point, currentZoom, hasPhoto);
     });
   }, [mapReady, currentZoom, leafletRef]);
 

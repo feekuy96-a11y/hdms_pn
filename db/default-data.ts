@@ -55,8 +55,10 @@ export interface FloodRoute {
   direction_meta?: FloodDirectionMeta;
 }
 
+export type DetourPointLocationSource = "MAP" | "MANUAL" | "ROUTE_ENDPOINT";
+
 export interface DetourPointPhoto {
-  url: string;
+  url?: string;
   caption?: string;
   mediaId?: string;
   lat?: number;
@@ -64,6 +66,8 @@ export interface DetourPointPhoto {
   subdistrict?: string;
   district?: string;
   province?: string;
+  locationSource?: DetourPointLocationSource;
+  resolvedAt?: string;
 }
 
 export interface DetourMeta {

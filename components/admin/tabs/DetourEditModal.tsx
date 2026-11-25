@@ -13,7 +13,12 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { DetourPointPhoto, DetourRoute, FloodRoute } from "@/db/default-data";
+import type {
+  DetourPointLocationSource,
+  DetourPointPhoto,
+  DetourRoute,
+  FloodRoute,
+} from "@/db/default-data";
 import { DirectionSwitch } from "@/components/ui/DirectionSwitch";
 import { calculatePolylineRoadDistanceKm } from "@/lib/detour-presentation";
 import { normalizeMediaUrl } from "@/lib/flood-event-schema";
@@ -22,6 +27,10 @@ import {
   EMPTY_DETOUR_PHOTO_LOCATION,
   type DetourPhotoLocationState,
 } from "@/components/admin/tabs/useMapRouteFormState";
+import {
+  DETOUR_POINT_SOURCE_LABELS,
+  formatDetourPointResolvedAt,
+} from "@/components/admin/tabs/RouteGeometryEditorSection";
 
 export interface DetourEditModalProps {
   editingDetour: DetourRoute | null;
@@ -126,12 +135,35 @@ function ModalPhotoLocationFields({
     }
   };
 
+  const sourceLabel = location.locationSource
+    ? DETOUR_POINT_SOURCE_LABELS[location.locationSource]
+    : null;
+  const resolvedAtLabel = formatDetourPointResolvedAt(location.resolvedAt);
+  const isAreaMissing =
+    location.areaStatus === "not_found" ||
+    (Boolean(location.lat.trim() && location.lon.trim()) &&
+      !location.subdistrict.trim() &&
+      !location.district.trim() &&
+      location.areaStatus !== "resolving");
+
   return (
     <div className="space-y-1.5 rounded-md border border-slate-800 bg-slate-900/70 p-2">
       <div className="flex flex-wrap items-center justify-between gap-1.5">
-        <span className="text-[10px] font-heading font-semibold text-slate-300">
-          พิกัด &amp; พื้นที่ภาพ{pointName}
-        </span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] font-heading font-semibold text-slate-300">
+            พิกัด &amp; พื้นที่{pointName}
+          </span>
+          {sourceLabel && (
+            <span className="rounded-full border border-sky-500/40 bg-sky-950/60 px-2 py-0.5 text-[10px] font-heading font-semibold text-sky-200">
+              {sourceLabel}
+            </span>
+          )}
+          {resolvedAtLabel && (
+            <span className="text-[10px] text-slate-400">
+              อัปเดต {resolvedAtLabel}
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={onSyncFromEndpoint}
@@ -151,7 +183,13 @@ function ModalPhotoLocationFields({
             onFocus={() => {
               focusCoordRef.current = `${location.lat},${location.lon}`;
             }}
-            onChange={(e) => onChange({ lat: e.target.value })}
+            onChange={(e) =>
+              onChange({
+                lat: e.target.value,
+                locationSource: "MANUAL",
+                resolvedAt: new Date().toISOString(),
+              })
+            }
             onBlur={handleCoordBlur}
             placeholder="เช่น 6.834000"
             className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-[10px] text-white placeholder:text-slate-600"
@@ -167,13 +205,30 @@ function ModalPhotoLocationFields({
             onFocus={() => {
               focusCoordRef.current = `${location.lat},${location.lon}`;
             }}
-            onChange={(e) => onChange({ lon: e.target.value })}
+            onChange={(e) =>
+              onChange({
+                lon: e.target.value,
+                locationSource: "MANUAL",
+                resolvedAt: new Date().toISOString(),
+              })
+            }
             onBlur={handleCoordBlur}
             placeholder="เช่น 101.186000"
             className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-[10px] text-white placeholder:text-slate-600"
           />
         </label>
       </div>
+      {location.areaStatus === "resolving" && (
+        <p className="text-[10px] text-sky-300">กำลังค้นหาตำบล/อำเภอ/จังหวัดอัตโนมัติ...</p>
+      )}
+      {isAreaMissing && (
+        <div
+          role="status"
+          className="rounded border border-amber-500/40 bg-amber-950/40 px-2 py-1 text-[10px] font-medium text-amber-200"
+        >
+          ยังไม่พบข้อมูลพื้นที่ — สามารถกรอกตำบล/อำเภอ/จังหวัดเอง หรือบันทึกพิกัดและภาพได้เลย
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-1.5">
         <label className="space-y-0.5">
           <span className="block text-[10px] text-slate-400">ตำบล</span>
@@ -181,7 +236,13 @@ function ModalPhotoLocationFields({
             type="text"
             aria-label={`ตำบลภาพ${pointName}`}
             value={location.subdistrict}
-            onChange={(e) => onChange({ subdistrict: e.target.value })}
+            onChange={(e) =>
+              onChange({
+                subdistrict: e.target.value,
+                areaStatus: e.target.value.trim() || location.district.trim() ? "resolved" : "not_found",
+                resolvedAt: new Date().toISOString(),
+              })
+            }
             placeholder="ตำบล"
             className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-[10px] text-white placeholder:text-slate-600"
           />
@@ -192,7 +253,13 @@ function ModalPhotoLocationFields({
             type="text"
             aria-label={`อำเภอภาพ${pointName}`}
             value={location.district}
-            onChange={(e) => onChange({ district: e.target.value })}
+            onChange={(e) =>
+              onChange({
+                district: e.target.value,
+                areaStatus: location.subdistrict.trim() || e.target.value.trim() ? "resolved" : "not_found",
+                resolvedAt: new Date().toISOString(),
+              })
+            }
             placeholder="อำเภอ"
             className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-[10px] text-white placeholder:text-slate-600"
           />
@@ -203,7 +270,12 @@ function ModalPhotoLocationFields({
             type="text"
             aria-label={`จังหวัดภาพ${pointName}`}
             value={location.province}
-            onChange={(e) => onChange({ province: e.target.value })}
+            onChange={(e) =>
+              onChange({
+                province: e.target.value,
+                resolvedAt: new Date().toISOString(),
+              })
+            }
             placeholder="ปัตตานี"
             className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-[10px] text-white placeholder:text-slate-600"
           />
@@ -267,6 +339,7 @@ export function DetourEditModal({
   const setEffectiveStartLoc = setEditDetourStartPhotoLocation ?? setLocalStartLoc;
   const effectiveEndLoc = editDetourEndPhotoLocation ?? localEndLoc;
   const setEffectiveEndLoc = setEditDetourEndPhotoLocation ?? setLocalEndLoc;
+  const [activePointTab, setActivePointTab] = React.useState<"START" | "END">("START");
   const activeDetourIdRef = React.useRef<string | null>(null);
 
   const resolveEndpointArea = React.useCallback(
@@ -275,7 +348,8 @@ export function DetourEditModal({
       lat: number,
       lon: number,
       saved?: Partial<DetourPointPhoto>,
-      targetDetourId?: string
+      targetDetourId?: string,
+      source: DetourPointLocationSource = "MANUAL"
     ) => {
       const setLoc = endpoint === "START" ? setEffectiveStartLoc : setEffectiveEndLoc;
       const validCoord =
@@ -287,23 +361,43 @@ export function DetourEditModal({
       const savedSub = saved?.subdistrict?.trim() || "";
       const savedDist = saved?.district?.trim() || "";
       const savedProv = saved?.province?.trim() || "";
+      const hasArea = Boolean(savedSub || savedDist);
+      const resolvedSource = saved?.locationSource ?? source;
+      const resolvedAt = saved?.resolvedAt ?? new Date().toISOString();
       setLoc({
         lat: validCoord ? lat.toFixed(6) : "",
         lon: validCoord ? lon.toFixed(6) : "",
         subdistrict: savedSub,
         district: savedDist,
         province: savedProv || (validCoord ? "ปัตตานี" : ""),
+        locationSource: resolvedSource,
+        resolvedAt,
+        areaStatus: hasArea ? "resolved" : validCoord ? "resolving" : "idle",
       });
       if (validCoord && (!savedSub || !savedDist)) {
-        void localArea(lon, lat).then((loc) => {
-          if (targetDetourId && activeDetourIdRef.current !== targetDetourId) return;
-          setLoc((prev) => ({
-            ...prev,
-            subdistrict: prev.subdistrict || loc.tambon || "",
-            district: prev.district || loc.amphoe || "",
-            province: prev.province || loc.province || "ปัตตานี",
-          }));
-        });
+        void localArea(lon, lat)
+          .then((loc) => {
+            if (targetDetourId && activeDetourIdRef.current !== targetDetourId) return;
+            setLoc((prev) => {
+              const nextSub = prev.subdistrict || loc.tambon || "";
+              const nextDist = prev.district || loc.amphoe || "";
+              return {
+                ...prev,
+                subdistrict: nextSub,
+                district: nextDist,
+                province: prev.province || loc.province || "ปัตตานี",
+                areaStatus: nextSub || nextDist ? "resolved" : "not_found",
+                resolvedAt: new Date().toISOString(),
+              };
+            });
+          })
+          .catch(() => {
+            if (targetDetourId && activeDetourIdRef.current !== targetDetourId) return;
+            setLoc((prev) => ({
+              ...prev,
+              areaStatus: prev.subdistrict || prev.district ? "resolved" : "not_found",
+            }));
+          });
       }
     },
     [setEffectiveEndLoc, setEffectiveStartLoc]
@@ -316,6 +410,7 @@ export function DetourEditModal({
     }
     if (activeDetourIdRef.current === editingDetour.id) return;
     activeDetourIdRef.current = editingDetour.id;
+    setActivePointTab("START");
 
     const initEndpoint = (endpoint: "START" | "END", photo?: DetourPointPhoto) => {
       const setLoc = endpoint === "START" ? setEffectiveStartLoc : setEffectiveEndLoc;
@@ -330,7 +425,14 @@ export function DetourEditModal({
       const fallback = parseDetourEndpointCoords(editingDetour, endpoint);
       const targetLat = hasSavedCoord ? photo!.lat! : fallback.lat;
       const targetLon = hasSavedCoord ? photo!.lon! : fallback.lon;
-      if (!photo?.url && !hasSavedCoord && !photo?.subdistrict && !photo?.district && !photo?.province) {
+      if (
+        !photo?.url &&
+        !photo?.caption &&
+        !hasSavedCoord &&
+        !photo?.subdistrict &&
+        !photo?.district &&
+        !photo?.province
+      ) {
         setLoc(EMPTY_DETOUR_PHOTO_LOCATION);
         return;
       }
@@ -342,8 +444,11 @@ export function DetourEditModal({
           subdistrict: photo?.subdistrict || (endpoint === "START" ? editingDetour.subdistrict : ""),
           district: photo?.district || (endpoint === "START" ? editingDetour.district : ""),
           province: photo?.province,
+          locationSource: photo?.locationSource ?? (hasSavedCoord ? "MANUAL" : "ROUTE_ENDPOINT"),
+          resolvedAt: photo?.resolvedAt,
         },
-        editingDetour.id
+        editingDetour.id,
+        photo?.locationSource ?? (hasSavedCoord ? "MANUAL" : "ROUTE_ENDPOINT")
       );
     };
 
@@ -361,7 +466,8 @@ export function DetourEditModal({
       lat,
       lon,
       { subdistrict: editingDetour.subdistrict, district: editingDetour.district },
-      editingDetour.id
+      editingDetour.id,
+      "ROUTE_ENDPOINT"
     );
   }, [editDetourStartPhotoUrl, editingDetour, effectiveStartLoc.lat, effectiveStartLoc.lon, resolveEndpointArea]);
 
@@ -369,7 +475,7 @@ export function DetourEditModal({
     if (!editingDetour || !editDetourEndPhotoUrl) return;
     if (effectiveEndLoc.lat || effectiveEndLoc.lon) return;
     const { lat, lon } = parseDetourEndpointCoords(editingDetour, "END");
-    resolveEndpointArea("END", lat, lon, undefined, editingDetour.id);
+    resolveEndpointArea("END", lat, lon, undefined, editingDetour.id, "ROUTE_ENDPOINT");
   }, [editDetourEndPhotoUrl, editingDetour, effectiveEndLoc.lat, effectiveEndLoc.lon, resolveEndpointArea]);
 
   if (!editingDetour) return null;
@@ -578,137 +684,138 @@ export function DetourEditModal({
               </span>
               <span className="text-[10px] text-slate-400">แสดงหมุดกล้องบนแผนที่เมื่อคลิก</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-2.5 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-heading font-bold text-emerald-300">
-                    จุดเริ่มต้น A (ขาไป A → B)
-                  </span>
-                  <label className="cursor-pointer rounded-md border border-emerald-700/70 bg-emerald-950/40 hover:bg-emerald-900/60 px-2 py-0.5 text-[10px] font-heading font-bold text-emerald-200 transition">
-                    {editDetourStartPhotoUrl ? "เปลี่ยนภาพ" : "+ แนบภาพจุดเริ่ม A"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      aria-label="แนบภาพจุดเริ่มต้น A"
-                      className="sr-only"
-                      onChange={(e) => onPointPhotoUpload("START", e)}
-                    />
-                  </label>
-                </div>
-                {editDetourStartPhotoUrl && (
-                  <div className="space-y-1.5">
-                    <div className="relative">
-                      <img
-                        src={normalizeMediaUrl(editDetourStartPhotoUrl)}
-                        alt="ภาพทางเข้าจุดเริ่มต้น A"
-                        className="h-24 w-full rounded-md object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditDetourStartPhotoUrl("");
-                          setEditDetourStartPhotoCaption("");
-                          setEffectiveStartLoc(EMPTY_DETOUR_PHOTO_LOCATION);
-                        }}
-                        aria-label="ลบภาพจุดเริ่มต้น A"
-                        className="absolute top-1 right-1 rounded-full bg-slate-950/90 p-1 text-rose-400 hover:bg-rose-950 hover:text-white border border-rose-500/40"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      aria-label="คำอธิบายภาพจุดเริ่มต้น A"
-                      value={editDetourStartPhotoCaption}
-                      onChange={(e) => setEditDetourStartPhotoCaption(e.target.value)}
-                      placeholder="คำอธิบายทางเข้าจุดเริ่ม A..."
-                      className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-white"
-                    />
-                    <ModalPhotoLocationFields
-                      pointLabel="A"
-                      pointName="จุดเริ่มต้น A"
-                      location={effectiveStartLoc}
-                      onChange={(patch) => setEffectiveStartLoc((prev) => ({ ...prev, ...patch }))}
-                      onSyncFromEndpoint={() => {
-                        const { lat, lon } = parseDetourEndpointCoords(editingDetour, "START");
-                        resolveEndpointArea(
-                          "START",
-                          lat,
-                          lon,
-                          { subdistrict: editingDetour.subdistrict, district: editingDetour.district },
-                          editingDetour.id
-                        );
-                      }}
-                      onResolveFromCoords={(lat, lon) =>
-                        resolveEndpointArea("START", lat, lon, undefined, editingDetour.id)
-                      }
-                    />
-                  </div>
-                )}
-              </div>
+            {(() => {
+              const isStartTab = activePointTab === "START";
+              const pointLabel = isStartTab ? "A" : "B";
+              const pointName = isStartTab ? "จุดเริ่มต้น A" : "จุดสิ้นสุด B";
+              const photoUrl = isStartTab ? editDetourStartPhotoUrl : editDetourEndPhotoUrl;
+              const setPhotoUrl = isStartTab ? setEditDetourStartPhotoUrl : setEditDetourEndPhotoUrl;
+              const caption = isStartTab ? editDetourStartPhotoCaption : editDetourEndPhotoCaption;
+              const setCaption = isStartTab ? setEditDetourStartPhotoCaption : setEditDetourEndPhotoCaption;
+              const loc = isStartTab ? effectiveStartLoc : effectiveEndLoc;
+              const setLoc = isStartTab ? setEffectiveStartLoc : setEffectiveEndLoc;
+              const hasPointLoc = Boolean(loc.lat || loc.lon || loc.subdistrict || loc.district);
+              const hasStartSaved = Boolean(editDetourStartPhotoUrl || effectiveStartLoc.lat || effectiveStartLoc.subdistrict);
+              const hasEndSaved = Boolean(editDetourEndPhotoUrl || effectiveEndLoc.lat || effectiveEndLoc.subdistrict);
 
-              <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-2.5 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-heading font-bold text-sky-300">
-                    จุดสิ้นสุด B (ขากลับ B → A)
-                  </span>
-                  <label className="cursor-pointer rounded-md border border-sky-700/70 bg-sky-950/40 hover:bg-sky-900/60 px-2 py-0.5 text-[10px] font-heading font-bold text-sky-200 transition">
-                    {editDetourEndPhotoUrl ? "เปลี่ยนภาพ" : "+ แนบภาพจุดสิ้นสุด B"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      aria-label="แนบภาพจุดสิ้นสุด B"
-                      className="sr-only"
-                      onChange={(e) => onPointPhotoUpload("END", e)}
-                    />
-                  </label>
-                </div>
-                {editDetourEndPhotoUrl && (
-                  <div className="space-y-1.5">
-                    <div className="relative">
-                      <img
-                        src={normalizeMediaUrl(editDetourEndPhotoUrl)}
-                        alt="ภาพทางเข้าจุดสิ้นสุด B"
-                        className="h-24 w-full rounded-md object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditDetourEndPhotoUrl("");
-                          setEditDetourEndPhotoCaption("");
-                          setEffectiveEndLoc(EMPTY_DETOUR_PHOTO_LOCATION);
-                        }}
-                        aria-label="ลบภาพจุดสิ้นสุด B"
-                        className="absolute top-1 right-1 rounded-full bg-slate-950/90 p-1 text-rose-400 hover:bg-rose-950 hover:text-white border border-rose-500/40"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+              return (
+                <div className="space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div
+                      role="tablist"
+                      aria-label="เลือกแก้ไขข้อมูลจุด A หรือ จุด B"
+                      className="inline-flex rounded-lg border border-slate-700 bg-slate-950 p-0.5"
+                    >
+                      {(
+                        [
+                          { id: "START" as const, label: "จุด A (ต้นทาง A → B)", ready: hasStartSaved },
+                          { id: "END" as const, label: "จุด B (ปลายทาง B → A)", ready: hasEndSaved },
+                        ] as const
+                      ).map((tab) => {
+                        const selected = activePointTab === tab.id;
+                        return (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={selected}
+                            onClick={() => setActivePointTab(tab.id)}
+                            className={`px-2.5 py-1 rounded-md text-[11px] font-heading font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                              selected
+                                ? tab.id === "START"
+                                  ? "bg-emerald-600 text-white shadow"
+                                  : "bg-sky-600 text-white shadow"
+                                : "text-slate-300 hover:text-white"
+                            }`}
+                          >
+                            <span>{tab.label}</span>
+                            {tab.ready && (
+                              <span
+                                aria-hidden="true"
+                                className={`h-1.5 w-1.5 rounded-full ${selected ? "bg-white" : "bg-amber-400"}`}
+                              />
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
+                    <div className="flex items-center gap-1.5">
+                      {hasPointLoc && (
+                        <button
+                          type="button"
+                          onClick={() => setLoc(EMPTY_DETOUR_PHOTO_LOCATION)}
+                          className="rounded-md border border-slate-700 bg-slate-950 px-2 py-0.5 text-[10px] font-heading text-slate-300 hover:border-rose-500/50 hover:text-rose-300 transition cursor-pointer"
+                        >
+                          ล้างพิกัดจุด {pointLabel}
+                        </button>
+                      )}
+                      <label className="cursor-pointer rounded-md border border-emerald-700/70 bg-emerald-950/40 hover:bg-emerald-900/60 px-2 py-0.5 text-[10px] font-heading font-bold text-emerald-200 transition">
+                        {photoUrl ? "เปลี่ยนภาพ" : `+ แนบภาพ${pointName}`}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          aria-label={`แนบภาพ${pointName}`}
+                          className="sr-only"
+                          onChange={(e) => onPointPhotoUpload(activePointTab, e)}
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <ModalPhotoLocationFields
+                    pointLabel={pointLabel}
+                    pointName={pointName}
+                    location={loc}
+                    onChange={(patch) => setLoc((prev) => ({ ...prev, ...patch }))}
+                    onSyncFromEndpoint={() => {
+                      const { lat, lon } = parseDetourEndpointCoords(editingDetour, activePointTab);
+                      resolveEndpointArea(
+                        activePointTab,
+                        lat,
+                        lon,
+                        isStartTab
+                          ? { subdistrict: editingDetour.subdistrict, district: editingDetour.district }
+                          : undefined,
+                        editingDetour.id,
+                        "ROUTE_ENDPOINT"
+                      );
+                    }}
+                    onResolveFromCoords={(lat, lon) =>
+                      resolveEndpointArea(activePointTab, lat, lon, undefined, editingDetour.id, "MANUAL")
+                    }
+                  />
+
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-2.5 space-y-2">
+                    {photoUrl && (
+                      <div className="relative">
+                        <img
+                          src={normalizeMediaUrl(photoUrl)}
+                          alt={`ภาพทางเข้า${pointName}`}
+                          className="h-28 w-full rounded-md object-contain bg-slate-900"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setPhotoUrl("")}
+                          aria-label={`ลบภาพ${pointName}`}
+                          title="ลบเฉพาะภาพ (พิกัดและพื้นที่จุดยังคงอยู่)"
+                          className="absolute top-1 right-1 rounded-full bg-slate-950/90 p-1 text-rose-400 hover:bg-rose-950 hover:text-white border border-rose-500/40 cursor-pointer"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )}
                     <input
                       type="text"
-                      aria-label="คำอธิบายภาพจุดสิ้นสุด B"
-                      value={editDetourEndPhotoCaption}
-                      onChange={(e) => setEditDetourEndPhotoCaption(e.target.value)}
-                      placeholder="คำอธิบายทางเข้าจุดสิ้นสุด B (ฝั่งขากลับ)..."
+                      aria-label={`คำอธิบายภาพ${pointName}`}
+                      value={caption}
+                      onChange={(e) => setCaption(e.target.value)}
+                      placeholder={`คำอธิบายทางเข้า${pointName}...`}
                       className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-white"
                     />
-                    <ModalPhotoLocationFields
-                      pointLabel="B"
-                      pointName="จุดสิ้นสุด B"
-                      location={effectiveEndLoc}
-                      onChange={(patch) => setEffectiveEndLoc((prev) => ({ ...prev, ...patch }))}
-                      onSyncFromEndpoint={() => {
-                        const { lat, lon } = parseDetourEndpointCoords(editingDetour, "END");
-                        resolveEndpointArea("END", lat, lon, undefined, editingDetour.id);
-                      }}
-                      onResolveFromCoords={(lat, lon) =>
-                        resolveEndpointArea("END", lat, lon, undefined, editingDetour.id)
-                      }
-                    />
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Row 2.5: Approved Google Maps Navigation URLs */}

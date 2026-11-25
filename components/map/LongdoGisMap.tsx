@@ -25,8 +25,10 @@ import {
   getResponsivePopupOptions,
   buildHighwayPopupHtml,
   buildOfficePopupHtml,
+  buildDetourFallbackPinSpec,
   buildDetourPointPhotoPopupHtml,
   parseRouteCoordinates,
+  resolveDetourPointPinCoord,
 } from "./longdo-map-popups";
 import {
   buildDetourPhotoBadgeSpec,
@@ -1286,27 +1288,35 @@ export function LongdoGisMap({
         allPoints.push(geom.startCoord);
       }
 
-      // Keep the A/B photos on their canonical coordinates, regardless of the
-      // currently displayed travel direction. This replaces the old floating
-      // endpoint labels and keeps each marker attached to its real map point.
+      // Keep the A/B markers on their saved point coordinates (falling back to canonical
+      // detour endpoints), regardless of travel direction, and keep Popups interactive
+      // even when a point does not have a photo attached yet.
       const photoPoints = resolveDetourPhotoPointCoords(
         detour,
         parseRouteCoordinates(detour.coordinates_json)
       );
+      const startPhoto = detour.detour_meta?.start_point_photo;
+      const endPhoto = detour.detour_meta?.end_point_photo;
+      const startPin = resolveDetourPointPinCoord(startPhoto, photoPoints.startLat, photoPoints.startLon);
+      const endPin = resolveDetourPointPinCoord(endPhoto, photoPoints.endLat, photoPoints.endLon);
       const endpoints = [
-        { point: "START" as const, lat: photoPoints.startLat, lon: photoPoints.startLon, photo: detour.detour_meta?.start_point_photo },
-        { point: "END" as const, lat: photoPoints.endLat, lon: photoPoints.endLon, photo: detour.detour_meta?.end_point_photo },
+        { point: "START" as const, lat: startPin.lat, lon: startPin.lon, photo: startPhoto },
+        { point: "END" as const, lat: endPin.lat, lon: endPin.lon, photo: endPhoto },
       ];
 
       endpoints.forEach(({ point, lat, lon, photo }) => {
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        const hasPhoto = Boolean(typeof photo?.url === "string" && photo.url.trim());
         const marker = L.marker([lat, lon], {
-          interactive: Boolean(photo?.url),
+          interactive: true,
           zIndexOffset: 900,
-          icon: L.divIcon(buildDetourPhotoBadgeSpec(point, "FULL", true)),
+          icon: L.divIcon(
+            hasPhoto
+              ? buildDetourPhotoBadgeSpec(point, "FULL", true)
+              : buildDetourFallbackPinSpec(point, "FULL", true)
+          ),
         }).addTo(group);
         allPoints.push([lon, lat]);
-        if (!photo?.url) return;
         marker.bindPopup(
           () => buildDetourPointPhotoPopupHtml(detour, point, photo, lat, lon),
           getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")

@@ -1,4 +1,8 @@
-import { type DetourPointPhoto, SystemDataPayload } from "@/db/default-data";
+import {
+  type DetourPointLocationSource,
+  type DetourPointPhoto,
+  SystemDataPayload,
+} from "@/db/default-data";
 import { slicePolylineByKmRange } from "@/lib/gis-utils";
 import { AffectedShoulderType } from "@/lib/constants";
 import {
@@ -137,6 +141,8 @@ export interface DetourPointPhotoLocationInput {
   subdistrict?: string | null;
   district?: string | null;
   province?: string | null;
+  locationSource?: DetourPointLocationSource | null;
+  resolvedAt?: string | null;
 }
 
 function parseValidPhotoCoord(value: number | string | null | undefined): number | null {
@@ -151,17 +157,56 @@ function normalizeAreaText(value: string | null | undefined): string | undefined
   return trimmed;
 }
 
+function normalizeLocationSource(
+  value: unknown
+): DetourPointLocationSource | undefined {
+  if (value === "MAP" || value === "MANUAL" || value === "ROUTE_ENDPOINT") {
+    return value;
+  }
+  return undefined;
+}
+
+function normalizeResolvedAt(value: unknown): string | undefined {
+  const trimmed = String(value ?? "").trim();
+  return trimmed || undefined;
+}
+
+export function hasDetourPointData(
+  photo: DetourPointPhoto | null | undefined
+): boolean {
+  if (!photo) return false;
+  const hasCoord =
+    typeof photo.lat === "number" &&
+    Number.isFinite(photo.lat) &&
+    typeof photo.lon === "number" &&
+    Number.isFinite(photo.lon) &&
+    (photo.lat !== 0 || photo.lon !== 0);
+  return Boolean(
+    (typeof photo.url === "string" && photo.url.trim()) ||
+      (typeof photo.caption === "string" && photo.caption.trim()) ||
+      hasCoord ||
+      normalizeAreaText(photo.subdistrict) ||
+      normalizeAreaText(photo.district) ||
+      normalizeAreaText(photo.province)
+  );
+}
+
 export function buildDetourPointPhotoPayload(params: {
-  url: string;
+  url?: string | null;
   caption?: string;
   mediaId?: string;
   location?: DetourPointPhotoLocationInput | null;
   existingPhoto?: DetourPointPhoto;
 }): DetourPointPhoto {
   const { url, caption, mediaId, location, existingPhoto } = params;
+  const trimmedUrl = String(url ?? "").trim();
   const trimmedCaption = String(caption ?? "").trim();
-  const resolvedMediaId =
-    mediaId || (existingPhoto && existingPhoto.url === url ? existingPhoto.mediaId : undefined);
+  const resolvedMediaId = trimmedUrl
+    ? mediaId ||
+      (existingPhoto && existingPhoto.url === trimmedUrl
+        ? existingPhoto.mediaId
+        : undefined)
+    : undefined;
 
   const hasExplicitLocation = location !== undefined;
   const rawLat = hasExplicitLocation ? location?.lat : existingPhoto?.lat;
@@ -184,9 +229,23 @@ export function buildDetourPointPhotoPayload(params: {
   const province = normalizeAreaText(
     hasExplicitLocation ? location?.province : existingPhoto?.province
   );
+  const locationSource =
+    (hasExplicitLocation
+      ? normalizeLocationSource(location?.locationSource)
+      : undefined) ?? normalizeLocationSource(existingPhoto?.locationSource);
+  const explicitResolvedAt = hasExplicitLocation
+    ? normalizeResolvedAt(location?.resolvedAt)
+    : undefined;
+  const preservedResolvedAt = normalizeResolvedAt(existingPhoto?.resolvedAt);
+  const resolvedAt =
+    explicitResolvedAt ??
+    preservedResolvedAt ??
+    (hasExplicitLocation && (hasValidCoord || subdistrict || district || province)
+      ? new Date().toISOString()
+      : undefined);
 
   return {
-    url,
+    ...(trimmedUrl ? { url: trimmedUrl } : {}),
     ...(trimmedCaption ? { caption: trimmedCaption } : {}),
     ...(resolvedMediaId ? { mediaId: resolvedMediaId } : {}),
     ...(hasValidCoord
@@ -198,6 +257,8 @@ export function buildDetourPointPhotoPayload(params: {
     ...(subdistrict ? { subdistrict } : {}),
     ...(district ? { district } : {}),
     ...(province ? { province } : {}),
+    ...(locationSource ? { locationSource } : {}),
+    ...(resolvedAt ? { resolvedAt } : {}),
   };
 }
 
@@ -323,23 +384,26 @@ export function buildDetourMetaPayload(params: BuildDetourMetaPayloadParams): Re
     delete nextMeta.reverse_duration_min;
     delete nextMeta.reverse_duration_s;
   }
-  if (resolvedDetourStartPhotoUrl) {
-    nextMeta.start_point_photo = buildDetourPointPhotoPayload({
-      url: resolvedDetourStartPhotoUrl,
-      caption: detourStartPhotoCaption,
-      location: detourStartPhotoLocation,
-      existingPhoto: existingMeta?.start_point_photo,
-    });
+  const startPointPhoto = buildDetourPointPhotoPayload({
+    url: resolvedDetourStartPhotoUrl,
+    caption: detourStartPhotoCaption,
+    location: detourStartPhotoLocation,
+    existingPhoto: existingMeta?.start_point_photo,
+  });
+  if (hasDetourPointData(startPointPhoto)) {
+    nextMeta.start_point_photo = startPointPhoto;
   } else {
     delete nextMeta.start_point_photo;
   }
-  if (resolvedDetourEndPhotoUrl) {
-    nextMeta.end_point_photo = buildDetourPointPhotoPayload({
-      url: resolvedDetourEndPhotoUrl,
-      caption: detourEndPhotoCaption,
-      location: detourEndPhotoLocation,
-      existingPhoto: existingMeta?.end_point_photo,
-    });
+
+  const endPointPhoto = buildDetourPointPhotoPayload({
+    url: resolvedDetourEndPhotoUrl,
+    caption: detourEndPhotoCaption,
+    location: detourEndPhotoLocation,
+    existingPhoto: existingMeta?.end_point_photo,
+  });
+  if (hasDetourPointData(endPointPhoto)) {
+    nextMeta.end_point_photo = endPointPhoto;
   } else {
     delete nextMeta.end_point_photo;
   }

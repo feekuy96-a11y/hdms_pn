@@ -180,6 +180,7 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
           subdistrict: fallbackArea?.subdistrict,
           district: fallbackArea?.district,
           province: fallbackArea?.province || "ปัตตานี",
+          locationSource: "ROUTE_ENDPOINT",
         };
       }
       return undefined;

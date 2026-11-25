@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import type { DetourPointLocationSource } from "@/db/default-data";
 import { ActionButton, FormSection, ToolGroup } from "@/components/admin/ui";
 import { DirectionSwitch } from "@/components/ui/DirectionSwitch";
 import { analyzeCarriagewaySeparation } from "@/lib/gis-utils";
@@ -70,6 +71,7 @@ interface RouteGeometryEditorSectionProps {
     lonVal: number | string,
     options?: {
       manual?: boolean;
+      source?: DetourPointLocationSource;
       areaHint?: { subdistrict?: string; district?: string; province?: string } | null;
     }
   ) => Promise<void> | void;
@@ -138,7 +140,24 @@ interface DetourPhotoLocationFieldsProps {
   onToast: (msg: string) => void;
 }
 
-/** Shared coordinate & Thai area editor for point A/B entrance photos. */
+export const DETOUR_POINT_SOURCE_LABELS: Record<DetourPointLocationSource, string> = {
+  MAP: "เลือกจากแผนที่",
+  MANUAL: "กรอกพิกัดเอง",
+  ROUTE_ENDPOINT: "ดึงจากแนวเส้น",
+};
+
+export function formatDetourPointResolvedAt(iso?: string): string | null {
+  const raw = String(iso ?? "").trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleString("th-TH", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+/** Shared coordinate & Thai area editor for point A/B entrance points. */
 function DetourPhotoLocationFields({
   endpoint,
   pointLabel,
@@ -165,7 +184,7 @@ function DetourPhotoLocationFields({
       return;
     }
     if (manualRef) manualRef.current = false;
-    void resolveDetourPhotoArea?.(endpoint, nLat, nLon);
+    void resolveDetourPhotoArea?.(endpoint, nLat, nLon, { source: "ROUTE_ENDPOINT" });
     onToast(`ดึงพิกัดและพื้นที่จากจุด ${pointLabel} แล้ว`);
   };
 
@@ -181,16 +200,42 @@ function DetourPhotoLocationFields({
       Math.abs(nLon) <= 180 &&
       (nLat !== 0 || nLon !== 0)
     ) {
-      void resolveDetourPhotoArea?.(endpoint, nLat, nLon, { manual: true });
+      void resolveDetourPhotoArea?.(endpoint, nLat, nLon, {
+        manual: true,
+        source: "MANUAL",
+      });
     }
   };
 
+  const sourceLabel = location.locationSource
+    ? DETOUR_POINT_SOURCE_LABELS[location.locationSource]
+    : null;
+  const resolvedAtLabel = formatDetourPointResolvedAt(location.resolvedAt);
+  const isAreaMissing =
+    location.areaStatus === "not_found" ||
+    (Boolean(location.lat.trim() && location.lon.trim()) &&
+      !location.subdistrict.trim() &&
+      !location.district.trim() &&
+      location.areaStatus !== "resolving");
+
   return (
-    <div className="space-y-1.5 rounded-md border border-slate-800/90 bg-slate-900/70 p-2">
+    <div className="space-y-2 rounded-lg border border-slate-800/90 bg-slate-900/70 p-2.5">
       <div className="flex flex-wrap items-center justify-between gap-1.5">
-        <span className="text-[11px] font-heading font-semibold text-slate-200">
-          พิกัด &amp; พื้นที่ภาพ{pointName}
-        </span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-heading font-semibold text-slate-200">
+            พิกัด &amp; พื้นที่{pointName}
+          </span>
+          {sourceLabel && (
+            <span className="rounded-full border border-sky-500/40 bg-sky-950/60 px-2 py-0.5 text-[10px] font-heading font-semibold text-sky-200">
+              {sourceLabel}
+            </span>
+          )}
+          {resolvedAtLabel && (
+            <span className="text-[10px] text-slate-400">
+              อัปเดต {resolvedAtLabel}
+            </span>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
@@ -209,7 +254,7 @@ function DetourPhotoLocationFields({
         </div>
       </div>
       <p className="text-[10px] text-slate-400 leading-snug">
-        ดึงพิกัดจากจุด {pointLabel} บนแผนที่อัตโนมัติ หรือแก้ไข/ปักหมุดทับเฉพาะจุดถ่ายภาพได้
+        เลือกได้ 3 วิธี: ปักหมุดบนแผนที่, กรอกพิกัด Lat/Lon เอง หรือดึงจากแนวเส้นจุด {pointLabel} แล้วตรวจแก้ ต./อ./จ. ได้เสมอ
       </p>
       <div className="grid grid-cols-2 gap-1.5">
         <label className="space-y-0.5">
@@ -245,6 +290,17 @@ function DetourPhotoLocationFields({
           />
         </label>
       </div>
+      {location.areaStatus === "resolving" && (
+        <p className="text-[10px] text-sky-300">กำลังค้นหาตำบล/อำเภอ/จังหวัดอัตโนมัติ...</p>
+      )}
+      {isAreaMissing && (
+        <div
+          role="status"
+          className="rounded-md border border-amber-500/40 bg-amber-950/40 px-2.5 py-1.5 text-[10px] font-medium text-amber-200"
+        >
+          ยังไม่พบข้อมูลพื้นที่ — สามารถกรอกตำบล/อำเภอ/จังหวัดเอง หรือบันทึกพิกัดและภาพได้เลย
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-1.5">
         <label className="space-y-0.5">
           <span className="block text-[10px] text-slate-400">ตำบล</span>
@@ -366,6 +422,56 @@ export function RouteGeometryEditorSection({
   detourDirectionMode,
   detourDistanceMeters,
 }: RouteGeometryEditorSectionProps) {
+  const [activeDetourPointTab, setActiveDetourPointTab] = React.useState<"START" | "END">("START");
+  const activePointConfig =
+    activeDetourPointTab === "START"
+      ? {
+          endpoint: "START" as const,
+          pointLabel: "A" as const,
+          pointName: "จุดเริ่มต้น A",
+          photoUrl: detourStartPhotoUrl,
+          setPhotoUrl: setDetourStartPhotoUrl,
+          caption: detourStartPhotoCaption,
+          setCaption: setDetourStartPhotoCaption,
+          location: detourStartPhotoLocation,
+          routeLat: startLat,
+          routeLon: startLon,
+          manualRef: startPhotoLocManualRef,
+          uploadLabel: detourStartPhotoUrl ? "เปลี่ยนภาพ" : "+ แนบภาพจุดเริ่ม A",
+          uploadAriaLabel: "แนบภาพจุดเริ่มต้น A",
+          deleteAriaLabel: "ลบภาพจุดเริ่มต้น A",
+          captionAriaLabel: "คำอธิบายภาพจุดเริ่มต้น A",
+          captionPlaceholder: "คำอธิบาย เช่น ปากทางเข้าซอยฝั่งจุดเริ่มต้น A",
+          previewAlt: "ภาพทางเข้าจุดเริ่มต้น A",
+        }
+      : {
+          endpoint: "END" as const,
+          pointLabel: "B" as const,
+          pointName: "จุดสิ้นสุด B",
+          photoUrl: detourEndPhotoUrl,
+          setPhotoUrl: setDetourEndPhotoUrl,
+          caption: detourEndPhotoCaption,
+          setCaption: setDetourEndPhotoCaption,
+          location: detourEndPhotoLocation,
+          routeLat: endLat,
+          routeLon: endLon,
+          manualRef: endPhotoLocManualRef,
+          uploadLabel: detourEndPhotoUrl ? "เปลี่ยนภาพ" : "+ แนบภาพจุดสิ้นสุด B",
+          uploadAriaLabel: "แนบภาพจุดสิ้นสุด B",
+          deleteAriaLabel: "ลบภาพจุดสิ้นสุด B",
+          captionAriaLabel: "คำอธิบายภาพจุดสิ้นสุด B",
+          captionPlaceholder: "คำอธิบาย เช่น ปากทางเข้าฝั่งขากลับ (สำหรับผู้มาจากอีกฝั่ง)",
+          previewAlt: "ภาพทางเข้าจุดสิ้นสุด B",
+        };
+  const hasStartPointSaved = Boolean(detourStartPhotoUrl || detourStartPhotoLocation.lat || detourStartPhotoLocation.subdistrict);
+  const hasEndPointSaved = Boolean(detourEndPhotoUrl || detourEndPhotoLocation.lat || detourEndPhotoLocation.subdistrict);
+  const activePointHasLocation = Boolean(
+    activePointConfig.location.lat ||
+      activePointConfig.location.lon ||
+      activePointConfig.location.subdistrict ||
+      activePointConfig.location.district
+  );
+
   return (
     <FormSection
       step={2}
@@ -402,72 +508,6 @@ export function RouteGeometryEditorSection({
             placeholder="วางจาก Google Maps เช่น 6.8340, 101.1860"
             className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm text-white placeholder:text-slate-500"
           />
-          {routeMode === "DETOUR" && (
-            <div className="pt-2 border-t border-slate-800/80 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-heading font-semibold text-emerald-300 flex items-center gap-1">
-                  <Camera className="h-3.5 w-3.5" />
-                  ภาพทางเข้าจุดเริ่มต้น A (ขาไป A → B)
-                </span>
-                <label className="cursor-pointer rounded-lg border border-emerald-700/70 bg-emerald-950/40 hover:bg-emerald-900/60 px-2.5 py-1 text-[11px] font-heading font-bold text-emerald-200 transition">
-                  {detourStartPhotoUrl ? "เปลี่ยนภาพ" : "+ แนบภาพจุดเริ่ม A"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    aria-label="แนบภาพจุดเริ่มต้น A"
-                    className="sr-only"
-                    onChange={(e) => handleDetourPointPhotoUpload("START", e)}
-                  />
-                </label>
-              </div>
-              {detourStartPhotoUrl && (
-                <div className="space-y-1.5 rounded-lg border border-slate-800 bg-slate-950 p-2">
-                  <div className="relative">
-                    <img
-                      src={detourStartPhotoUrl}
-                      alt="ภาพทางเข้าจุดเริ่มต้น A"
-                      className="h-28 w-full rounded-md object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDetourStartPhotoUrl("");
-                        setDetourStartPhotoCaption("");
-                        if (startPhotoLocManualRef) startPhotoLocManualRef.current = false;
-                        updateDetourPhotoLocation?.("START", EMPTY_DETOUR_PHOTO_LOCATION, false);
-                      }}
-                      aria-label="ลบภาพจุดเริ่มต้น A"
-                      className="absolute top-1.5 right-1.5 rounded-full bg-slate-950/90 p-1 text-rose-400 hover:bg-rose-950 hover:text-white border border-rose-500/40"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    aria-label="คำอธิบายภาพจุดเริ่มต้น A"
-                    value={detourStartPhotoCaption}
-                    onChange={(e) => setDetourStartPhotoCaption(e.target.value)}
-                    placeholder="คำอธิบาย เช่น ปากทางเข้าซอยฝั่งจุดเริ่มต้น A"
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500"
-                  />
-                  <DetourPhotoLocationFields
-                    endpoint="START"
-                    pointLabel="A"
-                    pointName="จุดเริ่มต้น A"
-                    location={detourStartPhotoLocation}
-                    routeLat={startLat}
-                    routeLon={startLon}
-                    adminPickMode={adminPickMode}
-                    setAdminPickMode={setAdminPickMode}
-                    manualRef={startPhotoLocManualRef}
-                    resolveDetourPhotoArea={resolveDetourPhotoArea}
-                    updateDetourPhotoLocation={updateDetourPhotoLocation}
-                    onToast={onToast}
-                  />
-                </div>
-              )}
-            </div>
-          )}
         </div>
         <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
           <div className="flex items-center justify-between gap-2">
@@ -488,74 +528,136 @@ export function RouteGeometryEditorSection({
             placeholder="วางจาก Google Maps เช่น 6.8390, 101.1920"
             className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm text-white placeholder:text-slate-500"
           />
-          {routeMode === "DETOUR" && (
-            <div className="pt-2 border-t border-slate-800/80 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-heading font-semibold text-sky-300 flex items-center gap-1">
-                  <Camera className="h-3.5 w-3.5" />
-                  ภาพทางเข้าจุดสิ้นสุด B (ขากลับ B → A)
-                </span>
-                <label className="cursor-pointer rounded-lg border border-sky-700/70 bg-sky-950/40 hover:bg-sky-900/60 px-2.5 py-1 text-[11px] font-heading font-bold text-sky-200 transition">
-                  {detourEndPhotoUrl ? "เปลี่ยนภาพ" : "+ แนบภาพจุดสิ้นสุด B"}
+        </div>
+      </div>
+
+      {/* Point-First Tabbed Editor for Detour Point A / Point B */}
+      {routeMode === "DETOUR" && (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-heading font-bold text-white flex items-center gap-1.5">
+                <Camera className="h-3.5 w-3.5 text-amber-400" />
+                ข้อมูลพิกัด พื้นที่ และภาพจุดเข้า–ออกทางเลี่ยง (จุด A / จุด B)
+              </p>
+              <p className="text-[10px] text-slate-400">
+                พิกัดและพื้นที่ผูกกับตัวจุด A/B (สามารถเปลี่ยนหรือลบรูปภายหลังได้โดยพิกัดและพื้นที่ไม่หาย)
+              </p>
+            </div>
+            <div role="tablist" aria-label="เลือกจุดต้นทางหรือปลายทางของทางเลี่ยง" className="inline-flex rounded-lg border border-slate-700 bg-slate-950 p-0.5">
+              {(
+                [
+                  { id: "START" as const, label: "จุด A (ต้นทาง)", ready: hasStartPointSaved },
+                  { id: "END" as const, label: "จุด B (ปลายทาง)", ready: hasEndPointSaved },
+                ] as const
+              ).map((tab) => {
+                const selected = activeDetourPointTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setActiveDetourPointTab(tab.id)}
+                    className={`min-h-9 px-3 py-1 rounded-md text-xs font-heading font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      selected
+                        ? tab.id === "START"
+                          ? "bg-emerald-600 text-white shadow"
+                          : "bg-sky-600 text-white shadow"
+                        : "text-slate-300 hover:text-white"
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    {tab.ready && (
+                      <span
+                        aria-hidden="true"
+                        className={`h-1.5 w-1.5 rounded-full ${selected ? "bg-white" : "bg-amber-400"}`}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <DetourPhotoLocationFields
+            endpoint={activePointConfig.endpoint}
+            pointLabel={activePointConfig.pointLabel}
+            pointName={activePointConfig.pointName}
+            location={activePointConfig.location}
+            routeLat={activePointConfig.routeLat}
+            routeLon={activePointConfig.routeLon}
+            adminPickMode={adminPickMode}
+            setAdminPickMode={setAdminPickMode}
+            manualRef={activePointConfig.manualRef}
+            resolveDetourPhotoArea={resolveDetourPhotoArea}
+            updateDetourPhotoLocation={updateDetourPhotoLocation}
+            onToast={onToast}
+          />
+
+          <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-950/80 p-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-heading font-semibold text-slate-200">
+                ภาพถ่ายประกอบ &amp; คำอธิบาย ({activePointConfig.pointName})
+              </span>
+              <div className="flex items-center gap-2">
+                {activePointHasLocation && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (activePointConfig.manualRef) activePointConfig.manualRef.current = false;
+                      updateDetourPhotoLocation?.(
+                        activePointConfig.endpoint,
+                        EMPTY_DETOUR_PHOTO_LOCATION,
+                        false
+                      );
+                    }}
+                    className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-heading text-slate-300 hover:border-rose-500/50 hover:text-rose-300 transition cursor-pointer"
+                  >
+                    ล้างพิกัดจุด {activePointConfig.pointLabel}
+                  </button>
+                )}
+                <label className="cursor-pointer rounded-lg border border-emerald-700/70 bg-emerald-950/40 hover:bg-emerald-900/60 px-2.5 py-1 text-[11px] font-heading font-bold text-emerald-200 transition">
+                  {activePointConfig.uploadLabel}
                   <input
                     type="file"
                     accept="image/*"
-                    aria-label="แนบภาพจุดสิ้นสุด B"
+                    aria-label={activePointConfig.uploadAriaLabel}
                     className="sr-only"
-                    onChange={(e) => handleDetourPointPhotoUpload("END", e)}
+                    onChange={(e) => handleDetourPointPhotoUpload(activePointConfig.endpoint, e)}
                   />
                 </label>
               </div>
-              {detourEndPhotoUrl && (
-                <div className="space-y-1.5 rounded-lg border border-slate-800 bg-slate-950 p-2">
-                  <div className="relative">
-                    <img
-                      src={detourEndPhotoUrl}
-                      alt="ภาพทางเข้าจุดสิ้นสุด B"
-                      className="h-28 w-full rounded-md object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDetourEndPhotoUrl("");
-                        setDetourEndPhotoCaption("");
-                        if (endPhotoLocManualRef) endPhotoLocManualRef.current = false;
-                        updateDetourPhotoLocation?.("END", EMPTY_DETOUR_PHOTO_LOCATION, false);
-                      }}
-                      aria-label="ลบภาพจุดสิ้นสุด B"
-                      className="absolute top-1.5 right-1.5 rounded-full bg-slate-950/90 p-1 text-rose-400 hover:bg-rose-950 hover:text-white border border-rose-500/40"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    aria-label="คำอธิบายภาพจุดสิ้นสุด B"
-                    value={detourEndPhotoCaption}
-                    onChange={(e) => setDetourEndPhotoCaption(e.target.value)}
-                    placeholder="คำอธิบาย เช่น ปากทางเข้าฝั่งขากลับ (สำหรับผู้มาจากอีกฝั่ง)"
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500"
-                  />
-                  <DetourPhotoLocationFields
-                    endpoint="END"
-                    pointLabel="B"
-                    pointName="จุดสิ้นสุด B"
-                    location={detourEndPhotoLocation}
-                    routeLat={endLat}
-                    routeLon={endLon}
-                    adminPickMode={adminPickMode}
-                    setAdminPickMode={setAdminPickMode}
-                    manualRef={endPhotoLocManualRef}
-                    resolveDetourPhotoArea={resolveDetourPhotoArea}
-                    updateDetourPhotoLocation={updateDetourPhotoLocation}
-                    onToast={onToast}
-                  />
-                </div>
-              )}
             </div>
-          )}
+            {activePointConfig.photoUrl && (
+              <div className="relative">
+                <img
+                  src={activePointConfig.photoUrl}
+                  alt={activePointConfig.previewAlt}
+                  className="h-32 w-full rounded-md object-contain bg-slate-900"
+                />
+                <button
+                  type="button"
+                  onClick={() => activePointConfig.setPhotoUrl("")}
+                  aria-label={activePointConfig.deleteAriaLabel}
+                  title="ลบเฉพาะภาพ (พิกัดและพื้นที่จุดยังคงอยู่)"
+                  className="absolute top-1.5 right-1.5 rounded-full bg-slate-950/90 p-1 text-rose-400 hover:bg-rose-950 hover:text-white border border-rose-500/40 cursor-pointer"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+            <input
+              type="text"
+              aria-label={activePointConfig.captionAriaLabel}
+              value={activePointConfig.caption}
+              onChange={(e) => activePointConfig.setCaption(e.target.value)}
+              placeholder={activePointConfig.captionPlaceholder}
+              className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500"
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Separate B -> A Endpoints Card when 2-way editing is active */}
       {supportsTwoWayLineEdit && (

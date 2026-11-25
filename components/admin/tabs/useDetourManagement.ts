@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { type DetourPointPhoto, DetourRoute, SystemDataPayload } from "@/db/default-data";
 import {
   buildDetourPointPhotoPayload,
+  hasDetourPointData,
   type DetourPointPhotoLocationInput,
 } from "@/components/admin/tabs/map-management-helpers";
 import {
@@ -289,32 +290,55 @@ export function useDetourManagement({
     const savedSub = photo?.subdistrict?.trim() || "";
     const savedDist = photo?.district?.trim() || "";
     const savedProv = photo?.province?.trim() || "";
-    const shouldPopulate = Boolean(photo?.url || hasSavedCoord || savedSub || savedDist || savedProv);
+    const shouldPopulate = Boolean(
+      photo?.url || photo?.caption || hasSavedCoord || savedSub || savedDist || savedProv
+    );
 
     if (!shouldPopulate || (!validTarget && !savedSub && !savedDist && !savedProv)) {
       setLoc(EMPTY_DETOUR_PHOTO_LOCATION);
       return;
     }
 
+    const nextSub = savedSub || (isStart ? d.subdistrict || "" : "");
+    const nextDist = savedDist || (isStart ? d.district || "" : "");
+    const nextSource =
+      photo?.locationSource ?? (hasSavedCoord ? "MANUAL" : "ROUTE_ENDPOINT");
+    const hasArea = Boolean(nextSub.trim() || nextDist.trim());
     setLoc({
       lat: validTarget ? targetLat.toFixed(6) : "",
       lon: validTarget ? targetLon.toFixed(6) : "",
-      subdistrict: savedSub || (isStart ? d.subdistrict || "" : ""),
-      district: savedDist || (isStart ? d.district || "" : ""),
+      subdistrict: nextSub,
+      district: nextDist,
       province: savedProv || (validTarget ? "ปัตตานี" : ""),
+      locationSource: nextSource,
+      resolvedAt: photo?.resolvedAt,
+      areaStatus: hasArea ? "resolved" : validTarget ? "resolving" : "idle",
     });
 
-    if (validTarget && (!savedSub || !savedDist)) {
+    if (validTarget && (!nextSub || !nextDist)) {
       const targetId = d.id;
-      void localArea(targetLon, targetLat).then((loc) => {
-        if (modalEditDetourIdRef.current !== targetId) return;
-        setLoc((prev) => ({
-          ...prev,
-          subdistrict: prev.subdistrict || loc.tambon || "",
-          district: prev.district || loc.amphoe || "",
-          province: prev.province || loc.province || "ปัตตานี",
-        }));
-      });
+      void localArea(targetLon, targetLat)
+        .then((loc) => {
+          if (modalEditDetourIdRef.current !== targetId) return;
+          setLoc((prev) => {
+            const finalSub = prev.subdistrict || loc.tambon || "";
+            const finalDist = prev.district || loc.amphoe || "";
+            return {
+              ...prev,
+              subdistrict: finalSub,
+              district: finalDist,
+              province: prev.province || loc.province || "ปัตตานี",
+              areaStatus: finalSub || finalDist ? "resolved" : "not_found",
+            };
+          });
+        })
+        .catch(() => {
+          if (modalEditDetourIdRef.current !== targetId) return;
+          setLoc((prev) => ({
+            ...prev,
+            areaStatus: prev.subdistrict || prev.district ? "resolved" : "not_found",
+          }));
+        });
     }
   };
 
@@ -542,13 +566,14 @@ export function useDetourManagement({
           // Keep compressed dataUrl if staging endpoint is not mocked in offline/unit test
         }
       }
-      if (resolvedStartPhotoUrl) {
-        updatedDetourMeta.start_point_photo = buildDetourPointPhotoPayload({
-          url: resolvedStartPhotoUrl,
-          caption: editDetourStartPhotoCaption,
-          location: effectiveStartPhotoLoc,
-          existingPhoto: existingMeta.start_point_photo,
-        });
+      const startPointPayload = buildDetourPointPhotoPayload({
+        url: resolvedStartPhotoUrl,
+        caption: editDetourStartPhotoCaption,
+        location: effectiveStartPhotoLoc,
+        existingPhoto: existingMeta.start_point_photo,
+      });
+      if (hasDetourPointData(startPointPayload)) {
+        updatedDetourMeta.start_point_photo = startPointPayload;
       } else {
         delete updatedDetourMeta.start_point_photo;
       }
@@ -567,13 +592,14 @@ export function useDetourManagement({
           // Keep compressed dataUrl if staging endpoint is not mocked in offline/unit test
         }
       }
-      if (resolvedEndPhotoUrl) {
-        updatedDetourMeta.end_point_photo = buildDetourPointPhotoPayload({
-          url: resolvedEndPhotoUrl,
-          caption: editDetourEndPhotoCaption,
-          location: effectiveEndPhotoLoc,
-          existingPhoto: existingMeta.end_point_photo,
-        });
+      const endPointPayload = buildDetourPointPhotoPayload({
+        url: resolvedEndPhotoUrl,
+        caption: editDetourEndPhotoCaption,
+        location: effectiveEndPhotoLoc,
+        existingPhoto: existingMeta.end_point_photo,
+      });
+      if (hasDetourPointData(endPointPayload)) {
+        updatedDetourMeta.end_point_photo = endPointPayload;
       } else {
         delete updatedDetourMeta.end_point_photo;
       }

@@ -1,4 +1,10 @@
-import { SystemDataPayload, FloodRoute, DetourRoute, DohOfficeLocation } from "@/db/default-data";
+import {
+  SystemDataPayload,
+  FloodRoute,
+  DetourRoute,
+  DohOfficeLocation,
+  DetourPointPhoto,
+} from "@/db/default-data";
 import { APP_CONFIG } from "@/lib/constants";
 import { splitDetourAdviceByDirection } from "@/lib/gis-utils";
 import {
@@ -473,29 +479,36 @@ export function buildDetourPopupHtml(
   `;
 }
 
-export function buildDetourPointPhotoPopupHtml(
-  detour: DetourRoute,
-  role: "START" | "END",
-  photo: {
-    url: string;
-    caption?: string;
-    lat?: number;
-    lon?: number;
-    subdistrict?: string;
-    district?: string;
-    province?: string;
-  },
-  lat: number,
-  lon: number
-): string {
-  const isStart = role === "START";
-  const badgeText = isStart
-    ? "จุดเริ่มต้น A — ทางเข้าทางเลี่ยง (ขาไป A → B)"
-    : "จุดสิ้นสุด B — ทางเข้าทางเลี่ยง (ขากลับ B → A)";
-  const defaultCaption = isStart
-    ? "บริเวณทางเข้าเส้นทางเลี่ยง ฝั่งจุดเริ่มต้น A (สำหรับผู้ใช้ทางขาไป A → B)"
-    : "บริเวณทางเข้าเส้นทางเลี่ยง ฝั่งจุดสิ้นสุด B (สำหรับผู้ใช้ทางที่มาจากอีกฝั่ง B → A)";
-  const hasPhotoCoord =
+export function hasDetourPointMetadata(photo?: DetourPointPhoto | null): boolean {
+  if (!photo) return false;
+  const hasCoord =
+    typeof photo.lat === "number" &&
+    Number.isFinite(photo.lat) &&
+    typeof photo.lon === "number" &&
+    Number.isFinite(photo.lon) &&
+    Math.abs(photo.lat) <= 90 &&
+    Math.abs(photo.lon) <= 180 &&
+    (photo.lat !== 0 || photo.lon !== 0);
+  const hasArea = Boolean(
+    formatPopupAreaSegment("ต.", photo.subdistrict) ||
+      formatPopupAreaSegment("อ.", photo.district) ||
+      formatPopupAreaSegment("จ.", photo.province)
+  );
+  return Boolean(
+    (typeof photo.url === "string" && photo.url.trim()) ||
+      (typeof photo.caption === "string" && photo.caption.trim()) ||
+      hasCoord ||
+      hasArea
+  );
+}
+
+export function resolveDetourPointPinCoord(
+  photo: DetourPointPhoto | null | undefined,
+  fallbackLat: number,
+  fallbackLon: number
+): { lat: number; lon: number } {
+  const hasCustom =
+    photo &&
     typeof photo.lat === "number" &&
     typeof photo.lon === "number" &&
     Number.isFinite(photo.lat) &&
@@ -503,8 +516,57 @@ export function buildDetourPointPhotoPopupHtml(
     Math.abs(photo.lat) <= 90 &&
     Math.abs(photo.lon) <= 180 &&
     (photo.lat !== 0 || photo.lon !== 0);
-  const effectiveLat = hasPhotoCoord ? photo.lat! : lat;
-  const effectiveLon = hasPhotoCoord ? photo.lon! : lon;
+  return hasCustom
+    ? { lat: photo.lat!, lon: photo.lon! }
+    : { lat: fallbackLat, lon: fallbackLon };
+}
+
+export function buildDetourFallbackPinSpec(
+  point: "START" | "END",
+  variant: "COMPACT" | "FULL" = "FULL",
+  isFocusEndpoint = false
+) {
+  const compact = variant === "COMPACT";
+  const size = compact ? 20 : 26;
+  const label = point === "START" ? "A" : "B";
+  const bg = point === "START" ? "#064e3b" : "#0c4a6e";
+  const border = point === "START" ? "#10b981" : "#38bdf8";
+  const text = point === "START" ? "#a7f3d0" : "#bae6fd";
+  const pointClass = point === "START" ? "doh-detour-photo-start" : "doh-detour-photo-end";
+  return {
+    html: `<div class="doh-detour-photo-badge doh-detour-point-fallback" style="width:${size}px;height:${size}px;border-radius:999px;background:${bg};color:${text};border:2px solid ${border};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:${compact ? 10 : 11}px;line-height:1;box-shadow:0 3px 10px rgba(0,0,0,0.6)"><span>${label}</span></div>`,
+    className: `doh-detour-photo-point ${pointClass}${isFocusEndpoint ? " hdms-focus-endpoint" : ""}`,
+    iconSize: [size, size] as [number, number],
+    iconAnchor: [size / 2, size / 2] as [number, number],
+  };
+}
+
+export function buildDetourPointPhotoPopupHtml(
+  detour: DetourRoute,
+  role: "START" | "END",
+  photo: DetourPointPhoto | null | undefined,
+  lat: number,
+  lon: number
+): string {
+  const safePhoto = photo ?? {};
+  const isStart = role === "START";
+  const rawUrl = typeof safePhoto.url === "string" ? safePhoto.url.trim() : "";
+  const normalizedUrl = rawUrl ? escapeHtml(normalizeMediaUrl(rawUrl)) : "";
+  const hasPhotoUrl = Boolean(normalizedUrl);
+  const badgeIcon = hasPhotoUrl ? "📷" : "📍";
+  const badgeText = isStart
+    ? hasPhotoUrl
+      ? "จุดเริ่มต้น A — ทางเข้าทางเลี่ยง (ขาไป A → B)"
+      : "จุดเริ่มต้น A — พิกัดทางเข้าทางเลี่ยง (ขาไป A → B)"
+    : hasPhotoUrl
+      ? "จุดสิ้นสุด B — ทางเข้าทางเลี่ยง (ขากลับ B → A)"
+      : "จุดสิ้นสุด B — พิกัดทางเข้าทางเลี่ยง (ขากลับ B → A)";
+  const defaultCaption = isStart
+    ? "บริเวณทางเข้าเส้นทางเลี่ยง ฝั่งจุดเริ่มต้น A (สำหรับผู้ใช้ทางขาไป A → B)"
+    : "บริเวณทางเข้าเส้นทางเลี่ยง ฝั่งจุดสิ้นสุด B (สำหรับผู้ใช้ทางที่มาจากอีกฝั่ง B → A)";
+  const pinCoord = resolveDetourPointPinCoord(safePhoto, lat, lon);
+  const effectiveLat = pinCoord.lat;
+  const effectiveLon = pinCoord.lon;
   const hasValidCoord =
     Number.isFinite(effectiveLat) &&
     Number.isFinite(effectiveLon) &&
@@ -513,14 +575,13 @@ export function buildDetourPointPhotoPopupHtml(
     ? `${Number(effectiveLat).toFixed(6)}, ${Number(effectiveLon).toFixed(6)}`
     : null;
   const areaParts = [
-    formatPopupAreaSegment("ต.", photo.subdistrict),
-    formatPopupAreaSegment("อ.", photo.district),
-    formatPopupAreaSegment("จ.", photo.province),
+    formatPopupAreaSegment("ต.", safePhoto.subdistrict),
+    formatPopupAreaSegment("อ.", safePhoto.district),
+    formatPopupAreaSegment("จ.", safePhoto.province),
   ].filter((part): part is string => Boolean(part));
   const areaLine = areaParts.length > 0 ? areaParts.join(" ") : null;
 
-  const normalizedUrl = escapeHtml(normalizeMediaUrl(photo.url));
-  const captionText = escapeHtml(photo.caption?.trim() || defaultCaption);
+  const captionText = escapeHtml(safePhoto.caption?.trim() || defaultCaption);
   const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${Number(effectiveLat).toFixed(6)},${Number(effectiveLon).toFixed(6)}&travelmode=driving`;
 
   return `
@@ -531,7 +592,7 @@ export function buildDetourPointPhotoPopupHtml(
             ? "bg-emerald-950/90 border border-emerald-500/60 text-emerald-300"
             : "bg-sky-950/90 border border-sky-500/60 text-sky-300"
         }">
-          <span>📷</span>
+          <span>${badgeIcon}</span>
           <span>${escapeHtml(badgeText)}</span>
         </span>
       </div>
@@ -540,33 +601,54 @@ export function buildDetourPointPhotoPopupHtml(
         ${
           areaLine || coordText
             ? `<div class="rounded-lg border border-slate-800/90 bg-slate-900/75 px-2.5 py-1.5 space-y-0.5">
-                ${areaLine ? `<p class="text-[0.75rem] font-medium text-sky-200 leading-snug break-words">📍 ${escapeHtml(areaLine)}</p>` : ""}
+                ${
+                  areaLine
+                    ? `<p class="text-[0.75rem] font-medium text-sky-200 leading-snug break-words">📍 ${escapeHtml(areaLine)}</p>`
+                    : !hasPhotoUrl
+                      ? `<p class="text-[0.75rem] font-medium text-slate-400 leading-snug">📍 ยังไม่พบข้อมูลพื้นที่ ต./อ./จ.</p>`
+                      : ""
+                }
                 ${coordText ? `<p class="font-mono text-[0.6875rem] text-slate-300 leading-tight">พิกัด: ${escapeHtml(coordText)}</p>` : ""}
               </div>`
             : ""
         }
         <p class="text-xs text-amber-200/95 leading-relaxed break-words">${captionText}</p>
       </div>
-      <div class="relative flex items-center justify-center overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950">
-        <img
-          src="${normalizedUrl}"
-          alt="${escapeHtml(`${badgeText} ${detour.route_name}`)}"
-          onclick="window.__openDetourPointPhoto && window.__openDetourPointPhoto(this.src, this.alt)"
-          class="w-full h-auto max-h-[min(36dvh,16rem)] object-contain cursor-zoom-in hover:opacity-95 transition"
-        />
-        <span class="pointer-events-none absolute bottom-2 right-2 rounded-lg bg-slate-950/85 border border-slate-700 px-[0.667em] py-[0.167em] text-[0.75rem] text-slate-200">
-          แตะที่ภาพเพื่อขยายเต็มจอ
-        </span>
-      </div>
+      ${
+        hasPhotoUrl
+          ? `<div class="relative flex items-center justify-center overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950">
+              <img
+                src="${normalizedUrl}"
+                alt="${escapeHtml(`${badgeText} ${detour.route_name}`)}"
+                onclick="window.__openDetourPointPhoto && window.__openDetourPointPhoto(this.src, this.alt)"
+                class="w-full h-auto max-h-[min(36dvh,16rem)] object-contain cursor-zoom-in hover:opacity-95 transition"
+              />
+              <span class="pointer-events-none absolute bottom-2 right-2 rounded-lg bg-slate-950/85 border border-slate-700 px-[0.667em] py-[0.167em] text-[0.75rem] text-slate-200">
+                แตะที่ภาพเพื่อขยายเต็มจอ
+              </span>
+            </div>`
+          : `<div class="rounded-xl border border-dashed border-slate-700/90 bg-slate-900/70 px-3 py-3 text-center text-[0.75rem] text-slate-300">
+              ยังไม่มีภาพถ่ายประกอบจุดนี้
+            </div>`
+      }
       <div class="grid grid-cols-2 gap-[0.5em] sm:gap-[0.667em] pt-1">
-        <a
-          href="${escapeHtml(navUrl)}"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="min-h-[2.75rem] px-[0.667em] sm:px-[0.833em] py-[0.5em] rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-heading font-black text-xs flex items-center justify-center gap-[0.333em] text-center shadow transition"
-        >
-          <span>🧭 ดูบน Google Maps</span>
-        </a>
+        ${
+          hasValidCoord
+            ? `<a
+                href="${escapeHtml(navUrl)}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="min-h-[2.75rem] px-[0.667em] sm:px-[0.833em] py-[0.5em] rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-heading font-black text-xs flex items-center justify-center gap-[0.333em] text-center shadow transition"
+              >
+                <span>🧭 ดูบน Google Maps</span>
+              </a>`
+            : `<span
+                aria-disabled="true"
+                class="min-h-[2.75rem] px-[0.667em] sm:px-[0.833em] py-[0.5em] rounded-xl border border-slate-800 bg-slate-900/60 text-slate-400 font-heading font-bold text-xs flex items-center justify-center text-center"
+              >
+                ไม่มีพิกัดนำทาง
+              </span>`
+        }
         <button
           type="button"
           onclick="window.__openDetourModal && window.__openDetourModal('${escapeHtml(detour.id)}')"
