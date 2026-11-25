@@ -869,3 +869,89 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
     await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 });
+
+test.describe("Admin Shared GIS Focus Mode", () => {
+  test("Admin popup triggers compact Focus Exit pill (Flood + Detour B->A) and auto-exits when entering map-pick edit mode", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Admin split-pane map+form focus test runs on desktop layout");
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    const payload = createMockPayload();
+    await page.route("**/functions/v1/hdms-api", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
+    );
+
+    await page.goto(`${base}/admin/`);
+    await page.locator(".leaflet-control-zoom-in").waitFor({ state: "visible" });
+
+    // 1. Enter Flood Focus from Admin map popup -> verify compact Focus Exit pill only
+    const floodPin = page.locator(".doh-map-capsule-pin").first();
+    await expect(floodPin).toBeVisible();
+    await floodPin.click();
+
+    const floodPopup = page.locator(".doh-flood-leaflet-popup");
+    await expect(floodPopup).toBeVisible();
+    await floodPopup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).click();
+
+    const adminExitBar = page.getByTestId("admin-gis-focus-exit-bar");
+    await expect(adminExitBar).toBeVisible();
+    await expect(adminExitBar).toContainText("โฟกัส: ทล.42 นาจวก - ดอนยาง");
+    await expect(page.getByTestId("gis-focus-mode-bar")).toHaveCount(0);
+    await expect(page.locator(".leaflet-popup")).toHaveCount(0);
+    await expect(page.locator(".hdms-focus-endpoint").first()).toBeVisible();
+
+    const exitHitCheck = await page.evaluate(() => {
+      const bar = document.querySelector('[data-testid="admin-gis-focus-exit-bar"]');
+      const exitBtn = document.querySelector('[data-testid="gis-focus-exit-btn"]');
+      if (!bar || !exitBtn) return { barPresent: false, hitSelf: false, overlapsCollapse: false };
+      const barRect = bar.getBoundingClientRect();
+      const btnRect = exitBtn.getBoundingClientRect();
+      const hit = document.elementFromPoint(btnRect.left + btnRect.width / 2, btnRect.top + btnRect.height / 2);
+      const collapseBtn = document.querySelector('button[aria-label*="แผงควบคุม"]');
+      const collapseRect = collapseBtn?.getBoundingClientRect();
+      const overlapsCollapse = Boolean(
+        collapseRect &&
+          barRect.left < collapseRect.right &&
+          barRect.right > collapseRect.left &&
+          barRect.top < collapseRect.bottom &&
+          barRect.bottom > collapseRect.top
+      );
+      return {
+        barPresent: true,
+        hitSelf: Boolean(hit && (exitBtn === hit || exitBtn.contains(hit))),
+        overlapsCollapse,
+      };
+    });
+    expect(exitHitCheck).toEqual({ barPresent: true, hitSelf: true, overlapsCollapse: false });
+
+    await page.getByTestId("gis-focus-exit-btn").click();
+    await expect(adminExitBar).toHaveCount(0);
+
+    // 2. Enter Detour B -> A Focus and exit with Escape
+    const detourSymbol = page.locator(".doh-detour-symbol").first();
+    await expect(detourSymbol).toBeVisible();
+    await detourSymbol.focus();
+    await detourSymbol.press("Enter");
+
+    const detourPopup = page.locator(".doh-detour-leaflet-popup").filter({ hasText: "เส้นทางเลี่ยง" });
+    await expect(detourPopup).toBeVisible();
+    await detourPopup.getByRole("button", { name: "ขากลับ B → A" }).click();
+    await detourPopup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).click();
+
+    await expect(adminExitBar).toBeVisible();
+    await expect(adminExitBar).toContainText("เส้นทางเลี่ยง ปน.2043 (B → A)");
+    await page.keyboard.press("Escape");
+    await expect(adminExitBar).toHaveCount(0);
+
+    // 3. Re-enter Focus Mode, then trigger map pick mode -> isEditingBlocked must auto-exit Focus Mode
+    await floodPin.click();
+    await expect(floodPopup).toBeVisible();
+    await floodPopup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).click();
+    await expect(adminExitBar).toBeVisible();
+
+    await page.getByRole("complementary").getByRole("button", { name: /จัดการแผนที่/ }).click();
+    await page.getByRole("button", { name: "เลือกจุด A", exact: true }).click();
+
+    await expect(adminExitBar).toHaveCount(0);
+    await expect(page.getByText("คลิกบนแผนที่เพื่อกำหนดจุดเริ่มต้น...")).toBeVisible();
+  });
+});

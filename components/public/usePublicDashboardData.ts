@@ -7,6 +7,7 @@ import { getPublicSystemDataAction } from "@/app/actions/doh-actions";
 import { createClient } from "@/lib/supabase/client";
 import { extractDirectionalAdvice } from "@/lib/gis-utils";
 import { getLinkedDetoursForFlood, getLinkedEventsForDetour } from "@/lib/event-detour-links";
+import { computeGisFilterHighlights } from "@/lib/gis-filter-rules";
 import { normalizeMediaUrl, parseFloodDirectionMeta } from "@/lib/flood-event-schema";
 import {
   getTrafficPresentation,
@@ -15,7 +16,6 @@ import {
 } from "@/lib/traffic-presentation";
 import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
-import { highwayIdsInDetour, STATUS_ORDER } from "@/components/public/public-route-helpers";
 
 export interface UsePublicDashboardDataParams {
   selectedFloodId: string;
@@ -151,41 +151,24 @@ export function usePublicDashboardData({
     if (!routeChips.some((chip) => chip.id === selectedRouteFilter)) setSelectedRouteFilter("ALL");
   }, [routeChips, selectedRouteFilter, setSelectedRouteFilter]);
 
-  // Filtered flood routes for citizens/users
-  const filteredFloods = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().replace(/^(?:ทล|ปน)\.?\s*/i, "").toLocaleLowerCase();
-    const rawQuery = searchQuery.toLowerCase();
-    return (systemData.floodRoutes || [])
-      .filter((r) => {
-        if (!r.is_active) return false;
-        const matchSearch =
-          r.route_no.toLowerCase().includes(normalizedQuery) ||
-          r.section_name.toLowerCase().includes(rawQuery) ||
-          (r.subdistrict && r.subdistrict.toLowerCase().includes(rawQuery)) ||
-          (r.district && r.district.toLowerCase().includes(rawQuery));
-
-        const cleanNo = r.route_no.replace(/^(?:ทล|ปน)\.?\s*/i, "").trim();
-        const matchChip =
-          selectedRouteFilter === "ALL" || cleanNo === selectedRouteFilter || r.route_no === selectedRouteFilter;
-
-        const presentation = getTrafficPresentation(
-          r.traffic_status as TrafficStatus,
-          r.water_level_cm,
-          r.direction_meta?.trafficStatusDetail
-        );
-        const matchStatus = selectedStatusFilter === "ALL" || presentation.color === selectedStatusFilter;
-        return matchSearch && matchChip && matchStatus;
-      })
-      .sort(
-        (a, b) =>
-          STATUS_ORDER[
-            getTrafficPresentation(a.traffic_status as TrafficStatus, a.water_level_cm, a.direction_meta?.trafficStatusDetail).color
-          ] -
-          STATUS_ORDER[
-            getTrafficPresentation(b.traffic_status as TrafficStatus, b.water_level_cm, b.direction_meta?.trafficStatusDetail).color
-          ]
-      );
-  }, [systemData.floodRoutes, searchQuery, selectedRouteFilter, selectedStatusFilter]);
+  // Shared flood, detour & highway filtering rules (Public active-only)
+  const {
+    filteredFloods,
+    filteredDetours,
+    highlightFloodIds,
+    highlightDetourIds,
+    highlightHighwayRouteNos,
+    isFilterActive,
+  } = useMemo(
+    () =>
+      computeGisFilterHighlights(systemData, {
+        searchQuery,
+        routeFilter: selectedRouteFilter,
+        statusFilter: selectedStatusFilter,
+        includeInactive: false,
+      }),
+    [systemData, searchQuery, selectedRouteFilter, selectedStatusFilter]
+  );
 
   const situationCounts = useMemo(() => {
     const counts: Record<StatusColor, number> = { red: 0, orange: 0, amber: 0, sky: 0, emerald: 0, slate: 0 };
@@ -251,62 +234,6 @@ export function usePublicDashboardData({
     return counts;
   }, [systemData]);
 
-  const filteredDetours = useMemo(() => {
-    const activeDetours = (systemData.detourRoutes || []).filter((route) => route.is_active);
-    const query = searchQuery.trim().toLocaleLowerCase();
-    const normalizedQuery = query.replace(/^(?:ทล|ปน)\.?\s*/i, "");
-    return activeDetours.filter((route) => {
-      const detourHighwayIds = highwayIdsInDetour(route, systemData);
-      const linkedEvents = getLinkedEventsForDetour(route, systemData);
-      const linkedEventsText = linkedEvents
-        .map((ev) => `${ev.routeNo} ${ev.sectionName} ${ev.kmRangeLabel}`)
-        .join(" ");
-      const matchesText =
-        `${route.route_name} ${route.description || ""} ${linkedEventsText}`.toLocaleLowerCase().includes(query) ||
-        detourHighwayIds.some((id) => id.includes(normalizedQuery));
-      const standaloneLocalIds =
-        linkedEvents.length === 0
-          ? [...`${route.route_name || ""} ${route.description || ""}`.matchAll(/(ปน\.(?:ถ\.)?\s*\d{1,5})/gi)].map(
-              (match) => match[1].replace(/\s+/g, "")
-            )
-          : [];
-      const matchesHighway =
-        selectedRouteFilter === "ALL" ||
-        detourHighwayIds.includes(selectedRouteFilter) ||
-        standaloneLocalIds.includes(selectedRouteFilter);
-      return matchesText && matchesHighway;
-    });
-  }, [systemData, searchQuery, selectedRouteFilter]);
-
-  const highlightFloodIds = useMemo(() => filteredFloods.map((route) => route.id), [filteredFloods]);
-  const highlightDetourIds = useMemo(() => filteredDetours.map((route) => route.id), [filteredDetours]);
-  const isFilterActive = Boolean(searchQuery.trim()) || selectedRouteFilter !== "ALL" || selectedStatusFilter !== "ALL";
-  const highlightHighwayRouteNos = useMemo(() => {
-    if (!isFilterActive) return [];
-    const normalize = (value: string) => value.replace(/^ทล\.?\s*/i, "").trim();
-    const routes = new Set<string>();
-    const add = (value: string) => {
-      const number = normalize(value);
-      if (/^\d+$/.test(number)) routes.add(number);
-    };
-    filteredFloods.forEach((route) => add(route.route_no));
-    filteredDetours.forEach((route) => highwayIdsInDetour(route, systemData).forEach(add));
-    const query = searchQuery.trim().toLocaleLowerCase();
-    const normalizedQuery = normalize(query);
-    for (const layer of systemData.highwayLayers || []) {
-      const features = layer.geojson_data?.type === "FeatureCollection"
-        ? layer.geojson_data.features : layer.geojson_data?.type === "Feature" ? [layer.geojson_data] : [];
-      for (const feature of features || []) {
-        const props = feature.properties || {};
-        const number = normalize(String(props.route_no || props.route_code || props.ROAD_NO || props.route || props.code || ""));
-        const name = String(props.section_name || props.route_name || props.ROAD_NAME || props.section || props.name || "");
-        if ((selectedRouteFilter === "ALL" || number === normalize(selectedRouteFilter)) &&
-          (!query || number.toLocaleLowerCase().includes(normalizedQuery) || name.toLocaleLowerCase().includes(query)) &&
-          (selectedStatusFilter === "ALL" || filteredFloods.some((route) => normalize(route.route_no) === number))) add(number);
-      }
-    }
-    return [...routes].sort((a, b) => a.localeCompare(b, "th", { numeric: true }));
-  }, [isFilterActive, filteredFloods, filteredDetours, systemData, searchQuery, selectedRouteFilter, selectedStatusFilter]);
   const activeRouteChip = routeChips.find((chip) => chip.id === selectedRouteFilter);
 
   const selectedFloodDetourEntries = useMemo(

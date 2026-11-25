@@ -35,11 +35,13 @@ const LongdoGisMap = dynamic(
     ),
   }
 );
+import type { GisMapViewportApi } from "@/components/map/LongdoGisMap";
+import { useSharedGisFocus } from "@/components/map/useSharedGisFocus";
 import { OfflineSyncStatus } from "@/components/offline/OfflineSyncStatus";
 import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
 import Link from "next/link";
-import { ArrowLeft, RotateCw, FileText, PieChart, Settings, Smartphone, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ArrowLeft, RotateCw, FileText, PieChart, Settings, Smartphone, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 const ExecutiveDashboard = dynamic(
   () => import("@/components/executive/ExecutiveDashboard").then((mod) => mod.ExecutiveDashboard),
@@ -118,6 +120,36 @@ export default function AdminPage() {
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [editableOfficeId, setEditableOfficeId] = useState<string | null>(null);
+  const mapViewportApiRef = useRef<GisMapViewportApi | null>(null);
+  const isEditingBlocked = Boolean(
+    adminPickMode ||
+      vertexEditable ||
+      draftCoordinates.length > 0 ||
+      draftReverseCoordinates.length > 0 ||
+      editableOfficeId
+  );
+
+  const handleBeforeEnterFocus = useCallback(() => {
+    setFocusCoordinates(null);
+  }, []);
+
+  const handleAfterExitFocus = useCallback(() => {
+    setFocusCoordinates(null);
+  }, []);
+
+  const {
+    gisFocus,
+    isFocused,
+    enterFloodFocus: handleEnterFloodFocus,
+    enterDetourFocus: handleEnterDetourFocus,
+    exitFocus: handleExitGisFocus,
+  } = useSharedGisFocus({
+    mapViewportApiRef,
+    isModalOpen: isDispatchModalOpen || adminViewMode === "executive",
+    isEditingBlocked,
+    onBeforeEnterFocus: handleBeforeEnterFocus,
+    onAfterExitFocus: handleAfterExitFocus,
+  });
 
   // Phase 2.1: Single initial bootstrap (1 RTT via getSystemDataAction) hydrates both split caches:
   // ["dohAdminStaticGis"] (10m staleTime) and ["dohAdminOperational"] (live). Subsequent saves
@@ -216,6 +248,20 @@ export default function AdminPage() {
     };
   }, [bootstrapQuery, operationalQuery, staticGisQuery, systemData]);
   useSystemFavicon(systemData.systemSettings?.logoUrl, systemData.systemSettings?.name, systemData.systemSettings?.org);
+
+  const adminFocusLabel = useMemo(() => {
+    if (!isFocused || !gisFocus.targetId) return null;
+    if (gisFocus.targetType === "FLOOD") {
+      const flood = systemData.floodRoutes.find((item) => item.id === gisFocus.targetId);
+      return flood ? `ทล.${flood.route_no} ${flood.section_name}` : "จุดน้ำท่วม";
+    }
+    if (gisFocus.targetType === "DETOUR") {
+      const detour = systemData.detourRoutes.find((item) => item.id === gisFocus.targetId);
+      const dirText = gisFocus.direction === "REVERSE" ? "B → A" : "A → B";
+      return detour ? `${detour.route_name} (${dirText})` : `ทางเลี่ยง (${dirText})`;
+    }
+    return null;
+  }, [isFocused, gisFocus.targetId, gisFocus.targetType, gisFocus.direction, systemData.floodRoutes, systemData.detourRoutes]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -635,7 +681,35 @@ export default function AdminPage() {
               draftMode={draftMode}
               focusCoordinates={focusCoordinates}
               incomingGisLines={incomingGisLines}
+              gisFocus={gisFocus}
+              mapViewportApiRef={mapViewportApiRef}
+              onFocusFloodOnMap={handleEnterFloodFocus}
+              onFocusDetourOnMap={handleEnterDetourFocus}
             />
+
+            {isFocused && adminFocusLabel && (
+              <div
+                data-testid="admin-gis-focus-exit-bar"
+                role="region"
+                aria-label="แถบควบคุมโหมดโฟกัสบนแผนที่"
+                className="pointer-events-auto absolute bottom-16 lg:bottom-4 left-1/2 -translate-x-1/2 z-[460] flex w-fit max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-full border border-sky-400/50 bg-surface-floating/95 py-1 pl-3.5 pr-1.5 text-xs font-heading text-slate-100 shadow-2xl backdrop-blur-md"
+              >
+                <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-sky-400" />
+                <span className="truncate max-w-[14rem] sm:max-w-[20rem] font-bold">
+                  โฟกัส: {adminFocusLabel}
+                </span>
+                <button
+                  type="button"
+                  data-testid="gis-focus-exit-btn"
+                  onClick={() => handleExitGisFocus()}
+                  title="ออกจากโหมดโฟกัส (Esc)"
+                  className="inline-flex min-h-[2.25rem] shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-slate-950 transition hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>ออกจากโฟกัส</span>
+                </button>
+              </div>
+            )}
 
             {adminPickMode && (
               <div

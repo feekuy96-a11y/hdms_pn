@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
@@ -9,15 +9,9 @@ import { AdviceText } from "@/components/AdviceText";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload, FloodRoute, DetourRoute } from "@/db/default-data";
 import { createClient } from "@/lib/supabase/client";
 import type { GisMapViewportApi } from "@/components/map/LongdoGisMap";
+import { useSharedGisFocus } from "@/components/map/useSharedGisFocus";
 import { GisFocusModeBar } from "@/components/public/GisFocusModeBar";
-import {
-  enterGisFocus,
-  exitGisFocus,
-  IDLE_GIS_FOCUS_STATE,
-  updateGisFocusOptions,
-  type GisFocusDirection,
-  type GisFocusState,
-} from "@/lib/gis-focus-mode";
+import type { GisFocusViewportSnapshot } from "@/lib/gis-focus-mode";
 
 const LongdoGisMap = dynamic(
   () => import("@/components/map/LongdoGisMap").then((mod) => mod.LongdoGisMap),
@@ -148,23 +142,45 @@ export default function HomePage() {
   const [returnToDetourList, setReturnToDetourList] = useState(false);
   const [focusCoordinates, setFocusCoordinates] = useState<[number, number] | null>(null);
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
-  const [gisFocus, setGisFocus] = useState<GisFocusState>(IDLE_GIS_FOCUS_STATE);
   const mapViewportApiRef = useRef<GisMapViewportApi | null>(null);
-  const preModalViewportRef = useRef<{ center: [number, number]; zoom: number } | null>(null);
+  const preModalViewportRef = useRef<GisFocusViewportSnapshot | null>(null);
 
-  const captureFocusOriginSnapshot = useCallback(() => {
-    const viewport = preModalViewportRef.current ?? mapViewportApiRef.current?.getViewport() ?? null;
-    preModalViewportRef.current = null;
-    return {
-      viewport,
-      filters: {
-        activeTab: sidebarTab,
-        statusFilter: selectedStatusFilter,
-        routeFilter: selectedRouteFilter,
-        searchQuery,
-      },
-    };
-  }, [sidebarTab, selectedStatusFilter, selectedRouteFilter, searchQuery]);
+  const focusFilters = useMemo(
+    () => ({
+      activeTab: sidebarTab,
+      statusFilter: selectedStatusFilter,
+      routeFilter: selectedRouteFilter,
+      searchQuery,
+    }),
+    [sidebarTab, selectedStatusFilter, selectedRouteFilter, searchQuery]
+  );
+
+  const handleBeforeEnterFocus = useCallback(() => {
+    setFocusCoordinates(null);
+    setShowDossier(false);
+    setViewingDetourModal(null);
+    setReturnToDetourList(false);
+    setIsMobileDrawerOpen(false);
+  }, []);
+
+  const handleAfterExitFocus = useCallback(() => {
+    setFocusCoordinates(null);
+  }, []);
+
+  const {
+    gisFocus,
+    enterFloodFocus: handleEnterFloodFocus,
+    enterDetourFocus: handleEnterDetourFocus,
+    updateFocusOptions,
+    exitFocus: handleExitGisFocus,
+  } = useSharedGisFocus({
+    mapViewportApiRef,
+    preFocusViewportRef: preModalViewportRef,
+    filters: focusFilters,
+    isModalOpen: showDossier || Boolean(viewingDetourModal),
+    onBeforeEnterFocus: handleBeforeEnterFocus,
+    onAfterExitFocus: handleAfterExitFocus,
+  });
 
   // Clear pre-modal snapshot if user closes FloodDossierModal without entering Focus Mode
   useEffect(() => {
@@ -172,83 +188,6 @@ export default function HomePage() {
       preModalViewportRef.current = null;
     }
   }, [showDossier, gisFocus.status]);
-
-  const handleEnterDetourFocus = useCallback((detourId: string, direction: GisFocusDirection) => {
-    mapViewportApiRef.current?.closePopup();
-    setFocusCoordinates(null);
-    setViewingDetourModal(null);
-    setShowDossier(false);
-    setReturnToDetourList(false);
-    setIsMobileDrawerOpen(false);
-    setGisFocus((prev) =>
-      enterGisFocus(prev, {
-        targetType: "DETOUR",
-        targetId: detourId,
-        direction,
-        captureSnapshot: captureFocusOriginSnapshot,
-      })
-    );
-  }, [captureFocusOriginSnapshot]);
-
-  const handleEnterFloodFocus = useCallback((floodId: string) => {
-    mapViewportApiRef.current?.closePopup();
-    setFocusCoordinates(null);
-    setShowDossier(false);
-    setViewingDetourModal(null);
-    setIsMobileDrawerOpen(false);
-    setGisFocus((prev) =>
-      enterGisFocus(prev, {
-        targetType: "FLOOD",
-        targetId: floodId,
-        direction: "FORWARD",
-        showLinkedDetour: false,
-        linkedDetourId: null,
-        captureSnapshot: captureFocusOriginSnapshot,
-      })
-    );
-  }, [captureFocusOriginSnapshot]);
-
-  const handleExitGisFocus = useCallback(() => {
-    preModalViewportRef.current = null;
-    setFocusCoordinates(null);
-    setGisFocus((prev) => {
-      const { nextState, restoreSnapshot } = exitGisFocus(prev);
-      if (restoreSnapshot?.viewport) {
-        const vp = restoreSnapshot.viewport;
-        window.requestAnimationFrame(() => {
-          mapViewportApiRef.current?.restoreViewport(vp);
-        });
-      }
-      return nextState;
-    });
-  }, []);
-
-  // Desktop Esc shortcut to exit Shared GIS Focus Mode when no modal is open
-  useEffect(() => {
-    if (gisFocus.status !== "focused" || showDossier || viewingDetourModal) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        handleExitGisFocus();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [gisFocus.status, showDossier, viewingDetourModal, handleExitGisFocus]);
-
-  // Interaction Policy: auto-exit Focus Mode when sidebar filters/search change to prevent state conflict
-  const prevFiltersRef = useRef({ searchQuery, selectedRouteFilter, selectedStatusFilter });
-  useEffect(() => {
-    const prev = prevFiltersRef.current;
-    const changed =
-      prev.searchQuery !== searchQuery ||
-      prev.selectedRouteFilter !== selectedRouteFilter ||
-      prev.selectedStatusFilter !== selectedStatusFilter;
-    prevFiltersRef.current = { searchQuery, selectedRouteFilter, selectedStatusFilter };
-    if (changed && gisFocus.status === "focused") {
-      setGisFocus((current) => exitGisFocus(current).nextState);
-    }
-  }, [searchQuery, selectedRouteFilter, selectedStatusFilter, gisFocus.status]);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -836,16 +775,14 @@ export default function HomePage() {
             systemData={systemData}
             onExit={handleExitGisFocus}
             onChangeDirection={(direction) =>
-              setGisFocus((prev) => updateGisFocusOptions(prev, { direction, refit: true }))
+              updateFocusOptions({ direction, refit: true })
             }
             onToggleLinkedDetour={(show, detourId) =>
-              setGisFocus((prev) =>
-                updateGisFocusOptions(prev, {
-                  showLinkedDetour: show,
-                  linkedDetourId: detourId ?? prev.linkedDetourId,
-                  refit: true,
-                })
-              )
+              updateFocusOptions({
+                showLinkedDetour: show,
+                linkedDetourId: detourId,
+                refit: true,
+              })
             }
           />
           {selectedRouteFilter !== "ALL" && activeRouteChip && (
