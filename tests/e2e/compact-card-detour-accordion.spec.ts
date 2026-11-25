@@ -128,7 +128,7 @@ test("compact flood card, detour jump link, ordered exclusive accordion, and rea
 
   await page.goto(`${base}/`);
   if ((page.viewportSize()?.width || 1280) < 1024) {
-    await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
+    await page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
   }
 
   // Group 1-6 checks on first compact FloodCard (real non-Pattani province)
@@ -543,7 +543,7 @@ test("citizen situation summary status filter, route chips, clear button, and em
 
   await page.goto(`${base}/`);
 
-  const sidebar = page.locator("div.lg\\:flex").filter({ hasText: "จุดเฝ้าระวังและน้ำท่วมทางหลวง" });
+  const sidebar = page.locator("div.lg\\:flex").filter({ has: page.getByRole("heading", { name: "ตรวจสอบเส้นทาง", exact: true }) });
   await expect(sidebar).toBeVisible();
 
   // 1. SituationSummary lists items with counts

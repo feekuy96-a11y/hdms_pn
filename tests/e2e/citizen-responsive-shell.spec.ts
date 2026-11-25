@@ -1,0 +1,436 @@
+import { expect, test } from "@playwright/test";
+import { resolveCitizenOfficeDirectory } from "../../components/public/citizen-office-directory";
+
+const base = process.env.BASE_PATH || "";
+const date = "2026-11-25T07:20:00.000Z";
+const coords = [[101.186, 6.881], [101.205, 6.892]];
+const payload = {
+  updatedAt: date,
+  floodRoutes: [{
+    id: "F43", route_no: "43", section_name: "หนองจิก ทดสอบ", km_start: "97+127", km_end: "97+252",
+    lat_start: 6.881, lon_start: 101.186, lat_end: 6.892, lon_end: 101.205, coordinates_json: coords,
+    water_level_cm: 30, traffic_status: "WARNING", direction_meta: {}, latest_photo_url: "", is_active: true, updated_at: date,
+  }],
+  detourRoutes: [{
+    id: "D43", flood_id_ref: "F43", route_name: "ทางเลี่ยงหนองจิก ทดสอบ", description: "1. ออกจากถนนสายหลัก\n2. กลับเข้าถนนสายหลัก",
+    direction_mode: "FORWARD_ONLY", is_active: true, updated_at: date, lat_start: 6.881, lon_start: 101.186,
+    lat_end: 6.892, lon_end: 101.205, coordinates_json: coords,
+  }],
+  highwayLayers: [], timelineUpdates: [], mitigationProjects: [], offices: [], mapStyles: null,
+  systemSettings: { name: "ระบบทดสอบ", org: "แขวงทางหลวง", phone: "1586" },
+};
+
+test("citizen shell keeps one map and the selected flood across phone, tablet and desktop widths", async ({ page }) => {
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: payload }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(base + "/");
+  await expect(page.getByText("น้ำท่วม 1 จุด")).toBeVisible();
+  const nav = page.getByRole("navigation", { name: "เมนูประชาชน" });
+  const drawer = page.getByRole("dialog", { name: "รายการสายทางและจุดเฝ้าระวัง" });
+  const flood = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+  const map = page.locator(".leaflet-container").first();
+  await expect(map).toBeVisible();
+  const originalMap = await map.elementHandle();
+  await nav.getByRole("button", { name: "เหตุการณ์น้ำท่วม" }).click();
+  await expect(drawer).toBeVisible();
+  await expect(nav).toHaveCount(0);
+  await drawer.getByRole("button", { name: /เส้นทางเลี่ยง 1 สาย/ }).click();
+  await expect(flood).toBeVisible();
+  await expect(drawer).toHaveCount(0);
+  await flood.getByRole("button", { name: /ทางเลี่ยงหนองจิก ทดสอบ/ }).click();
+  await expect(flood.getByRole("link", { name: "ดูบน Google Maps" })).toBeVisible();
+
+  const zoom = () => page.locator("[data-public-layer-opacities]").evaluate((el) =>
+    JSON.parse(el.getAttribute("data-public-layer-opacities") || "{}").zoom as number
+  );
+  await expect.poll(zoom).toBe(13); // Wait for the existing Leaflet flight to settle before measuring resize.
+  const focusedZoom = await zoom();
+  for (const [width, height] of [[320,568],[360,640],[480,800],[568,320],[667,375],[768,1024],[820,1180],[900,600],[980,664],[1023,740],[1024,768],[1100,750],[1280,800],[1440,900],[768,1024],[390,844]]) {
+    await page.setViewportSize({ width, height });
+    await expect(flood).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(1);
+    await expect(flood.getByRole("button", { name: /ทางเลี่ยงหนองจิก ทดสอบ/ })).toHaveAttribute("aria-expanded", "true");
+    await expect.poll(() => page.evaluate((node) => node.isConnected, originalMap)).toBe(true);
+    expect(await zoom()).toBe(focusedZoom);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+
+  await flood.getByRole("button", { name: "ปิดรายละเอียด", exact: true }).click();
+  await nav.getByRole("button", { name: "เหตุการณ์น้ำท่วม" }).click();
+  await expect(drawer.getByRole("button", { name: /หนองจิก ทดสอบ/, pressed: true })).toBeVisible();
+  await page.setViewportSize({ width: 568, height: 320 });
+  await drawer.getByRole("button", { name: /เส้นทางเลี่ยง 1 สาย/ }).click();
+  await expect(flood).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await flood.getByRole("button", { name: "ปิดรายละเอียด", exact: true }).click();
+  await nav.getByRole("button", { name: "ทางเลี่ยง", exact: true }).click();
+  await drawer.getByRole("button", { name: /ทางเลี่ยงหนองจิก ทดสอบ/ }).click();
+  const detour = page.getByRole("dialog", { name: /คำแนะนำเส้นทางเลี่ยง/ });
+  await expect(detour).toBeVisible();
+  await expect(detour.getByRole("button", { name: /ขากลับ/ })).toBeDisabled();
+  await expect(drawer).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeVisible();
+});
+
+test("mobile shortcuts fit with 44px hit regions and desktop keeps the existing layout", async ({ page }) => {
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: payload }));
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto(base + "/");
+  const nav = page.getByRole("navigation", { name: "เมนูประชาชน" });
+  for (const [width, height] of [[320,568],[390,844],[568,320],[744,1133],[820,1180],[1023,768]]) {
+    await page.setViewportSize({ width, height });
+    await expect(nav).toBeVisible();
+    const fits = await nav.locator("button, a").evaluateAll((els) => els.every(el => {
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width/2,r.top + r.height/2);
+      return r.width >= 44 && r.height >= 44 && r.x >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
+        && !!hit && el.contains(hit);
+    }));
+    expect(fits).toBe(true);
+    await expect(nav.getByRole("button", { name: "ติดต่อ", exact: true })).toBeVisible();
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(nav).toBeHidden();
+  await expect(page.getByPlaceholder(/ค้นหาสายทาง.*ทล[.]43/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "โทรสายด่วน 1586", exact: true })).toBeVisible();
+});
+
+test("citizen theme can switch and saves the theme on reload without changing nav", async ({ page }) => {
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: payload }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(base + "/");
+  const shell = page.locator(".citizen-ui");
+  const nav = page.getByRole("navigation", { name: "เมนูประชาชน" });
+  await expect(shell).toHaveAttribute("data-citizen-theme", "light");
+  await expect(nav).toBeVisible();
+  const light = await shell.evaluate(el => getComputedStyle(el).getPropertyValue("--surface-panel").trim());
+  await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
+  await expect(shell).toHaveAttribute("data-citizen-theme", "dark");
+  expect(await shell.evaluate(el => getComputedStyle(el).getPropertyValue("--surface-panel").trim())).not.toBe(light);
+  await page.reload();
+  await expect(shell).toHaveAttribute("data-citizen-theme", "dark");
+  await expect(nav).toBeVisible();
+  await page.getByRole("button", { name: "เปิดธีมสว่าง" }).click();
+  await expect(shell).toHaveAttribute("data-citizen-theme", "light");
+});
+
+test("citizen directory lists six offices in order and enables only verified stored actions", async ({ page, isMobile }) => {
+  const officeNames = ["แขวงทางหลวงปัตตานี", "หมวดทางหลวงโคกโพธิ์", "หมวดทางหลวงหนองจิก", "หมวดทางหลวงปะนาเระ", "หมวดทางหลวงสายบุรี", "หมวดทางหลวงยะรัง"];
+  const records = officeNames.map((name, i) => ({
+    id: "fixture-" + i, name, type: i === 0 ? "HEADQUARTERS" : "SUBDIVISION",
+    address: "ตำแหน่งจำลอง " + (i + 1), phone: "๐๗๓-๑๒๓๔๕๖", lat: 6.81 + i * 0.01, lon: 101.17 + i * 0.01, is_active: true,
+  }));
+  records[0].name = "สำนักงาน แขวงทางหลวง ปัตตานี (สำนักงานใหญ่)";
+  records[0].phone = "๐๗๓-๑๒๓๔๕๖ ต่อ ๑๐๓";
+  records[1].phone = "0773-123456";
+  records[3].phone = "+66 81 123 4567";
+  records[2].lat = 101.17; // Inverted / invalid coordinate must not enable Directions.
+  const offices = [...records.slice(0,5).reverse(), { ...records[4], id: "duplicate" },
+    { ...records[0], id: "nonpublic", type: "SERVICE_POINT" },
+    { ...records[5], id: "inactive", is_active: false },
+  ];
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: { ...payload, offices } }));
+  await page.setViewportSize({ width: isMobile ? 320 : 1280, height: isMobile ? 568 : 900 });
+  await page.goto(base + "/");
+  const opener = isMobile
+    ? page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "ติดต่อ", exact: true })
+    : page.getByRole("button", { name: "ติดต่อ", exact: true });
+  await expect(page.getByRole("link", { name: "โทรสายด่วน 1586", exact: true })).toHaveAttribute("href","tel:1586");
+  await opener.click();
+  const directory = page.getByRole("dialog", { name: "ติดต่อหน่วยงาน" });
+  await expect(directory).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  expect(await directory.locator("article h3").allTextContents()).toEqual(officeNames);
+  const hq = directory.locator("article").filter({ hasText: officeNames[0] });
+  await expect(hq.getByRole("link", { name: /โทรสอบถาม/ })).toHaveAttribute("href", "tel:073123456");
+  await expect(hq).toContainText("ต่อ ๑๐๓");
+  const href = await hq.getByRole("link", { name: /นำทาง/ }).getAttribute("href");
+  const parsed = new URL(href!);
+  expect(parsed.hostname).toBe("www.google.com");
+  expect(parsed.searchParams.get("destination")).toBe("6.81,101.17");
+  // Link destinations are inspected only, never dialed or navigated.
+  await expect(directory.locator("article").nth(1).getByRole("button", { name: /โทรสอบถาม/ })).toBeDisabled();
+  await expect(directory.locator("article").nth(1)).toContainText("0773-123456");
+  await expect(directory.locator("article").nth(1)).toContainText("รูปแบบหมายเลขไม่ถูกต้อง");
+  await expect(directory.locator("article").nth(1).getByRole("link", { name: /นำทาง/ })).toBeVisible();
+  await expect(directory.locator("article").nth(3).getByRole("link", { name: /โทรสอบถาม/ })).toHaveAttribute("href", "tel:+66811234567");
+  await expect(directory.locator("article").nth(2).getByRole("button", { name: /นำทาง/ })).toBeDisabled();
+  await expect(directory.locator("article").nth(4)).toContainText("ยังยืนยันข้อมูลสำนักงานไม่ได้");
+  await expect(directory.locator("article").nth(5)).toContainText("ยังไม่มีข้อมูลสำนักงาน");
+  await directory.locator("article").last().scrollIntoViewIfNeeded();
+  expect(await directory.locator(".citizen-office-scroll").evaluate(el => el.scrollHeight >= el.clientHeight)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(isMobile ? 320 : 1280);
+  await page.keyboard.press("Escape");
+  await expect(directory).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+test("citizen directory rejects conflicting HQ aliases and ambiguous multiple numbers", () => {
+  const hq = { id: "mock-hq", name: "แขวงทางหลวงปัตตานี", type: "HEADQUARTERS" as const,
+    address: "ที่อยู่สมมติ", phone: "073-123456", lat: 6.88, lon: 101.20, is_active: true };
+  const alternate = { ...hq, id: "mock-another-hq", name: "แขวงทางหลวงปัตตานี (สำนักงานใหญ่)" };
+  expect(resolveCitizenOfficeDirectory([hq, alternate])[0]).toMatchObject({ availability: "ambiguous", tel: null, directions: null });
+  expect(resolveCitizenOfficeDirectory([{ ...hq, phone: "073-123456 / 073-654321" }])[0].tel).toBeNull();
+  expect(resolveCitizenOfficeDirectory([{ ...hq, phone: "+66 73 123456 ext. 103" }])[0].tel).toBe("tel:+6673123456");
+});
+
+test("map-first hierarchy keeps travel status and source time above the detour list", async ({ page, isMobile }) => {
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: payload }));
+  await page.setViewportSize({ width: isMobile ? 390 : 1440, height: 900 });
+  await page.goto(base + "/");
+  const map = page.getByRole("region", { name: "แผนที่และข้อมูลการเดินทาง" });
+  await expect(map).toBeVisible();
+  await expect(page.getByText("LIVE", { exact: true })).toHaveCount(0);
+  if (isMobile) {
+    await page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม" }).click();
+    await expect(page.getByRole("heading", { name: "เหตุการณ์น้ำท่วม", exact: true })).toBeVisible();
+  } else {
+    const dock = page.locator(".citizen-sidebar");
+    await expect(dock.getByRole("heading", { name: "ตรวจสอบเส้นทาง" })).toBeVisible();
+    expect((await map.boundingBox())!.x).toBeLessThan((await dock.boundingBox())!.x);
+  }
+  const card = page.locator(".citizen-card:visible").first();
+  await expect(card.locator(".citizen-flood-row-top")).toContainText("อัปเดต");
+  await card.getByRole("button", { name: "ดูรายละเอียด", exact: true }).click();
+  const detail = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+  await expect(detail).toBeVisible();
+  await expect(detail.locator(".citizen-incident-details")).toContainText("อัปเดตล่าสุด");
+  await expect(detail.locator(".citizen-incident-facts")).toContainText("30");
+  expect(await detail.evaluate(root => {
+    const photo = root.querySelector(".citizen-incident-photo")!;
+    const metadata = root.querySelector(".citizen-incident-details")!;
+    const facts = root.querySelector(".citizen-incident-facts")!;
+    const detour = root.querySelector("#dossier-detour-section")!;
+    return Boolean(photo.compareDocumentPosition(metadata) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+      Boolean(metadata.compareDocumentPosition(facts) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+      Boolean(facts.compareDocumentPosition(detour) & Node.DOCUMENT_POSITION_FOLLOWING);
+  })).toBe(true);
+});
+
+test("public map starts with four grouped tools and keeps one layer panel and the same viewport", async ({ page, isMobile }) => {
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: payload }));
+  await page.setViewportSize({ width: isMobile ? 320 : 1280, height: isMobile ? 568 : 900 });
+  await page.goto(base + "/");
+  const map = page.locator(".leaflet-container").first();
+  const tools = page.getByRole("group", { name: "เครื่องมือแผนที่" });
+  const layers = tools.getByRole("button", { name: "เลเยอร์", exact: true });
+  const panel = page.getByRole("region", { name: "เลเยอร์และสัญลักษณ์แผนที่" });
+  await expect(map).toBeVisible();
+  await expect(tools.getByRole("button")).toHaveCount(4);
+  const assertVerticalControlHits = () => tools.getByRole("button").evaluateAll((buttons) => {
+    const rects = buttons.map((button) => button.getBoundingClientRect());
+    return buttons.every((button, i) => {
+      const r = rects[i];
+      const hit = document.elementFromPoint(r.x + r.width/2, r.y + r.height/2);
+      return button.textContent?.trim() === "" && r.width >= 44 && r.height >= 44 &&
+        r.right <= innerWidth && r.bottom <= innerHeight && button.contains(hit) &&
+        (i === 0 || (r.y >= rects[i-1].bottom && Math.abs(r.x - rects[i-1].x)<1));
+    });
+  });
+  await expect(tools.getByRole("button", { name: "ตำแหน่งของฉัน", exact: true })).toBeEnabled();
+  await expect(layers).toHaveAttribute("aria-expanded", "false");
+  await expect(panel).toHaveCount(0);
+  const root = await map.elementHandle();
+  const overlay = page.locator("[data-public-layer-opacities]");
+  const zoom = () => overlay.evaluate(el => JSON.parse(el.getAttribute("data-public-layer-opacities") || "{}").zoom as number);
+  const initial = await zoom();
+  await tools.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await expect.poll(zoom).toBeGreaterThan(initial);
+  const current = await zoom();
+  for (const [width,height] of [[320,568],[568,320],[768,1024],[1440,900]]) {
+    await page.setViewportSize({ width,height });
+    await expect.poll(assertVerticalControlHits).toBe(true);
+    await layers.click();
+    await expect.poll(assertVerticalControlHits).toBe(true);
+    await expect(panel).toBeVisible();
+    await expect(panel).toHaveCount(1);
+    await expect(layers).toHaveAttribute("aria-expanded", "true");
+    const bounds = (await panel.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(height);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual((await tools.boundingBox())!.x);
+    await expect(panel.getByRole("checkbox").first()).toBeVisible();
+    await expect(panel.getByRole("heading", { name: "แผนที่ฐาน", exact: true })).toBeVisible();
+    await expect(panel.getByRole("heading", { name: "แสดงบนแผนที่", exact: true })).toBeVisible();
+    expect(await panel.locator(".citizen-visibility label").evaluateAll(rows => rows.every(row => row.getBoundingClientRect().height >= 44))).toBe(true);
+    await expect(panel.getByRole("button", { name: "Longdo", exact: true })).toBeAttached();
+    await expect(panel.getByRole("button", { name: "ดาวเทียม", exact: true })).toBeAttached();
+    await panel.getByRole("button", { name: "ถนน OSM", exact: true }).click();
+    await expect(panel.getByRole("button", { name: "ถนน OSM", exact: true })).toHaveAttribute("aria-pressed","true");
+    await panel.getByText("ตั้งค่าเพิ่มเติม", { exact: true }).click();
+    await expect(panel.getByRole("button", { name: "แยกช่วง", exact: true })).toBeVisible();
+    await panel.getByText("คำอธิบายสัญลักษณ์", { exact: true }).click();
+    await expect(panel.getByText(/หมุดรูปคลื่นระบุจุดน้ำท่วม/)).toBeVisible();
+    await layers.click();
+    await expect(panel).toHaveCount(0);
+    expect(await zoom()).toBe(current);
+    expect(await page.evaluate(el=>el.isConnected,root)).toBe(true);
+  }
+});
+
+test("top map filters count logical flood points and avoid changing unrelated detours", async ({ page, isMobile }) => {
+  const prototype = payload.floodRoutes[0];
+  const statuses = [
+    { id: "F-A-left", publicCase: "ช่วงซ้ายรถเล็กผ่านไม่ได้", use: "WARNING", detail: "CAUTION", event: "EV-A" },
+    { id: "F-A-right", publicCase: "ช่วงขวารถเล็กผ่านไม่ได้", use: "WARNING", detail: "NO_SMALL_VEHICLES", event: "EV-A" },
+    { id: "F-B", publicCase: "หนึ่งช่องทางทดสอบ", use: "ONE_LANE", detail: "ONE_LANE", event: "EV-B" },
+    { id: "F-C", publicCase: "ผ่านไม่สะดวกทดสอบ", use: "LIGHT_VEHICLES_ONLY", detail: "LIGHT_VEHICLES_ONLY", event: "EV-C" },
+    { id: "F-D", publicCase: "รอตรวจสอบทดสอบ", use: "WARNING", detail: "PENDING_VERIFICATION", event: "EV-D" },
+  ];
+  const floods = statuses.map((status) => ({ ...prototype, id: status.id, section_name: status.publicCase, traffic_status: status.use,
+    direction_meta: { trafficStatusDetail: status.detail, eventId: status.event } }));
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: {
+    ...payload, floodRoutes: floods,
+    eventSegments: statuses.map(status => ({ flood_id: status.id, event_id: status.event })),
+  } }));
+  await page.setViewportSize({ width: isMobile ? 320 : 1280, height: isMobile ? 568 : 900 });
+  await page.goto(base + "/");
+  const summary = page.getByRole("complementary", { name: "สรุปสถานการณ์บนแผนที่" });
+  const count = summary.getByRole("button", { name: "น้ำท่วม 4 จุด", exact: true });
+  const layers = page.getByRole("button", { name: "เลเยอร์", exact: true });
+  await count.click();
+  await expect(summary).toContainText("มี 1 จุดรอตรวจสอบสถานะ");
+  await expect(summary).toContainText("ทางเลี่ยง 1 เส้นทาง");
+  const allowed = summary.getByRole("button", { name: /รถเล็ก(?:ไม่สามารถผ่านได้|ผ่านไม่ได้)/ });
+  await expect(allowed).toContainText("1");
+  await expect(summary.getByRole("button", { name: /๑ ช่องทาง/ })).toContainText("1");
+  await expect(summary.getByRole("button", { name: /รอตรวจสอบ/ })).toContainText("1");
+  await allowed.click();
+  await expect(summary.getByRole("button", { name:"ล้างตัวกรองสถานะ" })).toBeVisible();
+  const opacities = () => page.locator("[data-public-layer-opacities]").evaluate(el =>
+    JSON.parse(el.getAttribute("data-public-layer-opacities") || "{}") as { floods: Record<string,number>; detours: Record<string,number> }
+  );
+  await expect.poll(async () => (await opacities()).floods["F-B"]).toBe(0);
+  await expect.poll(async () => (await opacities()).detours.D43).toBeGreaterThan(0);
+  await layers.click();
+  await expect(summary).toHaveCount(0);
+  await layers.click();
+  await expect(summary.getByRole("button", { name:"ล้างตัวกรองสถานะ" })).toBeVisible();
+  const tools = page.getByRole("group", { name: "เครื่องมือแผนที่" });
+  const assertSeparated = async () => {
+    const s = (await summary.boundingBox())!;
+    const t = (await tools.boundingBox())!;
+    expect(s.x + s.width <= t.x || t.x + t.width <= s.x || s.y + s.height <= t.y || t.y + t.height <= s.y).toBe(true);
+  };
+  await assertSeparated();
+  if (isMobile) {
+    await page.setViewportSize({ width: 568, height: 320 });
+    await assertSeparated();
+    await page.getByRole("navigation", { name:"เมนูประชาชน" }).getByRole("button",{ name:"เหตุการณ์น้ำท่วม",exact:true }).click();
+    const list = page.getByRole("dialog", { name:"รายการสายทางและจุดเฝ้าระวัง" });
+    await expect(list).toContainText("ช่วงซ้ายรถเล็กผ่านไม่ได้");
+    await expect(list).not.toContainText("หนึ่งช่องทางทดสอบ");
+    await list.getByRole("button", {name:"ปิดรายการสายทาง"}).click();
+  } else {
+    await expect(page.locator(".citizen-sidebar")).toContainText("ช่วงซ้ายรถเล็กผ่านไม่ได้");
+    await expect(page.locator(".citizen-sidebar")).not.toContainText("หนึ่งช่องทางทดสอบ");
+  }
+  await summary.getByRole("button", { name:"ล้างตัวกรองสถานะ" }).click();
+  await expect.poll(async () => (await opacities()).floods["F-B"]).toBeGreaterThan(0);
+});
+
+test("separate map summary buttons remain usable during flood breakdown", async ({ page, isMobile }) => {
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: payload }));
+  await page.setViewportSize({ width: isMobile ? 320 : 1280, height: isMobile ? 568 : 900 });
+  await page.goto(base + "/");
+  const summary = page.getByRole("complementary", { name:"สรุปสถานการณ์บนแผนที่" });
+  const flood = summary.getByRole("button", { name:"น้ำท่วม 1 จุด", exact:true });
+  const detours = summary.getByRole("button", { name:"ทางเลี่ยง 1 เส้นทาง", exact:true });
+  await flood.click();
+  const breakdown = summary.locator("#citizen-map-status-filters");
+  await expect(breakdown).toBeVisible();
+  const d = (await detours.boundingBox())!;
+  const f = (await flood.boundingBox())!;
+  const b = (await breakdown.boundingBox())!;
+  expect(f.y).toBe(d.y);
+  expect(f.x + f.width).toBeLessThan(d.x);
+  expect(d.y + d.height).toBeLessThan(b.y);
+  expect(d.height).toBeGreaterThanOrEqual(44);
+  expect(await detours.evaluate(el => {
+    const r = el.getBoundingClientRect();
+    return el.contains(document.elementFromPoint(r.x + r.width/2, r.y + r.height/2));
+  })).toBe(true);
+  await detours.click();
+  if (isMobile) {
+    const drawer = page.getByRole("dialog", { name:"รายการสายทางและจุดเฝ้าระวัง" });
+    await expect(drawer.getByRole("heading", { name:"ทางเลี่ยง",exact:true })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(1);
+  } else {
+    await expect(page.locator(".citizen-sidebar").getByRole("button", { name:/ทางเลี่ยง \(1\)/, pressed:true })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  }
+});
+
+test("flood breakdown uses original map colors as accents in both themes", async ({ page }) => {
+  const statuses = ["CLOSED", "WARNING", "LIGHT_VEHICLES_ONLY", "ONE_LANE", "PASSABLE"] as const;
+  const floods = statuses.map((status, i) => ({ ...payload.floodRoutes[0], id:"status-" + i,
+    section_name:"ตัวอย่าง " + i, traffic_status:status, direction_meta:{}, latest_photo_url:"" }));
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json:{ ...payload, floodRoutes:floods } }));
+  await page.setViewportSize({ width:320,height:568 });
+  await page.goto(base + "/");
+  const summary = page.getByRole("complementary",{ name:"สรุปสถานการณ์บนแผนที่" });
+  await summary.getByRole("button", {name:"น้ำท่วม 5 จุด",exact:true}).click();
+  const rows = summary.locator("[data-map-flood-status]");
+  for (const theme of ["light","dark"] as const) {
+    if(theme==="dark") await page.getByRole("button",{name:"เปิดธีมมืด"}).click();
+    await expect(rows).toHaveCount(5);
+    const actual = await rows.evaluateAll(els => els.map(el => ({
+      id: el.getAttribute("data-map-flood-status"),
+      color: getComputedStyle(el).getPropertyValue("--flood-status-color").trim(),
+      swatch:getComputedStyle(el.querySelector(".citizen-flood-filter-swatch")!).backgroundColor,
+      ink:getComputedStyle(el).color,
+      count:getComputedStyle(el.querySelector(".citizen-flood-filter-count")!).color,
+    })));
+    const source = (await import("../../lib/flood-event-schema")).DETAILED_TRAFFIC_STATUS_CONFIG;
+    for (const row of actual) {
+      expect(row.color).toBe(source[row.id as keyof typeof source].hex);
+      expect(row.ink).toBe(row.count);
+      expect(row.swatch).not.toBe(row.ink);
+    }
+    const closed = rows.filter({hasText:"ผ่านไม่ได้"}).first();
+    await closed.click();
+    await expect(closed).toHaveAttribute("aria-pressed","true");
+    await closed.click();
+    await expect(closed).toHaveAttribute("aria-pressed","false");
+  }
+});
+
+test("summary holds one unabridged horizontal row with three-digit counts at 320px", async ({ page }) => {
+  const floodRoutes = Array.from({length:128}, (_, i) => ({...payload.floodRoutes[0],
+    id:"many-f-" + i, coordinates_json:[], lat_start:0, lon_start:0, lat_end:0, lon_end:0 }));
+  const detourRoutes = Array.from({length:256}, (_, i) => ({...payload.detourRoutes[0],
+    id:"many-d-" + i, flood_id_ref:null, coordinates_json:[], lat_start:0, lon_start:0, lat_end:0, lon_end:0 }));
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json:{...payload, floodRoutes, detourRoutes} }));
+  await page.setViewportSize({ width:320,height:568 });
+  await page.goto(base + "/");
+  const summary = page.getByRole("complementary", { name:"สรุปสถานการณ์บนแผนที่" });
+  const flood = summary.getByRole("button", {name:"น้ำท่วม 128 จุด",exact:true});
+  const detour = summary.getByRole("button", {name:"ทางเลี่ยง 256 เส้นทาง",exact:true});
+  await expect(detour).toBeVisible();
+  const tool = page.getByRole("group", { name:"เครื่องมือแผนที่" });
+  for (const [width,height,scale] of [[320,568,100],[320,568,125],[320,568,150],[568,320,150],[768,1024,150],[1024,768,100],[1440,900,100]]) {
+    await page.setViewportSize({width,height});
+    await page.evaluate(percent => { document.documentElement.style.fontSize = `${percent}%`; }, scale);
+    expect(await page.locator(".citizen-nav button:visible").evaluateAll(buttons => buttons.every(button =>
+      button.scrollWidth <= button.clientWidth && button.getBoundingClientRect().height >= 44
+    ))).toBe(true);
+    await expect(tool).toBeVisible();
+    const f = (await flood.boundingBox())!, d = (await detour.boundingBox())!, t = (await tool.boundingBox())!;
+    expect(f.y).toBe(d.y);
+    expect(f.x+f.width).toBeLessThan(d.x);
+    expect(d.x+d.width).toBeLessThan(t.x);
+    expect(d.height).toBeGreaterThanOrEqual(44);
+    expect(await detour.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await flood.click();
+    const breakdown = summary.locator("#citizen-map-status-filters");
+    const b = (await breakdown.boundingBox())!;
+    expect(b.y).toBeGreaterThan(d.y+d.height);
+    expect(b.x+b.width).toBeLessThan(t.x);
+    expect(await detour.evaluate(el => {
+      const r = el.getBoundingClientRect();
+      return el.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2));
+    })).toBe(true);
+    await flood.click();
+  }
+});

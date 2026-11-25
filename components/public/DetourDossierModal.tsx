@@ -90,7 +90,7 @@ export function DetourDossierModal({
 }: DetourDossierModalProps) {
   return (
     <div
-      className="fixed inset-0 z-[700] flex items-end justify-center bg-slate-950/80 backdrop-blur-xs animate-fade-in sm:items-center sm:p-4"
+      className="citizen-detour-dossier fixed inset-0 z-[700] flex items-end justify-center bg-slate-950/80 backdrop-blur-xs animate-fade-in sm:items-center sm:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) closeDetourDetails();
       }}
@@ -100,22 +100,20 @@ export function DetourDossierModal({
         role="dialog"
         aria-modal="true"
         aria-label={`คำแนะนำเส้นทางเลี่ยง ${viewingDetourModal.route_name}`}
-        className="relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[1.75rem] border-x-0 border-t border-b-0 border-sky-950 bg-[#081120] text-slate-100 shadow-2xl sm:max-h-[88dvh] sm:max-w-[30.625rem] sm:rounded-[1.75rem] sm:border-0 sm:ring-1 sm:ring-sky-950"
+        className="citizen-dossier-frame relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[1.75rem] border-x-0 border-t border-b-0 border-sky-950 bg-[#081120] text-slate-100 shadow-2xl sm:max-h-[88dvh] sm:max-w-[30.625rem] sm:rounded-[1.75rem] sm:border-0 sm:ring-1 sm:ring-sky-950"
       >
         {/* 1. Top Header Bar (Fixed outside scroll container) */}
         <div className="shrink-0 z-20 border-b border-slate-800/80 bg-[#0c182e] px-4 pb-3 pt-2.5 shadow-md">
           <div aria-hidden="true" className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-slate-600 sm:hidden" />
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <ArrowLeftRight className="w-6 h-6 text-[#f59e0b] stroke-[2.8] shrink-0" />
-              <h3 className="font-heading text-lg sm:text-xl font-bold tracking-wide text-white truncate">
-                เส้นทางเลี่ยง
-              </h3>
+          <div className="citizen-detour-head flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <ArrowLeftRight className="citizen-detour-glyph mt-1 size-5 shrink-0" aria-hidden="true" />
+              <div className="min-w-0">
+                <h3 className="text-base font-bold leading-snug text-white break-words [overflow-wrap:anywhere]">{viewingDetourModal.route_name}</h3>
+                <span className="citizen-detour-confirmation">{detourDirectionDetailedBadge(viewingDetourModal.direction_mode)}</span>
+              </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <span className="rounded-full border border-amber-500/70 bg-amber-950/40 px-3 py-1 text-xs font-semibold text-amber-300 shadow-xs whitespace-nowrap">
-                {detourDirectionDetailedBadge(viewingDetourModal.direction_mode)}
-              </span>
               <button
                 ref={detourCloseRef}
                 type="button"
@@ -143,17 +141,11 @@ export function DetourDossierModal({
                 : "โครงข่ายทางหลวงแผ่นดิน แขวงทางหลวงปัตตานี";
 
             return (
-              <div className="rounded-2xl border border-sky-800/80 bg-[#0e2146] p-3.5 flex items-center gap-3.5 shadow-md">
-                <div className="h-10 w-10 shrink-0 rounded-xl bg-[#0284c7] flex items-center justify-center text-white shadow-sm">
-                  <Link2 className="w-5 h-5 stroke-[2.5]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h4 className="font-heading text-sm sm:text-base font-bold text-white leading-snug break-words [overflow-wrap:anywhere]">
-                    {viewingDetourModal.route_name}
-                  </h4>
-                  <p className="text-xs text-sky-200/90 font-medium leading-normal mt-0.5 break-words">
-                    {scopeText}
-                  </p>
+              <div className="citizen-detour-context">
+                <Link2 className="size-4 shrink-0" aria-hidden="true" />
+                <div>
+                  <strong className="text-xs">เชื่อมโยงกับ</strong>
+                  <p className="text-xs break-words">{scopeText}</p>
                 </div>
               </div>
             );
@@ -190,7 +182,7 @@ export function DetourDossierModal({
           })()}
 
           {/* 3. Direction Selector */}
-          <section aria-label="เลือกทิศทางการเดินทาง">
+          <section className="citizen-detour-direction" aria-label="เลือกทิศทางการเดินทาง">
             <label className="text-sm font-semibold text-slate-200 block mb-2">
               เลือกทิศทางการเดินทาง
             </label>
@@ -412,13 +404,13 @@ export function DetourDossierModal({
 
           return (
             <div className="shrink-0 z-20 space-y-2 border-t border-slate-800/90 bg-[#081120] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_20px_rgba(8,17,32,0.95)] sm:rounded-b-[1.75rem]">
-              <div className="flex flex-col sm:flex-row sm:items-stretch gap-2.5">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] items-stretch gap-2.5">
                 {nav.isValid && nav.url ? (
                   <a
                     href={nav.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full sm:flex-[1.35] min-h-[2.75rem] flex items-center justify-between rounded-2xl bg-[#10b981] hover:bg-[#059669] px-3.5 py-2.5 text-white shadow-lg shadow-emerald-950/40 transition-all touch-manipulation cursor-pointer group"
+                    className="w-full min-w-0 min-h-[2.75rem] flex items-center justify-between rounded-2xl bg-[#10b981] hover:bg-[#059669] px-3.5 py-2.5 text-white shadow-lg shadow-emerald-950/40 transition-all touch-manipulation cursor-pointer group"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 rounded-full bg-white p-1 flex items-center justify-center shadow">
@@ -429,10 +421,10 @@ export function DetourDossierModal({
                         </svg>
                       </div>
                       <div className="text-left min-w-0">
-                        <div className="font-heading text-xs sm:text-sm font-bold text-white leading-tight truncate">
+                        <div className="font-heading text-xs sm:text-sm font-bold text-white leading-tight break-words">
                           ดูบน Google Maps
                         </div>
-                        <div className="text-[0.75rem]/[1.1rem] font-medium text-emerald-100 mt-0.5 truncate">
+                        <div className="text-[0.75rem]/[1.1rem] font-medium text-emerald-100 mt-0.5 break-words">
                           {modalDetourDirection === "FORWARD" ? "(ขาไป A ➔ B)" : "(ขากลับ B ➔ A)"}
                         </div>
                       </div>
@@ -440,7 +432,7 @@ export function DetourDossierModal({
                     <ExternalLink aria-hidden="true" className="w-4 h-4 sm:w-5 sm:h-5 text-white shrink-0 ml-1 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                   </a>
                 ) : (
-                  <div className="w-full sm:flex-[1.35] min-h-[2.75rem] flex items-center justify-center rounded-2xl border border-amber-500/40 bg-slate-900 px-3.5 py-2.5 text-center text-xs text-amber-200">
+                  <div className="w-full min-w-0 min-h-[2.75rem] flex items-center justify-center rounded-2xl border border-amber-500/40 bg-slate-900 px-3.5 py-2.5 text-center text-xs text-amber-200">
                     ⚠️ {nav.warning || "เส้นทางยังไม่พร้อมสำหรับการนำทาง"}
                   </div>
                 )}
@@ -448,7 +440,7 @@ export function DetourDossierModal({
                 <button
                   type="button"
                   onClick={() => onFocusMapLocation(getFocusCoords())}
-                  className="w-full sm:flex-1 min-h-[2.75rem] flex items-center justify-center gap-2 rounded-2xl border border-slate-700/80 bg-[#13203c] hover:bg-[#1a2b50] px-3.5 py-2.5 font-heading text-xs sm:text-sm font-bold text-white shadow transition-all touch-manipulation cursor-pointer shrink-0"
+                  className="w-full min-w-0 min-h-[2.75rem] flex items-center justify-center gap-2 rounded-2xl border border-slate-700/80 bg-[#13203c] hover:bg-[#1a2b50] px-3.5 py-2.5 font-heading text-xs sm:text-sm font-bold text-white shadow transition-all touch-manipulation cursor-pointer shrink-0"
                 >
                   <BookOpen aria-hidden="true" className="w-4 h-4 sm:w-5 sm:h-5 text-white shrink-0" />
                   <span>ดูตำแหน่งบนแผนที่</span>

@@ -12,6 +12,7 @@ export interface GisFilterCriteria {
   searchQuery: string;
   routeFilter: string;
   statusFilter: StatusColor | "ALL";
+  matchFloodPassability?: (route: FloodRoute) => boolean;
   /** Include inactive/draft records (e.g. Admin view). Defaults to false (Public). */
   includeInactive?: boolean;
 }
@@ -29,11 +30,11 @@ export function normalizeGisHighwayCode(value: string): string {
   return value.replace(/^ทล\.?\s*/i, "").trim();
 }
 
-export function isGisFilterCriteriaActive(criteria: Pick<GisFilterCriteria, "searchQuery" | "routeFilter" | "statusFilter">): boolean {
+export function isGisFilterCriteriaActive(criteria: Pick<GisFilterCriteria, "searchQuery" | "routeFilter" | "statusFilter" | "matchFloodPassability">): boolean {
   return (
     Boolean(criteria.searchQuery.trim()) ||
     criteria.routeFilter !== "ALL" ||
-    criteria.statusFilter !== "ALL"
+    criteria.statusFilter !== "ALL" || Boolean(criteria.matchFloodPassability)
   );
 }
 
@@ -81,7 +82,7 @@ export function filterFloodRoutes(
       );
       const matchStatus = statusFilter === "ALL" || presentation.color === statusFilter;
 
-      return matchSearch && matchRoute && matchStatus;
+      return matchSearch && matchRoute && matchStatus && (criteria.matchFloodPassability?.(route) ?? true);
     })
     .sort((a, b) => {
       const aColor = getTrafficPresentation(

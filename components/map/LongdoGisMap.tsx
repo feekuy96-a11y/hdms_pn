@@ -26,6 +26,8 @@ import {
   buildOfficePopupHtml,
   buildDetourFallbackPinSpec,
   buildDetourPointPhotoPopupHtml,
+  buildPublicDetourEndpointPopup,
+  bindPublicEndpointInspector,
   parseRouteCoordinates,
   resolveDetourPointPinCoord,
 } from "./longdo-map-popups";
@@ -94,6 +96,7 @@ interface LongdoGisMapProps {
   incomingGisLines?: [number, number][][];
   className?: string;
   publicMode?: boolean;
+  publicStatusSummary?: React.ReactNode;
   suspendRouteFiltering?: boolean;
   isSidebarCollapsed?: boolean;
   /** Public-list filter: keep non-matching safety routes visible but de-emphasized. */
@@ -142,6 +145,7 @@ export function LongdoGisMap({
   incomingGisLines = EMPTY_LINES,
   className = "h-full w-full",
   publicMode = false,
+  publicStatusSummary,
   suspendRouteFiltering,
   isSidebarCollapsed = false,
   highlightFloodIds = EMPTY_IDS,
@@ -359,7 +363,7 @@ export function LongdoGisMap({
         const map = L.map(mapContainerRef.current, {
           center: [APP_CONFIG.DEFAULT_CENTER.lat, APP_CONFIG.DEFAULT_CENTER.lon],
           zoom: APP_CONFIG.DEFAULT_ZOOM,
-          zoomControl: true,
+          zoomControl: !publicMode,
           fadeAnimation: false,
           // One shared canvas renderer for every vector layer (created once, never per redraw).
           renderer: sharedRenderer,
@@ -754,7 +758,11 @@ export function LongdoGisMap({
                 onCoordinatePickedRef.current?.(Number(event.latlng.lat.toFixed(6)), Number(event.latlng.lng.toFixed(6)), mode);
                 return;
               }
-              map.openPopup(buildHighwayPopupHtml(props, featureIsMain, color), event.latlng);
+              map.openPopup(
+                buildHighwayPopupHtml(props, featureIsMain, color),
+                event.latlng,
+                publicMode ? undefined : { autoPanPaddingTopLeft: L.point(8, 112) },
+              );
               setActivePopupEntity({ type: "HIGHWAY", id: highwayFeatureKeysRef.current.get(feature)! });
             });
           },
@@ -768,7 +776,7 @@ export function LongdoGisMap({
     return () => {
       group.clearLayers();
     };
-  }, [mapReady, systemData.highwayLayers, mapStyles, effectiveShowMainHwy, effectiveShowSecHwy, showRoadLabels, showSecondaryAtCurrentZoom, criticalHighwayRouteNos, currentZoom]);
+  }, [mapReady, systemData.highwayLayers, mapStyles, effectiveShowMainHwy, effectiveShowSecHwy, showRoadLabels, showSecondaryAtCurrentZoom, criticalHighwayRouteNos, currentZoom, publicMode]);
 
   // 4b. Highway shield labels - viewport-limited, grid-based collision check, redrawn on pan/zoom.
   useEffect(() => {
@@ -821,7 +829,10 @@ export function LongdoGisMap({
         });
         const sign = L.marker(item.latlng, { icon: signIcon, interactive: true }).addTo(group);
         sign.bindTooltip(`ทล.${escapeHtml(item.code)} · ${escapeHtml(item.name)}`, { direction: "top", offset: [0, -18] });
-        sign.bindPopup(() => `<div style="padding-top:5px"><strong>ทล.${escapeHtml(item.code)}</strong><br/>${escapeHtml(item.name)}</div>`);
+        sign.bindPopup(
+          () => `<div style="padding-top:5px"><strong>ทล.${escapeHtml(item.code)}</strong><br/>${escapeHtml(item.name)}</div>`,
+          publicMode ? undefined : { autoPanPaddingTopLeft: L.point(8, 112) },
+        );
         sign.on("popupopen", () => {
           let closest: { key: string; distance: number } | null = null;
           const visit = (path: any) => {
@@ -852,10 +863,13 @@ export function LongdoGisMap({
       map.off("moveend zoomend", schedule);
       group.clearLayers();
     };
-  }, [mapReady, shieldCandidates, effectiveShowHighwayShields, effectiveShowMainHwy, effectiveShowSecHwy, forceShowAllHighways, criticalHighwayRouteNos, isFilterActive, searchQuery, activeCardFocus, highlightHighwayRouteNos]);
+  }, [mapReady, shieldCandidates, effectiveShowHighwayShields, effectiveShowMainHwy, effectiveShowSecHwy, forceShowAllHighways, criticalHighwayRouteNos, isFilterActive, searchQuery, activeCardFocus, highlightHighwayRouteNos, publicMode]);
 
   // 4c & 4d. Detour routes + Flood routes & markers Hook
   useLongdoRouteLayers({
+    publicMode,
+    leafletMapRef,
+    onFocusOverviewDetour: (id, direction) => onFocusDetourOnMapRef.current?.(id, direction),
     onActivateMapEntity: setActivePopupEntity,
     mapReady,
     systemData,
@@ -1261,8 +1275,12 @@ export function LongdoGisMap({
         { point: "END" as const, lat: endPin.lat, lon: endPin.lon, photo: endPhoto },
       ];
 
-      endpoints.forEach(({ point, lat, lon, photo }) => {
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      const validEndpoints = endpoints.filter(({ lat, lon }) =>
+        Number.isFinite(lat) && Number.isFinite(lon) && !(lat === 0 && lon === 0)
+      );
+      const availablePoints = new Set(validEndpoints.map(({ point }) => point));
+      const markers = new Map<"START" | "END", ReturnType<typeof L.marker>>();
+      validEndpoints.forEach(({ point, lat, lon, photo }) => {
         const hasPhoto = Boolean(typeof photo?.url === "string" && photo.url.trim());
         const marker = L.marker([lat, lon], {
           interactive: true,
@@ -1273,11 +1291,21 @@ export function LongdoGisMap({
               : buildDetourFallbackPinSpec(point, "FULL", true)
           ),
         }).addTo(group);
+        markers.set(point, marker);
         allPoints.push([lon, lat]);
         marker.bindPopup(
-          () => buildDetourPointPhotoPopupHtml(detour, point, photo, lat, lon),
-          getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
+          () => publicMode
+            ? buildPublicDetourEndpointPopup(detour, point, photo, direction, systemData.floodRoutes || [], availablePoints)
+            : buildDetourPointPhotoPopupHtml(detour, point, photo, lat, lon),
+          { ...getResponsivePopupOptions(L, 350, 240, "doh-detour-leaflet-popup"), keepInView: true }
         );
+        if (publicMode) {
+          bindPublicEndpointInspector(L, map, marker, markers, point, () => {
+            const focusOnMap = onFocusDetourOnMapRef.current;
+            if (focusOnMap && (!isPrimary || gisFocus.targetType !== "DETOUR")) focusOnMap(detour.id, direction);
+            else marker.getElement()?.focus({ preventScroll: true });
+          }, true);
+        }
         marker.on("click", (event: any) => {
           L.DomEvent.stopPropagation(event);
           marker.openPopup();
@@ -1394,7 +1422,12 @@ export function LongdoGisMap({
           // former zero-size endpoint labels. Keep their full icon clear of
           // the Focus Bar rather than fitting only their coordinate center.
           const neededBottom = Math.ceil(mapRect.bottom - focusBarRect.top) + 48;
-          bottomPadding = Math.min(Math.max(120, neededBottom), Math.max(120, mapRect.height - topPadding - 96));
+          const minimumVisibleRouteHeight = publicMode ? 64 : 96;
+          if (publicMode) {
+            // Reserve only the compact summary's height when an expanded focus bar or test banner makes the visible map short.
+            topPadding = Math.min(topPadding, Math.max(58, Math.floor(mapRect.height - neededBottom - minimumVisibleRouteHeight)));
+          }
+          bottomPadding = Math.min(Math.max(120, neededBottom), Math.max(120, mapRect.height - topPadding - minimumVisibleRouteHeight));
         } else if (!isMobileViewport && barCenterY < mapCenterY) {
           const neededTop = Math.ceil(focusBarRect.bottom - mapRect.top) + 48;
           topPadding = Math.min(Math.max(132, neededTop), Math.max(132, mapRect.height - bottomPadding - 120));
@@ -1451,15 +1484,16 @@ export function LongdoGisMap({
   }, [mapReady, gisFocus, systemData, mapStyles]);
 
   return (
-    <div data-public-filter-counts={`flood:${highlightFloodIds.length};detour:${highlightDetourIds.length}`} className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full min-h-[450px]`} style={{ minHeight: 450 }}>
+    <div data-active-base-map={activeBaseMap} data-public-filter-counts={`flood:${highlightFloodIds.length};detour:${highlightDetourIds.length}`} className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full`} style={{ minHeight: publicMode ? 0 : 450 }}>
       <div
         ref={mapContainerRef}
-        className="w-full h-full min-h-[350px] bg-surface-canvas relative z-0"
-        style={{ position: "absolute", inset: 0, minHeight: 450 }}
+        className="w-full h-full bg-surface-canvas relative z-0"
+        style={{ position: "absolute", inset: 0, minHeight: publicMode ? 0 : 450 }}
       />
 
       <MapLegendOverlay
         publicMode={publicMode}
+        publicStatusSummary={publicStatusSummary}
         isSidebarCollapsed={isSidebarCollapsed}
         systemData={systemData}
         mapStyles={mapStyles}
@@ -1493,6 +1527,8 @@ export function LongdoGisMap({
         switchBaseMap={switchBaseMap}
         resetCamera={resetCamera}
         locateUser={locateUser}
+        onZoomIn={() => leafletMapRef.current?.zoomIn()}
+        onZoomOut={() => leafletMapRef.current?.zoomOut()}
         isLocating={isLocating}
         locationStatus={locationStatus}
         previewPointPhoto={previewPointPhoto}
