@@ -156,6 +156,9 @@ test("citizen route sheet filters floods and detours and returns from details wi
 });
 
 test("citizen map popups fit 360x640 mobile viewport without overflow or changing accessible names", async ({ page }) => {
+  // This flow exercises several popups and an intentional zoom transition
+  // before the progressive A/B photo marker becomes available.
+  test.setTimeout(90_000);
   test.skip((page.viewportSize()?.width ?? 1280) >= 1024, "Mobile popup layout verification runs in mobile view");
   await page.setViewportSize({ width: 360, height: 640 });
   const updatedAt = new Date(Date.now() - 8 * 60 * 1000).toISOString();
@@ -274,6 +277,26 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   await expect(floodPopup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
+  // Responsive flood markers may change appearance on zoom, but their open
+  // popup must remain attached to the same retained marker layer.
+  // The compact mobile popup deliberately occupies the control corner. Send a
+  // wheel event to Leaflet's canvas and assert that a real zoom change occurs.
+  const mapCanvas = page.locator(".leaflet-container");
+  const zoomBefore = await mapCanvas.evaluate((element) =>
+    JSON.parse(element.getAttribute("data-public-layer-opacities") || "{}").zoom
+  );
+  await mapCanvas.evaluate((element) => {
+    element.dispatchEvent(new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      deltaY: -720,
+    }));
+  });
+  await expect.poll(() => mapCanvas.evaluate((element) =>
+    JSON.parse(element.getAttribute("data-public-layer-opacities") || "{}").zoom
+  )).toBeGreaterThan(zoomBefore);
+  await expect(floodPopup).toBeVisible();
+
   // Open flood dossier dialog from popup and verify accessible name + close button size
   await floodPopup.getByRole("button", { name: "ดูรายละเอียด" }).click();
   await expect(floodPopup).toHaveCount(0);
@@ -303,7 +326,7 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   }).toEqual({ okWidth: true, okHeight: true, okLeft: true, okRight: true });
   await expect(detourPopup.getByRole("button", { name: "ขาไป A → B" })).toBeVisible();
   await expect(detourPopup.getByRole("button", { name: "ขากลับ B → A" })).toBeVisible();
-  await expect(detourPopup.getByRole("button", { name: /นำทางด้วย Google Maps/ })).toBeVisible();
+  await expect(detourPopup.getByRole("button", { name: /ดูบน Google Maps/ })).toBeVisible();
   await expect(detourPopup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   // Close button must not be obscured by top overlays or Leaflet zoom controls
@@ -311,7 +334,16 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   await expect(detourPopup).toHaveCount(0);
 
   // 3. Point photo popup at 360x640
-  await page.locator(".doh-detour-photo-start").first().click();
+  // A/B photo markers are deliberately hidden in the default overview and
+  // become available only after the user zooms in.
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  const startPhotoMarker = page.locator(".doh-detour-photo-start").first();
+  await expect(startPhotoMarker).toBeVisible();
+  // The marker can be outside the current mobile viewport after a prior map
+  // focus; keyboard activation remains available and avoids a coordinate-only
+  // assertion for this accessible map control.
+  await startPhotoMarker.focus();
+  await startPhotoMarker.press("Enter");
   const photoPopup = page.locator(".doh-detour-point-photo-popup");
   await expect(photoPopup).toBeVisible();
   await expect.poll(async () => {

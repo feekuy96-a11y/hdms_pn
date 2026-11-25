@@ -20,6 +20,14 @@ import {
   type GisFocusDirection,
   type GisFocusState,
 } from "@/lib/gis-focus-mode";
+import { splitDetourAdviceByDirection } from "@/lib/gis-utils";
+import {
+  calculatePolylineRoadDistanceKm,
+  detourDistanceMeters,
+  detourDurationSeconds,
+  getDetourTimelinePresentation,
+} from "@/lib/detour-presentation";
+import { parseRouteCoordinates } from "@/components/public/public-route-helpers";
 
 export interface GisFocusModeBarProps {
   focusState: GisFocusState;
@@ -36,6 +44,8 @@ export function GisFocusModeBar({
   onChangeDirection,
   onToggleLinkedDetour,
 }: GisFocusModeBarProps) {
+  const [isTimelineOpen, setIsTimelineOpen] = React.useState(false);
+  const [isCompactControlsOpen, setIsCompactControlsOpen] = React.useState(false);
   if (focusState.status !== "focused" || !focusState.targetType || !focusState.targetId) {
     return null;
   }
@@ -75,6 +85,30 @@ export function GisFocusModeBar({
     : false;
   const showDirectionToggle = Boolean(activeDetourForDir && canSwitchForward && canSwitchReverse);
 
+  const timeline = activeDetourForDir ? (() => {
+    const adviceByDirection = splitDetourAdviceByDirection(
+      activeDetourForDir.description || "",
+      activeDetourForDir.direction_mode
+    );
+    const advice = focusState.direction === "REVERSE"
+      ? adviceByDirection.reverseText
+      : adviceByDirection.forwardText;
+    const coordinates = focusState.direction === "REVERSE"
+      ? parseRouteCoordinates(activeDetourForDir.reverse_coordinates_json).length > 0
+        ? parseRouteCoordinates(activeDetourForDir.reverse_coordinates_json)
+        : parseRouteCoordinates(activeDetourForDir.coordinates_json)
+      : parseRouteCoordinates(activeDetourForDir.coordinates_json);
+    return getDetourTimelinePresentation(
+      advice,
+      detourDistanceMeters(activeDetourForDir.detour_meta, focusState.direction),
+      calculatePolylineRoadDistanceKm(coordinates),
+      "จุดเริ่มต้น",
+      "จุดสิ้นสุด",
+      activeDetourForDir.detour_meta?.road_condition,
+      detourDurationSeconds(activeDetourForDir.detour_meta, focusState.direction)
+    );
+  })() : null;
+
   const hasMissingGeometry = targetMissing
     ? false
     : isDetour
@@ -103,7 +137,8 @@ export function GisFocusModeBar({
       : `ทล.${floodData!.primaryFlood!.route_no} ${floodData!.primaryFlood!.section_name}`;
 
   return (
-    <div
+    <>
+      <div
       role="region"
       aria-label="แถบโหมดโฟกัสแผนที่"
       data-testid="gis-focus-mode-bar"
@@ -127,7 +162,7 @@ export function GisFocusModeBar({
               <span>{isDetour ? "โหมดโฟกัส: เส้นทางเลี่ยง" : "โหมดโฟกัส: เหตุการณ์น้ำท่วม"}</span>
             </span>
 
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900/90 px-2 py-0.5 text-[0.6875rem] text-slate-300 whitespace-nowrap">
+            <span className="hidden items-center gap-1 rounded-full border border-slate-700 bg-slate-900/90 px-2 py-0.5 text-[0.6875rem] text-slate-300 whitespace-nowrap sm:inline-flex">
               <EyeOff aria-hidden="true" className="h-3 w-3 shrink-0 text-amber-300" />
               <span>ซ่อนชั้นข้อมูลอื่นชั่วคราว</span>
             </span>
@@ -164,10 +199,10 @@ export function GisFocusModeBar({
                     ระดับน้ำ {floodData.maxWaterLevelCm} ซม.
                   </span>
                   {floodData.sideSummary && (
-                    <span className="text-sky-200">{floodData.sideSummary}</span>
+                    <span className="hidden text-sky-200 sm:inline">{floodData.sideSummary}</span>
                   )}
                   {floodStatus && (
-                    <span className="rounded-md border border-amber-500/40 bg-slate-900 px-1.5 py-0.5 font-semibold text-amber-200">
+                    <span className="hidden rounded-md border border-amber-500/40 bg-slate-900 px-1.5 py-0.5 font-semibold text-amber-200 sm:inline">
                       {floodStatus.label}
                     </span>
                   )}
@@ -206,9 +241,25 @@ export function GisFocusModeBar({
         </button>
       </div>
 
+      {!targetMissing && (showDirectionToggle || (!isDetour && linkedDetour) || timeline) && (
+        <button
+          type="button"
+          aria-expanded={isCompactControlsOpen}
+          aria-controls="gis-focus-extra-controls"
+          onClick={() => setIsCompactControlsOpen((open) => !open)}
+          className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-2.5 py-1 font-heading text-xs font-bold text-slate-100 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 sm:hidden"
+        >
+          <Route aria-hidden="true" className="h-3.5 w-3.5 text-amber-300" />
+          {isCompactControlsOpen ? "ซ่อนตัวเลือกเส้นทาง" : "ตัวเลือกเส้นทาง"}
+        </button>
+      )}
+
       {/* Action Controls Row: Linked Detour Overlay + A→B / B→A Switch */}
       {!targetMissing && (showDirectionToggle || (!isDetour && linkedDetour)) && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-800/90 pt-2">
+        <div
+          id="gis-focus-extra-controls"
+          className={`mt-2 flex flex-wrap items-center gap-2 border-t border-slate-800/90 pt-2 ${isCompactControlsOpen ? "flex" : "hidden"} sm:flex`}
+        >
           {!isDetour && linkedDetour && (
             <button
               type="button"
@@ -268,6 +319,64 @@ export function GisFocusModeBar({
           )}
         </div>
       )}
-    </div>
+      {timeline && (
+        <div className={`mt-2 border-t border-slate-800/90 pt-2 ${isCompactControlsOpen ? "block" : "hidden"} sm:block`}>
+          <button
+            type="button"
+            aria-expanded={isTimelineOpen}
+            aria-controls="gis-focus-timeline-panel"
+            onClick={() => setIsTimelineOpen((open) => !open)}
+            className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-2.5 py-1 font-heading text-xs font-bold text-slate-100 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+          >
+            <Route aria-hidden="true" className="h-3.5 w-3.5 text-amber-300" />
+            {isTimelineOpen ? "ซ่อนคำแนะนำเส้นทาง" : "อ่านคำแนะนำเส้นทาง"}
+          </button>
+        </div>
+      )}
+      </div>
+
+      {timeline && isTimelineOpen && (
+        <aside
+          id="gis-focus-timeline-panel"
+          data-testid="gis-focus-timeline-panel"
+          aria-label="รายละเอียดเส้นทางในโหมดโฟกัส"
+          className="pointer-events-auto absolute inset-x-2 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+14.25rem)] z-[619] max-h-[min(44dvh,28rem)] overflow-hidden rounded-2xl border border-slate-700 bg-[#081120]/[0.98] text-slate-100 shadow-2xl backdrop-blur-md sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[22rem] sm:max-h-[calc(100%-8rem)]"
+        >
+          <div className="flex items-center justify-between gap-3 border-b border-slate-800 px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="font-heading text-sm font-bold text-white">คำแนะนำเส้นทาง</p>
+              <p className="text-xs text-amber-300">{focusState.direction === "FORWARD" ? "ขาไป A → B" : "ขากลับ B → A"}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsTimelineOpen(false)}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+              aria-label="ปิดคำแนะนำเส้นทาง"
+            >
+              <X aria-hidden="true" className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="max-h-[calc(min(44dvh,28rem)-3.5rem)] space-y-2.5 overflow-y-auto overscroll-contain p-3 sm:max-h-[calc(100dvh-12rem)]">
+            {timeline.steps.length > 0 ? timeline.steps.map((step) => (
+              <article key={step.stepNumber} className="flex gap-2.5 rounded-xl border border-slate-800 bg-slate-900/80 p-2.5">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-amber-400 text-xs font-black text-slate-950">{step.stepNumber}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-amber-200">{step.title}</p>
+                  {step.detail && <p className="mt-0.5 text-xs leading-relaxed text-slate-300">{step.detail}</p>}
+                </div>
+              </article>
+            )) : (
+              <p className="rounded-xl border border-amber-500/40 bg-slate-900/80 p-3 text-xs leading-relaxed text-amber-100">
+                {timeline.directionNotice || "ยังไม่มีขั้นตอนเดินทางสำหรับทิศทางนี้"}
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <p className="rounded-xl border border-slate-800 bg-slate-900/80 p-2 text-xs text-slate-300">ระยะทาง<br /><strong className="text-sm text-white">{timeline.totalDistanceKm > 0 ? `${timeline.totalDistanceFormatted} กม.` : "ไม่ระบุ"}</strong></p>
+              <p className="rounded-xl border border-slate-800 bg-slate-900/80 p-2 text-xs text-slate-300">เวลาโดยประมาณ<br /><strong className="text-sm text-white">{timeline.estimatedMinutes !== null ? `${timeline.estimatedMinutes} นาที` : timeline.estimatedDurationText}</strong></p>
+            </div>
+          </div>
+        </aside>
+      )}
+    </>
   );
 }

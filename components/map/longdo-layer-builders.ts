@@ -234,20 +234,27 @@ export function buildDetourSymbolIconSpec(dColor: string): DivIconSpec {
 }
 
 /** สร้างสเปกไอคอนป้ายกล้องจุดเริ่มต้น A / จุดสิ้นสุด B ของทางเลี่ยง */
-export function buildDetourPhotoBadgeSpec(point: "START" | "END"): DivIconSpec {
+export function buildDetourPhotoBadgeSpec(
+  point: "START" | "END",
+  variant: "COMPACT" | "FULL" = "FULL",
+  isFocusEndpoint = false
+): DivIconSpec {
+  const compact = variant === "COMPACT";
+  const size = compact ? 22 : 30;
+  const label = compact ? "" : `<span>${point === "START" ? "A" : "B"}</span>`;
   if (point === "START") {
     return {
-      html: `<div class="doh-detour-photo-badge" style="min-width:34px;height:26px;padding:0 6px;border-radius:999px;background:#064e3b;color:#a7f3d0;border:2px solid #10b981;display:flex;align-items:center;justify-content:center;gap:3px;font-weight:900;font-size:11px;box-shadow:0 3px 10px rgba(0,0,0,0.6)"><span>📷</span><span>A</span></div>`,
-      className: "doh-detour-photo-point doh-detour-photo-start",
-      iconSize: [36, 26],
-      iconAnchor: [-6, 26],
+      html: `<div class="doh-detour-photo-badge" style="width:${size}px;height:${size}px;border-radius:999px;background:#064e3b;color:#a7f3d0;border:2px solid #10b981;display:flex;align-items:center;justify-content:center;gap:${compact ? 0 : 2}px;font-weight:900;font-size:${compact ? 11 : 10}px;box-shadow:0 3px 10px rgba(0,0,0,0.6)"><span>📷</span>${label}</div>`,
+      className: `doh-detour-photo-point doh-detour-photo-start${isFocusEndpoint ? " hdms-focus-endpoint" : ""}`,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
     };
   }
   return {
-    html: `<div class="doh-detour-photo-badge" style="min-width:34px;height:26px;padding:0 6px;border-radius:999px;background:#0c4a6e;color:#bae6fd;border:2px solid #38bdf8;display:flex;align-items:center;justify-content:center;gap:3px;font-weight:900;font-size:11px;box-shadow:0 3px 10px rgba(0,0,0,0.6)"><span>📷</span><span>B</span></div>`,
-    className: "doh-detour-photo-point doh-detour-photo-end",
-    iconSize: [36, 26],
-    iconAnchor: [-6, 0],
+    html: `<div class="doh-detour-photo-badge" style="width:${size}px;height:${size}px;border-radius:999px;background:#0c4a6e;color:#bae6fd;border:2px solid #38bdf8;display:flex;align-items:center;justify-content:center;gap:${compact ? 0 : 2}px;font-weight:900;font-size:${compact ? 11 : 10}px;box-shadow:0 3px 10px rgba(0,0,0,0.6)"><span>📷</span>${label}</div>`,
+    className: `doh-detour-photo-point doh-detour-photo-end${isFocusEndpoint ? " hdms-focus-endpoint" : ""}`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   };
 }
 
@@ -401,7 +408,9 @@ export function buildZoomAdaptiveFloodPinSpec(
   floodWaveIcon: string,
   floodWaveBadge: string
 ): DivIconSpec {
-  if (currentZoom <= 10) {
+  // The default map viewport is zoom 11. Keep that overview uncluttered and
+  // progressively disclose the highway number and water level only after zooming in.
+  if (currentZoom <= 11) {
     return {
       html: `
         <div class="${item.capsuleClass} doh-capsule-zoom-far" style="background:${escapeHtml(fColor)}" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
@@ -413,7 +422,7 @@ export function buildZoomAdaptiveFloodPinSpec(
       iconAnchor: [14, 14],
     };
   }
-  if (currentZoom >= 11 && currentZoom <= 13) {
+  if (currentZoom <= 13) {
     return {
       html: `
         <div class="${item.capsuleClass} doh-capsule-zoom-mid" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">

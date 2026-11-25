@@ -451,7 +451,7 @@ export function buildDetourPopupHtml(
               <svg width="14" height="14" viewBox="0 0 24 24" fill="#059669"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
             </div>
             <div class="text-left min-w-0">
-              <div class="font-bold text-xs leading-tight truncate">นำทางด้วย Google Maps</div>
+              <div class="font-bold text-xs leading-tight truncate">ดูบน Google Maps</div>
               <div id="detour-nav-subtext-${safeId}" class="text-[0.75rem] sm:text-[0.75rem] text-emerald-100 font-medium leading-tight mt-0.5 truncate">
                 ${isRev ? "(ขากลับ B ➔ A)" : "(ขาไป A ➔ B)"}
               </div>
@@ -507,12 +507,12 @@ export function buildDetourPointPhotoPopupHtml(
         <h5 class="font-bold text-white text-sm font-heading leading-snug break-words">${escapeHtml(detour.route_name)}</h5>
         <p class="text-xs text-amber-200/95 mt-1 leading-relaxed break-words">${captionText}</p>
       </div>
-      <div class="relative overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950">
+      <div class="relative flex items-center justify-center overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950">
         <img
           src="${normalizedUrl}"
           alt="${escapeHtml(`${badgeText} ${detour.route_name}`)}"
           onclick="window.__openDetourPointPhoto && window.__openDetourPointPhoto(this.src, this.alt)"
-          class="w-full h-32 sm:h-44 object-cover cursor-zoom-in hover:opacity-95 transition"
+          class="w-full h-auto max-h-[min(42dvh,18rem)] object-contain cursor-zoom-in hover:opacity-95 transition"
         />
         <span class="pointer-events-none absolute bottom-2 right-2 rounded-lg bg-slate-950/85 border border-slate-700 px-[0.667em] py-[0.167em] text-[0.75rem] text-slate-200">
           แตะที่ภาพเพื่อขยายเต็มจอ
@@ -525,7 +525,7 @@ export function buildDetourPointPhotoPopupHtml(
           rel="noopener noreferrer"
           class="min-h-[2.75rem] px-[0.667em] sm:px-[0.833em] py-[0.5em] rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-heading font-black text-xs flex items-center justify-center gap-[0.333em] text-center shadow transition"
         >
-          <span>🧭 นำทางไปจุดนี้</span>
+          <span>🧭 ดูบน Google Maps</span>
         </a>
         <button
           type="button"
