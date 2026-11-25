@@ -51,8 +51,24 @@ test(`${admin ? "admin" : "public"} highway popup restores the search filter aft
     await expect(page.locator(".leaflet-popup")).toContainText(title);
     await expect.poll(async () => (await readPublicLayerOpacities(page)).highwayFeatures[other].opacity).toBe(0);
     await expect.poll(async () => (await readPublicLayerOpacities(page)).highwayFeatures[selected].opacity).toBeGreaterThan(0);
-    await page.locator(".leaflet-popup-close-button").click();
+    const close = page.locator(".leaflet-popup-close-button");
+    const adminToolbar = page.getByRole("button", { name: "เปลี่ยนเป็นภาพถ่ายดาวเทียม" });
+    if (admin) {
+      await expect(adminToolbar).toBeVisible();
+      // After Leaflet's built-in autopan, a real pointer can reach the close button
+      // and the popup has been positioned below the floating Admin actions.
+      await expect.poll(async () => {
+        const toolbar = await adminToolbar.boundingBox();
+        return close.evaluate((element, bar) => {
+          const rect = element.getBoundingClientRect();
+          const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+          return Boolean(bar && rect.top >= bar.y + bar.height && hit && element.contains(hit));
+        }, toolbar);
+      }).toBe(true);
+    }
+    await close.click();
     await expect(page.locator(".leaflet-popup")).toHaveCount(0);
+    if (admin) await expect(adminToolbar).toBeVisible();
     await expect.poll(async () => (await readPublicLayerOpacities(page)).highwayFeatures[other].opacity).toBeGreaterThan(0);
     if (!isMobile) {
       await expect.poll(async () => (await readPublicLayerOpacities(page)).highwayFeatures["MAIN_HIGHWAY:2"].opacity).toBe(0);
@@ -114,16 +130,16 @@ test("citizen route sheet filters floods and detours and returns from details wi
   await page.goto(`${base}/`);
   // Wait for the intercepted live payload instead of opening an empty sheet
   // while TanStack Query is still resolving its initial request.
-  await expect(page.getByText("จุดเฝ้าระวังน้ำท่วม 2 จุด")).toBeVisible();
+  await expect(page.getByText("น้ำท่วม 2 จุด")).toBeVisible();
   await expect(page.locator('link[data-system-favicon="true"]')).toHaveAttribute("href", /agency-logo\.png/);
   await page.context().grantPermissions(["geolocation"]);
   await page.context().setGeolocation({ latitude: 6.700001, longitude: 101.200001 });
   await page.getByRole("button", { name: "ตำแหน่งของฉัน" }).click();
   await expect(page.getByText("แสดงตำแหน่งของคุณแล้ว")).toBeVisible();
-  await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
+  await page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
   const list = page.getByRole("dialog", { name: "รายการสายทางและจุดเฝ้าระวัง" });
   await expect(list).toBeVisible();
-  await expect(list.getByRole("heading", { name: "สถานการณ์ทางหลวง" })).toBeVisible();
+  await expect(list.getByRole("heading", { name: "เหตุการณ์น้ำท่วม" })).toBeVisible();
   // Flood chips only represent active highway flood routes; local-road detours
   // must not leak into this tab.
   expect((await list.getByLabel("สายทาง", { exact: true }).locator("option").allTextContents()).join(" ")).not.toContain("ปน.");
@@ -149,7 +165,9 @@ test("citizen route sheet filters floods and detours and returns from details wi
 
   // A status card is a real map/list filter, not decoration. Selecting the
   // warning bucket must hide a normally-passable record from the citizen sheet.
-  await page.getByRole("button", { name: /เฝ้าระวัง \/ ระมัดระวัง/ }).click();
+  await page.getByRole("button", { name: "น้ำท่วม 2 จุด", exact: true }).click();
+  await page.getByRole("complementary", { name: "สรุปสถานการณ์บนแผนที่" }).getByRole("button", { name: /รถเล็กไม่สามารถผ่านได้|รถเล็กผ่านไม่ได้/ }).click();
+  await page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
   await expect(list).toBeVisible();
   await expect(list.getByText("ทดสอบจุดน้ำท่วม ทล.42")).toBeVisible();
   await expect(list.getByText("สายทางที่ผ่านได้ปกติสำหรับทดสอบตัวกรอง")).toHaveCount(0);
@@ -256,7 +274,7 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   // 0. Top summary bar at 360x640 must show both badges fully without clipping or colliding with legend toggle
   const floodBadge = page.getByText("น้ำท่วม 1 จุด", { exact: true });
   const detourBadge = page.getByText("ทางเลี่ยง 1 เส้นทาง", { exact: true });
-  const legendBtn = page.getByRole("button", { name: /สัญลักษณ์บนแผนที่|สัญลักษณ์/, exact: true });
+  const legendBtn = page.getByRole("button", { name: /เลเยอร์/, exact: true });
   await expect(floodBadge).toBeVisible();
   await expect(detourBadge).toBeVisible();
   await expect(legendBtn).toBeVisible();
@@ -367,7 +385,7 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
       ? { okWidth: box.width <= 344, okHeight: box.height <= 370, okLeft: box.x >= 0, okRight: box.x + box.width <= 360 }
       : null;
   }).toEqual({ okWidth: true, okHeight: true, okLeft: true, okRight: true });
-  await expect(photoPopup.getByRole("button", { name: "ดูคำแนะนำทางเลี่ยง" })).toBeVisible();
+  await expect(photoPopup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.locator(".doh-detour-leaflet-popup .leaflet-popup-close-button").click();
   await expect(photoPopup).toHaveCount(0);
@@ -441,9 +459,9 @@ test("public map restores flood, detour and highway opacity after closing each d
 
   const routeList = (page.viewportSize()?.width ?? 1280) < 1024
     ? page.getByRole("dialog", { name: "รายการสายทางและจุดเฝ้าระวัง" })
-    : page.locator("div.hidden.lg\\:flex").filter({ has: page.getByRole("heading", { name: /จุดเฝ้าระวังและน้ำท่วมทางหลวง/ }) });
+    : page.locator("div.hidden.lg\\:flex").filter({ has: page.getByRole("heading", { name: /ตรวจสอบเส้นทาง/ }) });
   if ((page.viewportSize()?.width ?? 1280) < 1024) {
-    await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
+    await page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
   }
   await expect(routeList).toBeVisible();
   await routeList.getByRole("button", { name: /ทางเลี่ยง \(2\)/ }).click();

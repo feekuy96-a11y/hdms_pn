@@ -417,7 +417,7 @@ test("admin links one detour to multiple events with KM ranges and recovers from
 
   await page.goto(`${base}/`);
   if ((page.viewportSize()?.width ?? 1280) < 1024) {
-    await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
+    await page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
   }
   const card = page.locator("article").filter({ hasText: "หนองจิก" }).filter({ visible: true }).first();
   await card.getByRole("button", { name: /ดูรายละเอียด/ }).click();
@@ -530,7 +530,7 @@ test("admin and citizen detail views render all linked detours and linked flood 
   // 2. Citizen Public Portal
   await page.goto(`${base}/`);
   if ((page.viewportSize()?.width ?? 1280) < 1024) {
-    await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
+    await page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
   }
   const firstCard = page.locator("article").filter({ visible: true }).first();
   await expect(firstCard).toContainText("เส้นทางเลี่ยง 2 สาย");
@@ -546,7 +546,7 @@ test("admin and citizen detail views render all linked detours and linked flood 
 
   // Citizen detour tab shows BOTH linked flood events on D-1
   if ((page.viewportSize()?.width ?? 1280) < 1024) {
-    const openSheetBtn = page.getByRole("button", { name: "ดูรายการสายทาง" });
+    const openSheetBtn = page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true });
     if (await openSheetBtn.isVisible().catch(() => false)) {
       await openSheetBtn.click();
     }
@@ -559,4 +559,371 @@ test("admin and citizen detail views render all linked detours and linked flood 
   await expect(publicDetourDialog).toBeVisible();
   await expect(publicDetourDialog).toContainText("ทล.42");
   await expect(publicDetourDialog).toContainText("ทล.43");
+});
+
+test("responsive Admin flood editor and ranked detour dialog retain reachable actions", async ({ page, isMobile }, testInfo) => {
+  test.setTimeout(45_000);
+  const viewports = isMobile
+    ? [{ name: "portrait", width: 390, height: 844 }]
+    : [
+      { name: "landscape", width: 844, height: 390 },
+      { name: "tablet", width: 820, height: 1180 },
+      { name: "desktop", width: 1440, height: 900 },
+    ];
+  const baseLinks: MockLink[] = [
+    { eventId: "EV-F-1", detourId: "D-1", eventDirection: "BOTH", detourDirection: "TWO_WAY",
+      position: 1, eventPosition: 1, recommendation: "RECOMMENDED", reviewedGeometryVersion: 3 },
+    { eventId: "EV-F-1", detourId: "D-2", eventDirection: "BOTH", detourDirection: "FORWARD",
+      position: 2, eventPosition: 2, recommendation: "PENDING", reviewedGeometryVersion: null },
+  ];
+  let links = baseLinks;
+  let version = 1;
+  let savedRanks: Array<string | undefined> = [];
+  const systemData = () => createSystemData({
+    eventDetourLinks: links,
+    eventSegments: [
+      { flood_id: "F-1", event_id: "EV-F-1", event_direction: "BOTH", segment_position: 1 },
+      { flood_id: "F-2", event_id: "EV-F-2", event_direction: "B_TO_A", segment_position: 1 },
+    ],
+    floodEvents: [{ id: "EV-F-1", link_version: version }, { id: "EV-F-2", link_version: 0 }],
+  });
+  await page.route("**/functions/v1/hdms-api*", async (route) => {
+    const body = route.request().postDataJSON() as { action?: string; args?: unknown[] };
+    if (body.action === "getEventDetourLinksAction") {
+      return route.fulfill({ json: { eventId: body.args?.[0], version, links } });
+    }
+    if (body.action === "replaceEventDetourLinksAction") {
+      const payload = body.args?.[0] as { eventId: string; expectedVersion: number; links: MockLink[] };
+      expect(payload.expectedVersion).toBe(version);
+      links = payload.links;
+      savedRanks = links.map((link) => link.detourId);
+      version += 1;
+      return route.fulfill({ json: { eventId: payload.eventId, version, links } });
+    }
+    return route.fulfill({ json: systemData() });
+  });
+
+  await page.emulateMedia({ colorScheme: "light" });
+  for (const view of viewports) {
+    links = baseLinks;
+    version = 1;
+    savedRanks = [];
+    await page.setViewportSize({ width: view.width, height: view.height });
+    await page.goto(`${base}/admin/`);
+    const workspace = page.locator("[data-admin-theme]");
+    const themeChooser = page.getByRole("button", { name: "รูปแบบสีพื้นที่จัดการ" });
+    const chooseTheme = async (mode: "system" | "light" | "dark") => {
+      await themeChooser.click();
+      await page.getByRole("group", { name: "เลือกธีมพื้นที่จัดการ" })
+        .getByRole("button", { name: { system: "ตามอุปกรณ์", light: "ธีมสว่าง", dark: "ธีมมืด" }[mode], exact: true }).click();
+      await expect(themeChooser).toBeFocused();
+      await expect(themeChooser).toHaveAttribute("aria-expanded", "false");
+    };
+    await themeChooser.focus();
+    await page.keyboard.press("Enter");
+    await expect(themeChooser).toHaveAttribute("aria-expanded", "true");
+    if (view.name === "portrait" || view.name === "desktop") {
+      await page.screenshot({ path: testInfo.outputPath(`admin-theme-choices-${view.name}.png`), animations: "disabled" });
+    }
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "ตามอุปกรณ์", exact: true })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(themeChooser).toBeFocused();
+    await expect(themeChooser).toHaveAttribute("aria-expanded", "false");
+    await expect(workspace).toHaveAttribute("data-admin-theme", "system");
+    const editorHeading = page.getByRole("heading", { name: "รายงานสถานการณ์น้ำท่วม" });
+    await expect(editorHeading).toHaveCSS("color", "rgb(22, 42, 68)");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(editorHeading).toHaveCSS("color", "rgb(241, 245, 250)");
+    await page.emulateMedia({ colorScheme: "light" });
+    await chooseTheme("dark");
+    await page.reload();
+    await expect(workspace).toHaveAttribute("data-admin-theme", "dark");
+    await expect(editorHeading).toHaveCSS("color", "rgb(241, 245, 250)");
+    await chooseTheme("light");
+    await expect(editorHeading).toHaveCSS("color", "rgb(22, 42, 68)");
+    await page.screenshot({ path: testInfo.outputPath(`admin-initial-${view.name}.png`), animations: "disabled" });
+    const incidents = page.getByRole("button", { name: "รายการเหตุการณ์", exact: true }).filter({ visible: true }).first();
+    if (view.width < 1024) {
+      const mobileNav = page.getByRole("navigation", { name: "เมนูจัดการแอดมินมือถือ" });
+      const daily = mobileNav.getByRole("group", { name: "งานภาคสนาม" });
+      await expect(daily.getByRole("button")).toHaveCount(3);
+      await expect(daily.getByRole("button").nth(0)).toHaveAccessibleName("รายการเหตุการณ์");
+      await expect(daily.getByRole("button").nth(1)).toHaveAttribute("aria-current", "page");
+      await expect(daily.getByRole("button").nth(2)).toHaveAccessibleName("รายการทางเลี่ยง");
+      const tools = mobileNav.locator("summary");
+      const highwayWorkspace = mobileNav.getByRole("button", { name: "โครงข่ายสายทาง" });
+      await expect(highwayWorkspace).toBeHidden();
+      await tools.focus();
+      await page.keyboard.press("Enter");
+      await expect(highwayWorkspace).toBeVisible();
+      if (view.name === "portrait" || view.name === "tablet") {
+        await page.screenshot({ path: testInfo.outputPath(`admin-tools-${view.name}.png`), animations: "disabled" });
+      }
+      await highwayWorkspace.focus();
+      await page.keyboard.press("Escape");
+      await expect(highwayWorkspace).toBeHidden();
+      await expect(tools).toBeFocused();
+    }
+    await incidents.click();
+    const launch = page.getByRole("button", { name: /จัดการทางเลี่ยงเชื่อมโยง ทล\.42 ตอนคลองแงะ/ });
+    await launch.click();
+    const dialog = page.getByRole("dialog", { name: "จัดการความสัมพันธ์เหตุการณ์และทางเลี่ยง" });
+    const body = dialog.getByRole("region", { name: "รายละเอียดการเชื่อมโยง" });
+    const save = dialog.getByRole("button", { name: "บันทึกความสัมพันธ์", exact: true });
+    const move = dialog.getByRole("button", { name: "เลื่อนลำดับ ทางเลี่ยงสาย 4092 ขึ้น", exact: true });
+    await expect(move).toBeEnabled();
+    await move.click();
+    await expect(dialog.getByText("อันดับ 1", { exact: true })).toBeVisible();
+    await expect(save).toBeInViewport();
+    await expect(save).toBeEnabled();
+    const [bodyBox, saveBox] = await Promise.all([body.boundingBox(), save.boundingBox()]);
+    expect(bodyBox!.height).toBeGreaterThan(120);
+    expect(saveBox!.height).toBeGreaterThanOrEqual(44);
+    expect(saveBox!.y).toBeGreaterThanOrEqual(bodyBox!.y + bodyBox!.height - 1);
+    expect(saveBox!.y + saveBox!.height).toBeLessThanOrEqual(view.height);
+    await dialog.getByText("อันดับ 1", { exact: true }).scrollIntoViewIfNeeded();
+    await expect(dialog).toHaveCSS("background-color", "rgb(238, 241, 244)");
+    const remove = dialog.getByTitle("นำออกจากเหตุการณ์").first();
+    await expect(remove).toHaveCSS("background-color", "rgb(251, 233, 236)");
+    await expect(remove).toHaveCSS("color", "rgb(147, 39, 60)");
+    await page.screenshot({ path: testInfo.outputPath(`admin-rank-${view.name}.png`), animations: "disabled" });
+
+    await save.click();
+    await expect(dialog.getByText(/ยืนยันข้อมูลจากฐานข้อมูลแล้ว/)).toBeVisible();
+    expect(savedRanks).toEqual(["D-2", "D-1"]);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(launch).toBeFocused();
+    await expect(page.getByText("บันทึกและโหลดยืนยันความสัมพันธ์จากฐานข้อมูลเรียบร้อย", { exact: true })).toBeHidden();
+
+    if (view.name === "portrait") {
+      await chooseTheme("dark");
+      await launch.click();
+      await expect(dialog).toHaveCSS("background-color", "rgb(20, 31, 45)");
+      await dialog.getByText("อันดับ 1", { exact: true }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath("admin-rank-dark-portrait.png"), animations: "disabled" });
+      await page.keyboard.press("Escape");
+      await chooseTheme("light");
+    }
+
+    const expand = page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ }).first();
+    await expand.click();
+    const segment = page.locator(".doh-incident-segment").filter({ hasText: "10+000" }).first();
+    await segment.getByRole("button", { name: "แก้ไข", exact: true }).click();
+    const exitEdit = page.getByRole("button", { name: "ออกจากโหมดแก้ไข" });
+    await expect(exitEdit).toBeVisible();
+    await expect(page.getByText("เผยแพร่ขึ้นแผนที่ประชาชน", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "แนวเส้นและพิกัด" })).toBeVisible();
+    const formNav = page.getByRole("navigation", { name: "ข้ามไปยังส่วนของแบบฟอร์ม" });
+    await expect(formNav).toBeVisible();
+    const geometry = page.getByRole("region", { name: "แนวเส้นและพิกัด" });
+    await expect(geometry.locator('input[type="file"][accept*=".kml"]')).toHaveCount(1);
+    await formNav.getByRole("button", { name: "เลือกวิธีบันทึกและเผยแพร่" }).click();
+    const publish = page.getByRole("region", { name: "เลือกวิธีบันทึกและเผยแพร่" });
+    await expect(publish).toBeFocused();
+    const draft = publish.getByRole("checkbox", { name: /บันทึกเป็นฉบับร่าง/ });
+    await draft.check();
+    await expect(page.getByRole("button", { name: "บันทึกร่างเหตุการณ์" })).toBeVisible();
+    await expect(page.getByText("โหมดฉบับร่าง (ยังไม่แสดงประชาชน)", { exact: true })).toBeVisible();
+    await draft.uncheck();
+    await expect(page.getByRole("button", { name: "บันทึกการแก้ไขเหตุการณ์" })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`admin-publish-${view.name}.png`), animations: "disabled" });
+    if (view.width < 1024) {
+      await formNav.getByRole("button", { name: "ข้อมูลสถานการณ์น้ำท่วม" }).click();
+      const situation = page.getByRole("region", { name: "ข้อมูลสถานการณ์น้ำท่วม" });
+      await expect(situation).toBeFocused();
+      await expect(situation).toBeInViewport();
+      await expect(page.getByRole("button", { name: "บันทึกการแก้ไขเหตุการณ์" })).toBeInViewport();
+      await page.screenshot({ path: testInfo.outputPath(`admin-flood-status-${view.name}.png`), animations: "disabled" });
+      if (view.name === "portrait") {
+        await page.getByRole("button", { name: "แผนที่ GIS", exact: true }).click();
+        await expect(page.getByRole("button", { name: "บันทึกการแก้ไขเหตุการณ์" })).toBeHidden();
+        await expect(page.locator(".leaflet-container").first()).toBeVisible();
+        await expect(themeChooser).toBeInViewport();
+        await page.getByRole("button", { name: "ฟอร์มข้อมูล", exact: true }).click();
+        await expect(exitEdit).toBeVisible();
+      }
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(view.width);
+    await formNav.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`admin-flood-${view.name}.png`), animations: "disabled" });
+
+    // Change the same browser-local presentation preference without navigating out of this edit.
+    await chooseTheme("dark");
+    await expect(editorHeading).toHaveCSS("color", "rgb(241, 245, 250)");
+    await expect(exitEdit).toBeVisible();
+    await formNav.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`admin-flood-dark-${view.name}.png`), animations: "disabled" });
+    await chooseTheme("system");
+
+  }
+});
+
+test("Admin registries surface location and update time while keeping filters and actions", async ({ page, isMobile }, testInfo) => {
+  const systemData = createSystemData();
+  await page.route("**/functions/v1/hdms-api*", (route) => route.fulfill({ json: systemData }));
+  await page.emulateMedia({ colorScheme: isMobile ? "dark" : "light" });
+  await page.goto(`${base}/admin/`);
+  const openMenu = (name: string) => page.getByRole("button", { name, exact: true }).filter({ visible: true }).first().click();
+
+  await openMenu("รายการเหตุการณ์");
+  const incidents = page.getByRole("region", { name: "งานติดตามเหตุการณ์น้ำท่วม" });
+  const event = incidents.locator(".doh-incident-header").filter({ hasText: "คลองแงะ" });
+  await expect(event.locator("time")).toHaveAttribute("datetime", "2026-11-18T00:00:00.000Z");
+  await expect(event.getByText(/10\+000/)).toBeVisible();
+  await expect(event.getByRole("button", { name: /จัดการทางเลี่ยงเชื่อมโยง/ })).toBeVisible();
+  await expect(event.locator("svg.lucide-waves")).toHaveCount(1);
+  await expect(incidents.getByRole("combobox", { name: "กรองตามสถานะจราจร" })).toBeVisible();
+  const searchIncidents = incidents.getByRole("textbox", { name: "ค้นหาเหตุการณ์น้ำท่วม" });
+  await searchIncidents.fill("ไม่มีเหตุการณ์นี้");
+  await expect(event).toHaveCount(0);
+  await incidents.getByRole("button", { name: "ล้างตัวกรอง" }).click();
+  await expect(event).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("incident-registry.png"), animations: "disabled" });
+
+  await openMenu("รายการทางเลี่ยง");
+  const detours = page.getByRole("region", { name: "งานจัดการเส้นทางเลี่ยง" });
+  await expect(detours.getByRole("button", { name: "วาดทางเลี่ยงใหม่บนแผนที่" })).toBeVisible();
+  await expect(detours.getByRole("button", { name: "จัดการความสัมพันธ์ (หลายจุด)" })).toBeVisible();
+  await expect(detours.getByRole("combobox", { name: "ขอบเขตส่งออกทางเลี่ยง" })).toBeVisible();
+  const detourUpdate = detours.locator("time[datetime='2026-11-18T00:00:00.000Z']").filter({ visible: true }).first();
+  await expect(detourUpdate).toBeInViewport();
+  const searchDetours = detours.getByRole("textbox", { name: "ค้นหาเส้นทางเลี่ยง" });
+  await searchDetours.fill("ไม่มีเส้นทางเลี่ยงนี้");
+  await expect(detours.locator("time").filter({ visible: true })).toHaveCount(0);
+  await detours.getByRole("button", { name: "ล้างตัวกรอง" }).click();
+  await expect(detours.locator("time").filter({ visible: true }).first()).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("detour-registry.png"), animations: "disabled" });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
+});
+
+test("existing flood edit cancels cleanly or discards only unsaved changes", async ({ page }) => {
+  const writes: string[] = [];
+  const upserts: Array<{ id?: string; isActive?: boolean }> = [];
+  await page.route("**/functions/v1/hdms-api*", (route) => {
+    const body = route.request().postDataJSON() as { action?: string; args?: [{ id?: string; isActive?: boolean }] };
+    if (body.action && /upsert|delete|save|replace/i.test(body.action)) writes.push(body.action);
+    if (body.action === "upsertRouteAction") {
+      if (body.args?.[0]) upserts.push(body.args[0]);
+      return route.fulfill({ json: { success: true, savedId: "F-1", systemData: createSystemData() } });
+    }
+    return route.fulfill({ json: createSystemData() });
+  });
+  await page.goto(`${base}/admin/`);
+  await page.getByRole("button", { name: "รายการเหตุการณ์", exact: true }).filter({ visible: true }).first().click();
+  await page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด.*คลองแงะ/ }).click();
+  const row = page.locator(".doh-incident-segment").filter({ hasText: "10+000" });
+  const selected = row.getByRole("checkbox");
+  await selected.check();
+  const edit = row.getByRole("button", { name: "แก้ไข", exact: true });
+  const cancelEdit = page.getByRole("button", { name: "ออกจากโหมดแก้ไข", exact: true });
+  const confirm = page.getByRole("dialog", { name: "ออกจากการแก้ไขโดยไม่บันทึก?" });
+  await edit.click();
+  await expect(cancelEdit).toBeVisible();
+  await page.evaluate(() => localStorage.setItem("hdms_admin_map_draft_v1", "unrelated-local-draft"));
+  await cancelEdit.click();
+  await expect(confirm).toHaveCount(0);
+  await expect(edit).toBeFocused();
+  await expect(selected).toBeChecked();
+  expect(await page.evaluate(() => localStorage.getItem("hdms_admin_map_draft_v1"))).toBe("unrelated-local-draft");
+
+  await edit.click();
+  const landmark = page.getByRole("textbox", { name: /จุดสังเกตหน้างาน/ });
+  const savedLandmark = await landmark.inputValue();
+  await landmark.fill("จุดชั่วคราวที่ยังไม่ได้บันทึก");
+  await cancelEdit.click();
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole("button", { name: "แก้ไขต่อ", exact: true }).click();
+  await expect(landmark).toHaveValue("จุดชั่วคราวที่ยังไม่ได้บันทึก");
+  await page.getByRole("button", { name: "รายการเหตุการณ์", exact: true }).filter({ visible: true }).first().click();
+  await confirm.getByRole("button", { name: "ละทิ้งการเปลี่ยนแปลง" }).click();
+  await expect(edit).toBeFocused();
+  await expect(selected).toBeChecked();
+  expect(writes).toEqual([]);
+  await edit.click();
+  await expect(landmark).toHaveValue(savedLandmark);
+  await page.getByRole("checkbox", { name: /บันทึกเป็นฉบับร่าง/ }).check();
+  await page.getByRole("button", { name: "บันทึกร่างเหตุการณ์", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "บันทึกร่างสำเร็จ" })).toBeVisible();
+  expect(upserts).toEqual([expect.objectContaining({ id: "F-1", isActive: false })]);
+});
+
+test("incident subdivision filter combines verified office, road and traffic status", async ({ page }) => {
+  const systemData = createSystemData();
+  const officeName = "หมวดทางหลวงทดสอบ";
+  const offices = [{ id: "HQ-TEST", name: "แขวงทดสอบ", type: "HEADQUARTERS" }, { id: "OFFICE-TEST", name: officeName, type: "SUBDIVISION" }];
+  const [first, second] = systemData.floodRoutes;
+  const floodRoutes = [
+    { ...first, direction_meta: { ...first.direction_meta, subdivisionName: officeName }, reporter_name: "ผู้รายงานบุคคล" },
+    { ...second, reporter_name: "นายช่างภาคสนาม" },
+    { ...second, id: "F-3", route_no: "44", section_name: "ทดสอบชื่อเดิม", reporter_name: officeName,
+      direction_meta: { ...second.direction_meta, eventId: "EV-F-3", eventTitle: "ทดสอบชื่อเดิม" } },
+  ];
+  await page.route("**/functions/v1/hdms-api*", (route) => route.fulfill({ json: { ...systemData, offices, floodRoutes } }));
+  await page.goto(`${base}/admin/`);
+  await page.getByRole("button", { name: "รายการเหตุการณ์", exact: true }).filter({ visible: true }).first().click();
+  const area = page.getByRole("combobox", { name: "กรองตามหมวดทางหลวง" });
+  const road = page.getByRole("combobox", { name: "กรองตามสายทางหลวง" });
+  const traffic = page.getByRole("combobox", { name: "กรองตามสถานะจราจร" });
+  const rows = page.locator(".doh-incident-header");
+  await expect(area).toHaveValue("ALL");
+  await expect(rows).toHaveCount(3);
+  await area.selectOption(`office:${officeName}`);
+  await expect(rows).toHaveCount(2);
+  await road.selectOption("42");
+  await expect(rows).toHaveCount(1);
+  await traffic.selectOption("WARNING");
+  await expect(rows).toHaveCount(0);
+  await page.getByRole("button", { name: "ล้างตัวกรอง" }).click();
+  await expect(area).toHaveValue("ALL");
+  await expect(road).toHaveValue("ALL");
+  await expect(traffic).toHaveValue("ALL");
+  await area.selectOption("UNASSIGNED");
+  await expect(rows).toHaveCount(1);
+  await expect(rows).toContainText("หนองจิก");
+});
+
+test("Admin theme and ranked dialog motion supports fast reopen, focus and reduced motion", async ({ page }) => {
+  await page.route("**/functions/v1/hdms-api*", (route) => {
+    const request = route.request();
+    if (request.method() === "POST" && request.postDataJSON()?.action === "getEventDetourLinksAction") {
+      return route.fulfill({ json: { eventId: "EV-F-1", version: 1, links: [] } });
+    }
+    return route.fulfill({ json: createSystemData() });
+  });
+  for (const reducedMotion of ["no-preference", "reduce"] as const) {
+    await page.emulateMedia({ reducedMotion });
+    await page.goto(`${base}/admin/`);
+    const theme = page.getByRole("button", { name: "รูปแบบสีพื้นที่จัดการ" });
+    const choices = page.locator("#admin-theme-choices");
+    const duration = reducedMotion === "reduce" ? "0s" : "0.15s, 0.15s";
+    await theme.focus();
+    await page.keyboard.press("Enter");
+    await expect(choices).toHaveCSS("transition-duration", duration);
+    await page.keyboard.press("Escape");
+    await expect(theme).toHaveAttribute("aria-expanded", "false");
+    await expect(choices).toHaveAttribute("inert", "");
+    await page.keyboard.press("Enter");
+    await expect(choices).toHaveAttribute("data-motion-open", "true");
+    await page.keyboard.press("Escape");
+    await expect(choices).toBeHidden();
+    await expect(theme).toBeFocused();
+
+    await page.getByRole("button", { name: "รายการเหตุการณ์", exact: true }).filter({ visible: true }).first().click();
+    const launch = page.getByRole("button", { name: /จัดการทางเลี่ยงเชื่อมโยง.*คลองแงะ/ });
+    const ranked = page.getByRole("dialog", { name: "จัดการความสัมพันธ์เหตุการณ์และทางเลี่ยง" });
+    await launch.click();
+    await expect(ranked).toBeVisible();
+    await expect(ranked).toHaveCSS("transition-duration", duration);
+    await ranked.getByRole("button", { name: "ปิดหน้าต่างจัดการความสัมพันธ์" }).focus();
+    await page.keyboard.press("Escape");
+    await expect(launch).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(ranked).toBeVisible();
+    await ranked.getByRole("button", { name: "ปิดหน้าต่างจัดการความสัมพันธ์" }).focus();
+    await page.keyboard.press("Escape");
+    await expect(ranked).toHaveCount(0);
+    await expect(launch).toBeFocused();
+  }
 });

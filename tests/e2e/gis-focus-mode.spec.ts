@@ -280,7 +280,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
     );
 
     await page.goto(`${base}/`);
-    await page.getByRole("button", { name: /ดูรายการสายทาง/ }).click();
+    await page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
     await page.getByRole("button", { name: /ทางเลี่ยง/ }).first().click();
     await page.getByRole("button", { name: /เส้นทางเลี่ยง ปน\.2043/ }).first().click();
 
@@ -598,7 +598,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
     );
 
     await page.goto(`${base}/`);
-    await page.getByRole("button", { name: /ดูรายการสายทาง/ }).click();
+    await page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
     await page.getByRole("button", { name: /ดูรายละเอียด/ }).first().click();
     const floodDialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
     await floodDialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).last().click();
@@ -617,24 +617,20 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
       const zoomIn = document.querySelector(".leaflet-control-zoom-in");
       const zoomOut = document.querySelector(".leaflet-control-zoom-out");
       const locateBtn = Array.from(document.querySelectorAll("button")).find((b) =>
-        b.textContent?.includes("ตำแหน่งของฉัน")
+        b.getAttribute("aria-label") === "ตำแหน่งของฉัน"
       );
       const legendBtn = Array.from(document.querySelectorAll("button")).find((b) =>
-        b.textContent?.includes("สัญลักษณ์บนแผนที่")
+        b.getAttribute("aria-label") === "เลเยอร์"
       );
       const listBtn = Array.from(document.querySelectorAll("button")).find((b) =>
-        b.textContent?.includes("ดูรายการสายทาง")
+        b.closest('[aria-label="เมนูประชาชน"]') && b.textContent?.includes("เหตุการณ์")
       );
-      const statusBar = document.querySelector('[aria-label="สรุปสถานการณ์และแถบควบคุมบนแผนที่"]');
+      const statusBar = document.querySelector('[aria-label="สรุปสถานการณ์บนแผนที่"]');
       const floodPill = statusBar
-        ? Array.from(statusBar.querySelectorAll("div")).find(
-            (el) => el.textContent?.includes("น้ำท่วม") && !el.textContent?.includes("ทางเลี่ยง")
-          )
+        ? statusBar.querySelector(".citizen-map-status-flood")
         : undefined;
       const detourPill = statusBar
-        ? Array.from(statusBar.querySelectorAll("div")).find(
-            (el) => el.textContent?.includes("ทางเลี่ยง") && !el.textContent?.includes("น้ำท่วม")
-          )
+        ? statusBar.querySelector(".citizen-map-status-detours")
         : undefined;
       const exitBtn = document.querySelector('[data-testid="gis-focus-exit-btn"]');
 
@@ -731,24 +727,20 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
         return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
       };
       const barRect = document.querySelector('[data-testid="gis-focus-mode-bar"]')?.getBoundingClientRect();
-      const statusBar = document.querySelector('[aria-label="สรุปสถานการณ์และแถบควบคุมบนแผนที่"]');
+      const statusBar = document.querySelector('[aria-label="สรุปสถานการณ์บนแผนที่"]');
       const floodPill = statusBar
-        ? Array.from(statusBar.querySelectorAll("div")).find(
-            (el) => el.textContent?.includes("น้ำท่วม") && !el.textContent?.includes("ทางเลี่ยง")
-          )
+        ? statusBar.querySelector(".citizen-map-status-flood")
         : undefined;
       const detourPill = statusBar
-        ? Array.from(statusBar.querySelectorAll("div")).find(
-            (el) => el.textContent?.includes("ทางเลี่ยง") && !el.textContent?.includes("น้ำท่วม")
-          )
+        ? statusBar.querySelector(".citizen-map-status-detours")
         : undefined;
       const zoomIn = document.querySelector(".leaflet-control-zoom-in");
       const zoomOut = document.querySelector(".leaflet-control-zoom-out");
       const locateBtn = Array.from(document.querySelectorAll("button")).find((b) =>
-        b.textContent?.includes("ตำแหน่งของฉัน")
+        b.getAttribute("aria-label") === "ตำแหน่งของฉัน"
       );
       const legendBtn = Array.from(document.querySelectorAll("button")).find((b) =>
-        b.textContent?.includes("สัญลักษณ์บนแผนที่")
+        b.getAttribute("aria-label") === "เลเยอร์"
       );
       const exitBtn = document.querySelector('[data-testid="gis-focus-exit-btn"]');
 
@@ -948,10 +940,109 @@ test.describe("Admin Shared GIS Focus Mode", () => {
     await floodPopup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).click();
     await expect(adminExitBar).toBeVisible();
 
-    await page.getByRole("complementary").getByRole("button", { name: /จัดการแผนที่/ }).click();
+    await page.getByRole("complementary").getByRole("button", { name: /รายงานสถานการณ์น้ำท่วม/ }).click();
     await page.getByRole("button", { name: "เลือกจุด A", exact: true }).click();
 
     await expect(adminExitBar).toHaveCount(0);
     await expect(page.getByText("คลิกบนแผนที่เพื่อกำหนดจุดเริ่มต้น...")).toBeVisible();
   });
+});
+
+test("public focus endpoint selector re-anchors one popup A to B to A without changing travel direction", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: isMobile ? 320 : 1280, height: isMobile ? 640 : 900 });
+  const payload = createMockPayload();
+  const detour = payload.detourRoutes[0];
+  detour.detour_meta = {
+    ...detour.detour_meta,
+    start_point_photo: { url: "https://images.example.test/start.png", caption: "ทะเบียนภาพจุด A", subdistrict: "ตัวอย่าง ก", district: "ทดสอบ ก", province: "ปัตตานี" },
+    end_point_photo: { caption: "ทะเบียนจุด B ไม่มีรูป", subdistrict: "ตัวอย่าง ข", district: "ทดสอบ ข", province: "ปัตตานี" },
+  };
+  detour.description = "ขาไป:\n1. แยกต้นทาง\n2. สะพานกลางทาง\n3. แยกสิ้นสุด\nขากลับ:\n1. แยกสิ้นสุด\n2. สะพานขากลับ\n3. แยกต้นทาง";
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: payload }));
+  await page.goto(base + "/");
+  const detourSymbol = page.locator(".doh-detour-symbol").first();
+  await detourSymbol.focus();
+  await detourSymbol.press("Enter");
+  const overview = page.locator(".doh-detour-popup");
+  await overview.getByRole("button", { name: "ขากลับ B → A" }).click();
+  await overview.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).click();
+  const focusBar = page.getByTestId("gis-focus-mode-bar");
+  await expect(focusBar).toContainText("ขากลับ (B → A)");
+  const pointA = page.locator(".hdms-focus-endpoint.doh-detour-photo-start");
+  const pointB = page.locator(".hdms-focus-endpoint.doh-detour-photo-end");
+  await expect(pointA).toBeVisible();
+  await pointA.press("Enter");
+  const popup = page.locator("[data-detour-endpoint]");
+  const leafletPopup = page.locator(".leaflet-popup");
+  const group = popup.getByRole("group", { name: "เลือกจุดบนเส้นทาง" });
+  const a = group.getByRole("button", { name: "A", exact: true });
+  const b = group.getByRole("button", { name: "B", exact: true });
+  const timeline = popup.getByRole("list", { name: "ลำดับจุดทางเลี่ยง" });
+  async function checkAnchor() {
+    const box = await leafletPopup.boundingBox();
+    expect(box).toBeTruthy();
+    expect(box!.width).toBeLessThanOrEqual((page.viewportSize()?.width || 320) - 16);
+    await expect(leafletPopup).toHaveCount(1);
+    await expect(popup.locator("[data-endpoint-scroll]")).toBeVisible();
+  }
+  await expect(a).toHaveAttribute("aria-pressed", "true");
+  await expect(popup.locator("img")).toHaveAttribute("src", /start/);
+  await expect(popup.locator("[data-endpoint-locality]")).toContainText("ต.ตัวอย่าง ก");
+  await expect(timeline).toContainText("สะพานขากลับ");
+  const before = await leafletPopup.elementHandle();
+  await b.click();
+  await expect(b).toHaveAttribute("aria-pressed", "true");
+  await expect(popup.locator("[data-endpoint-locality]")).toContainText("ต.ตัวอย่าง ข");
+  await expect(popup).toContainText("ยังไม่มีภาพถ่ายประกอบจุดนี้");
+  await expect(timeline).toContainText("สะพานขากลับ");
+  await expect.poll(() => page.evaluate((el) => el.isConnected, before)).toBe(false);
+  await checkAnchor();
+  await a.click();
+  await expect(a).toHaveAttribute("aria-pressed", "true");
+  const focusOnMap = popup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" });
+  await focusOnMap.scrollIntoViewIfNeeded();
+  await expect(focusOnMap).toBeVisible();
+  await checkAnchor();
+  await page.keyboard.press("Escape");
+  await expect(popup).toHaveCount(0);
+  await expect(focusBar).toContainText("ขากลับ (B → A)");
+  await pointB.press("Enter");
+  await expect(b).toHaveAttribute("aria-pressed", "true");
+  await focusOnMap.click();
+  await expect(leafletPopup).toHaveCount(0);
+  await expect(focusBar).toContainText("ขากลับ (B → A)");
+});
+
+test("public overview A and B use the same anchored inspector, retaining the chosen reverse itinerary", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: isMobile ? 390 : 1280, height: isMobile ? 760 : 900 });
+  const payload = createMockPayload();
+  const route = payload.detourRoutes[0];
+  route.detour_meta = { ...route.detour_meta, start_point_photo: { caption: "ข้อมูลปลาย A ในแผนที่รวม", subdistrict: "ตัวอย่าง ก" } };
+  route.description = "ขาไป:\n1. จุด A\n2. ผ่านแยกไป\n3. จุด B\nขากลับ:\n1. จุด B\n2. ผ่านแยกกลับ\n3. จุด A";
+  await page.route("**/functions/v1/hdms-api", (request) => request.fulfill({ json: payload }));
+  await page.goto(base + "/");
+  const symbol = page.locator(".doh-detour-symbol").first();
+  await symbol.focus();
+  await symbol.press("Enter");
+  await page.locator(".doh-detour-popup").getByRole("button", { name: "ขากลับ B → A" }).click();
+  await page.locator(".leaflet-popup-close-button").click();
+  const pointA = page.locator(".doh-detour-photo-start:not(.hdms-focus-endpoint)").first();
+  const pointB = page.locator(".doh-detour-photo-end:not(.hdms-focus-endpoint)").first();
+  for (let i=0; i<4 && !(await pointB.isVisible()); i++) await page.getByRole("button", { name: "Zoom in" }).click();
+  await expect(pointB).toBeVisible();
+  await pointB.press("Enter");
+  const popup = page.locator("[data-detour-endpoint]");
+  const a = popup.getByRole("button", { name: "A", exact:true });
+  const b = popup.getByRole("button", { name: "B", exact:true });
+  await expect(b).toHaveAttribute("aria-pressed","true");
+  await expect(popup).toContainText("ยังไม่มีภาพถ่ายประกอบจุดนี้");
+  await a.click();
+  await expect(a).toHaveAttribute("aria-pressed","true");
+  await expect(popup).toContainText("ข้อมูลปลาย A ในแผนที่รวม");
+  await expect(popup.getByRole("list")).toContainText("ผ่านแยกกลับ");
+  await expect(page.locator(".leaflet-popup")).toHaveCount(1);
+  await expect(pointA).toBeVisible();
+  await popup.getByRole("button", { name:"ดูตำแหน่งบนแผนที่" }).click();
+  await expect(page.getByTestId("gis-focus-mode-bar")).toContainText("ขากลับ (B → A)");
+  await expect(popup).toHaveCount(0);
 });
