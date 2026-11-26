@@ -15,6 +15,7 @@ import { useSharedGisFocus } from "@/components/map/useSharedGisFocus";
 import { PUBLIC_READ_MESSAGES } from "@/components/public/public-read-state";
 import { CitizenPhotoViewer, publicPhotoSource, type CitizenPhoto } from "@/components/public/CitizenPhotoViewer";
 import { CitizenMapStatus, recordedPassability, mapPassabilityLabel, type MapPassability } from "@/components/public/CitizenMapStatus";
+import { CitizenInstallPrompt } from "@/components/public/CitizenInstallPrompt";
 import { CitizenOfficeDirectory } from "@/components/public/CitizenOfficeDirectory";
 import { CitizenThemeSymbol } from "@/components/public/CitizenThemeSymbol";
 import { GisFocusModeBar } from "@/components/public/GisFocusModeBar";
@@ -1090,6 +1091,7 @@ export default function HomePage() {
 
 
       {publicPhoto && <CitizenPhotoViewer photo={publicPhoto} onClose={() => setPublicPhoto(null)} />}
+      <CitizenInstallPrompt blocked={Boolean(testPreview || showDossier || isMobileDrawerOpen || isContactOpen || viewingDetourModal || gisFocus.status !== "idle")} />
       {isContactOpen && <CitizenOfficeDirectory offices={systemData.offices} hotlinePhone={hotlinePhone} onClose={closeContacts} />}
 
       {/* Toast Notification (z-[640]: above map/floating-bar z-[400..600], below drawer z-[650] and modals z-[700..800]) */}

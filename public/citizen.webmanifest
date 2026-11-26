@@ -1,0 +1,16 @@
+{
+  "id": "./",
+  "name": "ทางหลวงปัตตานี: น้ำท่วมและทางเลี่ยง",
+  "short_name": "ทางหลวงปัตตานี",
+  "description": "แผนที่สถานการณ์น้ำท่วมและเส้นทางเลี่ยง แขวงทางหลวงปัตตานี",
+  "lang": "th",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f2347",
+  "theme_color": "#113947",
+  "icons": [
+    { "src": "app-icons/hdms-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "app-icons/hdms-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
