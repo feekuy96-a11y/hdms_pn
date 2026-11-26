@@ -906,9 +906,9 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMo
             : `<div class="doh-flood-popup-water font-heading font-bold text-xs sm:text-sm text-[#F6A52F] mt-0.5 leading-tight">รอตรวจสอบระดับน้ำ</div>`}
         </div>
 
-        <!-- ขวา: ช่องจราจร -->
+        <!-- ขวา: ส่วนของถนนที่ได้รับผลกระทบ -->
         <div class="rounded-xl bg-[#20384A] p-2 border border-[#526D83]/40 flex flex-col justify-center">
-          <div class="text-[11px] text-[#B5CBD9] font-medium leading-none mb-1">ช่องจราจร:</div>
+          <div class="text-[11px] text-[#B5CBD9] font-medium leading-none mb-1">ส่วนที่ได้รับผลกระทบ</div>
           <strong class="font-heading font-bold text-xs sm:text-sm text-white leading-tight block break-words mt-0.5">${escapeHtml(lanesDisplay)}</strong>
         </div>
       </div>
