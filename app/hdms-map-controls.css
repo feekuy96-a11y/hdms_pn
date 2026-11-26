@@ -1,0 +1,122 @@
+/* Shared map chrome. Insets are relative to the map, not the page or admin sidebar. */
+[data-hdms-map] .citizen-map-toolwrap {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-end: 10px;
+  z-index: 415;
+  pointer-events: none;
+}
+[data-hdms-map] .citizen-map-tools {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--hdms-control-edge);
+  border-radius: 12px;
+  box-shadow: var(--hdms-shadow);
+}
+[data-hdms-map] .citizen-map-tools button {
+  display: grid;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: 8px;
+}
+[data-hdms-map] .citizen-map-tools button:disabled { opacity: .6; }
+[data-hdms-map] .citizen-map-tools button > svg { width: 17px; height: 17px; }
+[data-hdms-map] .citizen-map-location-status {
+  position: absolute;
+  inset-block-start: 5rem;
+  inset-inline-end: calc(100% + .45rem);
+  inline-size: max-content;
+  max-inline-size: 11rem;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--hdms-control-edge);
+  border-radius: 8px;
+  padding: .3rem .55rem;
+  font-size: .76rem;
+  box-shadow: var(--hdms-shadow);
+}
+[data-hdms-map] .hdms-map-leading {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline: 12px 65px;
+  z-index: 414;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+[data-hdms-map] .hdms-map-leading > :not(button) { min-inline-size: 0; }
+[data-hdms-map] .hdms-map-leading .citizen-map-status { position: static; max-inline-size: 100%; pointer-events: auto; }
+@media (max-width: 380px) {
+  [data-hdms-map] .hdms-map-leading { inset-inline-start: 8px; }
+}
+[data-hdms-map] .citizen-map-layer-wrap {
+  position: absolute;
+  inset-block: 12px;
+  inset-inline-end: 65px;
+  inline-size: min(18rem, calc(100% - 77px));
+  z-index: 420;
+  pointer-events: none;
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition: opacity 150ms ease-out, transform 150ms ease-out, visibility 0ms;
+}
+[data-hdms-map] .citizen-map-layer-wrap[data-hdms-layers-open=false] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(5px);
+  transition-delay: 0ms, 0ms, 150ms;
+}
+[data-hdms-map] .citizen-map-layer-wrap[inert] .citizen-legend { pointer-events: none; }
+[data-hdms-map] .citizen-legend {
+  inline-size: 100%;
+  max-block-size: min(100%, 65dvh, 27rem);
+  padding: .32rem .58rem .45rem;
+  border-radius: 12px;
+  box-shadow: var(--hdms-shadow);
+  scrollbar-color: var(--text-secondary) var(--bg-card);
+}
+[data-hdms-map] .citizen-layer-head { min-height: 44px; margin: 0; padding: 0; border-color: var(--border-subtle); }
+[data-hdms-map] .citizen-layer-head > div { gap: 0; }
+[data-hdms-map] .citizen-layer-head button { min-width: 44px; min-height: 44px; }
+[data-hdms-map] :is(.citizen-basemap h3, .citizen-layer-label) {
+  color: var(--text-secondary);
+  font-size: .72rem;
+  font-weight: 750;
+  line-height: 1.2;
+  margin: .38rem 0 .18rem;
+}
+[data-hdms-map] .citizen-basemap { padding-bottom: .3rem; border-bottom: 1px solid var(--border-subtle); }
+[data-hdms-map] .citizen-basemap-options { padding: 0; margin: 0; border: 0; gap: 2px; }
+[data-hdms-map] .citizen-basemap-options button { min-height: 44px; font-size: .7rem; }
+[data-hdms-map] .citizen-visibility > * { margin-block: 0 !important; }
+[data-hdms-map] .citizen-visibility :is(label, .citizen-layer-road-row) { min-height: 44px; padding-block: 0; gap: .25rem; }
+[data-hdms-map] .citizen-visibility input[type=checkbox] { width: 16px; height: 16px; margin-inline-end: 2px; accent-color: var(--brand-active-bg); }
+[data-hdms-map] .citizen-layer-road-row { position: relative; }
+[data-hdms-map] .citizen-layer-road-row label > span { max-width: calc(100% - 64px); }
+[data-hdms-map] .citizen-layer-road-row .citizen-layer-info {
+  position: absolute;
+  inset-inline-end: 21px;
+  inset-block-start: 0;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+}
+[data-hdms-map] .citizen-layer-road-row .citizen-layer-info[aria-expanded=true] { color: var(--status-info-ink); }
+[data-hdms-map] .citizen-layer-info svg { width: 15px; height: 15px; }
+[data-hdms-map] :is(.citizen-legend-explainer, .citizen-layer-advanced) { margin: 0; padding: 0; border: 0; border-top: 1px solid var(--border-subtle); }
+[data-hdms-map] :is(.citizen-legend-explainer, .citizen-layer-advanced) summary { min-height: 44px; padding: .68rem .05rem; cursor: pointer; font-weight: 750; }
+[data-hdms-map] .citizen-legend-explainer p { color: var(--text-secondary); margin-bottom: .55rem; }
+[data-hdms-map] .citizen-layer-route-list { margin-top: .55rem; box-shadow: none; }
+@media (max-width: 1023px) and (max-height: 430px) {
+  [data-hdms-map] .citizen-map-toolwrap { inset-block-start: 1px; }
+  [data-hdms-map] .citizen-map-layer-wrap { inset-block-start: 4px; }
+  [data-hdms-map] .citizen-legend { max-block-size: max(7rem, min(100%, calc(100dvh - 9.25rem))); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-hdms-map] .citizen-map-layer-wrap[data-hdms-layers-open] { transition: none; transform: none; }
+}

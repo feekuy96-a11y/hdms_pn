@@ -45,7 +45,6 @@ import {
   Settings,
   RotateCw,
   Search,
-  ChevronLeft,
   ChevronRight,
   ChevronDown,
   X,
@@ -601,6 +600,7 @@ export default function HomePage() {
         {/* A. LEFT SIDEBAR: ROUTE LIST (DESKTOP COLLAPSIBLE)                 */}
         {/* ================================================================= */}
         <div
+          id="public-map-route-pane"
           className={`${isSidebarCollapsed ? "hidden" : "hidden lg:flex"
             } citizen-sidebar order-2 w-full lg:w-[min(35%,25.625rem)] xl:w-[min(35%,27.5rem)] bg-surface-panel border-t lg:border-t-0 lg:border-l border-surface flex-col shrink-0 z-20 lg:h-full overflow-hidden transition-all duration-300`}
         >
@@ -611,15 +611,6 @@ export default function HomePage() {
                 <h2 className="text-base font-bold">ตรวจสอบเส้นทาง</h2>
                 <p className="citizen-subcopy">ค้นหา เลือกสายทาง หรือกรองสถานะการเดินทาง</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsSidebarCollapsed(true)}
-                aria-label="ย่อรายการสายทาง"
-                className="hidden lg:flex text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition"
-                title="ย่อแถบข้างเพื่อขยายแผนที่เต็มจอ"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
             </div>
 
             {/* Search Input Box */}
@@ -816,17 +807,6 @@ export default function HomePage() {
               <button type="button" onClick={() => void refetch()} className="min-h-11 rounded-lg bg-amber-400 px-3 font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">ลองอีกครั้ง</button>
             </div>
           )}
-          {/* Floating Expand Sidebar Button (when collapsed on desktop) */}
-          {isSidebarCollapsed && (
-            <button
-              type="button"
-              onClick={() => setIsSidebarCollapsed(false)}
-              className="hidden lg:flex absolute top-3 left-[17.5rem] z-[400] min-h-9 hdms-map-control border px-3 py-1.5 rounded-xl shadow-2xl items-center gap-1.5 text-xs font-heading font-bold transition cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" /> แสดงรายการสายทาง
-            </button>
-          )}
-
           <LongdoGisMap
             isFilterActive={isFilterActive}
             searchQuery={searchQuery}
@@ -855,6 +835,12 @@ export default function HomePage() {
               </div>
             ) : undefined}
             isSidebarCollapsed={isSidebarCollapsed}
+            sidePaneControl={{
+              controlsId: "public-map-route-pane",
+              openLabel: "แสดงรายการสายทาง",
+              closeLabel: "ย่อรายการสายทาง",
+              onToggle: () => setIsSidebarCollapsed((previous) => !previous),
+            }}
             systemData={systemData}
             highlightFloodIds={highlightFloodIds}
             highlightDetourIds={highlightDetourIds}

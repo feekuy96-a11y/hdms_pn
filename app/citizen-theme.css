@@ -260,22 +260,6 @@
 .citizen-ui .citizen-detour-confirmation { display:inline-block; font-size:.74rem; color:var(--cit-sub); margin-top:.2rem; }
 .citizen-ui .citizen-detour-context { display:flex; gap:.6rem; padding:.65rem .7rem; border-left:1px solid var(--surface-border); color:var(--cit-sub); }
 .citizen-ui .citizen-detour-direction { padding:.7rem; border-radius:12px; background:var(--cit-selected); }
-.citizen-ui .citizen-map-toolwrap { position:absolute;top:12px;right:12px;z-index:415;max-width:calc(100% - 24px);pointer-events:none;display:grid;justify-items:end;gap:.35rem; }
-.citizen-ui .citizen-map-tools { display:flex;align-items:center;gap:2px;border:1px solid var(--hdms-control-edge);border-radius:12px;box-shadow:var(--cit-shadow);padding:2px; }
-.citizen-ui .citizen-map-tools button { display:flex;align-items:center;justify-content:center;gap:.25rem;min-width:44px;min-height:44px;padding-inline:.3rem;border-radius:8px;font-size:.73rem;font-weight:750; }
-.citizen-ui .citizen-map-tools button:disabled { opacity:.6; }
-.citizen-ui .citizen-map-tools button:hover,.citizen-ui .citizen-map-tools button[aria-expanded=true] { background:var(--cit-selected); }
-.citizen-ui .citizen-map-location-status { color:var(--cit-ink);background:var(--surface-panel);border:1px solid var(--surface-border);border-radius:8px;padding:.3rem .55rem;font-size:.76rem; }
-.citizen-ui .citizen-map-layer-wrap { top:66px; }
-.citizen-ui .citizen-map-layer-wrap .citizen-legend { max-height:min(66dvh,calc(100dvh - 10.5rem));width:min(21rem,calc(100vw - 1.5rem)); }
-.citizen-ui .citizen-legend-explainer { border-block:1px solid var(--surface-border);margin-block:.4rem;padding-inline:.1rem; }
-.citizen-ui .citizen-legend-explainer summary { font-weight:750;min-height:44px;padding:.7rem 0;cursor:pointer; }
-.citizen-ui .citizen-legend-explainer p { color:var(--cit-sub);margin-bottom:.55rem; }
-.citizen-ui .citizen-layer-route-list { margin-top:.55rem;box-shadow:none; }
-@media (max-width:767px) {
-  .citizen-ui .citizen-map-summary { top:68px; }
-  .citizen-ui .citizen-map-tools button { font-size:.69rem; }
-}
 .citizen-ui .citizen-map-status { position:absolute;top:12px;left:12px;z-index:412;width:max-content;max-width:min(19rem,calc(100% - 24px));border:1px solid var(--surface-border);border-radius:12px;background:var(--surface-panel);color:var(--cit-ink);box-shadow:var(--cit-shadow);padding:3px; }
 .citizen-ui .citizen-map-status-head { display:flex;align-items:stretch;border-bottom:1px solid var(--surface-border); }
 .citizen-ui .citizen-map-status button { display:flex;align-items:center;gap:.4rem;min-height:44px;padding:.3rem .55rem;text-align:left;color:var(--cit-action);font-size:.78rem;font-weight:750;border-radius:8px; }
@@ -299,46 +283,8 @@
 .citizen-ui .citizen-incident-area svg { flex:none;color:var(--cit-action); }
 .citizen-ui .citizen-incident-close { position:absolute;top:0;right:0; }
 .citizen-ui .citizen-incident-photo [class*="bg-slate-950/"] { background:var(--surface-panel);color:var(--cit-ink);border-color:var(--surface-border); }
-@media (max-width: 1023px) and (max-height: 430px) {
-  .citizen-ui .citizen-map-layer-wrap .citizen-legend { max-height:calc(100dvh - 13.5rem); }
-}
-/* Compact, labelled icon-only tools at the map edge. */
-.citizen-ui .citizen-map-toolwrap { top:12px;right:10px; }
-.citizen-ui .citizen-map-tools { flex-direction:column;gap:0;padding:0; }
-.citizen-ui .citizen-map-tools button { width:44px;height:44px; padding:0; }
-.citizen-ui .citizen-map-tools button[aria-busy=true] svg { opacity:.6; }
-.citizen-ui .citizen-map-tools button[aria-expanded=true] { box-shadow:inset 0 0 0 1px var(--cit-focus); }
-.citizen-ui .citizen-map-layer-wrap { top:12px;right:65px; }
-.citizen-ui .citizen-map-layer-wrap .citizen-legend { width:min(21rem,calc(100vw - 5rem));min-width:0; }
+/* The public summary leaves the common right map rail clear. */
 .citizen-ui .citizen-map-status { top:12px;max-width:min(19rem,calc(100% - 78px)); }
-.citizen-ui .citizen-map-location-status { position:absolute;top:5rem;right:calc(100% + .45rem);width:max-content;max-width:11rem; }
-@media (max-width:1023px) and (max-height:430px) {
-  .citizen-ui .citizen-map-toolwrap { top:1px; }
-  .citizen-ui .citizen-map-layer-wrap { top:4px; }
-  .citizen-ui .citizen-map-layer-wrap .citizen-legend { max-height:calc(100dvh - 9.25rem); }
-}
-/* Calm, dense Layers panel: one basemap group and independent visibility rows. */
-.citizen-ui .citizen-map-layer-wrap .citizen-legend { width:min(18rem,calc(100vw - 5rem));padding:.32rem .58rem .45rem;border-radius:12px;max-height:min(65dvh,27rem); }
-.citizen-ui .citizen-layer-head { min-height:44px;margin:0;padding:0;color:var(--cit-ink); }
-.citizen-ui .citizen-layer-head > div { gap:0; }
-.citizen-ui .citizen-layer-head button { background:none;min-width:44px;min-height:44px; }
-.citizen-ui :is(.citizen-basemap h3,.citizen-layer-label) { color:var(--cit-sub);font-size:.72rem;font-weight:750;line-height:1.2;margin:.38rem 0 .18rem; }
-.citizen-ui .citizen-basemap { padding-bottom:.3rem;border-bottom:1px solid var(--surface-border); }
-.citizen-ui .citizen-basemap-options { padding:0;margin:0;border:0;gap:2px; }
-.citizen-ui .citizen-basemap-options button { min-height:44px;box-shadow:none;font-size:.7rem; }
-.citizen-ui .citizen-visibility > * { margin-block:0!important; }
-.citizen-ui .citizen-visibility :is(label,.citizen-layer-road-row) { min-height:44px;padding-block:0;gap:.25rem; }
-.citizen-ui .citizen-visibility input[type=checkbox] { width:16px;height:16px;margin-right:2px;accent-color:var(--cit-action); }
-.citizen-ui .citizen-layer-road-row { position:relative; }
-.citizen-ui .citizen-layer-road-row label > span { max-width:calc(100% - 64px); }
-.citizen-ui .citizen-layer-road-row .citizen-layer-info { position:absolute;right:21px;top:0;width:44px;height:44px;border:0;background:none;color:var(--cit-sub); }
-.citizen-ui .citizen-layer-road-row .citizen-layer-info[aria-expanded=true] { color:var(--cit-action); }
-.citizen-ui .citizen-layer-info svg { width:15px;height:15px; }
-.citizen-ui :is(.citizen-legend-explainer,.citizen-layer-advanced) { margin:0;padding:0;border:0;border-top:1px solid var(--surface-border); }
-.citizen-ui :is(.citizen-legend-explainer,.citizen-layer-advanced) summary { min-height:44px;padding:.68rem .05rem;cursor:pointer;font-weight:750; }
-@media (max-width:1023px) and (max-height:430px) {
-  .citizen-ui .citizen-map-layer-wrap .citizen-legend { max-height:calc(100dvh - 9.25rem); }
-}
 /* Separate quick actions keep the detour entry reachable while flood filters expand. */
 .citizen-ui .citizen-map-status { display:grid; justify-items:start; gap:6px; padding:0; background:transparent; box-shadow:none; border:0; }
 .citizen-ui .citizen-map-status-head { display:contents; }
@@ -380,21 +326,6 @@
   .citizen-ui .citizen-map-status-flood > svg:last-child { width:9px; }
 }
 
-/* Keep the closed layer controls out of interaction immediately, while their visual exit finishes. */
-.citizen-ui .citizen-map-layer-wrap[data-citizen-layers-open] {
-  opacity:1;
-  visibility:visible;
-  transform:translateX(0);
-  transition: opacity 150ms ease-out, transform 150ms ease-out, visibility 0ms;
-}
-.citizen-ui .citizen-map-layer-wrap[data-citizen-layers-open="false"] {
-  opacity:0;
-  visibility:hidden;
-  transform:translateX(5px);
-  transition-delay:0ms,0ms,150ms;
-}
-.citizen-ui .citizen-map-layer-wrap[inert] .citizen-legend { pointer-events:none; }
-
 @keyframes citizen-panel-enter {
   from { opacity:0; transform:translateY(6px); }
   to { opacity:1; transform:translateY(0); }
@@ -404,7 +335,6 @@
 }
 .citizen-ui :is(.citizen-flood-dossier, .citizen-detour-dossier) { animation:none; }
 @media (prefers-reduced-motion: reduce) {
-  .citizen-ui .citizen-map-layer-wrap[data-citizen-layers-open] { transition:none; transform:none; }
   .citizen-ui :is(.citizen-drawer, .citizen-office-sheet, .citizen-flood-dossier .citizen-dossier-frame, .citizen-detour-dossier .citizen-dossier-frame) { animation:none; }
 }
 
@@ -417,7 +347,6 @@
 }
 
 /* Keep the visual glyphs and secondary surfaces compact, not their interactive targets. */
-.citizen-ui .citizen-map-tools button > svg,
 .citizen-ui .citizen-theme-button > svg,
 .citizen-ui .citizen-nav button > svg { width:17px;height:17px;flex:none; }
 .citizen-ui .citizen-sidebar .citizen-dock-controls { padding:.78rem .85rem .62rem; }

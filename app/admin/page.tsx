@@ -51,7 +51,7 @@ import { OfflineSyncStatus } from "@/components/offline/OfflineSyncStatus";
 import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
 import Link from "next/link";
-import { ArrowLeft, RotateCw, FileText, PieChart, Settings, Smartphone, PanelLeftClose, PanelLeftOpen, X, Sun, Moon, Monitor } from "lucide-react";
+import { ArrowLeft, RotateCw, FileText, PieChart, Settings, Smartphone, X, Sun, Moon, Monitor } from "lucide-react";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 const ExecutiveDashboard = dynamic(
   () => import("@/components/executive/ExecutiveDashboard").then((mod) => mod.ExecutiveDashboard),
@@ -581,6 +581,7 @@ export default function AdminPage() {
         <div className="flex-1 flex flex-col lg:flex-row lg:min-h-0 overflow-visible lg:overflow-hidden relative">
           {/* Left: Full Government Administrative Console (ฝั่งซ้ายมือ - รองรับการพับ/เปิด) */}
           <div
+            id="admin-map-workspace-pane"
             ref={workspacePaneRef}
             style={!isSidebarCollapsed && workspacePaneWidth !== null ? { width: `${workspacePaneWidth}px`, maxWidth: "calc(100vw - 22rem)" } : undefined}
             className={`transition-all duration-300 ease-in-out border-b lg:border-b-0 lg:border-r border-surface shrink-0 flex-col overflow-hidden ${
@@ -679,34 +680,6 @@ export default function AdminPage() {
                 ↑ กลับไปฟอร์ม
               </button>
             </div>
-            {/* Sidebar Toggle Button (พับ/เปิด แผงควบคุมฝั่งซ้าย) */}
-            <div className="absolute top-3 left-3 z-[450] hidden lg:block">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSidebarCollapsed((prev) => !prev);
-                  // Trigger map resize adjustment
-                  setTimeout(() => {
-                    window.dispatchEvent(new Event("resize"));
-                  }, 350);
-                }}
-                className="min-h-9 flex items-center gap-1.5 rounded-xl border border-surface bg-surface-floating px-3 py-1.5 text-xs font-heading font-bold text-slate-200 shadow-xl hover:bg-surface-card hover:text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer"
-                title={isSidebarCollapsed ? "เปิดแผงควบคุม (แสดงฟอร์ม)" : "พับแผงควบคุม (ขยายแผนที่เต็มจอ)"}
-                aria-label={isSidebarCollapsed ? "เปิดแผงควบคุม" : "พับแผงควบคุม"}
-              >
-                {isSidebarCollapsed ? (
-                  <>
-                    <PanelLeftOpen className="h-4 w-4 text-amber-400" />
-                    <span>เปิดแผงควบคุม</span>
-                  </>
-                ) : (
-                  <>
-                    <PanelLeftClose className="h-4 w-4 text-slate-400" />
-                    <span>พับแผง</span>
-                  </>
-                )}
-              </button>
-            </div>
             <input
               type="search"
               aria-label="ค้นหาสายทางบนแผนที่"
@@ -718,6 +691,16 @@ export default function AdminPage() {
             />
             <LongdoGisMap
               systemData={systemData}
+              isSidebarCollapsed={isSidebarCollapsed}
+              sidePaneControl={{
+                controlsId: "admin-map-workspace-pane",
+                openLabel: "เปิดแผงควบคุม",
+                closeLabel: "พับแผงควบคุม",
+                onToggle: () => {
+                  setIsSidebarCollapsed((previous) => !previous);
+                  window.setTimeout(() => window.dispatchEvent(new Event("resize")), 350);
+                },
+              }}
               isFilterActive={mapHighlights.isFilterActive}
               highlightFloodIds={mapHighlights.highlightFloodIds}
               highlightDetourIds={mapHighlights.highlightDetourIds}

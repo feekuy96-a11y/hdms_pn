@@ -52,17 +52,16 @@ test(`${admin ? "admin" : "public"} highway popup restores the search filter aft
     await expect.poll(async () => (await readPublicLayerOpacities(page)).highwayFeatures[other].opacity).toBe(0);
     await expect.poll(async () => (await readPublicLayerOpacities(page)).highwayFeatures[selected].opacity).toBeGreaterThan(0);
     const close = page.locator(".leaflet-popup-close-button");
-    const adminToolbar = page.getByRole("button", { name: "เปลี่ยนเป็นภาพถ่ายดาวเทียม" });
+    const adminToolbar = page.getByRole("group", { name: "เครื่องมือแผนที่" });
     if (admin) {
       await expect(adminToolbar).toBeVisible();
-      // After Leaflet's built-in autopan, a real pointer can reach the close button
-      // and the popup has been positioned below the floating Admin actions.
+      // Leaflet keeps the close button reachable without covering the right toolbar.
       await expect.poll(async () => {
         const toolbar = await adminToolbar.boundingBox();
         return close.evaluate((element, bar) => {
           const rect = element.getBoundingClientRect();
           const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-          return Boolean(bar && rect.top >= bar.y + bar.height && hit && element.contains(hit));
+          return Boolean(bar && (rect.top >= bar.y + bar.height || rect.left >= bar.x + bar.width || rect.right <= bar.x) && hit && element.contains(hit));
         }, toolbar);
       }).toBe(true);
     }

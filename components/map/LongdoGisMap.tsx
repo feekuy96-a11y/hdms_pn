@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import { SystemDataPayload, DetourRoute } from "@/db/default-data";
 import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
-import { MapLegendOverlay } from "./MapLegendOverlay";
+import { MapLegendOverlay, type MapSidePaneControl } from "./MapLegendOverlay";
 import {
   escapeHtml,
   isFloodLineVisibleOnCurrentMap,
@@ -43,12 +43,13 @@ import {
   resolveDetourPhotoPointCoords,
 } from "./longdo-layer-builders";
 import { placeArrowsOnLine, renderDirectionalArrows } from "./longdo-arrow-layer";
+import { drawFloodStatusAccent } from "./longdo-flood-status-accent";
 import { installRouteMotion } from "./longdo-route-motion";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import { renderVertexEditHandles } from "./longdo-vertex-handles";
 import { renderDraftAndConflictLayer } from "./longdo-draft-layer";
 import { useLongdoPopupBridge, useLongdoRouteLayers } from "./useLongdoRouteLayers";
-import { getTrafficPresentation, TRAFFIC_ACCENT } from "@/lib/traffic-presentation";
+import { getTrafficPresentation } from "@/lib/traffic-presentation";
 import {
   collectFocusBoundsPoints,
   resolveDetourFocusGeometry,
@@ -101,6 +102,7 @@ interface LongdoGisMapProps {
   publicStatusSummary?: React.ReactNode;
   suspendRouteFiltering?: boolean;
   isSidebarCollapsed?: boolean;
+  sidePaneControl?: MapSidePaneControl;
   /** Public-list filter: keep non-matching safety routes visible but de-emphasized. */
   highlightFloodIds?: string[];
   highlightDetourIds?: string[];
@@ -150,6 +152,7 @@ export function LongdoGisMap({
   publicStatusSummary,
   suspendRouteFiltering,
   isSidebarCollapsed = false,
+  sidePaneControl,
   highlightFloodIds = EMPTY_IDS,
   highlightDetourIds = EMPTY_IDS,
   isFilterActive = false,
@@ -365,7 +368,7 @@ export function LongdoGisMap({
         const map = L.map(mapContainerRef.current, {
           center: [APP_CONFIG.DEFAULT_CENTER.lat, APP_CONFIG.DEFAULT_CENTER.lon],
           zoom: APP_CONFIG.DEFAULT_ZOOM,
-          zoomControl: !publicMode,
+          zoomControl: false,
           fadeAnimation: false,
           // One shared canvas renderer for every vector layer (created once, never per redraw).
           renderer: sharedRenderer,
@@ -1219,7 +1222,7 @@ export function LongdoGisMap({
     ) => {
       const geom = resolveDetourFocusGeometry(detour, direction);
       const style = mapStyles.detour;
-      const color = publicMode ? TRAFFIC_ACCENT.amber : style?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
+      const color = style?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
       const weight = (style?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight) + (isPrimary ? 1.5 : 0);
       const borderColor = style?.borderActive ? style.borderColor || "#ffffff" : "#091326";
       const borderWidth = style?.borderActive ? Math.max(1, Number(style.borderWidth) || 1) : 2;
@@ -1345,10 +1348,8 @@ export function LongdoGisMap({
         const borderColor = style?.borderActive ? style.borderColor || "#ffffff" : "#091326";
         const borderWidth = style?.borderActive ? Math.max(1, Number(style.borderWidth) || 1) : 2;
         const weight = (style?.weight || LAYER_CONFIG.FLOOD_RED_LINE.weight) + 0.5;
+        const color = style?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
         floodData.activeSegments.forEach((seg) => {
-          const color = publicMode
-            ? getTrafficPresentation(seg.traffic_status, seg.water_level_cm, seg.direction_meta?.trafficStatusDetail).hex
-            : style?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
           const segCoords = (floodData.coordsList.find((_, idx) => floodData.activeSegments[idx]?.id === seg.id)) || [];
           if (segCoords.length >= 2) {
             const latLngs = segCoords.map(toLeafletLatLng);
@@ -1365,6 +1366,7 @@ export function LongdoGisMap({
               opacity: style?.opacity ?? 0.95,
             }).addTo(group);
             raisePathLayers(line);
+            if (publicMode) drawFloodStatusAccent(L, group, latLngs, renderer, seg, weight, style?.opacity ?? 0.95);
             allPolylines.push(segCoords);
           } else if (Number.isFinite(seg.lon_start) && Number.isFinite(seg.lat_start)) {
             allPoints.push([seg.lon_start, seg.lat_start]);
@@ -1373,7 +1375,9 @@ export function LongdoGisMap({
               radius: 10,
               color: borderColor,
               weight: borderWidth,
-              fillColor: color,
+              fillColor: publicMode
+                ? getTrafficPresentation(seg.traffic_status, seg.water_level_cm, seg.direction_meta?.trafficStatusDetail).hex
+                : color,
               fillOpacity: style?.opacity ?? 0.95,
             }).addTo(group);
           }
@@ -1500,6 +1504,7 @@ export function LongdoGisMap({
         publicMode={publicMode}
         publicStatusSummary={publicStatusSummary}
         isSidebarCollapsed={isSidebarCollapsed}
+        sidePaneControl={sidePaneControl}
         systemData={systemData}
         mapStyles={mapStyles}
         mapReady={mapReady}
