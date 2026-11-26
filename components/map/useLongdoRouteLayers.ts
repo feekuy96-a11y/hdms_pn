@@ -356,6 +356,7 @@ export function useLongdoRouteLayers({
           renderer,
         }).addTo(group);
         polyline.__dohFilterId = detour.id;
+        polyline.__dohBaseOpacity = detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity;
         detourLinesRef.current.push({
           id: detour.id,
           line: polyline,
@@ -393,6 +394,7 @@ export function useLongdoRouteLayers({
             renderer,
           }).addTo(group);
           revPolyline.__dohFilterId = detour.id;
+          revPolyline.__dohBaseOpacity = detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity;
           detourLinesRef.current.push({
             id: detour.id,
             line: revPolyline,
@@ -561,6 +563,7 @@ export function useLongdoRouteLayers({
           renderer,
         }).addTo(group);
         polyline.__dohFilterId = flood.id;
+        polyline.__dohBaseOpacity = fOpacity;
         if (publicMode) {
           const accent = drawFloodStatusAccent(L, group, latLngs, renderer, flood, selectedWeight, fOpacity) as ReturnType<typeof drawFloodStatusAccent> & {
             __dohFilterId: string;
