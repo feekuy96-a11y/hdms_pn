@@ -1,0 +1,302 @@
+/* Public mobile field atlas. Only paint the working shell; Leaflet, the
+   status grid, panel lifecycles and their stacking stay with their owners. */
+.citizen-field-sign,.citizen-themed-symbol,.citizen-mobile-hotline { display: none; }
+.citizen-traffic-card-value { display: contents; }
+
+@media (max-width: 1023px) {
+  .citizen-ui {
+    --atlas-teal-950: #0b2734;
+    --atlas-teal-900: #113947;
+    --atlas-teal-800: #14272f;
+    --atlas-teal-750: #1c363f;
+    --atlas-teal-650: #385762;
+    --atlas-teal-200: #c4d6d8;
+    --atlas-teal-150: #c9dee0;
+    --atlas-teal-100: #e9f2f2;
+    --atlas-teal-50: #f3f7f7;
+    --atlas-teal-25: #f7faf9;
+    --atlas-shadow-950: #102c3b;
+    --atlas-petrol: var(--atlas-teal-900);
+    --atlas-night: var(--atlas-teal-950);
+    --atlas-paper: var(--atlas-teal-50);
+    --atlas-gold: var(--hdms-amber-300);
+    --atlas-quiet: var(--atlas-teal-150);
+    --atlas-line: var(--atlas-teal-200);
+    --atlas-detail: var(--atlas-teal-100);
+    --atlas-glass-paper: 247, 250, 249;
+    --atlas-glass-night: 20, 42, 52;
+    --atlas-nav-channels: var(--atlas-glass-paper);
+    --atlas-nav: rgb(var(--atlas-nav-channels));
+    --atlas-nav-ink: var(--hdms-ink-900);
+    --atlas-nav-rim: color-mix(in srgb, var(--hdms-white) 76%, transparent);
+  }
+
+  .citizen-ui[data-citizen-theme="dark"] {
+    --atlas-paper: var(--atlas-teal-800);
+    --atlas-line: var(--atlas-teal-650);
+    --atlas-detail: var(--atlas-teal-750);
+    --atlas-nav-channels: var(--atlas-glass-night);
+    --atlas-nav-ink: var(--hdms-slate-50);
+    --atlas-nav-rim: color-mix(in srgb, var(--atlas-quiet) 25%, transparent);
+  }
+
+  .citizen-ui .citizen-header {
+    background: var(--atlas-petrol);
+    color: var(--atlas-paper);
+    border-bottom: 1px solid var(--atlas-night);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--atlas-shadow-950) 15%, transparent);
+    padding-inline: max(.65rem, env(safe-area-inset-left)) max(.65rem,env(safe-area-inset-right));
+  }
+
+  .citizen-ui[data-citizen-theme="dark"] .citizen-header { background: var(--atlas-night); }
+  .citizen-ui .citizen-brand-name { color: var(--hdms-white); }
+  .citizen-ui .citizen-header h1 { color: var(--atlas-quiet); }
+
+  .citizen-ui .citizen-header :is(.citizen-brand-name,h1) {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+  }
+
+  @media (max-width: 639px) {
+    .citizen-ui .citizen-header .citizen-brand-name { font-size: .75rem; }
+  }
+
+  .citizen-ui .citizen-header .citizen-logo {
+    width: 28px;
+    height: 32px;
+    background: transparent;
+    color: var(--atlas-gold);
+    border-radius: 0;
+  }
+
+  .citizen-ui .citizen-header .citizen-logo > .citizen-field-sign {
+    display: block;
+    width: 26px;
+    height: 26px;
+  }
+  .citizen-ui .citizen-brand-existing { display: none; }
+
+  .citizen-ui .citizen-header .citizen-hotline,
+  .citizen-ui .citizen-theme-switch .citizen-theme-legacy { display: none; }
+
+  .citizen-ui .citizen-header .citizen-theme-switch {
+    min-width: 44px;
+    min-height: 44px;
+    border: 0;
+    border-radius: 9px;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+    --focus-ring: var(--atlas-gold);
+  }
+
+  .citizen-ui .citizen-header .citizen-theme-switch:hover {
+    background: color-mix(in srgb, var(--atlas-quiet) 10%, transparent);
+  }
+
+  .citizen-ui .citizen-themed-symbol {
+    display: block;
+    color: var(--hdms-ice-200);
+    --symbol-rim: var(--atlas-teal-25);
+    --symbol-shadow: var(--hdms-teal-650);
+    filter: drop-shadow(0 2px 1px var(--atlas-night));
+  }
+  .citizen-ui .citizen-themed-symbol[data-tone="sun"] {
+    color: var(--atlas-gold);
+    --symbol-rim: var(--atlas-teal-25);
+    --symbol-shadow: var(--hdms-amber-500);
+  }
+  .citizen-ui .citizen-theme-symbol-rim { stop-color: var(--symbol-rim); }
+  .citizen-ui .citizen-theme-symbol-shadow { stop-color: var(--symbol-shadow); }
+  .citizen-ui .citizen-mobile-hotline {
+    display: inline-flex;
+    color: var(--cit-action);
+    background: var(--atlas-detail);
+  }
+
+  .citizen-ui .citizen-nav[aria-label] {
+    border-color: var(--atlas-line);
+    background-image: none;
+    background-color: var(--atlas-nav);
+    box-shadow: inset 0 1px 0 var(--atlas-nav-rim),
+      0 -3px 12px color-mix(in srgb, var(--atlas-shadow-950) 15%, transparent);
+    gap: 0;
+  }
+
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .citizen-ui .citizen-nav[aria-label] {
+      /* Keep actual terrain color perceptible even on evenly toned tiles.
+         Classic rgba also works in older backdrop-filter-capable WebKit. */
+      background-color: rgba(var(--atlas-nav-channels), .68);
+      background-image: linear-gradient(to bottom, var(--atlas-nav-rim), transparent .45rem);
+      -webkit-backdrop-filter: blur(5px) saturate(125%);
+      backdrop-filter: blur(5px) saturate(125%);
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .citizen-ui .citizen-nav[aria-label] {
+      background: var(--atlas-nav);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+
+  .citizen-ui .citizen-nav[aria-label] > button {
+    box-sizing: border-box;
+    position: relative;
+    border-radius: 3px;
+    border-block-end: 2px solid transparent;
+  }
+
+  .citizen-ui .citizen-nav[aria-label] > button:not([aria-current]):not(:hover) {
+    color: var(--atlas-nav-ink);
+  }
+
+  .citizen-ui .citizen-nav[aria-label] > button[aria-current="page"] {
+    border-block-end-color: var(--brand-active-text);
+    background: var(--brand-active-bg);
+    color: var(--brand-active-text);
+  }
+
+  .citizen-ui .citizen-nav[aria-label] > button[aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    inset-block-start: .16rem;
+    inset-inline-start: calc(50% - .65rem);
+    inline-size: 1.3rem;
+    block-size: 2px;
+    border-radius: 2px;
+    background: currentColor;
+  }
+
+  .citizen-ui :is(.citizen-office-head,.citizen-incident-header,.citizen-detour-dossier .citizen-dossier-frame > div:first-child,.citizen-drawer > div:first-child) {
+    background: var(--atlas-detail);
+    border-color: var(--atlas-line);
+    border-block-end-style: solid;
+    box-shadow: none;
+  }
+
+  .citizen-ui :is(.citizen-office-head,.citizen-incident-heading,.citizen-detour-head,.citizen-drawer > div:first-child) :is(h2,h3) {
+    color: var(--cit-ink);
+    text-wrap: pretty;
+  }
+
+  .citizen-ui .citizen-office-head h2,
+  .citizen-ui .citizen-detour-head h3,
+  .citizen-ui .citizen-drawer > div:first-child h2 {
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  .citizen-ui .citizen-incident-road h3 { font-weight: 800; }
+  .citizen-ui .citizen-incident-kicker { color: var(--cit-action); }
+
+  .citizen-ui .citizen-route-id {
+    color: var(--atlas-gold);
+    background: var(--atlas-petrol);
+    border: 1px solid var(--atlas-night);
+    border-radius: 5px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .citizen-ui :is(.citizen-office-scroll,.citizen-dossier-frame,.citizen-drawer) { background-color: var(--atlas-paper); }
+  .citizen-ui .citizen-office-scroll > h3 { border-bottom: 1px solid var(--atlas-line); padding-block-end: .35rem; }
+  .citizen-ui .citizen-office-icon { border-radius: 4px; background: var(--atlas-detail); }
+  .citizen-ui .citizen-office-card { border-color: var(--atlas-line); }
+  .citizen-ui .citizen-detour-context { border-color: var(--atlas-line); background: var(--atlas-detail); border-radius: 6px; }
+
+  /* Chroma lives on decision cards. The neutral pending state and the map's
+     existing semantic tokens are deliberately not recolored. */
+  .citizen-ui .citizen-drawer .citizen-traffic-card {
+    --atlas-status-face: var(--cit-deep);
+    --atlas-status-ink: var(--traffic-accent);
+    --atlas-closure-400: #ff5a62;
+    --atlas-caution-400: #ff9652;
+    --atlas-lane-300: #ffd34c;
+    --atlas-delay-300: #67ccff;
+    --atlas-open-400: #53d79c;
+    --atlas-closure-750: #9f233b;
+    --atlas-caution-750: #924017;
+    --atlas-lane-750: #795400;
+    --atlas-delay-750: #005a87;
+    --atlas-open-750: #00684a;
+    --atlas-closure-ink: #430814;
+    --atlas-caution-ink: #4a1b08;
+    --atlas-lane-ink: #3d2500;
+    --atlas-delay-ink: #0a2b42;
+    --atlas-open-ink: #043423;
+    --atlas-closure-glow: #fff4f6;
+    --atlas-caution-glow: #fff2e5;
+    --atlas-lane-glow: #fff7d4;
+    --atlas-delay-glow: #effaff;
+    --atlas-open-glow: #e9fff4;
+    background-color: var(--atlas-status-face);
+    background-image: linear-gradient(to bottom,
+      color-mix(in srgb, var(--hdms-white) 9%, transparent),
+      transparent 54%,
+      color-mix(in srgb, var(--atlas-shadow-950) 6%, transparent));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hdms-white) 47%, transparent),
+      0 2px 3px color-mix(in srgb, var(--atlas-shadow-950) 16%, transparent);
+    align-content: center;
+    text-align: center;
+    border-color: color-mix(in srgb, var(--atlas-status-ink) 35%, var(--atlas-status-face));
+    border-radius: .55rem;
+  }
+  .citizen-ui .citizen-drawer .citizen-traffic-card[data-traffic-card="red"] { --atlas-status-face: var(--atlas-closure-400); --atlas-status-ink: var(--atlas-closure-ink); }
+  .citizen-ui .citizen-drawer .citizen-traffic-card[data-traffic-card="orange"] { --atlas-status-face: var(--atlas-caution-400); --atlas-status-ink: var(--atlas-caution-ink); }
+  .citizen-ui .citizen-drawer .citizen-traffic-card[data-traffic-card="amber"] { --atlas-status-face: var(--atlas-lane-300); --atlas-status-ink: var(--atlas-lane-ink); }
+  .citizen-ui .citizen-drawer .citizen-traffic-card[data-traffic-card="sky"] { --atlas-status-face: var(--atlas-delay-300); --atlas-status-ink: var(--atlas-delay-ink); }
+  .citizen-ui .citizen-drawer .citizen-traffic-card[data-traffic-card="emerald"] { --atlas-status-face: var(--atlas-open-400); --atlas-status-ink: var(--atlas-open-ink); }
+  .citizen-ui[data-citizen-theme="dark"] .citizen-drawer .citizen-traffic-card[data-traffic-card="red"] { --atlas-status-face: var(--atlas-closure-750); --atlas-status-ink: var(--atlas-closure-glow); }
+  .citizen-ui[data-citizen-theme="dark"] .citizen-drawer .citizen-traffic-card[data-traffic-card="orange"] { --atlas-status-face: var(--atlas-caution-750); --atlas-status-ink: var(--atlas-caution-glow); }
+  .citizen-ui[data-citizen-theme="dark"] .citizen-drawer .citizen-traffic-card[data-traffic-card="amber"] { --atlas-status-face: var(--atlas-lane-750); --atlas-status-ink: var(--atlas-lane-glow); }
+  .citizen-ui[data-citizen-theme="dark"] .citizen-drawer .citizen-traffic-card[data-traffic-card="sky"] { --atlas-status-face: var(--atlas-delay-750); --atlas-status-ink: var(--atlas-delay-glow); }
+  .citizen-ui[data-citizen-theme="dark"] .citizen-drawer .citizen-traffic-card[data-traffic-card="emerald"] { --atlas-status-face: var(--atlas-open-750); --atlas-status-ink: var(--atlas-open-glow); }
+  .citizen-ui .citizen-drawer .citizen-traffic-card:is(:hover,[aria-pressed="true"]) {
+    background-color: color-mix(in srgb, var(--atlas-status-ink) 3%, var(--atlas-status-face));
+    border-color: var(--atlas-status-ink);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--atlas-status-ink) 38%, transparent);
+  }
+  .citizen-ui .citizen-drawer :is(.citizen-traffic-card-label,.citizen-traffic-card-top) { color: var(--atlas-status-ink); }
+  .citizen-ui .citizen-drawer .citizen-traffic-card-value {
+    display: inline-flex;
+    align-items: center;
+    gap: .24rem;
+    border-radius: .38rem;
+    padding-inline: .3rem;
+    background: color-mix(in srgb, var(--atlas-status-face) 88%, var(--atlas-shadow-950));
+  }
+  .citizen-ui[data-citizen-theme="light"] .citizen-drawer .citizen-traffic-card-value {
+    background: color-mix(in srgb, var(--atlas-status-face) 80%, var(--hdms-white));
+  }
+  .citizen-ui .citizen-drawer .citizen-traffic-card-top {
+    position: relative;
+    justify-content: center;
+    padding-inline: .6rem;
+  }
+  .citizen-ui .citizen-drawer .citizen-traffic-card-check {
+    position: absolute;
+    inset-inline-end: -.15rem;
+    inset-block-start: 0;
+  }
+  .citizen-ui .citizen-drawer .citizen-traffic-card-top svg { stroke-width: 2.4; }
+
+  @media (forced-colors: active) {
+    .citizen-ui .citizen-themed-symbol {
+      color: ButtonText;
+      --symbol-rim: ButtonFace;
+      --symbol-shadow: ButtonFace;
+      filter: none;
+    }
+    .citizen-ui .citizen-nav[aria-label] {
+      background: Canvas;
+      box-shadow: none;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+    .citizen-ui .citizen-nav[aria-label] > button[aria-current="page"] { border-block-end-color: Highlight; }
+  }
+}
