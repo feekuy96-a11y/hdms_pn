@@ -28,6 +28,8 @@ import {
   buildDetourPointPhotoPopupHtml,
   buildPublicDetourEndpointPopup,
   bindPublicEndpointInspector,
+  getPublicDetourEndpointLabel,
+  labelPublicDetourEndpointMarker,
   parseRouteCoordinates,
   resolveDetourPointPinCoord,
 } from "./longdo-map-popups";
@@ -1300,6 +1302,7 @@ export function LongdoGisMap({
           { ...getResponsivePopupOptions(L, 350, 240, "doh-detour-leaflet-popup"), keepInView: true }
         );
         if (publicMode) {
+          labelPublicDetourEndpointMarker(marker, getPublicDetourEndpointLabel(detour, point, direction));
           bindPublicEndpointInspector(L, map, marker, markers, point, () => {
             const focusOnMap = onFocusDetourOnMapRef.current;
             if (focusOnMap && (!isPrimary || gisFocus.targetType !== "DETOUR")) focusOnMap(detour.id, direction);

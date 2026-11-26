@@ -11,6 +11,7 @@ import {
 import { resetAreaLookup, resolveArea } from "../../lib/area-lookup";
 import { fetchOsrmWithFailover, resetOsrmClient } from "../../lib/osrm-client";
 import { sampleWaypointsForGoogleMaps } from "../../lib/detour-navigation";
+import type { SystemDataPayload } from "../../db/default-data";
 
 const baseHighwayNetwork = JSON.parse(
   fs.readFileSync(path.join(process.cwd(), "public/data/highway-base-network.json"), "utf8")
@@ -23,6 +24,85 @@ function baseHighwayNetworkResponse(url: string): Response | null {
     headers: { "Content-Type": "application/json" },
   });
 }
+
+test.describe("Public detour endpoints on mobile", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  const updatedAt = "2026-11-24T06:00:00.000Z";
+  const photoUrl = "data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=";
+  const payload: SystemDataPayload = {
+    updatedAt,
+    floodRoutes: [],
+    detourRoutes: [{
+      id: "D-ENDPOINT-TEST",
+      flood_id_ref: null,
+      route_name: "ทางเลี่ยงทดสอบ A/B",
+      direction_mode: "TWO_WAY",
+      lat_start: 6.78,
+      lon_start: 101.13,
+      lat_end: 6.81,
+      lon_end: 101.17,
+      coordinates_json: [[101.13, 6.78], [101.145, 6.795], [101.17, 6.81]],
+      reverse_coordinates_json: [[101.17, 6.81], [101.15, 6.796], [101.13, 6.78]],
+      description: "ขาไป:\n1. จุด A\n2. ผ่านสะพาน\n3. จุด B\nขากลับ:\n1. จุด B\n2. ผ่านสะพาน\n3. จุด A",
+      is_active: true,
+      updated_at: updatedAt,
+      detour_meta: {
+        start_point_photo: { url: photoUrl, caption: "เข้าทางเลี่ยงที่แยกหน้าโรงเรียน ".repeat(8) },
+        end_point_photo: { url: photoUrl, caption: "กลับเข้าสู่ทางหลวงที่แยกตลาด ".repeat(8) },
+      },
+    }],
+    timelineUpdates: [],
+    mitigationProjects: [],
+    highwayLayers: [],
+    offices: [],
+    mapStyles: null,
+    systemSettings: { name: "HDMS Test", desc: "ระบบเฝ้าระวังน้ำท่วม", org: "แขวงทางหลวงปัตตานี", phone: "1586" },
+  };
+
+  for (const scenario of [
+    { trip: "ขาไป A → B", focus: "ขาไป (A → B)", a: "จุดเริ่มต้น", b: "จุดสิ้นสุด" },
+    { trip: "ขากลับ B → A", focus: "ขากลับ (B → A)", a: "จุดสิ้นสุด", b: "จุดเริ่มต้น" },
+  ]) {
+    test(`endpoint popup and marker names agree with ${scenario.trip} at 390×844`, async ({ page, isMobile }) => {
+      test.skip(!isMobile, "Runs in the mobile browser project.");
+      await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
+      await page.goto(`${process.env.BASE_PATH || ""}/`);
+
+      await page.locator(".doh-detour-symbol").press("Enter");
+      const overview = page.locator(".doh-detour-popup");
+      await overview.getByRole("button", { name: scenario.trip, exact: true }).click();
+      await overview.getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).click();
+      await expect(page.getByTestId("gis-focus-mode-bar")).toContainText(scenario.focus);
+
+      for (const [letter, pin, role] of [
+        ["A", "start", scenario.a],
+        ["B", "end", scenario.b],
+      ] as const) {
+        const marker = page.locator(`.hdms-focus-endpoint.doh-detour-photo-${pin}`);
+        await expect(marker).toBeVisible();
+        // Continue with the popup checks even if the marker still exposes only its icon text.
+        await expect.soft(marker, `marker ${letter} should name the point and its travel role`)
+          .toHaveAccessibleName(new RegExp(`(?=.*\\b${letter}\\b)(?=.*${role})`), { timeout: 1000 });
+        await marker.press("Enter");
+        const popup = page.getByRole("region", { name: `${letter} · ${role}`, exact: true });
+        await expect(popup.getByRole("heading", { name: `${letter} · ${role}`, exact: true })).toBeVisible();
+        const frame = page.locator(".leaflet-popup-content-wrapper").filter({ has: popup });
+        await expect.poll(() => frame.evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          const viewport = document.documentElement.clientWidth;
+          const card = element.querySelector<HTMLElement>("[data-detour-endpoint]")!;
+          return viewport === 390 && box.width <= viewport - 24 + 0.5
+            && box.left >= -0.5 && box.right <= viewport + 0.5
+            && card.scrollWidth <= card.clientWidth + 1
+            && document.documentElement.scrollWidth <= viewport + 1;
+        }), { message: `point ${letter} popup fits inside the mobile viewport without horizontal overflow` }).toBe(true);
+        await page.locator(".leaflet-popup-close-button").click();
+        await expect(popup).toHaveCount(0);
+      }
+    });
+  }
+});
 
 test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
   const origEnvUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
