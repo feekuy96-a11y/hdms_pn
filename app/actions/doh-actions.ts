@@ -217,6 +217,7 @@ export async function saveTimelineUpdateAction(payload: {
 export async function upsertRouteAction(payload: {
   recordType: "FLOOD" | "DETOUR";
   id?: string;
+  linkedDetourCreate?: true;
   routeNo?: string;
   sectionName?: string;
   kmStart?: string;
@@ -247,7 +248,7 @@ export async function upsertRouteAction(payload: {
   reporterName?: string;
   directionMeta?: Record<string, any>;
   expectedUpdatedAt?: string;
-}): Promise<{ success: boolean; savedId?: string; systemData: SystemDataPayload }> {
+}): Promise<{ success: boolean; savedId?: string; systemData: SystemDataPayload; detourLinkState?: "LINKED" | "PENDING" }> {
   return invokeHdms("upsertRouteAction", [payload]);
 }
 

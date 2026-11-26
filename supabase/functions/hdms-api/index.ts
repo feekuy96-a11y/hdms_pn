@@ -977,6 +977,23 @@ Deno.serve(async (req) => {
         if (p.expectedUpdatedAt && existing.updated_at && new Date(existing.updated_at).getTime() > new Date(p.expectedUpdatedAt).getTime()) {
           fail("ข้อมูลนี้เพิ่งถูกแก้ไขโดยเจ้าหน้าที่ท่านอื่น กรุณารีเฟรชข้อมูลล่าสุดก่อนบันทึก", 409);
         }
+        const linkedCreate = p.linkedDetourCreate === true;
+        if (linkedCreate && (p.recordType !== "DETOUR" || !/^D-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id) ||
+            typeof p.id !== "string" || typeof p.detourRefId !== "string" || !p.detourRefId.trim())) {
+          fail("Invalid linked detour create", 400);
+        }
+        const finishLinkedCreate = async () => {
+          const { data, error } = await db.rpc("doh_append_event_detour_link", {
+            p_flood_id: p.detourRefId, p_detour_id: id,
+          });
+          // false means there is no eligible parent event, not an acknowledged link.
+          const detourLinkState = !error && data === true ? "LINKED" : "PENDING";
+          return reply({ success: true, savedId: id, detourLinkState });
+        };
+        if (linkedCreate && existing.id) {
+          if (existing.flood_id_ref !== p.detourRefId) fail("ทางเลี่ยงนี้อ้างอิงจุดน้ำท่วมอื่น กรุณาตรวจสอบก่อนบันทึก", 409);
+          return await finishLinkedCreate();
+        }
         const geometry = p.coordinates ?? existing.coordinates_json ?? [];
         if (!Array.isArray(geometry) || geometry.length < 2) fail("At least two route points required");
         geometry.forEach((point: any) => { number(point[0], -180, 180); number(point[1], -90, 90); });
@@ -999,7 +1016,15 @@ Deno.serve(async (req) => {
           Object.assign(extRow, { reverse_coordinates_json: revGeometry, reverse_waypoints_json: revWaypoints, direction_mode: detourDir(p.directionMode ?? existing.direction_mode), detour_meta: (p.detourMeta && typeof p.detourMeta === "object") ? p.detourMeta : (existing.detour_meta ?? {}) });
         }
         // Do not silently discard selected direction/lane fields on database errors.
-        const fullUpsert = await db.from(table).upsert({ ...baseRow, ...extRow });
+        const row = { ...baseRow, ...extRow };
+        const fullUpsert = linkedCreate ? await db.from(table).insert(row) : await db.from(table).upsert(row);
+        if (linkedCreate && fullUpsert.error?.code === "23505") {
+          // A previous timed-out request may have committed after the read above.
+          // Never overwrite an existing route or resurrect a deleted route on retry.
+          const prior = await check(db.from(table).select("id,flood_id_ref").eq("id", id).is("deleted_at", null).maybeSingle());
+          if (prior?.flood_id_ref === p.detourRefId) return await finishLinkedCreate();
+          fail("ไม่สามารถยืนยันทางเลี่ยงเดิม กรุณาตรวจสอบรายการทางเลี่ยงก่อน", 409);
+        }
         if (fullUpsert.error) {
           console.error("Route upsert rejected", fullUpsert.error.code, fullUpsert.error.message);
           fail("บันทึกไม่สำเร็จ: โปรดตรวจสอบ schema/migration ของช่องจราจรและทิศทาง", 422);
@@ -1019,6 +1044,7 @@ Deno.serve(async (req) => {
         } else if (persisted.direction_mode !== extRow.direction_mode) {
           fail("บันทึกแล้วแต่ทิศทางเดินรถที่อ่านกลับมาไม่ตรง กรุณาตรวจสอบก่อนเผยแพร่", 409);
         }
+        if (linkedCreate) return await finishLinkedCreate();
         if (p.recordType === "DETOUR" && baseRow.flood_id_ref &&
             (!p.id || (p.detourRefId === baseRow.flood_id_ref && p.detourRefId !== existing.flood_id_ref))) {
           const { error: linkError } = await db.rpc("doh_append_event_detour_link", {
