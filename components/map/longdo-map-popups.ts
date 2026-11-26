@@ -21,7 +21,7 @@ import {
   type DetourTimelineStep,
 } from "@/lib/detour-presentation";
 import {
-  AFFECTED_ROAD_PART_LABELS,
+  resolveRecordedFloodImpact,
   parseFloodDirectionMeta,
   resolveFloodWaterReading,
   normalizeMediaUrl,
@@ -821,19 +821,6 @@ export function formatPopupRelativeUpdate(iso?: string | null): string {
   return `อัปเดต ${new Date(ts).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}`;
 }
 
-export function resolveRecordedLanesText(flood: FloodRoute): string | null {
-  const direct = String(flood.affected_lanes ?? "").trim();
-  if (direct && direct !== "-") return direct;
-  const parts = flood.direction_meta?.affectedParts;
-  if (Array.isArray(parts) && parts.length > 0) {
-    const valid = parts
-      .filter((p) => p && p !== "UNSPECIFIED" && p !== "PENDING_VERIFICATION")
-      .map((p) => AFFECTED_ROAD_PART_LABELS[p as keyof typeof AFFECTED_ROAD_PART_LABELS] || String(p))
-      .filter(Boolean);
-    if (valid.length > 0) return valid.join(", ");
-  }
-  return null;
-}
 
 export function resolvePopupTrafficStatus(flood: FloodRoute): { label: string; badgeClass: string; accentColor: string } {
   const presentation = getTrafficPresentation(
@@ -851,8 +838,8 @@ export function resolvePopupTrafficStatus(flood: FloodRoute): { label: string; b
 export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMode = false): string {
   const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
   const waterKnown = meta.waterLevelKnown;
-  const lanesText = resolveRecordedLanesText(flood);
-  const lanesDisplay = lanesText || "ทุกช่องจราจร";
+  const lanesText = resolveRecordedFloodImpact(flood, meta);
+  const lanesDisplay = lanesText || "ไม่ระบุ";
   const statusInfo = resolvePopupTrafficStatus(flood);
   const routeBadge = /^(?:ทล|ปน)\.?\s*/i.test(String(flood.route_no || "")) ? String(flood.route_no) : `ทล.${flood.route_no}`;
   const areaLine = formatPopupAreaLine(flood);
@@ -919,9 +906,9 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMo
             : `<div class="doh-flood-popup-water font-heading font-bold text-xs sm:text-sm text-[#F6A52F] mt-0.5 leading-tight">รอตรวจสอบระดับน้ำ</div>`}
         </div>
 
-        <!-- ขวา: ช่องจราจร -->
+        <!-- ขวา: ส่วนของถนนที่ได้รับผลกระทบ -->
         <div class="rounded-xl bg-[#20384A] p-2 border border-[#526D83]/40 flex flex-col justify-center">
-          <div class="text-[11px] text-[#B5CBD9] font-medium leading-none mb-1">ช่องจราจร:</div>
+          <div class="text-[11px] text-[#B5CBD9] font-medium leading-none mb-1">ส่วนที่ได้รับผลกระทบ</div>
           <strong class="font-heading font-bold text-xs sm:text-sm text-white leading-tight block break-words mt-0.5">${escapeHtml(lanesDisplay)}</strong>
         </div>
       </div>

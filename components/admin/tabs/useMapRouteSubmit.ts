@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import { SystemDataPayload } from "@/db/default-data";
 import {
@@ -9,6 +9,7 @@ import {
   buildDetourMetaPayload,
   type DetourPointPhotoLocationInput,
 } from "@/components/admin/tabs/map-management-helpers";
+import type { FloodSaveTarget, FloodSaveValidation } from "./flood-save-validation";
 import { HdmsHttpError } from "@/lib/hdms-api";
 import { calculatePolylineRoadDistanceKm } from "@/lib/detour-presentation";
 import {
@@ -38,6 +39,7 @@ import {
   FloodPhotoItem,
   FloodSegmentDirectionMeta,
   parseFloodDirectionMeta,
+  encodeFloodImpactParts,
   generateNextEventCode,
   resolveEffectiveRoadSide,
   mapTrafficStatusToDetail,
@@ -246,6 +248,33 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
     if (onClearEditingRoute) onClearEditingRoute();
   };
 
+  const [floodValidation, setFloodValidation] = useState<FloodSaveValidation | null>(null);
+  const invalidFloodSide = roadSide === "UNKNOWN" ||
+    (roadSide === "LEFT" && directionCode !== "A_TO_B") ||
+    (roadSide === "RIGHT" && directionCode !== "B_TO_A") ||
+    (roadSide === "BOTH" && directionCode !== "BOTH");
+  const invalidWaterReading = (value: string | number) => value === "" || !Number.isFinite(Number(value)) || Number(value) < 0;
+  const showFloodValidation = (target: FloodSaveTarget, message: string) => {
+    setFloodValidation({ target, message });
+    requestAnimationFrame(() => {
+      const field = document.getElementById(target);
+      field?.focus({ preventScroll: true });
+      field?.scrollIntoView({ block: "center", inline: "nearest" });
+    });
+  };
+  const activeFloodValidation = routeMode === "FLOOD" && floodValidation && (
+    floodValidation.target === "flood-road-side" ? invalidFloodSide :
+    floodValidation.target === "flood-section-name-input" ? !sectionName.trim() :
+    floodValidation.target === "flood-water-level-reverse" ? isDividedBothFlood && reverseWaterLevelKnown && invalidWaterReading(reverseRouteWaterLevel) :
+    floodValidation.target === "flood-water-level-forward" || floodValidation.target === "flood-water-level-single"
+      ? waterLevelKnown && invalidWaterReading(routeWaterLevel) :
+    draftCoordinates.length < 2 || needsCarriagewayChoice || (isDividedBothFlood && draftReverseCoordinates.length < 2)
+  ) ? floodValidation : null;
+  useEffect(() => setFloodValidation(null), [routeMode, routeEditId]);
+  useEffect(() => {
+    if (floodValidation && !activeFloodValidation) setFloodValidation(null);
+  }, [activeFloodValidation, floodValidation]);
+
   const handleSubmitRoute = async () => {
     if (linkedRequestInFlight.current || dualNeedsReview.current) return;
     if (dualAttempt.current) {
@@ -313,20 +342,23 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
       onToast("ไม่พบค่าทิศทางเดินรถที่ถูกต้อง กรุณาเลือก A → B, B → A หรือสองทิศทางก่อนบันทึก");
       return;
     }
-    if (routeMode === "FLOOD" && (roadSide === "UNKNOWN" ||
-        (roadSide === "LEFT" && directionCode !== "A_TO_B") ||
-        (roadSide === "RIGHT" && directionCode !== "B_TO_A") ||
-        (roadSide === "BOTH" && directionCode !== "BOTH"))) {
-      onToast("กรุณาเลือกฝั่งถนนและทิศทางการเดินรถให้ตรงกันก่อนบันทึก (ซ้าย A→B / ขวา B→A / ทั้งสองฝั่ง)");
-      return;
-    }
-    if (routeMode === "FLOOD" && isDividedBothFlood && reverseWaterLevelKnown && reverseRouteWaterLevel === "") {
-      onToast("กรุณาระบุระดับน้ำท่วมผิวทางฝั่งขากลับ (B → A) หรือติ๊ก 'ไม่ทราบค่า'");
-      return;
-    }
-    if (!sectionName && routeMode === "FLOOD") {
-      onToast("กรุณาระบุชื่อตอนควบคุมหรือบริเวณที่เกิดเหตุ");
-      return;
+    if (routeMode === "FLOOD") {
+      if (invalidFloodSide) {
+        showFloodValidation("flood-road-side", "กรุณาเลือกฝั่งถนนที่น้ำท่วม: ซ้ายทาง ขวาทาง หรือทั้งสองฝั่ง");
+        return;
+      }
+      if (!sectionName.trim()) {
+        showFloodValidation("flood-section-name-input", "กรุณาระบุชื่อตอนควบคุมหรือบริเวณที่เกิดเหตุ");
+        return;
+      }
+      if (waterLevelKnown && invalidWaterReading(routeWaterLevel)) {
+        showFloodValidation(isDividedBothFlood ? "flood-water-level-forward" : "flood-water-level-single", "กรุณาระบุระดับน้ำตั้งแต่ 0 ซม. หรือเลือกยังไม่ทราบค่าระดับน้ำ");
+        return;
+      }
+      if (isDividedBothFlood && reverseWaterLevelKnown && invalidWaterReading(reverseRouteWaterLevel)) {
+        showFloodValidation("flood-water-level-reverse", "กรุณาระบุระดับน้ำขากลับตั้งแต่ 0 ซม. หรือเลือกยังไม่ทราบค่าระดับน้ำ");
+        return;
+      }
     }
 
     const startPair = parseCoordinatePair(startCoordinateText);
@@ -338,16 +370,19 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
     const numWaterLevel = Number(routeWaterLevel) || 0;
 
     if (draftCoordinates.length < 2 && (!numSLat || !numELat || isNaN(numSLat) || isNaN(numELat))) {
-      onToast("กรุณากำหนดจุดพิกัดเริ่มต้นและสิ้นสุดบนแผนที่");
+      if (routeMode === "FLOOD") showFloodValidation("flood-geometry-validation-target", "กรุณากำหนดจุดพิกัดเริ่มต้นและสิ้นสุดบนแผนที่");
+      else onToast("กรุณากำหนดจุดพิกัดเริ่มต้นและสิ้นสุดบนแผนที่");
       return;
     }
     if (needsCarriagewayChoice) {
-      onToast("กรุณาเลือกโครงสร้างถนนก่อนบันทึก");
+      if (routeMode === "FLOOD") showFloodValidation("flood-geometry-validation-target", "กรุณาเลือกโครงสร้างถนนก่อนบันทึก");
+      else onToast("กรุณาเลือกโครงสร้างถนนก่อนบันทึก");
       return;
     }
     if ((isDividedBothFlood || twoWayDividedDetour)
       && (draftCoordinates.length < 2 || draftReverseCoordinates.length < 2)) {
-      onToast("กรุณาตรวจแนวเส้น A→B และ B→A ให้ครบทั้งสองทิศก่อนบันทึก");
+      if (routeMode === "FLOOD") showFloodValidation("flood-geometry-validation-target", "กรุณาตรวจแนวเส้น A→B และ B→A ให้ครบทั้งสองทิศก่อนบันทึก");
+      else onToast("กรุณาตรวจแนวเส้น A→B และ B→A ให้ครบทั้งสองทิศก่อนบันทึก");
       return;
     }
     if (routeMode === "DETOUR" && draftCoordinates.length < 2) {
@@ -371,10 +406,11 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
       }
     }
     if (routeMode === "FLOOD" && draftCoordinates.length < 2) {
-      onToast("กรุณาสร้างเส้นน้ำท่วมบนแนวทางหลวงก่อนบันทึก");
+      showFloodValidation("flood-geometry-validation-target", "กรุณาสร้างเส้นน้ำท่วมบนแนวทางหลวงก่อนบันทึก");
       return;
     }
 
+    setFloodValidation(null);
     const chosenRouteNo = routeNo || (availableHighways[0]?.no || "43");
 
     if (routeMode === "FLOOD" && !saveAsDraft && kmStart && kmEnd) {
@@ -434,7 +470,8 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
         return { ...photo, dataUrl: uploaded.url, sizeBytes: uploaded.sizeBytes, format: uploaded.mimeType === "image/jpeg" ? "jpeg" as const : "webp" as const };
       }));
       const effectiveRoadSide: RoadSideType = roadSide;
-      const { lanesSummary, shoulderSummary } = buildAffectedPartSummary(affectedParts);
+      const impact = encodeFloodImpactParts(affectedParts);
+      const { lanesSummary, shoulderSummary } = buildAffectedPartSummary(impact.affectedParts);
       const primaryPhoto = storedPhotos[0]?.dataUrl || fieldImages[0] || undefined;
       const dbTrafficStatus = (routeStatus as string) === "PENDING_VERIFICATION" ? "WARNING" : routeStatus;
       const syncReport = async (recordId?: string, status = String(dbTrafficStatus)) => {
@@ -466,7 +503,7 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
         directionCode,
         directionLabel: directionCode === "A_TO_B" ? "ตามหลัก กม. (ขาไป A → B)" : directionCode === "B_TO_A" ? "ย้อนหลัก กม. (ขากลับ B → A)" : directionCode === "BOTH" ? "ทั้งสองทิศทาง" : "ไม่ระบุทิศทาง",
         roadSide: effectiveRoadSide,
-        affectedParts,
+        ...impact,
         trafficStatusDetail: mapTrafficStatusToDetail(dbTrafficStatus),
         status_verified: true,
         waterLevelKnown,
@@ -551,14 +588,15 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
         const revELon = reverseCoords[reverseCoords.length - 1] ? reverseCoords[reverseCoords.length - 1][0] : numSLon;
 
         const numRevWaterLevel = Number(reverseRouteWaterLevel || 0);
-        const { lanesSummary: revLanesSummary, shoulderSummary: revShoulderSummary } = buildAffectedPartSummary(reverseAffectedParts);
+        const reverseImpact = encodeFloodImpactParts(reverseAffectedParts);
+        const { lanesSummary: revLanesSummary, shoulderSummary: revShoulderSummary } = buildAffectedPartSummary(reverseImpact.affectedParts);
         const revTrafficStatus = (reverseRouteStatus as string) === "PENDING_VERIFICATION" ? "WARNING" : reverseRouteStatus;
 
         const reverseDirectionMeta: FloodSegmentDirectionMeta = {
           ...floodDirectionMeta,
           directionCode: "B_TO_A",
           directionLabel: "ย้อนหลัก กม. (ขากลับ B → A)",
-          affectedParts: reverseAffectedParts,
+          ...reverseImpact,
           trafficStatusDetail: mapTrafficStatusToDetail(revTrafficStatus),
           status_verified: true,
           waterLevelKnown: reverseWaterLevelKnown,
@@ -792,5 +830,5 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
     }
   };
 
-  return { handleSubmitRoute, linkedDetourPending, dualFloodSaveState };
+  return { handleSubmitRoute, linkedDetourPending, dualFloodSaveState, floodValidation: activeFloodValidation };
 }

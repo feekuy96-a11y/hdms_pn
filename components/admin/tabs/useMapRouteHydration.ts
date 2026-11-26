@@ -1,5 +1,6 @@
 "use client";
 
+import { decodeFloodImpactParts } from "@/lib/flood-event-schema";
 import React, { useEffect, useRef } from "react";
 import { type DetourPointPhoto, SystemDataPayload } from "@/db/default-data";
 import {
@@ -289,7 +290,7 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
         setReverseRouteStatus(existingRevSibling ? existingRevSibling.traffic_status : flood.traffic_status);
         setReverseWaterLevelKnown(existingRevSibling ? existingRevSibling.direction_meta?.water_level_known !== false : flood.direction_meta?.water_level_known !== false);
         const siblingMeta = existingRevSibling ? parseFloodDirectionMeta(existingRevSibling.direction_meta, existingRevSibling) : meta;
-        setReverseAffectedParts(siblingMeta.affectedParts && siblingMeta.affectedParts.length ? siblingMeta.affectedParts : ["ALL_LANES"]);
+        setReverseAffectedParts(siblingMeta.affectedParts.length ? decodeFloodImpactParts(siblingMeta) : ["ALL_LANES"]);
       } else {
         setReverseRouteWaterLevel("");
         setReverseRouteStatus("WARNING");
@@ -325,7 +326,7 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
       if (meta.startedAt) setStartedAt(meta.startedAt.slice(0, 16));
       setCauseAndNote(meta.causeAndNote || flood.detour_advice || "");
       setDirectionCode(meta.directionCode);
-      setAffectedParts(meta.affectedParts && meta.affectedParts.length ? meta.affectedParts : ["UNSPECIFIED"]);
+      setAffectedParts(meta.affectedParts.length ? decodeFloodImpactParts(meta) : ["UNSPECIFIED"]);
       setDetailedPhotos(meta.photos || []);
       setFieldImages(meta.photos?.length ? meta.photos.map((p) => p.dataUrl) : (flood.latest_photo_url ? [flood.latest_photo_url] : []));
     } else {

@@ -49,6 +49,8 @@ export type AffectedRoadPart =
   | "RIGHT_SHOULDER"
   | "LEFT_FRONTAGE"
   | "RIGHT_FRONTAGE"
+  | "LEFT_FRONTAGE_SHOULDER"
+  | "RIGHT_FRONTAGE_SHOULDER"
   | "UNSPECIFIED"
   | "PENDING_VERIFICATION";
 
@@ -71,9 +73,96 @@ export const AFFECTED_ROAD_PART_LABELS: Record<AffectedRoadPart, string> = {
   RIGHT_SHOULDER: "ไหล่ทางขวา",
   LEFT_FRONTAGE: "ทางขนานซ้าย",
   RIGHT_FRONTAGE: "ทางขนานขวา",
+  LEFT_FRONTAGE_SHOULDER: "ไหล่ทางของทางขนานซ้ายทาง",
+  RIGHT_FRONTAGE_SHOULDER: "ไหล่ทางของทางขนานขวาทาง",
   UNSPECIFIED: "ไม่ระบุ",
   PENDING_VERIFICATION: "ไม่ระบุ",
 };
+
+type FloodImpactSide = "LEFT" | "RIGHT";
+const FRONTAGE_IMPACT_SIDES = ["LEFT", "RIGHT"] as const;
+
+export function hasFloodImpactPart(parts: readonly AffectedRoadPart[], part: AffectedRoadPart): boolean {
+  return parts.includes(part) || FRONTAGE_IMPACT_SIDES.some((side) =>
+    (part === `${side}_SHOULDER` || part === `${side}_FRONTAGE`) && parts.includes(`${side}_FRONTAGE_SHOULDER`));
+}
+
+/** Combine only an explicit edit; unrelated changes never reinterpret a legacy pair. */
+export function toggleFloodImpactPart(parts: readonly AffectedRoadPart[], part: AffectedRoadPart): AffectedRoadPart[] {
+  if (part === "UNSPECIFIED") return ["UNSPECIFIED"];
+  const specific: AffectedRoadPart[] = parts.filter((p) => p !== "UNSPECIFIED" && p !== "PENDING_VERIFICATION");
+  for (const side of FRONTAGE_IMPACT_SIDES) {
+    const frontage = `${side}_FRONTAGE` as const;
+    const shoulder = `${side}_SHOULDER` as const;
+    const combined = `${side}_FRONTAGE_SHOULDER` as const;
+    if (part !== frontage && part !== shoulder) continue;
+    const other = part === frontage ? shoulder : frontage;
+    if (specific.includes(combined)) return [...specific.filter((p) => p !== combined), other];
+    if (!specific.includes(part) && specific.includes(other)) {
+      return [...specific.filter((p) => p !== other), combined];
+    }
+  }
+  const isSelected = specific.includes(part);
+  let next: AffectedRoadPart[];
+  if (isSelected) next = specific.filter((p) => p !== part);
+  else if (part === "ALL_LANES") next = [...specific.filter((p) => p !== "LEFT_LANE" && p !== "RIGHT_LANE"), part];
+  else next = [...specific.filter((p) => !(part === "LEFT_LANE" || part === "RIGHT_LANE") || p !== "ALL_LANES"), part];
+  return next.length ? next : ["UNSPECIFIED"];
+}
+
+/** Store the known frontage part for old readers; only the supported optional JSON conveys which shoulder. */
+export function encodeFloodImpactParts(parts: readonly AffectedRoadPart[]): {
+  affectedParts: AffectedRoadPart[];
+  frontageShoulderSides?: FloodImpactSide[];
+} {
+  const frontageShoulderSides = FRONTAGE_IMPACT_SIDES.filter((side) => parts.includes(`${side}_FRONTAGE_SHOULDER`));
+  const knownParts = parts.map((part): AffectedRoadPart => part === "LEFT_FRONTAGE_SHOULDER"
+    ? "LEFT_FRONTAGE" : part === "RIGHT_FRONTAGE_SHOULDER" ? "RIGHT_FRONTAGE" : part);
+  return { affectedParts: [...new Set(knownParts)], frontageShoulderSides: frontageShoulderSides.length ? [...frontageShoulderSides] : undefined };
+}
+
+export function decodeFloodImpactParts(meta: { affectedParts: readonly AffectedRoadPart[]; frontageShoulderSides?: readonly FloodImpactSide[] }): AffectedRoadPart[] {
+  return meta.affectedParts.map((part) =>
+    part === "LEFT_FRONTAGE" && meta.frontageShoulderSides?.includes("LEFT") ? "LEFT_FRONTAGE_SHOULDER" :
+    part === "RIGHT_FRONTAGE" && meta.frontageShoulderSides?.includes("RIGHT") ? "RIGHT_FRONTAGE_SHOULDER" : part);
+}
+
+export function mirrorFloodImpactForReverse(parts: readonly AffectedRoadPart[]): AffectedRoadPart[] {
+  const counterparts: Partial<Record<AffectedRoadPart, AffectedRoadPart>> = {
+    LEFT_SHOULDER: "RIGHT_SHOULDER", RIGHT_SHOULDER: "LEFT_SHOULDER",
+    LEFT_FRONTAGE: "RIGHT_FRONTAGE", RIGHT_FRONTAGE: "LEFT_FRONTAGE",
+    LEFT_FRONTAGE_SHOULDER: "RIGHT_FRONTAGE_SHOULDER", RIGHT_FRONTAGE_SHOULDER: "LEFT_FRONTAGE_SHOULDER",
+  };
+  return parts.map((part) => counterparts[part] ?? part);
+}
+
+export function floodImpactSummaryLabel(part: AffectedRoadPart): string {
+  if (part === "LEFT_SHOULDER") return "ไหล่ทางซ้ายทาง";
+  if (part === "RIGHT_SHOULDER") return "ไหล่ทางขวาทาง";
+  if (part === "LEFT_FRONTAGE") return "ทางขนานซ้ายทาง";
+  if (part === "RIGHT_FRONTAGE") return "ทางขนานขวาทาง";
+  return AFFECTED_ROAD_PART_LABELS[part];
+}
+
+export function formatFloodImpactParts(meta: { affectedParts: readonly AffectedRoadPart[]; frontageShoulderSides?: readonly FloodImpactSide[] }): string {
+  return decodeFloodImpactParts(meta)
+    .filter((part) => part !== "UNSPECIFIED" && part !== "PENDING_VERIFICATION")
+    .map(floodImpactSummaryLabel)
+    .join(", ");
+}
+
+export function resolveRecordedFloodImpact(
+  flood: { affected_lanes?: string | null; direction_meta?: unknown },
+  meta = parseFloodDirectionMeta(flood.direction_meta, flood),
+): string | null {
+  const generated = formatFloodImpactParts(meta);
+  const direct = String(flood.affected_lanes ?? "").trim();
+  if ((meta.frontageShoulderSides?.length || Array.isArray((flood.direction_meta as { affectedParts?: unknown } | null | undefined)?.affectedParts)) && generated) {
+    return `น้ำท่วมบริเวณ${generated}`;
+  }
+  if (direct && direct !== "-") return direct;
+  return generated ? `น้ำท่วมบริเวณ${generated}` : null;
+}
 
 export type DetailedTrafficStatus =
   | "PASSABLE"              // ผ่านได้ปกติ
@@ -202,6 +291,7 @@ export interface FloodSegmentDirectionMeta {
   directionLabel?: string;     // เช่น "ตามหลัก กม. (ขาไป A → B)"
   roadSide?: "LEFT" | "RIGHT" | "BOTH" | "UNKNOWN";
   affectedParts: AffectedRoadPart[];
+  frontageShoulderSides?: FloodImpactSide[];
   trafficStatusDetail: DetailedTrafficStatus;
   waterLevelKnown: boolean;
 
@@ -366,20 +456,28 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
       : "UNKNOWN";
 
   const rawAffected = Array.isArray(parsed.affectedParts) ? parsed.affectedParts : [];
-  const affectedParts: AffectedRoadPart[] = rawAffected.filter((p: any): p is AffectedRoadPart => p in AFFECTED_ROAD_PART_LABELS);
+  const affectedParts: AffectedRoadPart[] = rawAffected.filter((p: unknown): p is AffectedRoadPart => typeof p === "string" &&
+    Object.prototype.hasOwnProperty.call(AFFECTED_ROAD_PART_LABELS, p) && !p.endsWith("_FRONTAGE_SHOULDER"));
   if (affectedParts.length === 0) {
-    if (route?.affected_lanes?.includes("ทุกช่อง")) affectedParts.push("ALL_LANES");
-    else if (route?.affected_lanes?.includes("ซ้าย")) affectedParts.push("LEFT_LANE");
-    else if (route?.affected_lanes?.includes("ขวา")) affectedParts.push("RIGHT_LANE");
-    else if (route?.affected_shoulder === "LEFT") affectedParts.push("LEFT_SHOULDER");
-    else if (route?.affected_shoulder === "RIGHT") affectedParts.push("RIGHT_SHOULDER");
-    else if (route?.affected_shoulder === "BOTH") {
-      affectedParts.push("LEFT_SHOULDER");
-      affectedParts.push("RIGHT_SHOULDER");
-    } else {
-      affectedParts.push("UNSPECIFIED");
+    const oldLanes = route?.affected_lanes || "";
+    for (const part of AFFECTED_ROAD_PARTS) {
+      if (part.value !== "UNSPECIFIED" && oldLanes.includes(part.label)) affectedParts.push(part.value);
     }
+    if (oldLanes.includes("ทุกช่อง") && !affectedParts.includes("ALL_LANES")) affectedParts.push("ALL_LANES");
+    if (affectedParts.length === 0) {
+      // Some historic values contain a free-text lane side rather than the current labels.
+      if (oldLanes.includes("ซ้าย")) affectedParts.push("LEFT_LANE");
+      if (oldLanes.includes("ขวา")) affectedParts.push("RIGHT_LANE");
+    }
+    if ((route?.affected_shoulder === "LEFT" || route?.affected_shoulder === "BOTH") && !affectedParts.includes("LEFT_SHOULDER")) {
+      affectedParts.push("LEFT_SHOULDER");
+    }
+    if ((route?.affected_shoulder === "RIGHT" || route?.affected_shoulder === "BOTH") && !affectedParts.includes("RIGHT_SHOULDER")) {
+      affectedParts.push("RIGHT_SHOULDER");
+    }
+    if (affectedParts.length === 0) affectedParts.push("UNSPECIFIED");
   }
+
 
   const rawPhotos: any[] = Array.isArray(parsed.photos) ? parsed.photos : [];
   const photos: FloodPhotoItem[] = rawPhotos
@@ -427,6 +525,9 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
     directionLabel: parsed.directionLabel || (fallbackDirection === "A_TO_B" ? "ตามหลัก กม. (ขาไป A → B)" : fallbackDirection === "B_TO_A" ? "ย้อนหลัก กม. (ขากลับ B → A)" : fallbackDirection === "BOTH" ? "ทั้งสองทิศทาง" : "ไม่ระบุทิศทาง"),
     roadSide: fallbackRoadSide,
     affectedParts,
+    frontageShoulderSides: Array.isArray(parsed.frontageShoulderSides)
+      ? FRONTAGE_IMPACT_SIDES.filter((side) => parsed.frontageShoulderSides.includes(side) && affectedParts.includes(`${side}_FRONTAGE`))
+      : undefined,
     trafficStatusDetail: mapTrafficStatusToDetail(route?.traffic_status, parsed.trafficStatusDetail),
     waterLevelKnown: reading.known,
     startedAt: parsed.startedAt || route?.updated_at || new Date().toISOString(),

@@ -800,15 +800,18 @@ test("Admin registries surface location and update time while keeping filters an
 
 test("existing flood edit cancels cleanly or discards only unsaved changes", async ({ page }) => {
   const writes: string[] = [];
+  const systemData = createSystemData();
+  const existing = systemData.floodRoutes.find((row) => row.id === "F-1")!;
+  Object.assign(existing, { affected_lanes: "ทุกช่องจราจร, ทางขนานซ้าย", affected_shoulder: "RIGHT" });
   const upserts: Array<{ id?: string; isActive?: boolean }> = [];
   await page.route("**/functions/v1/hdms-api*", (route) => {
     const body = route.request().postDataJSON() as { action?: string; args?: [{ id?: string; isActive?: boolean }] };
     if (body.action && /upsert|delete|save|replace/i.test(body.action)) writes.push(body.action);
     if (body.action === "upsertRouteAction") {
       if (body.args?.[0]) upserts.push(body.args[0]);
-      return route.fulfill({ json: { success: true, savedId: "F-1", systemData: createSystemData() } });
+      return route.fulfill({ json: { success: true, savedId: "F-1", systemData } });
     }
-    return route.fulfill({ json: createSystemData() });
+    return route.fulfill({ json: systemData });
   });
   await page.goto(`${base}/admin/`);
   await page.getByRole("button", { name: "รายการเหตุการณ์", exact: true }).filter({ visible: true }).first().click();
@@ -843,10 +846,14 @@ test("existing flood edit cancels cleanly or discards only unsaved changes", asy
   expect(writes).toEqual([]);
   await edit.click();
   await expect(landmark).toHaveValue(savedLandmark);
+  const impact = page.getByRole("group", { name: "ส่วนที่ได้รับผลกระทบ ทั้งสองฝั่ง" });
+  await expect(impact.getByRole("button", { name: "ทางขนานซ้าย", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(impact.getByRole("button", { name: "ไหล่ทางขวา", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(impact.getByRole("button", { name: "ทุกช่องจราจร", exact: true })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("checkbox", { name: /บันทึกเป็นฉบับร่าง/ }).check();
   await page.getByRole("button", { name: "บันทึกร่างเหตุการณ์", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "บันทึกร่างสำเร็จ" })).toBeVisible();
-  expect(upserts).toEqual([expect.objectContaining({ id: "F-1", isActive: false })]);
+  expect(upserts).toEqual([expect.objectContaining({ id: "F-1", isActive: false, directionMeta: expect.objectContaining({ affectedParts: ["ALL_LANES", "LEFT_FRONTAGE", "RIGHT_SHOULDER"] }) })]);
 });
 
 test("incident subdivision filter combines verified office, road and traffic status", async ({ page }) => {

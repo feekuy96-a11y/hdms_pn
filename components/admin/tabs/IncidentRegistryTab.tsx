@@ -15,7 +15,7 @@ import { getDeletedRoutesAction, restoreRouteAction } from "@/app/actions/doh-ac
 import {
   parseFloodDirectionMeta, resolveEffectiveRoadSide, getDetailedTrafficPresentation,
   getFloodCompletenessIssues, mapTrafficStatusToDetail,
-  AFFECTED_ROAD_PART_LABELS, DetailedTrafficStatus, ParentFloodEventGroup,
+  decodeFloodImpactParts, floodImpactSummaryLabel, DetailedTrafficStatus, ParentFloodEventGroup,
 } from "@/lib/flood-event-schema";
 import {
   getTrafficPresentation, TRAFFIC_STATUS_OPTIONS, deriveTrafficStatusFromWaterLevel,
@@ -382,7 +382,7 @@ export function IncidentRegistryTab({
                         meta.trafficStatusDetail
                       );
                       const completenessIssues = getFloodCompletenessIssues(r, meta);
-                      const visibleParts = (meta.affectedParts || []).filter(
+                      const visibleParts = decodeFloodImpactParts(meta).filter(
                         (p: any) => p && p !== "UNSPECIFIED" && p !== "PENDING_VERIFICATION"
                       );
 
@@ -542,7 +542,7 @@ export function IncidentRegistryTab({
                                 เส้นทางที่ได้รับผลกระทบ:{" "}
                                 <strong className={visibleParts.length > 0 ? "text-sky-300" : "text-amber-300"}>
                                   {visibleParts.length > 0
-                                    ? visibleParts.map((p: any) => AFFECTED_ROAD_PART_LABELS[p as keyof typeof AFFECTED_ROAD_PART_LABELS] || p).join(", ")
+                                    ? visibleParts.map(floodImpactSummaryLabel).join(", ")
                                     : "ไม่ระบุ"}
                                 </strong>
                               </span>
