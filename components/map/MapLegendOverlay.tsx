@@ -5,6 +5,7 @@ import { Layers, Plus, Minus, Building2, ChevronUp, LocateFixed, Info, X, PanelL
 import { SystemDataPayload } from "@/db/default-data";
 import { LAYER_CONFIG } from "@/lib/constants";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
+import type { AdministrativeBoundaryControls } from "./useAdministrativeBoundaries";
 import { isFloodLineVisibleOnCurrentMap } from "./longdo-map-popups";
 
 export interface MapSidePaneControl {
@@ -20,6 +21,7 @@ interface MapLegendOverlayProps {
   mapReady: boolean;
   isLayerControlCollapsed: boolean;
   setIsLayerControlCollapsed: (collapsed: boolean) => void;
+  administrativeBoundaries?: AdministrativeBoundaryControls;
   showFloodLayer: boolean;
   setShowFloodLayer: (show: boolean) => void;
   effectiveShowFloodLayer: boolean;
@@ -67,6 +69,7 @@ export function MapLegendOverlay({
   mapReady,
   isLayerControlCollapsed,
   setIsLayerControlCollapsed,
+  administrativeBoundaries,
   showFloodLayer,
   setShowFloodLayer,
   effectiveShowFloodLayer,
@@ -458,6 +461,68 @@ export function MapLegendOverlay({
                 <input type="checkbox" checked={showHighwayShields} onChange={(e) => setShowHighwayShields(e.target.checked)} className="accent-slate-400 rounded h-5 w-5 sm:h-4 sm:w-4 shrink-0 cursor-pointer" />
               </label>
             </div>
+
+            {administrativeBoundaries && (
+              <fieldset className="hdms-map-muted space-y-1.5 rounded-lg border px-2">
+                <legend className="hdms-guide-title px-1 font-semibold">ขอบเขตการปกครอง</legend>
+                <label className="flex min-h-11 items-center justify-between gap-2">
+                  <span>แสดงขอบเขตการปกครอง</span>
+                  <input
+                    type="checkbox"
+                    checked={administrativeBoundaries.enabled}
+                    onChange={event => administrativeBoundaries.onToggle(event.target.checked)}
+                    className="h-5 w-5 accent-sky-400"
+                  />
+                </label>
+                {administrativeBoundaries.enabled && (
+                  <div className="space-y-1.5 pb-2">
+                    {administrativeBoundaries.index && (
+                      <>
+                        <label className="block">จังหวัด
+                          <select className="hdms-map-control block min-h-10 w-full rounded-md border px-2" value={administrativeBoundaries.provinceCode}
+                            onChange={event => administrativeBoundaries.onProvince(event.target.value)}>
+                            {administrativeBoundaries.index.provinces.map(area => <option key={area.code} value={area.code}>{area.name}</option>)}
+                          </select>
+                        </label>
+                        <label className="block">อำเภอ/เขต
+                          <select className="hdms-map-control block min-h-10 w-full rounded-md border px-2" value={administrativeBoundaries.districtCode}
+                            disabled={!administrativeBoundaries.districts.length}
+                            onChange={event => administrativeBoundaries.onDistrict(event.target.value)}>
+                            <option value="">ทุกอำเภอ/เขต</option>
+                            {administrativeBoundaries.districts.map(area => <option key={area.code} value={area.code}>{area.name}</option>)}
+                          </select>
+                        </label>
+                        <label className="block">ตำบล/แขวง
+                          <select className="hdms-map-control block min-h-10 w-full rounded-md border px-2" value={administrativeBoundaries.subdistrictCode}
+                            disabled={!administrativeBoundaries.subdistricts.length}
+                            onChange={event => administrativeBoundaries.onSubdistrict(event.target.value)}>
+                            <option value="">ทุกตำบล/แขวง</option>
+                            {administrativeBoundaries.subdistricts.map(area => <option key={area.code} value={area.code}>{area.name}</option>)}
+                          </select>
+                        </label>
+                        <p className="break-words text-xs">
+                          ที่มา: <a className="underline" href="https://github.com/GeoThai/boundaries/releases/tag/v2026.10.23">GeoThai / OCHA COD-AB / กรมแผนที่ทหาร</a>
+                          {" · "}<a className="underline" href="https://creativecommons.org/licenses/by/3.0/igo/">CC BY 3.0 IGO</a>
+                          {" · "}<a className="underline" href="https://github.com/GeoThai/data/tree/v2026.10.22">ชื่อและรหัส GeoThai</a>
+                          {" · "}<a className="underline" href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>
+                          {" · ขอบเขตอ้างอิง ไม่ใช่แนวเขตตามกฎหมาย"}
+                        </p>
+                        {administrativeBoundaries.sharedNames.length > 1 && (
+                          <p role="status">ขอบเขตร่วม: {administrativeBoundaries.sharedNames.join(" / ")} (ไม่มีเส้นขอบเขตแยกรายแขวงในชุดข้อมูล)</p>
+                        )}
+                      </>
+                    )}
+                    {administrativeBoundaries.status === "loading" && <p role="status">กำลังโหลดขอบเขตการปกครอง</p>}
+                    {administrativeBoundaries.status === "error" && (
+                      <div>
+                        <p role="status">โหลดขอบเขตการปกครองไม่สำเร็จ</p>
+                        <button type="button" onClick={administrativeBoundaries.onRetry} className="hdms-map-control min-h-11 underline">ลองใหม่</button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </fieldset>
+            )}
 
             {(secondaryDisplaySetting || floodMarkerSetting || detourDirectionSetting) && (
               <details className="citizen-layer-advanced">

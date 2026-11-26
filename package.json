@@ -15,7 +15,12 @@
     "test:e2e": "playwright test",
     "test:e2e:local": "node scripts/test-e2e-with-public-config.mjs",
     "check": "npm run lint && npm run typecheck && npm run build",
-    "check:deploy": "npm run lint && npm run typecheck && npm run build:pages"
+    "check:deploy": "npm run lint && npm run typecheck && npm run build:pages",
+    "generate:admin-boundaries": "node scripts/build-admin-boundaries.mjs",
+    "predev": "npm run generate:admin-boundaries",
+    "prebuild": "npm run generate:admin-boundaries",
+    "prebuild:server": "npm run generate:admin-boundaries",
+    "prebuild:pages": "npm run generate:admin-boundaries"
   },
   "engines": {
     "node": ">=22"
