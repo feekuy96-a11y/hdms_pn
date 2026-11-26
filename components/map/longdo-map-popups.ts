@@ -213,7 +213,7 @@ export function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color:
   const lengthKm = props.length_km || "";
   return `
     <div class="doh-highway-popup w-[min(18.5rem,calc(100vw-2.25rem))] max-w-full text-xs p-[0.833em] sm:p-[1em] font-body bg-slate-950 text-white rounded-xl" style="border-top: 3px solid ${color}">
-      <div class="hdms-map-popup-heading flex items-center justify-between pb-1.5 border-b border-slate-800 gap-[0.667em]">
+      <div class="hdms-map-popup-heading flex items-center justify-between pb-1.5 border-b doh-highway-divider gap-[0.667em]">
         <span class="text-white text-sm sm:text-base font-bold font-heading tracking-wide break-words">
           ${code ? `ทล.${escapeHtml(code)} ` : ""}${escapeHtml(name)}
         </span>
@@ -221,16 +221,16 @@ export function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color:
       <div class="mt-2">
         ${props.km_start !== undefined && props.km_start !== null && String(props.km_start).trim() !== "" ? `<p class="text-amber-300 text-[0.75rem] mt-0.5 font-mono">ระหว่าง กม.${escapeHtml(formatKmPost(props.km_start))}${props.km_end !== undefined && props.km_end !== null && String(props.km_end).trim() !== "" ? ` ถึง กม.${escapeHtml(formatKmPost(props.km_end))}` : ""}</p>` : ""}
       </div>
-      <div class="grid grid-cols-2 gap-[0.5em] mt-2.5 pt-2 border-t border-slate-800 text-[0.75rem]">
-        <div class="bg-slate-900/90 p-[0.5em] rounded-lg border border-slate-800">
-          <span class="text-slate-400 block text-[0.75rem]">ระยะทาง</span>
-          <strong class="text-amber-400 font-mono">${lengthKm ? `${escapeHtml(lengthKm)} กม.` : "ตามโครงข่าย"}</strong>
+      <div class="grid grid-cols-2 gap-[0.5em] mt-2.5 pt-2 border-t doh-highway-divider text-[0.75rem]">
+        <div class="doh-highway-metric p-[0.5em] rounded-lg border">
+          <span class="doh-highway-metric-label block text-[0.75rem]">ระยะทาง</span>
+          <strong class="doh-highway-metric-value font-mono">${lengthKm ? `${escapeHtml(lengthKm)} กม.` : "ตามโครงข่าย"}</strong>
         </div>
-        <div class="bg-slate-900/90 p-[0.5em] rounded-lg border border-slate-800">
-          <span class="text-slate-400 block text-[0.75rem]">ช่องจราจร</span>
-          <strong class="text-sky-400 font-mono text-[0.75rem]">${escapeHtml(props.lanes || "๔ ช่องจราจร")}</strong>
+        <div class="doh-highway-metric p-[0.5em] rounded-lg border">
+          <span class="doh-highway-metric-label block text-[0.75rem]">ช่องจราจร</span>
+          <strong class="doh-highway-metric-value font-mono text-[0.75rem]">${escapeHtml(props.lanes || "๔ ช่องจราจร")}</strong>
         </div>
-        <div class="col-span-2 mt-0.5 rounded-lg border border-slate-700 bg-slate-900/90 px-[0.667em] py-[0.5em] text-center text-[0.75rem] font-semibold text-amber-300">
+        <div class="doh-highway-type col-span-2 mt-0.5 rounded-lg border px-[0.667em] py-[0.5em] text-center text-[0.75rem] font-semibold">
           ${featureIsMain ? "ทางหลวงสายหลัก" : "ทางหลวงสายรอง"}
         </div>
       </div>

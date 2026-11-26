@@ -79,6 +79,86 @@
 .canvas { background: var(--workspace-canvas); }
 .chrome { background: var(--workspace-panel); border-color: var(--workspace-edge); }
 .topbar { box-shadow: 0 2px 12px var(--workspace-shadow); }
+
+/* Match the public brand's name → organization hierarchy. Controls remain distinct. */
+.brand { display: flex; align-items: center; gap: .45rem; min-inline-size: 0; }
+.brandLogo {
+  inline-size: 2rem;
+  block-size: 2rem;
+  flex: none;
+  object-fit: contain;
+}
+.brandFallback { display: grid; place-items: center; color: var(--workspace-amber); font-size: .75rem; font-weight: 800; }
+.brandCopy { min-inline-size: 0; overflow-wrap: anywhere; }
+.brandTitle, .brandOrg { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.brandTitle { -webkit-line-clamp: 2; margin: 0; color: var(--workspace-ink); font-size: .75rem; font-weight: 800; line-height: 1.21; }
+.brandOrg { -webkit-line-clamp: 1; margin: .12rem 0 0; color: var(--workspace-muted); font-size: .68rem; font-weight: 650; line-height: 1.2; }
+@media (max-width: 639px) {
+  .topbar { padding-inline: 10px; gap: 8px; }
+  .topbar > div { gap: 6px; }
+  .topbar :is(a[aria-label="หน้าประชาชน"], button[aria-label="รีเฟรชข้อมูล"], .themeChooser) {
+    min-inline-size: 44px;
+    inline-size: 44px;
+    min-block-size: 44px;
+    padding-inline: 0;
+  }
+  .brand { gap: 6px; }
+  .brandLogo { inline-size: 32px; block-size: 32px; }
+}
+@media (min-width: 640px) {
+  .brand { gap: .6rem; }
+  .brandTitle { font-size: .875rem; }
+  .brandOrg { font-size: .75rem; }
+}
+@media (min-width: 1024px) { .brand { max-inline-size: min(34rem, 48vw); } }
+
+.mapBack, .mapSearch input {
+  min-block-size: 44px;
+  border: 1px solid var(--workspace-field-edge);
+  border-radius: .55rem;
+  color: var(--workspace-ink);
+  background-color: var(--workspace-panel);
+}
+.mapBack {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .25rem;
+  padding: .25rem .45rem;
+  color: var(--workspace-on-primary);
+  border-color: var(--workspace-primary);
+  background-color: var(--workspace-primary);
+  font-size: .72rem;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mapBack > svg { flex: none; }
+.mapBack:hover { background-color: var(--workspace-primary-hover); }
+.mapSearch { position: relative; min-inline-size: 0; }
+.mapSearch > svg {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: .55rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--workspace-muted);
+}
+.mapSearch input {
+  display: block;
+  width: 100%;
+  min-inline-size: 0;
+  padding: .35rem .45rem .35rem 1.85rem;
+  font-size: 1rem;
+  box-shadow: 0 1px 3px var(--workspace-shadow);
+}
+.mapSearch input::placeholder { color: var(--workspace-muted); opacity: 1; }
+.mapBack:focus-visible, .mapSearch input:focus-visible { outline: 2px solid var(--workspace-sky); outline-offset: 1px; }
+@media (min-width: 1024px) {
+  .mapBack { display: none; }
+  .mapSearch input { font-size: .875rem; }
+}
+
 .chrome button[aria-current="page"],
 .paneSwitch button[aria-pressed="true"] {
   background: var(--workspace-active);

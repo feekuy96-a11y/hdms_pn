@@ -98,6 +98,20 @@ div[data-hdms-popup=photo] { background: var(--hdms-scrim); }
 .leaflet-popup.hdms-popup-map .leaflet-popup-content :is([class~="text-slate-300"],[class~="text-slate-400"],[class~="text-slate-500"]) { color: var(--text-secondary); }
 .leaflet-popup.hdms-popup-map .leaflet-popup-content :is([class*="bg-[#0d"],[class*="bg-[#0e"],[class*="bg-[#0f"]) { background-color: var(--bg-input); border-color: var(--border-subtle); }
 
+/* Pair every highway field with its own theme-aware surface and text. */
+.doh-highway-popup .doh-highway-divider { border-color: var(--border-subtle); }
+.doh-highway-popup .doh-highway-metric {
+  background: var(--bg-input);
+  border-color: var(--border-subtle);
+}
+.doh-highway-popup .doh-highway-metric-label { color: var(--text-secondary); }
+.doh-highway-popup .doh-highway-metric-value { color: var(--text-primary); }
+.doh-highway-popup .doh-highway-type {
+  background: var(--state-selected);
+  color: var(--text-primary);
+  border-color: var(--hdms-control-edge);
+}
+
 /* Keep status tone readable on a light popup as well as a dark popup. */
 :is([data-hdms-popup=panel], .leaflet-popup.hdms-popup-map) :is([class~="text-red-200"], [class*="text-red-200/"], [class~="text-red-300"], [class*="text-red-300/"], [class~="text-red-400"], [class*="text-red-400/"], [class~="text-rose-200"], [class*="text-rose-200/"], [class~="text-rose-300"], [class*="text-rose-300/"], [class~="text-rose-400"], [class*="text-rose-400/"]) {
   color: var(--status-danger-ink);

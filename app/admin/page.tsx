@@ -51,13 +51,14 @@ import { OfflineSyncStatus } from "@/components/offline/OfflineSyncStatus";
 import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
 import Link from "next/link";
-import { ArrowLeft, RotateCw, FileText, PieChart, Settings, Smartphone, X, Sun, Moon, Monitor } from "lucide-react";
+import { ArrowLeft, ArrowUp, Search, RotateCw, FileText, PieChart, Settings, Smartphone, X, Sun, Moon, Monitor } from "lucide-react";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 const ExecutiveDashboard = dynamic(
   () => import("@/components/executive/ExecutiveDashboard").then((mod) => mod.ExecutiveDashboard),
   { ssr: false }
 );
 import { usePollingActivity } from "@/lib/use-polling-activity";
+import { websiteEmblemClip } from "@/lib/website-emblem";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
 
 export default function AdminPage() {
@@ -424,30 +425,19 @@ export default function AdminPage() {
           >
             <ArrowLeft className="w-4 h-4" aria-hidden="true" /> <span className="hidden sm:inline">หน้าประชาชน</span>
           </Link>
-          <div className="flex items-center gap-2 min-w-0">
+          <div className={workspace.brand} role="group" aria-label="ระบบจัดการของส่วนราชการ">
             {systemData.systemSettings?.logoUrl ? (
-              <img
-                src={systemData.systemSettings.logoUrl}
-                alt="Logo"
-                className="w-8 h-8 rounded-lg object-contain shadow shrink-0 bg-slate-900 p-0.5 border border-surface"
-              />
+              <img src={systemData.systemSettings.logoUrl} alt="" className={workspace.brandLogo} style={{ clipPath: websiteEmblemClip(systemData.systemSettings.logoUrl) }} />
             ) : (
-              <span className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-heading font-black text-[0.75rem] shadow shrink-0">
-                ขท.
-              </span>
+              <span className={`${workspace.brandLogo} ${workspace.brandFallback}`} aria-hidden="true">ขท.</span>
             )}
-            <div className="min-w-0">
-              <div className="flex items-center gap-[0.45em]">
-                <span className="sr-only min-[360px]:not-sr-only min-w-0 max-w-full min-[360px]:truncate sm:shrink-0 rounded bg-amber-400 px-[0.5em] py-[0.1em] text-[0.75rem] font-heading font-black tracking-normal text-slate-950">
-                  ส่วนราชการ
-                </span>
-                <span className="text-[0.75rem] text-amber-300 font-heading font-medium tracking-normal hidden md:inline truncate">
-                  {systemData.systemSettings?.org || "แขวงทางหลวงปัตตานี กรมทางหลวง"}
-                </span>
-              </div>
-              <h1 className="font-heading text-[0.75rem] sm:text-[0.875rem] font-bold tracking-normal leading-snug text-white whitespace-nowrap truncate">
+            <div className={workspace.brandCopy}>
+              <h1 className={`${workspace.brandTitle} font-heading`}>
                 {systemData.systemSettings?.name || "ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย"}
               </h1>
+              <p className={workspace.brandOrg}>
+                {systemData.systemSettings?.org || "แขวงทางหลวงปัตตานี กรมทางหลวง"}
+              </p>
             </div>
           </div>
         </div>
@@ -824,19 +814,21 @@ export default function AdminPage() {
                   }
                 }}
                 aria-label="กลับไปส่วนกรอกฟอร์ม"
-                className="lg:hidden min-h-11 rounded-xl border border-surface bg-surface-floating px-[0.9em] py-[0.5em] text-[0.75rem] font-heading font-bold text-amber-300 shadow-xl hover:bg-surface-card hover:text-white transition"
+                className={`${workspace.mapBack} font-heading`}
               >
-                ↑ กลับไปฟอร์ม
+                <ArrowUp size={14} aria-hidden="true" />กลับไปฟอร์ม
               </button>
-              <input
-              type="search"
-              aria-label="ค้นหาสายทางบนแผนที่"
-              placeholder="ค้นหาสายทางบนแผนที่"
-              value={mapSearch}
-              disabled={isEditingBlocked}
-              onChange={(event) => setMapSearch(event.target.value)}
-              className="min-h-11 min-w-0 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white disabled:hidden"
-            />
+              <div className={workspace.mapSearch} hidden={isEditingBlocked}>
+                <Search size={16} aria-hidden="true" />
+                <input
+                  type="search"
+                  aria-label="ค้นหาสายทางบนแผนที่"
+                  placeholder="ค้นหาสายทางบนแผนที่"
+                  value={mapSearch}
+                  disabled={isEditingBlocked}
+                  onChange={(event) => setMapSearch(event.target.value)}
+                />
+              </div>
             </div>
           </div>
         </div>
