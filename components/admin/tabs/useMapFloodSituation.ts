@@ -33,6 +33,7 @@ export type TrafficStatusValue =
 export interface UseMapFloodSituationParams {
   systemData: SystemDataPayload;
   routeMode: "FLOOD" | "DETOUR";
+  carriagewayChoice: "" | "SHARED" | "DIVIDED";
   routeNo: string;
   selectedHighwayName: string;
   sectionName: string;
@@ -50,6 +51,7 @@ export interface UseMapFloodSituationParams {
 export function useMapFloodSituation({
   systemData,
   routeMode,
+  carriagewayChoice,
   routeNo,
   selectedHighwayName,
   sectionName,
@@ -112,8 +114,9 @@ export function useMapFloodSituation({
   const isSelectedHighwayDivided = Boolean(
     selectedHighwayOption && (selectedHighwayOption.laneCount >= 4 || selectedHighwayOption.hasDualCarriageway)
   );
+  const floodCarriageway: "" | "SHARED" | "DIVIDED" = carriagewayChoice || selectedHighwayOption?.carriagewayStructure || "";
   const isDividedBothFlood =
-    routeMode === "FLOOD" && roadSide === "BOTH" && directionCode === "BOTH" && isSelectedHighwayDivided;
+    routeMode === "FLOOD" && roadSide === "BOTH" && directionCode === "BOTH" && floodCarriageway === "DIVIDED";
 
   const availableOfficeNames = useMemo(() => {
     const names = new Set<string>();
@@ -174,8 +177,8 @@ export function useMapFloodSituation({
   };
 
   // Seed or slice reverse carriageway geometry when "ท่วมทั้งสองฝั่งจราจร" is chosen on a >= 4-lane highway
-  const ensureReverseFloodGeometry = (forwardSource: [number, number][]) => {
-    if (!isSelectedHighwayDivided) return;
+  const ensureReverseFloodGeometry = () => {
+    if (floodCarriageway !== "DIVIDED" || draftReverseCoordinates.length >= 2) return;
     if (routeNo && kmStart && kmEnd) {
       const bestGroup = findBestHighwayGroupForSelection(
         systemData.highwayLayers,
@@ -206,11 +209,6 @@ export function useMapFloodSituation({
           return;
         }
       }
-    }
-    if (draftReverseCoordinates.length < 2 && forwardSource.length >= 2) {
-      const seeded = [...forwardSource].reverse().map((p) => [...p] as [number, number]);
-      setDraftReverseCoordinates?.(seeded);
-      originalReverseRouteCoordinatesRef.current = seeded.map((p) => [...p] as [number, number]);
     }
   };
 
@@ -262,6 +260,7 @@ export function useMapFloodSituation({
     availableHighways,
     selectedHighwayOption,
     selectedHighwayLaneCount,
+    floodCarriageway,
     isSelectedHighwayDivided,
     isDividedBothFlood,
     availableOfficeNames,

@@ -462,9 +462,12 @@ test("map flood pin opens summary popup without stacking, per-route detour direc
   await expect(dialog).toHaveCount(0);
   const startPhotoPin = page.locator(".doh-detour-photo-start").first();
   const endPhotoPin = page.locator(".doh-detour-photo-end").first();
+  await expect(startPhotoPin).toBeHidden();
+  await expect(endPhotoPin).toBeHidden();
+  await page.locator(".doh-detour-symbol").first().press("Enter");
   await expect(startPhotoPin).toBeVisible();
   await expect(endPhotoPin).toBeVisible();
-  await startPhotoPin.click({ force: true });
+  await startPhotoPin.press("Enter");
   await expect(page.locator(".doh-detour-point-photo-popup")).toContainText("ภาพปากทางเข้าแยกเมาะมาวี ฝั่งจุด A");
 });
 

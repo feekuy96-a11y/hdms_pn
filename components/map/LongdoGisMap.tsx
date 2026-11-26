@@ -883,6 +883,7 @@ export function LongdoGisMap({
     effectiveShowFloodLayer,
     floodDisplayMode,
     currentZoom,
+    selectedDetourPopupId: activePopupEntity?.type === "DETOUR" ? activePopupEntity.id : null,
     leafletRef,
     rendererRef,
     detourGroupRef,
@@ -951,6 +952,10 @@ export function LongdoGisMap({
       if (!ids) return;
       const baseOpacity = Number.isFinite(layer.__dohBaseOpacity) ? layer.__dohBaseOpacity : 1;
       const visible = !active || ids.some((id: string) => matches.has(id));
+      if (layer.__dohApplyEndpointFilter) {
+        layer.__dohApplyEndpointFilter(visible);
+        return;
+      }
       const opacity = baseOpacity * (visible ? 1 : 0);
       if (layer.__dohBaseInteractive === undefined) layer.__dohBaseInteractive = layer.options?.interactive ?? true;
       layer.options.interactive = visible && layer.__dohBaseInteractive;
@@ -1069,6 +1074,9 @@ export function LongdoGisMap({
       const visibleDetourIds = new Set(detourLinesRef.current
         .filter((entry) => entry.line.options.opacity > 0)
         .map((entry) => entry.id));
+      const visibleFloodIds = new Set(Object.entries(floodLinesRef.current)
+        .filter(([, entry]) => entry.line.options.opacity > 0)
+        .map(([id]) => id));
       const visibleHighwayKeys = new Set<string>();
       const collectVisibleHighways = (path: any) => {
         if (path.eachLayer) { path.eachLayer(collectVisibleHighways); return; }
@@ -1084,6 +1092,8 @@ export function LongdoGisMap({
         mapStyles,
         highwayLayers: systemData.highwayLayers,
         detourRoutes: systemData.detourRoutes,
+        floodRoutes: systemData.floodRoutes,
+        visibleFloodIds,
         showMainHwy: effectiveShowMainHwy,
         showSecHwy: effectiveShowSecHwy,
         showDetourLayer: effectiveShowDetourLayer,

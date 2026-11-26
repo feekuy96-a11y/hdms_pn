@@ -122,7 +122,7 @@ export function MapManagementTab({
     detourEndPhotoUrl, setDetourEndPhotoUrl, detourEndPhotoCaption, setDetourEndPhotoCaption,
     detourEndPhotoLocation, setDetourEndPhotoLocation,
     startPhotoLocManualRef, endPhotoLocManualRef, resolveDetourPhotoArea, updateDetourPhotoLocation,
-    forceStraightThrough, setForceStraightThrough, detourDirectionMode, setDetourDirectionMode,
+    forceStraightThrough, setForceStraightThrough, detourDirectionMode, setDetourDirectionMode, carriagewayChoice, setCarriagewayChoice,
     detourDistanceMeters, setDetourDistanceMeters, detourDurationSeconds, setDetourDurationSeconds,
     closedRoadConflicts, setClosedRoadConflicts, passabilityWarnings, setPassabilityWarnings,
     startLat, setStartLat, startLon, setStartLon, endLat, setEndLat, endLon, setEndLon,
@@ -167,13 +167,14 @@ export function MapManagementTab({
     reverseWaterLevelKnown, setReverseWaterLevelKnown,
     reverseAffectedParts, setReverseAffectedParts,
     availableHighways, selectedHighwayOption, selectedHighwayLaneCount,
-    isSelectedHighwayDivided, isDividedBothFlood, availableOfficeNames,
+    isSelectedHighwayDivided, isDividedBothFlood, floodCarriageway, availableOfficeNames,
     handleWaterLevelInputChange, handleReverseWaterLevelInputChange,
     toggleAffectedPartWithAutoStatus, ensureReverseFloodGeometry,
     resetFloodSituationState,
   } = useMapFloodSituation({
     systemData,
     routeMode,
+    carriagewayChoice,
     routeNo,
     selectedHighwayName,
     sectionName,
@@ -184,11 +185,27 @@ export function MapManagementTab({
     originalReverseRouteCoordinatesRef: originalReverseRouteCoordinates,
   });
 
-  const supportsTwoWayLineEdit =
-    (routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY") || isDividedBothFlood;
+  const bothDirections = routeMode === "DETOUR" ? detourDirectionMode === "TWO_WAY" : roadSide === "BOTH";
+  const effectiveCarriageway = routeMode === "DETOUR" ? carriagewayChoice : floodCarriageway;
+  const needsCarriagewayChoice = bothDirections && !effectiveCarriageway;
+  const twoWayDividedDetour = routeMode === "DETOUR" && bothDirections && effectiveCarriageway === "DIVIDED";
+  const supportsTwoWayLineEdit = twoWayDividedDetour || isDividedBothFlood;
+  const changeCarriagewayChoice = (value: "" | "SHARED" | "DIVIDED") => {
+    if (value === effectiveCarriageway) return;
+    setCarriagewayChoice(value);
+    routingRequest.current += 1;
+    setDraftCoordinates([]);
+    setDraftReverseCoordinates?.([]);
+    setDraftReverseWaypoints?.([]);
+    setRevStartLat("");
+    setRevStartLon("");
+    setRevEndLat("");
+    setRevEndLon("");
+    setSnappingStatusText("");
+  };
 
   useMapMetaAndMarkerSync({
-    routeMode, roadSide, detourDirectionMode, setDraftDirectionMeta,
+    routeMode, roadSide, detourDirectionMode, showBothWays: Boolean(effectiveCarriageway), setDraftDirectionMeta,
     startLat, startLon, endLat, endLon, revStartLat, revStartLon, revEndLat, revEndLon,
     supportsTwoWayLineEdit, onDraftPickMarkersChange,
     sectionNameManuallyEdited, startArea, endArea,
@@ -257,7 +274,7 @@ export function MapManagementTab({
     detourRoadCondition, setDetourRoadCondition,
     detourDurationMinFwd, setDetourDurationMinFwd,
     detourDurationMinRev, setDetourDurationMinRev,
-    detourDirectionMode, setDetourDirectionMode,
+    detourDirectionMode, setDetourDirectionMode, carriagewayChoice, setCarriagewayChoice,
     detourStartPhotoUrl, setDetourStartPhotoUrl,
     detourStartPhotoCaption, setDetourStartPhotoCaption,
     detourStartPhotoLocation, setDetourStartPhotoLocation,
@@ -331,6 +348,7 @@ export function MapManagementTab({
     setDetourName,
     setDetourDesc,
     setDetourDirectionMode,
+    setCarriagewayChoice,
     setDetourGoogleMapsUrlFwd,
     setDetourGoogleMapsUrlRev,
     setDetourRoadCondition,
@@ -356,6 +374,7 @@ export function MapManagementTab({
     systemData,
     routeMode,
     detourDirectionMode,
+    twoWayDividedDetour, needsCarriagewayChoice,
     forceStraightThrough,
     useCarriagewaySnapping,
     isDividedBothFlood,
@@ -419,7 +438,7 @@ export function MapManagementTab({
     highwayLayers: systemData.highwayLayers,
     routeMode,
     activeEditTarget,
-    isSelectedHighwayDivided,
+    isSelectedHighwayDivided: roadSide === "BOTH" ? isDividedBothFlood : isSelectedHighwayDivided,
     routeNo,
     sectionName,
     kmStart,
@@ -561,9 +580,9 @@ export function MapManagementTab({
     systemData, onDataRefresh, onToast, showSuccessModal, showErrorModal,
     onNavigateToIncidents, onClearEditingRoute, editingRoute,
     routeMode, routeEditId, setRouteEditId, saveAsDraft, setIsSubmitting,
-    startLat, startLon, endLat, endLon, revStartLat, revStartLon, revEndLat, revEndLon,
+    startLat, startLon, endLat, endLon,
     draftCoordinates, draftReverseCoordinates, draftReverseWaypoints,
-    closedRoadConflicts, detourName, detourRefId, detourDesc, detourDirectionMode,
+    closedRoadConflicts, detourName, detourRefId, detourDesc, detourDirectionMode, twoWayDividedDetour, needsCarriagewayChoice,
     detourRoadCondition, detourDurationMinFwd, detourDurationMinRev,
     detourDistanceMeters, detourGoogleMapsUrlFwd, detourGoogleMapsUrlRev,
     detourStartPhotoUrl, detourStartPhotoCaption, detourStartPhotoLocation,
@@ -646,7 +665,7 @@ export function MapManagementTab({
           highwayComboboxRef, isHighwayDropdownOpen, setIsHighwayDropdownOpen,
           availableHighways, highwaySearchQuery, setHighwaySearchQuery,
           kmStart, setKmStart, kmEnd, setKmEnd, directionCode, setDirectionCode,
-          roadSide, setRoadSide, isSelectedHighwayDivided, draftCoordinates,
+          roadSide, setRoadSide, isSelectedHighwayDivided,
           ensureReverseFloodGeometry, setDraftReverseCoordinates, setDraftReverseWaypoints,
           setFreeEditTarget, routeEditId, handleSlicePolylineFromKm,
           detourRefId, setDetourRefId, floodRoutes: systemData.floodRoutes,
@@ -676,6 +695,7 @@ export function MapManagementTab({
           handleDetourPointPhotoUpload, snappingStatusText, setSnappingStatusText,
           freeEditEnabled, setFreeEditEnabled, freeVertexTool, setFreeVertexTool,
           supportsTwoWayLineEdit, activeEditTarget, handleSelectEditDirection,
+          bothDirections, effectiveCarriageway, onCarriagewayChange: changeCarriagewayChoice,
           draftCoordinates, setDraftCoordinates,
           draftReverseCoordinates, setDraftReverseCoordinates,
           draftWaypoints, draftReverseWaypoints, setDraftReverseWaypoints,
@@ -709,7 +729,7 @@ export function MapManagementTab({
         floodProps={{
           selectedHighwayOption, selectedHighwayLaneCount,
           isSelectedHighwayDivided, isDividedBothFlood,
-          directionCode, setDirectionCode, roadSide, setRoadSide, draftCoordinates,
+          directionCode, setDirectionCode, roadSide, setRoadSide,
           setDraftReverseCoordinates, setDraftReverseWaypoints,
           setFreeEditTarget, ensureReverseFloodGeometry,
           affectedParts, setAffectedParts, reverseAffectedParts, setReverseAffectedParts,

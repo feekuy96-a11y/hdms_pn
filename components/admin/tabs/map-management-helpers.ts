@@ -449,8 +449,6 @@ export function computeSlicedHighwayPolylines(params: {
       }
       if (reverseBranch && reverseBranch.coordinates.length >= 2) {
         slicedReverse = sliceBranchByKmRange(reverseBranch, forwardBranch, bestGroup.kmStart, bestGroup.kmEnd, kmStart, kmEnd, true);
-      } else if (slicedForward.length >= 2) {
-        slicedReverse = [...slicedForward].reverse().map((p) => [...p] as [number, number]);
       }
     } else if (directionCode === "B_TO_A") {
       const chosenBranch = reverseBranch || bestGroup.primaryBranch;
@@ -495,9 +493,6 @@ export function computeSlicedHighwayPolylines(params: {
     }
     if (targetCoords.length >= 2) {
       slicedForward = slicePolylineByKmRange(targetCoords, secKmStart ?? kmStart, secKmEnd ?? kmEnd, kmStart, kmEnd, directionCode === "B_TO_A");
-      if (roadSide === "BOTH" && isSelectedHighwayDivided && slicedForward.length >= 2) {
-        slicedReverse = [...slicedForward].reverse().map((p) => [...p] as [number, number]);
-      }
     }
   }
 

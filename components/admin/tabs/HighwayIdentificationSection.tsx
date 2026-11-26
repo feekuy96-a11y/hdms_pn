@@ -56,8 +56,7 @@ export interface HighwayIdentificationSectionProps {
   roadSide: RoadSideType;
   setRoadSide: (side: RoadSideType) => void;
   isSelectedHighwayDivided: boolean;
-  draftCoordinates: [number, number][];
-  ensureReverseFloodGeometry: (forwardSource: [number, number][]) => void;
+  ensureReverseFloodGeometry: () => void;
   setDraftReverseCoordinates?: (coords: [number, number][]) => void;
   setDraftReverseWaypoints?: (pts: [number, number][]) => void;
   setFreeEditTarget: (target: "FORWARD" | "REVERSE") => void;
@@ -115,7 +114,6 @@ export function HighwayIdentificationSection({
   roadSide,
   setRoadSide,
   isSelectedHighwayDivided,
-  draftCoordinates,
   ensureReverseFloodGeometry,
   setDraftReverseCoordinates,
   setDraftReverseWaypoints,
@@ -431,7 +429,7 @@ export function HighwayIdentificationSection({
               onClick={() => {
                 setDirectionCode("BOTH");
                 setRoadSide("BOTH");
-                if (isSelectedHighwayDivided) ensureReverseFloodGeometry(draftCoordinates);
+                if (isSelectedHighwayDivided) ensureReverseFloodGeometry();
               }}
               className={`min-h-10 rounded-lg px-3 py-2 text-[11px] font-heading font-bold border transition cursor-pointer ${directionCode === "BOTH" && roadSide === "BOTH" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600"}`}
             >

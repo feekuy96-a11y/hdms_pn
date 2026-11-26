@@ -19,6 +19,8 @@ export interface UseDualRoadSnappingParams {
   routeMode: "FLOOD" | "DETOUR";
   detourDirectionMode: DetourDirectionModeType;
   forceStraightThrough: boolean;
+  twoWayDividedDetour: boolean;
+  needsCarriagewayChoice: boolean;
   useCarriagewaySnapping: boolean;
   isDividedBothFlood: boolean;
   roadSide: RoadSideType;
@@ -54,6 +56,7 @@ export function useDualRoadSnapping(params: UseDualRoadSnappingParams) {
     routeMode,
     detourDirectionMode,
     forceStraightThrough,
+    twoWayDividedDetour, needsCarriagewayChoice,
     useCarriagewaySnapping,
     isDividedBothFlood,
     roadSide,
@@ -99,6 +102,10 @@ export function useDualRoadSnapping(params: UseDualRoadSnappingParams) {
     }
   ) => {
     const requestId = ++routingRequest.current;
+    if (needsCarriagewayChoice) {
+      setSnappingStatusText("กรุณาเลือกโครงสร้างถนนก่อนคำนวณเส้น");
+      return;
+    }
     if (freeEditEnabled) setFreeEditEnabled(false);
     const numSLat = Number(sLat);
     const numSLon = Number(sLon);
@@ -108,6 +115,14 @@ export function useDualRoadSnapping(params: UseDualRoadSnappingParams) {
     const effRevSLon = Number(revOverrides?.revSLon ?? revStartLon) || numELon;
     const effRevELat = Number(revOverrides?.revELat ?? revEndLat) || numSLat;
     const effRevELon = Number(revOverrides?.revELon ?? revEndLon) || numSLon;
+
+    const hasSeparateReversePins = Boolean(
+      Number(revOverrides?.revSLat ?? revStartLat) && Number(revOverrides?.revSLon ?? revStartLon) &&
+      Number(revOverrides?.revELat ?? revEndLat) && Number(revOverrides?.revELon ?? revEndLon) &&
+      (effRevSLon !== numELon || effRevSLat !== numELat) &&
+      (effRevELon !== numSLon || effRevELat !== numSLat)
+    );
+    const requestReversePins = () => setSnappingStatusText("คำนวณ A→B แล้ว กรุณาแยกหมุด B→A บนคันทางขากลับแล้วคำนวณอีกครั้ง");
 
     if (!numSLat || !numSLon || !numELat || !numELon || isNaN(numSLat) || isNaN(numELat)) {
       onToast("กรุณาระบุพิกัด A และ B ให้ครบถ้วนก่อนคำนวณเส้นเกาะถนน");
@@ -174,10 +189,34 @@ export function useDualRoadSnapping(params: UseDualRoadSnappingParams) {
 
         const emptyPicked = { coords: [] as [number, number][], distance: 0, duration: 0, conflicts: [] as ReturnType<typeof detectClosedRoadConflicts> };
         const preserveForward = Boolean(revOverrides?.reverseOnly && draftCoordinates.length >= 2);
-        const [pickedAB, pickedBA] = await Promise.all([
-          !preserveForward && detourDirectionMode !== "REVERSE_ONLY" ? resolveDetourDirection(pointsAB) : Promise.resolve(emptyPicked),
-          detourDirectionMode !== "FORWARD_ONLY" ? resolveDetourDirection(pointsBA) : Promise.resolve(emptyPicked),
-        ]);
+        const twoWay = twoWayDividedDetour;
+        if (twoWay) {
+          if (!preserveForward) setDraftCoordinates([]);
+          setDraftReverseCoordinates?.([]);
+          setSnappingStatusText(preserveForward ? "กำลังคำนวณทางเลี่ยง B→A…" : "กำลังคำนวณทางเลี่ยง A→B…");
+        }
+        const pickedAB = !preserveForward && detourDirectionMode !== "REVERSE_ONLY"
+          ? await resolveDetourDirection(pointsAB)
+          : emptyPicked;
+        if (requestId !== routingRequest.current) return;
+        if (twoWay && !preserveForward) {
+          if (pickedAB.coords.length < 2) {
+            setSnappingStatusText("คำนวณทางเลี่ยง A→B ไม่สำเร็จ กรุณาตรวจหมุดแล้วลองใหม่");
+            return;
+          }
+          setDraftCoordinates(pickedAB.coords);
+          setSnappingStatusText("กำลังคำนวณทางเลี่ยง B→A…");
+        }
+        if (twoWay && !hasSeparateReversePins) {
+          requestReversePins();
+          return;
+        }
+        const pickedBA = twoWay || detourDirectionMode === "REVERSE_ONLY"
+          ? await resolveDetourDirection(pointsBA).catch(error => {
+              if (twoWay) return emptyPicked;
+              throw error;
+            })
+          : emptyPicked;
         if (requestId !== routingRequest.current) return;
 
         const forwardCoords = preserveForward
@@ -185,7 +224,7 @@ export function useDualRoadSnapping(params: UseDualRoadSnappingParams) {
           : detourDirectionMode === "REVERSE_ONLY"
             ? pickedBA.coords
             : pickedAB.coords;
-        const reverseCoords = detourDirectionMode === "TWO_WAY" ? pickedBA.coords : [];
+        const reverseCoords = twoWay ? pickedBA.coords : [];
 
         if (forwardCoords.length < 2) {
           setDraftCoordinates([]);
@@ -225,7 +264,7 @@ export function useDualRoadSnapping(params: UseDualRoadSnappingParams) {
         setClosedRoadConflicts(uniqueConflictMsgs);
 
         const fwdPassWarnings = detectPassabilityFloodWarnings(forwardCoords, systemData.floodRoutes || [], "FORWARD");
-        const revPassWarnings = detourDirectionMode === "TWO_WAY" && pickedBA.coords.length >= 2
+        const revPassWarnings = twoWay && pickedBA.coords.length >= 2
           ? detectPassabilityFloodWarnings(pickedBA.coords, systemData.floodRoutes || [], "REVERSE")
           : [];
         const uniquePassMsgs = Array.from(
@@ -243,7 +282,9 @@ export function useDualRoadSnapping(params: UseDualRoadSnappingParams) {
           }))
         );
 
-        if (uniqueConflictMsgs.length > 0) {
+        if (twoWay && reverseCoords.length < 2) {
+          setSnappingStatusText("คำนวณทางเลี่ยง B→A ไม่สำเร็จ เก็บแนว A→B ไว้แล้ว กรุณาตรวจหมุดขากลับแล้วลองใหม่");
+        } else if (uniqueConflictMsgs.length > 0) {
           setSnappingStatusText(
             `⚠️ พบเส้นทางเลี่ยงตัดผ่านจุดที่ปิดการจราจร (${uniqueConflictMsgs.join(", ")}) — กรุณาเพิ่มจุดดัดเพื่ออ้อมจุดปิดจราจร`
           );
@@ -251,7 +292,7 @@ export function useDualRoadSnapping(params: UseDualRoadSnappingParams) {
         } else {
           const straightLabel = forceStraightThrough ? "คำนวณแนวตรงผ่านแยกตามจุดควบคุมสำเร็จ" : "คำนวณทางเลี่ยงตามถนนสำเร็จ";
           setSnappingStatusText(
-            detourDirectionMode === "TWO_WAY"
+            twoWay
               ? `✓ ${straightLabel}: A→B (${forwardCoords.length} จุด) และ B→A (${pickedBA.coords.length} จุด) — ปลอดจุดปิดจราจร`
               : `✓ ${straightLabel} (${forwardCoords.length} จุด) — ปลอดจุดปิดจราจร`
           );
@@ -273,7 +314,7 @@ export function useDualRoadSnapping(params: UseDualRoadSnappingParams) {
           const acceptNonUTurn = (coords: [number, number][]) => {
             const polyKm = calculatePolylineRoadDistanceKm(coords);
             if (directKm > 0.05 && polyKm > Math.max(0.8, directKm * 2.5)) {
-              onToast("⚠️ พบแนวเส้นอ้อมจุดกลับรถยาวผิดปกติ — ระบบขอใช้จุดพิกัดตรงแทนเพื่อกันเส้นเลยจุดท่วม");
+              onToast("⚠️ พบแนวเส้นอ้อมจุดกลับรถยาวผิดปกติ — ระบบไม่นำแนวนี้มาใช้ กรุณาตรวจหมุดให้ตรงคันทาง");
               return false;
             }
             return true;
@@ -300,15 +341,26 @@ export function useDualRoadSnapping(params: UseDualRoadSnappingParams) {
         const pointsAB: [number, number][] = [[numSLon, numSLat], ...waypoints, [numELon, numELat]];
         const pointsBA: [number, number][] = [[effRevSLon, effRevSLat], ...reverseWaypoints, [effRevELon, effRevELat]];
         const preserveForward = Boolean(revOverrides?.reverseOnly && draftCoordinates.length >= 2);
-        const [fwdSnapped, revSnapped] = await Promise.all([
-          preserveForward ? Promise.resolve(draftCoordinates) : snapFloodDirected(pointsAB),
-          snapFloodDirected(pointsBA),
-        ]);
+        if (!preserveForward) setDraftCoordinates([]);
+        setDraftReverseCoordinates?.([]);
+        setSnappingStatusText(preserveForward ? "กำลังคำนวณเส้นน้ำท่วม B→A…" : "กำลังคำนวณเส้นน้ำท่วม A→B…");
+        const resolvedFwd = preserveForward ? draftCoordinates : await snapFloodDirected(pointsAB);
         if (requestId !== routingRequest.current) return;
-        const resolvedFwd = fwdSnapped && fwdSnapped.length >= 2 ? fwdSnapped : pointsAB;
-        const resolvedRev = revSnapped && revSnapped.length >= 2 ? revSnapped : [...resolvedFwd].reverse();
-        if (!preserveForward) {
-          setDraftCoordinates(resolvedFwd);
+        if (!resolvedFwd || resolvedFwd.length < 2) {
+          setSnappingStatusText("คำนวณเส้นน้ำท่วม A→B ไม่สำเร็จ กรุณาตรวจหมุดแล้วลองใหม่");
+          return;
+        }
+        if (!preserveForward) setDraftCoordinates(resolvedFwd);
+        setSnappingStatusText("กำลังคำนวณเส้นน้ำท่วม B→A…");
+        if (!hasSeparateReversePins) {
+          requestReversePins();
+          return;
+        }
+        const resolvedRev = await snapFloodDirected(pointsBA).catch(() => null);
+        if (requestId !== routingRequest.current) return;
+        if (!resolvedRev || resolvedRev.length < 2) {
+          setSnappingStatusText("คำนวณเส้นน้ำท่วม B→A ไม่สำเร็จ เก็บแนว A→B ไว้แล้ว กรุณาตรวจหมุดขากลับแล้วลองใหม่");
+          return;
         }
         setDraftReverseCoordinates?.(resolvedRev);
         setSnappingStatusText(

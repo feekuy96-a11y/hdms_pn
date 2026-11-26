@@ -251,10 +251,7 @@ export function useMapRouteActions({
 
   const handleRestoreOriginalRoute = () => {
     if (activeEditTarget === "REVERSE") {
-      const source =
-        originalReverseRouteCoordinatesRef.current.length >= 2
-          ? originalReverseRouteCoordinatesRef.current
-          : [...originalRouteCoordinatesRef.current].reverse();
+      const source = originalReverseRouteCoordinatesRef.current;
       if (source.length < 2) {
         onToast("รายการนี้ไม่มีแนวเส้นขากลับเดิมสำหรับคืนค่า");
         return;

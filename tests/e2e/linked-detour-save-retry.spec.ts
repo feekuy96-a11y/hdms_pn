@@ -15,6 +15,7 @@ for (const firstReply of ["pending", "disconnected"] as const) {
     systemSettings: { name: "ทดสอบ", org: "ทดสอบ", phone: "1586" } };
     const attempts: Array<{ id: string; detourRefId: string; linkedDetourCreate: boolean; detourMeta: unknown }> = [];
     const uploads: string[] = [];
+    const routeRequests: string[] = [];
     const deletes: string[] = [];
     const mediaUrl = (id: string) => "https://example.invalid/media/" + id;
 
@@ -42,6 +43,7 @@ for (const firstReply of ["pending", "disconnected"] as const) {
         return route.fulfill({ json: data });
       }
       if (url.pathname.includes("/route/v1/driving/")) {
+        routeRequests.push(url.pathname);
         return route.fulfill({ json: { code: "Ok", routes: [{
           distance: 1200, duration: 90, geometry: { type: "LineString", coordinates: [[101.21, 6.82], [101.22, 6.825], [101.23, 6.83]] },
         }] } });
@@ -58,8 +60,17 @@ for (const firstReply of ["pending", "disconnected"] as const) {
       await field.fill(value);
       await field.blur();
     }
+    const carriageway = page.getByLabel("โครงสร้างถนนสำหรับสองทิศทาง");
+    await expect(carriageway).toHaveValue("");
+    await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
+    await expect(page.getByText("กรุณาเลือกโครงสร้างถนนก่อนคำนวณเส้น")).toBeVisible();
+    expect(routeRequests).toHaveLength(0);
+    await carriageway.selectOption("SHARED");
+    await expect(page.getByRole("group", { name: /หมุดเส้นทางขากลับ/ })).toHaveCount(0);
     await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
     await expect(page.getByText(/คำนวณทางเลี่ยงตามถนนสำเร็จ/)).toBeVisible();
+    expect(routeRequests).toHaveLength(1);
+    expect(routeRequests[0]).toContain("101.21,6.82;101.23,6.83");
     await page.getByLabel("แนบภาพจุดเริ่มต้น A", { exact: true }).setInputFiles({ name: "a.png", mimeType: "image/png", buffer: image });
     await page.getByRole("tab", { name: /จุด B \(ปลายทาง\)/ }).click();
     await page.getByLabel("แนบภาพจุดสิ้นสุด B", { exact: true }).setInputFiles({ name: "b.png", mimeType: "image/png", buffer: image });
@@ -70,6 +81,7 @@ for (const firstReply of ["pending", "disconnected"] as const) {
       : "ยังยืนยันผลการบันทึกทางเลี่ยงไม่ได้" });
     await expect(notice).toBeVisible();
     expect(attempts).toHaveLength(1);
+    expect(attempts[0]).toMatchObject({ directionMode: "TWO_WAY", reverseCoordinates: [], reverseWaypoints: [] });
     expect(attempts[0]).toMatchObject({ id: expect.stringMatching(/^D-/), detourRefId: "F-1", linkedDetourCreate: true });
     await expect(notice).toContainText(attempts[0].id);
     for (const upload of uploads) expect(JSON.stringify(attempts[0].detourMeta)).toContain(mediaUrl(upload));

@@ -1234,8 +1234,24 @@ test("public overview A and B use the same anchored inspector, retaining the cho
   await expect(symbol).toBeVisible();
   const pointA = page.locator(".doh-detour-photo-start:not(.hdms-focus-endpoint)").first();
   const pointB = page.locator(".doh-detour-photo-end:not(.hdms-focus-endpoint)").first();
+  await expect(pointA).toBeHidden();
+  await expect(pointB).toBeHidden();
+  await symbol.press("Enter");
+  await expect(page.locator(".doh-detour-popup")).toBeVisible();
+  await expect(pointA).toBeVisible();
+  await expect(pointB).toBeVisible();
+  await page.locator(".leaflet-popup-close-button").click();
+  await expect(pointA).toBeHidden();
+  await expect(pointB).toBeHidden();
   const zoomIn = page.getByRole("button", { name: "Zoom in" });
-  for (let i = 0; i < 4 && !(await pointB.isVisible()); i++) await zoomIn.click();
+  const zoomLevel = () => page.locator("[data-public-layer-opacities]").evaluate(el =>
+    JSON.parse((el as HTMLElement).dataset.publicLayerOpacities || "{}").zoom as number
+  );
+  for (let i = 0; i < 6 && !(await pointB.isVisible()); i++) {
+    const previous = await zoomLevel();
+    await zoomIn.click();
+    await expect.poll(zoomLevel).toBeGreaterThan(previous);
+  }
   await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุด (ขาไป A → B)");
   await symbol.press("Enter");
   await page.locator(".doh-detour-popup").getByRole("button", { name: "ขากลับ B → A" }).click();

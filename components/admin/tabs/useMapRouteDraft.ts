@@ -48,6 +48,8 @@ export interface UseMapRouteDraftParams {
   setDetourDurationMinFwd: (v: string) => void;
   detourDurationMinRev: string;
   setDetourDurationMinRev: (v: string) => void;
+  carriagewayChoice: NonNullable<AdminMapDraftSnapshot["carriagewayChoice"]>;
+  setCarriagewayChoice: (v: NonNullable<AdminMapDraftSnapshot["carriagewayChoice"]>) => void;
   detourDirectionMode: AdminMapDraftSnapshot["detourDirectionMode"];
   setDetourDirectionMode: (v: AdminMapDraftSnapshot["detourDirectionMode"]) => void;
   detourStartPhotoUrl: string;
@@ -99,7 +101,7 @@ export function useMapRouteDraft(params: UseMapRouteDraftParams) {
     detourRoadCondition, setDetourRoadCondition,
     detourDurationMinFwd, setDetourDurationMinFwd,
     detourDurationMinRev, setDetourDurationMinRev,
-    detourDirectionMode, setDetourDirectionMode,
+    detourDirectionMode, setDetourDirectionMode, carriagewayChoice, setCarriagewayChoice,
     detourStartPhotoUrl, setDetourStartPhotoUrl,
     detourStartPhotoCaption, setDetourStartPhotoCaption,
     detourStartPhotoLocation, setDetourStartPhotoLocation,
@@ -149,6 +151,7 @@ export function useMapRouteDraft(params: UseMapRouteDraftParams) {
       detourDurationMinFwd,
       detourDurationMinRev,
       detourDirectionMode,
+      carriagewayChoice,
       detourStartPhotoUrl,
       detourStartPhotoCaption,
       detourStartPhotoLocation,
@@ -188,6 +191,7 @@ export function useMapRouteDraft(params: UseMapRouteDraftParams) {
     detourDurationMinFwd,
     detourDurationMinRev,
     detourDirectionMode,
+    carriagewayChoice,
     detourStartPhotoUrl,
     detourStartPhotoCaption,
     detourStartPhotoLocation,
@@ -232,6 +236,7 @@ export function useMapRouteDraft(params: UseMapRouteDraftParams) {
     setDetourDurationMinFwd(recoverableDraft.detourDurationMinFwd);
     setDetourDurationMinRev(recoverableDraft.detourDurationMinRev);
     setDetourDirectionMode(recoverableDraft.detourDirectionMode);
+    setCarriagewayChoice(recoverableDraft.carriagewayChoice ?? (recoverableDraft.routeMode === "DETOUR" && recoverableDraft.draftReverseCoordinates.length >= 2 ? "DIVIDED" : ""));
     setDetourStartPhotoUrl(recoverableDraft.detourStartPhotoUrl);
     setDetourStartPhotoCaption(recoverableDraft.detourStartPhotoCaption);
     setDetourStartPhotoLocation(recoverableDraft.detourStartPhotoLocation);

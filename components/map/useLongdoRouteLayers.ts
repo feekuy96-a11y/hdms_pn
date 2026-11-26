@@ -197,6 +197,7 @@ export interface UseLongdoRouteLayersParams {
   effectiveShowFloodLayer: boolean;
   floodDisplayMode: "EVENTS" | "SEGMENTS";
   currentZoom: number;
+  selectedDetourPopupId: string | null;
   leafletRef: React.MutableRefObject<any>;
   rendererRef: React.MutableRefObject<any>;
   detourGroupRef: React.MutableRefObject<any>;
@@ -222,6 +223,7 @@ export function useLongdoRouteLayers({
   effectiveShowFloodLayer,
   floodDisplayMode,
   currentZoom,
+  selectedDetourPopupId,
   leafletRef,
   rendererRef,
   detourGroupRef,
@@ -254,25 +256,23 @@ export function useLongdoRouteLayers({
     waveBadge: string;
   }>>([]);
 
+  const endpointPresentation = React.useRef({ currentZoom, selectedDetourPopupId });
+  endpointPresentation.current = { currentZoom, selectedDetourPopupId };
+
   const syncDetourPhotoMarker = (
-    L: any,
-    marker: any,
-    point: "START" | "END",
-    zoom: number,
-    hasPhoto: boolean
+    L: any, marker: any, point: "START" | "END", hasPhoto: boolean, detourId: string
   ) => {
-    const visible = zoom >= 12;
-    const variant = zoom >= 14 ? "FULL" : "COMPACT";
-    // Leaflet binds DOM listeners while creating the icon. Set this before
-    // setIcon so a marker revealed after zooming is clickable immediately.
-    marker.options.interactive = visible;
-    marker.setIcon(
-      L.divIcon(
-        hasPhoto
-          ? buildDetourPhotoBadgeSpec(point, variant)
-          : buildDetourFallbackPinSpec(point, variant)
-      )
-    );
+    const { currentZoom: zoom, selectedDetourPopupId: selected } = endpointPresentation.current;
+    const visible = marker.__dohEndpointFilterVisible !== false &&
+      (selected ? selected === detourId : zoom >= 14);
+    const variant = selected === detourId || zoom >= 14 ? "FULL" : "COMPACT";
+    // Keep Leaflet interaction bound. CSS removes hidden pins from hit testing and tab order.
+    if (marker.__dohEndpointVariant !== variant) {
+      marker.__dohEndpointVariant = variant;
+      marker.setIcon(L.divIcon(hasPhoto
+        ? buildDetourPhotoBadgeSpec(point, variant)
+        : buildDetourFallbackPinSpec(point, variant)));
+    }
     marker.setOpacity(visible ? 1 : 0);
     const element = marker.getElement?.();
     if (element) {
@@ -331,9 +331,9 @@ export function useLongdoRouteLayers({
         });
         const detourPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
         polyline.bindPopup(() => buildDetourPopupHtml(detour, defaultDir, systemData), detourPopupOpts);
+        polyline.on("popupopen", () => activationRef.current?.({ type: "DETOUR", id: detour.id }));
         polyline.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
-          activationRef.current?.({ type: "DETOUR", id: detour.id });
           polyline.openPopup(e.latlng);
         });
 
@@ -343,9 +343,9 @@ export function useLongdoRouteLayers({
           .bindPopup(() => buildDetourPopupHtml(detour, defaultDir, systemData), detourPopupOpts)
           .addTo(group);
         detourMarker.__dohFilterId = detour.id;
+        detourMarker.on("popupopen", () => activationRef.current?.({ type: "DETOUR", id: detour.id }));
         detourMarker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
-          activationRef.current?.({ type: "DETOUR", id: detour.id });
           detourMarker.openPopup();
         });
       }
@@ -380,8 +380,8 @@ export function useLongdoRouteLayers({
           });
           const revPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
           revPolyline.bindPopup(() => buildDetourPopupHtml(detour, defaultDir, systemData), revPopupOpts);
+          revPolyline.on("popupopen", () => activationRef.current?.({ type: "DETOUR", id: detour.id }));
           revPolyline.on("click", (e: any) => {
-            activationRef.current?.({ type: "DETOUR", id: detour.id });
             L.DomEvent.stopPropagation(e);
             revPolyline.openPopup(e.latlng);
           });
@@ -452,11 +452,16 @@ export function useLongdoRouteLayers({
         if (publicMode) bindPublicEndpointInspector(L, map, marker, markers, point,
           () => overviewFocusRef.current(detour.id, directionForEndpoint()), false);
         detourPhotoMarkerRefs.current.push({ marker, point, hasPhoto, detourId: detour.id, refreshLabel });
-        syncDetourPhotoMarker(L, marker, point, currentZoom, hasPhoto);
+        marker.__dohApplyEndpointFilter = (visible: boolean) => {
+          marker.__dohEndpointFilterVisible = visible;
+          syncDetourPhotoMarker(L, marker, point, hasPhoto, detour.id);
+          refreshLabel?.();
+        };
+        syncDetourPhotoMarker(L, marker, point, hasPhoto, detour.id);
         refreshLabel?.();
         marker.__dohFilterId = detour.id;
+        marker.on("popupopen", () => activationRef.current?.({ type: "DETOUR", id: detour.id }));
         marker.on("click", (e: any) => {
-          activationRef.current?.({ type: "DETOUR", id: detour.id });
           L.DomEvent.stopPropagation(e);
           marker.openPopup();
         });
@@ -480,16 +485,15 @@ export function useLongdoRouteLayers({
   }, [mapReady, systemData.detourRoutes, effectiveShowDetourLayer, mapStyles, publicMode]);
 
   // A/B photo markers reveal progressively without recreating detour layers or
-  // their open popups: hidden at the default overview, compact at mid zoom,
-  // then labelled A/B when the user is close enough to inspect the route.
+  // their open popups: show only the selected detour, or nearby endpoints at close zoom.
   useEffect(() => {
     const L = leafletRef.current;
     if (!mapReady || !L) return;
-    detourPhotoMarkerRefs.current.forEach(({ marker, point, hasPhoto, refreshLabel }) => {
-      syncDetourPhotoMarker(L, marker, point, currentZoom, hasPhoto);
+    detourPhotoMarkerRefs.current.forEach(({ marker, point, hasPhoto, detourId, refreshLabel }) => {
+      syncDetourPhotoMarker(L, marker, point, hasPhoto, detourId);
       refreshLabel?.();
     });
-  }, [mapReady, currentZoom, leafletRef]);
+  }, [mapReady, currentZoom, selectedDetourPopupId, leafletRef]);
 
   // 4d. Flood routes + capsule markers (Hide flood line when confirmed water_level_cm === 0 while preserving DB history).
   useEffect(() => {
