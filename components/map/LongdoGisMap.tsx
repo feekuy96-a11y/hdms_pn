@@ -6,6 +6,8 @@ import type { LatLng, Polyline } from "leaflet";
 import { SystemDataPayload, DetourRoute } from "@/db/default-data";
 import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { MapLegendOverlay, type MapSidePaneControl } from "./MapLegendOverlay";
+import { MapCurrentWeatherCard } from "./MapCurrentWeatherCard";
+import { WEATHER_TEST_ENABLED } from "@/lib/map-current-weather";
 import {
   escapeHtml,
   isFloodLineVisibleOnCurrentMap,
@@ -1551,6 +1553,10 @@ export function LongdoGisMap({
         className="hdms-map-canvas w-full h-full relative z-0"
         style={{ position: "absolute", inset: 0, minHeight: publicMode ? 0 : 450 }}
       />
+
+      {WEATHER_TEST_ENABLED && publicMode && !isFocusMode && !isMapPopupOpen && isLayerControlCollapsed && (
+        <MapCurrentWeatherCard key={focusCoordinates?.join(",") ?? "pattani"} focusCoordinates={focusCoordinates} />
+      )}
 
       <MapLegendOverlay
         publicMode={publicMode}
