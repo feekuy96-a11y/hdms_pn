@@ -34,9 +34,9 @@ export function OfficialReportDispatchModal({
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="แบบรายงานสถานการณ์อุทกภัย" tabIndex={-1} onKeyDown={onKeyDown} className="bg-white text-slate-900 w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div ref={dialogRef} role="dialog" data-hdms-popup="print" aria-modal="true" aria-label="แบบรายงานสถานการณ์อุทกภัย" tabIndex={-1} onKeyDown={onKeyDown} className="bg-white text-slate-900 w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Modal Top Control Bar (Hidden when printing) */}
-        <div className="bg-[#0f2347] text-white px-4 py-3 flex items-center justify-between border-b border-amber-500 print:hidden">
+        <div data-hdms-popup-header className="bg-[#0f2347] text-white px-4 py-3 flex items-center justify-between border-b border-amber-500 print:hidden">
           <div className="flex items-center gap-2">
             <span className="bg-amber-500 text-slate-950 font-heading font-extrabold text-xs px-2 py-0.5 rounded">
               งานสารบรรณและรายงานราชการ
@@ -56,7 +56,7 @@ export function OfficialReportDispatchModal({
             <button
               type="button"
               onClick={onClose}
-              aria-label="ปิดแบบรายงาน"
+              aria-label="ปิดแบบรายงาน" data-hdms-popup-close
               className="text-slate-300 hover:text-white p-1"
             >
               <X className="w-5 h-5" />

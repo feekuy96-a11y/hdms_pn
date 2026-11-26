@@ -491,6 +491,7 @@ export function DetourEditModal({
       <div
         ref={dialog.dialogRef}
         role="dialog"
+        data-hdms-popup="panel"
         aria-modal="true"
         aria-label="แก้ไขข้อมูลเส้นทางเลี่ยง"
         tabIndex={-1}
@@ -508,7 +509,7 @@ export function DetourEditModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="ปิดหน้าต่างแก้ไขเส้นทางเลี่ยง"
+            aria-label="ปิดหน้าต่างแก้ไขเส้นทางเลี่ยง" data-hdms-popup-close
             className="min-h-10 min-w-10 inline-flex items-center justify-center p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800"
           >
             <X className="w-5 h-5" aria-hidden="true" />

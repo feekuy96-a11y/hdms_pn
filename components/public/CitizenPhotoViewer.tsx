@@ -49,7 +49,7 @@ export function CitizenPhotoViewer({ photo, onClose }: { photo: CitizenPhoto; on
 
   const canRetry = state === "slow" || state === "failed";
   return (
-    <dialog ref={dialog}
+    <dialog data-hdms-popup="photo" ref={dialog}
       aria-label="ภาพถ่ายสถานการณ์ขนาดเต็ม"
       className="fixed inset-0 m-0 h-dvh w-screen max-h-none max-w-none overflow-hidden border-0 bg-transparent p-0 backdrop:bg-slate-950/90"
       onCancel={(event) => { event.preventDefault(); onClose(); }}
@@ -63,18 +63,18 @@ export function CitizenPhotoViewer({ photo, onClose }: { photo: CitizenPhoto; on
         }
       }}>
       <div className="flex h-full items-center justify-center p-4" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-        <button ref={close} type="button" aria-label="ปิดภาพขนาดเต็ม" onClick={onClose}
-          className="absolute right-4 top-4 z-10 grid size-11 place-items-center rounded-full bg-[#223548] text-[#fff] hover:bg-[#30475b]">
+        <button ref={close} type="button" aria-label="ปิดภาพขนาดเต็ม" data-hdms-popup-close onClick={onClose}
+          className="absolute right-4 top-4 z-10 grid size-11 place-items-center rounded-full">
           <X className="size-5" aria-hidden="true" />
         </button>
         {state !== "loaded" && (
-          <div className="absolute max-w-[calc(100%-2rem)] rounded-xl bg-[#223548] p-4 text-center text-white">
+          <div data-hdms-photo-status className="absolute max-w-[calc(100%-2rem)] rounded-xl p-4 text-center text-white">
             <p role={state === "failed" ? "alert" : "status"}>
               {state === "failed" ? "โหลดภาพไม่สำเร็จ" : state === "slow" ? "ภาพใช้เวลาโหลดนานกว่าปกติ" : "กำลังโหลดภาพขนาดเต็ม…"}
             </p>
             {canRetry && (
               <button ref={retry} type="button" onClick={retryPhoto}
-                className="mt-3 min-h-11 rounded-lg bg-white px-4 py-2 font-medium text-[#223548] hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+                className="mt-3 min-h-11 rounded-lg bg-[var(--bg-input)] px-4 py-2 font-medium text-[var(--text-primary)] hover:bg-[var(--state-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
                 ลองโหลดภาพอีกครั้ง
               </button>
             )}

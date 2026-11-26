@@ -46,7 +46,7 @@ export function CitizenOfficeDirectory({ offices, onClose }: { offices?: DohOffi
   }, []);
   const directory = resolveCitizenOfficeDirectory(offices);
   return (
-    <dialog ref={dialogRef} className="citizen-office-directory" aria-labelledby="citizen-offices-title"
+    <dialog data-hdms-popup="panel" ref={dialogRef} className="citizen-office-directory" aria-labelledby="citizen-offices-title"
       onCancel={(event) => { event.preventDefault(); event.stopPropagation(); onClose(); }}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
@@ -72,7 +72,7 @@ export function CitizenOfficeDirectory({ offices, onClose }: { offices?: DohOffi
             <h2 id="citizen-offices-title" className="text-lg font-bold">ติดต่อหน่วยงาน</h2>
             <p>แขวงทางหลวงปัตตานีและหมวดทางหลวง</p>
           </div>
-          <button type="button" aria-label="ปิดหน้าติดต่อ" className="citizen-theme-button" onClick={onClose}><X size={18} aria-hidden="true" /></button>
+          <button type="button" aria-label="ปิดหน้าติดต่อ" data-hdms-popup-close className="citizen-theme-button" onClick={onClose}><X size={18} aria-hidden="true" /></button>
         </header>
         <div className="citizen-office-scroll">
           <h3 className="mb-2 text-sm font-bold">สำนักงานใหญ่</h3>

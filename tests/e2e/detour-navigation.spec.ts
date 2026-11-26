@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { resolveDetourGoogleMapsNavigation, getUnifiedTrafficStatus, sampleWaypointsForGoogleMaps } from "../../lib/detour-navigation";
+import { getTrafficPresentation, resolveReportFreshness } from "../../lib/traffic-presentation";
+import { DETAILED_TRAFFIC_STATUS_CONFIG } from "../../lib/flood-event-schema";
 import { DetourRoute, FloodRoute } from "../../db/default-data";
 
 test.describe("Phase 5.7: Google Maps Detour Navigation Architecture (5 Steps)", () => {
@@ -149,6 +151,24 @@ test.describe("Phase 5.7: Google Maps Detour Navigation Architecture (5 Steps)",
 });
 
 test.describe("Phase 5.1: Unified Traffic Status Presentation (5 Statuses + Pending)", () => {
+  test("uses the same high warning accent in filters and map status presentation, distinct from one lane", () => {
+    const warning = getTrafficPresentation("WARNING", 35, "CAUTION");
+    expect(warning.hex).toBe(DETAILED_TRAFFIC_STATUS_CONFIG.CAUTION.hex);
+    expect(warning.hex).toBe(DETAILED_TRAFFIC_STATUS_CONFIG.NO_SMALL_VEHICLES.hex);
+    expect(warning.hex).not.toBe(DETAILED_TRAFFIC_STATUS_CONFIG.ONE_LANE.hex);
+  });
+
+  test("recognizes exact freshness boundaries and never labels missing or future data as fresh", () => {
+    const now = Date.parse("2026-11-26T06:00:00Z");
+    const at = (hours: number) => new Date(now - hours * 3_600_000).toISOString();
+    expect(resolveReportFreshness(at(2), now)).toBe("fresh");
+    expect(resolveReportFreshness(at(2.01), now)).toBe("aging");
+    expect(resolveReportFreshness(at(6), now)).toBe("aging");
+    expect(resolveReportFreshness(at(6.01), now)).toBe("stale");
+    expect(resolveReportFreshness(undefined, now)).toBe("unknown");
+    expect(resolveReportFreshness("invalid", now)).toBe("unknown");
+    expect(resolveReportFreshness(at(-1), now)).toBe("unknown");
+  });
   test("Accurately differentiates 5 traffic statuses", () => {
     const sClosed = getUnifiedTrafficStatus("CLOSED", 70);
     expect(sClosed.color).toBe("red");

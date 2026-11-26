@@ -33,6 +33,7 @@ export function HighwayRouteDetailModal({
     <div className="fixed inset-0 z-[1001] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-label="รายละเอียดสายทาง">
       <div
         ref={routeDialog.dialogRef}
+        data-hdms-popup="panel"
         tabIndex={-1}
         onKeyDown={routeDialog.onKeyDown}
         className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-950 p-6 text-white shadow-2xl space-y-4 [contain:layout_style_paint]"
@@ -48,7 +49,7 @@ export function HighwayRouteDetailModal({
           </div>
           <button
             type="button"
-            aria-label="ปิดรายละเอียด"
+            aria-label="ปิดรายละเอียด" data-hdms-popup-close
             onClick={() => setSelectedRoute(null)}
             className="min-h-10 min-w-10 flex items-center justify-center rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition"
           >

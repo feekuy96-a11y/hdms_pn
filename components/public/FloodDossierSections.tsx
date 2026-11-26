@@ -302,7 +302,7 @@ export function FloodDossierDetourSection({
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2 border-t border-slate-700/60 px-3.5 py-2.5">
                   {detourNav && detourNav.isValid && detourNav.url ? (
                     <a
-                      href={detourNav.url}
+                      href={detourNav.url} data-hdms-primary
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="ดูบน Google Maps"

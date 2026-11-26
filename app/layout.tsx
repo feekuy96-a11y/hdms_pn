@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Prompt, Sarabun } from "next/font/google";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
+import "./hdms-theme.css";
+import "./hdms-popup.css";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 
 const prompt = Prompt({

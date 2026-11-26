@@ -148,7 +148,7 @@ export function MapLegendOverlay({
                 {pinnedRouteList && (
                   <button
                     type="button"
-                    aria-label="ปิดรายชื่อสายทางหลวง"
+                    aria-label="ปิดรายชื่อสายทางหลวง" data-hdms-popup-close
                     onClick={() => {
                       setPinnedRouteList(null);
                       setLegendRouteList(null);
@@ -554,6 +554,7 @@ export function MapLegendOverlay({
       {previewPointPhoto && (
         <div
           role="dialog"
+          data-hdms-popup="photo"
           aria-modal="true"
           aria-label={previewPointPhoto.title}
           className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-950/90 p-[1em]"
@@ -561,7 +562,7 @@ export function MapLegendOverlay({
         >
           <button
             type="button"
-            aria-label="ปิดภาพทางเข้าทางเลี่ยง"
+            aria-label="ปิดภาพทางเข้าทางเลี่ยง" data-hdms-popup-close
             onClick={() => setPreviewPointPhoto(null)}
             className="absolute top-[1em] right-4 grid h-11 w-11 place-items-center rounded-full bg-slate-800 text-white hover:bg-slate-700 cursor-pointer"
           >

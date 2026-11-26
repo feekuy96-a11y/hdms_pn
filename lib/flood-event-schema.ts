@@ -14,7 +14,7 @@
  */
 
 import { parseKmPostMeters, formatKmPostString } from "./highway-schema";
-import { getTrafficPresentation, type TrafficPresentation } from "./traffic-presentation";
+import { getTrafficPresentation, TRAFFIC_ACCENT, type TrafficPresentation } from "./traffic-presentation";
 export { parseKmPostMeters, formatKmPostString };
 
 export function normalizeMediaUrl(value: unknown): string {
@@ -102,7 +102,7 @@ export const DETAILED_TRAFFIC_STATUS_CONFIG: Record<DetailedTrafficStatus, Detai
     label: "ผ่านได้ปกติ",
     detail: "การจราจรผ่านได้ตามปกติ",
     colorName: "emerald",
-    hex: "#10b981",
+    hex: TRAFFIC_ACCENT.emerald,
     badgeClass: "bg-emerald-950/80 text-emerald-300 border border-emerald-500/50",
     dotClass: "bg-emerald-500",
     icon: "✅",
@@ -113,7 +113,7 @@ export const DETAILED_TRAFFIC_STATUS_CONFIG: Record<DetailedTrafficStatus, Detai
     label: "รถทุกชนิดผ่านได้แต่ไม่สะดวก",
     detail: "รถทุกชนิดผ่านได้แต่ไม่สะดวก โปรดสัญจรด้วยความระมัดระวัง",
     colorName: "sky",
-    hex: "#0ea5e9",
+    hex: TRAFFIC_ACCENT.sky,
     badgeClass: "bg-sky-950/80 text-sky-300 border border-sky-500/50",
     dotClass: "bg-sky-400",
     icon: "🚗",
@@ -124,7 +124,7 @@ export const DETAILED_TRAFFIC_STATUS_CONFIG: Record<DetailedTrafficStatus, Detai
     label: "รถเล็กผ่านได้ ๑ ช่องทาง",
     detail: "เปิดการจราจรหนึ่งช่องทาง",
     colorName: "amber",
-    hex: "#f59e0b",
+    hex: TRAFFIC_ACCENT.amber,
     badgeClass: "bg-amber-950/80 text-amber-200 border border-amber-500/50",
     dotClass: "bg-amber-500",
     icon: "↔️",
@@ -134,10 +134,10 @@ export const DETAILED_TRAFFIC_STATUS_CONFIG: Record<DetailedTrafficStatus, Detai
     value: "CAUTION",
     label: "รถเล็กผ่านไม่ได้",
     detail: "น้ำท่วมผิวทาง รถเล็กผ่านไม่ได้",
-    colorName: "amber",
-    hex: "#f59e0b",
-    badgeClass: "bg-amber-950/80 text-amber-200 border border-amber-500/50",
-    dotClass: "bg-amber-500",
+    colorName: "orange",
+    hex: TRAFFIC_ACCENT.orange,
+    badgeClass: "bg-orange-950/80 text-orange-200 border border-orange-500/50",
+    dotClass: "bg-orange-500",
     icon: "⚠️",
     dbStatus: "WARNING",
   },
@@ -146,7 +146,7 @@ export const DETAILED_TRAFFIC_STATUS_CONFIG: Record<DetailedTrafficStatus, Detai
     label: "รถเล็กไม่สามารถผ่านได้",
     detail: "ระดับน้ำสูง รถเล็กไม่สามารถผ่านได้ รถใหญ่ผ่านได้",
     colorName: "orange",
-    hex: "#f97316",
+    hex: TRAFFIC_ACCENT.orange,
     badgeClass: "bg-orange-950/80 text-orange-200 border border-orange-500/50",
     dotClass: "bg-orange-500",
     icon: "🚗",
@@ -157,7 +157,7 @@ export const DETAILED_TRAFFIC_STATUS_CONFIG: Record<DetailedTrafficStatus, Detai
     label: "ผ่านไม่ได้",
     detail: "รถทุกชนิดผ่านไม่ได้",
     colorName: "red",
-    hex: "#dc2626",
+    hex: TRAFFIC_ACCENT.red,
     badgeClass: "bg-red-950/80 text-red-300 border border-red-500/50",
     dotClass: "bg-red-500 animate-pulse",
     icon: "⛔",
@@ -168,7 +168,7 @@ export const DETAILED_TRAFFIC_STATUS_CONFIG: Record<DetailedTrafficStatus, Detai
     label: "รอตรวจสอบสถานะ",
     detail: "ไม่พบสถานะการจราจรที่ยืนยันได้",
     colorName: "slate",
-    hex: "#64748b",
+    hex: TRAFFIC_ACCENT.slate,
     badgeClass: "bg-slate-900/80 text-slate-300 border border-slate-600/50",
     dotClass: "bg-slate-400",
     icon: "⏳",

@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState, type CSSProperties } from "react";
-import { ChevronDown, Route, Waves } from "lucide-react";
+import { Car, ChevronDown, CircleCheck, CircleHelp, CircleX, Route, TrafficCone, TriangleAlert, Waves } from "lucide-react";
 import type { FloodRoute, SystemDataPayload } from "@/db/default-data";
 import { DETAILED_TRAFFIC_STATUS_CONFIG, mapTrafficStatusToDetail, type DetailedTrafficStatus } from "@/lib/flood-event-schema";
 import { PUBLIC_READ_MESSAGES, type PublicReadState } from "./public-read-state";
@@ -8,6 +8,14 @@ import { getEventIdForFloodRoute } from "@/lib/event-detour-links";
 
 export type MapPassability = Exclude<DetailedTrafficStatus, "CAUTION">;
 const statuses: readonly MapPassability[] = ["CLOSED", "NO_SMALL_VEHICLES", "LIGHT_VEHICLES_ONLY", "ONE_LANE", "PASSABLE", "PENDING_VERIFICATION"];
+const statusIcons = {
+  CLOSED: CircleX,
+  NO_SMALL_VEHICLES: TriangleAlert,
+  LIGHT_VEHICLES_ONLY: Car,
+  ONE_LANE: TrafficCone,
+  PASSABLE: CircleCheck,
+  PENDING_VERIFICATION: CircleHelp,
+} satisfies Record<MapPassability, typeof CircleX>;
 
 export function mapPassabilityLabel(value: MapPassability): string {
   return value === "NO_SMALL_VEHICLES" ? DETAILED_TRAFFIC_STATUS_CONFIG.CAUTION.label : DETAILED_TRAFFIC_STATUS_CONFIG[value].label;
@@ -70,11 +78,13 @@ export function CitizenMapStatus({ systemData, selected, onFilter, onDetours, re
           {readState === "ready" && count === 0 && <p className="citizen-map-status-note">ยังไม่พบจุดที่รายงาน</p>}
           {statuses.filter((key) => (totals.get(key)?.size ?? 0) > 0 || selected === key).map(key => {
             const status = DETAILED_TRAFFIC_STATUS_CONFIG[key];
+            const Icon = statusIcons[key];
             return (
               <button type="button" key={key} aria-pressed={selected === key} data-map-flood-status={key}
                 style={{ "--flood-status-color": status.hex } as CSSProperties}
                 onClick={() => onFilter(selected === key ? "ALL" : key)}>
                 <span className="citizen-flood-filter-label">
+                  <Icon className="citizen-flood-filter-icon" aria-hidden="true" />
                   <i className="citizen-flood-filter-swatch" aria-hidden="true" />
                   <span>{mapPassabilityLabel(key)}</span>
                 </span>

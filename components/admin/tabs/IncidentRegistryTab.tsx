@@ -308,7 +308,7 @@ export function IncidentRegistryTab({
                       </h3>
                     </div>
                     <div className={`${workspace.registryFacts} text-xs text-slate-400`}>
-                      <span className={`text-[11px] font-heading font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap ${statusConfig.badgeClass}`}>
+                      <span style={{ borderInlineStartColor: statusConfig.hex, borderInlineStartWidth: 3 }} className={`text-[11px] font-heading font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap ${statusConfig.badgeClass}`}>
                         {statusConfig.icon} {statusConfig.label}
                       </span>
                       {linkedEventDetours.length > 0 && (
@@ -416,7 +416,7 @@ export function IncidentRegistryTab({
                                   <path d="M2 16c2 2 4 2 6 0s4-2 6 0 4 2 6 0" />
                                 </svg>
                               </span>
-                              <span className={`text-[11px] font-heading font-bold px-2 py-0.5 rounded whitespace-nowrap ${segStatusConfig.badgeClass}`}>
+                              <span style={{ borderInlineStartColor: segStatusConfig.hex, borderInlineStartWidth: 3 }} className={`text-[11px] font-heading font-bold px-2 py-0.5 rounded whitespace-nowrap ${segStatusConfig.badgeClass}`}>
                                 {segStatusConfig.icon} {segStatusConfig.label}
                               </span>
                               {completenessIssues.length > 0 && (
