@@ -156,43 +156,48 @@ test("citizen theme inverts active filters without dimming the basemap or overla
   await expect(contacts).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
 
-test("public flood popup keeps area, water level, status and close control readable in both themes", async ({ page }) => {
-  const criticalFlood = { ...payload.floodRoutes[0], traffic_status: "CLOSED", subdistrict: "บ้านนอก", district: "ปะนาเระ", province: "ปัตตานี" };
-  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: { ...payload, floodRoutes: [criticalFlood] } }));
-  await page.goto(base + "/");
-  const pin = page.locator(".doh-map-capsule-pin").first();
-  const popup = page.locator(".doh-flood-leaflet-popup");
+for (const [status, label] of [
+  ["CLOSED", "ผ่านไม่ได้"],
+  ["PENDING_VERIFICATION", "รอตรวจสอบสถานะ"],
+] as const) {
+  test(`public flood popup keeps ${status} and the incident details readable in both themes`, async ({ page }) => {
+    const criticalFlood = { ...payload.floodRoutes[0], traffic_status: status, direction_meta: { trafficStatusDetail: status }, subdistrict: "บ้านนอก", district: "ปะนาเระ", province: "ปัตตานี" };
+    await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: { ...payload, floodRoutes: [criticalFlood] } }));
+    await page.goto(base + "/");
+    const pin = page.locator(".doh-map-capsule-pin").first();
+    const popup = page.locator(".doh-flood-leaflet-popup");
 
-  for (const theme of ["light", "dark"]) {
-    if (theme === "dark") await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
-    await pin.click();
-    await expect(popup).toHaveClass(/hdms-popup-map/);
-    await expect(popup.locator(".leaflet-popup-content-wrapper")).toHaveCSS("background-color", theme === "light" ? "rgb(255, 255, 255)" : "rgb(26, 45, 62)");
-    await expect(popup.getByText("ต.บ้านนอก อ.ปะนาเระ จ.ปัตตานี")).toBeVisible();
-    await expect(popup.getByText("ผ่านไม่ได้", { exact: true })).toBeVisible();
-    for (const selector of [".doh-flood-popup-area span", ".doh-flood-popup-water", ".doh-flood-popup-status", ".leaflet-popup-close-button"]) {
-      const contrast = await popup.locator(selector).evaluate(element => {
-        const rgb = (color: string) => (color.match(/[\d.]+/g) || []).map(Number);
-        const luma = (color: number[]) => color.slice(0, 3).reduce((sum, byte, channel) => {
-          const n = byte / 255;
-          return sum + (n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4) * [0.2126, 0.7152, 0.0722][channel];
-        }, 0);
-        const foreground = luma(rgb(getComputedStyle(element).color));
-        for (let node: Element | null = element; node; node = node.parentElement) {
-          const bg = rgb(getComputedStyle(node).backgroundColor);
-          if (bg.length === 3 || bg[3] === 1) {
-            const background = luma(bg);
-            return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+    for (const theme of ["light", "dark"]) {
+      if (theme === "dark") await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
+      await pin.click();
+      await expect(popup).toHaveClass(/hdms-popup-map/);
+      await expect(popup.locator(".leaflet-popup-content-wrapper")).toHaveCSS("background-color", theme === "light" ? "rgb(255, 255, 255)" : "rgb(26, 45, 62)");
+      await expect(popup.getByText("ต.บ้านนอก อ.ปะนาเระ จ.ปัตตานี")).toBeVisible();
+      await expect(popup.getByText(label, { exact: true })).toBeVisible();
+      for (const selector of [".doh-flood-popup-area span", ".doh-flood-popup-water", ".doh-flood-popup-status", ".leaflet-popup-close-button"]) {
+        const contrast = await popup.locator(selector).evaluate(element => {
+          const rgb = (color: string) => (color.match(/[\d.]+/g) || []).map(Number);
+          const luma = (color: number[]) => color.slice(0, 3).reduce((sum, byte, channel) => {
+            const n = byte / 255;
+            return sum + (n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4) * [0.2126, 0.7152, 0.0722][channel];
+          }, 0);
+          const foreground = luma(rgb(getComputedStyle(element).color));
+          for (let node: Element | null = element; node; node = node.parentElement) {
+            const bg = rgb(getComputedStyle(node).backgroundColor);
+            if (bg.length === 3 || bg[3] === 1) {
+              const background = luma(bg);
+              return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+            }
           }
-        }
-        return 0;
-      });
-      expect(contrast, theme + " " + selector).toBeGreaterThanOrEqual(4.5);
+          return 0;
+        });
+        expect(contrast, theme + " " + selector).toBeGreaterThanOrEqual(4.5);
+      }
+      await popup.locator(".leaflet-popup-close-button").click();
+      await expect(popup).toHaveCount(0);
     }
-    await popup.locator(".leaflet-popup-close-button").click();
-    await expect(popup).toHaveCount(0);
-  }
-});
+  });
+}
 
 test("citizen directory lists six offices in order and enables only verified stored actions", async ({ page, isMobile }) => {
   const officeNames = ["แขวงทางหลวงปัตตานี", "หมวดทางหลวงโคกโพธิ์", "หมวดทางหลวงหนองจิก", "หมวดทางหลวงปะนาเระ", "หมวดทางหลวงสายบุรี", "หมวดทางหลวงยะรัง"];

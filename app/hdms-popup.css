@@ -68,7 +68,8 @@ div[data-hdms-popup=photo] { background: var(--hdms-scrim); }
   color: var(--text-primary);
   background: var(--bg-card);
 }
-.leaflet-popup.hdms-popup-map .leaflet-popup-content :is([class~="text-white"],[class~="text-slate-100"],[class~="text-slate-200"]):not(:where([class*="bg-red-"],[class*="bg-sky-"],[class*="bg-emerald-"])) {
+/* Status badges own their paired foreground/background, including unverified traffic. */
+.leaflet-popup.hdms-popup-map .leaflet-popup-content :is([class~="text-white"],[class~="text-slate-100"],[class~="text-slate-200"]):not(:where(.doh-flood-popup-status,[class*="bg-red-"],[class*="bg-sky-"],[class*="bg-emerald-"])) {
   color: var(--text-primary);
 }
 .leaflet-popup.hdms-popup-map .leaflet-popup-content :is([class~="text-slate-300"],[class~="text-slate-400"],[class~="text-slate-500"]) { color: var(--text-secondary); }
