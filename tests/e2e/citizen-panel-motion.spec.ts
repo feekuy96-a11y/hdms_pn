@@ -71,6 +71,9 @@ test("admin uses the right map controls and the text-free desktop sidebar toggle
   }).toBeLessThanOrEqual(14);
   await layers.click();
   await expect(panel).toBeVisible();
+  await expect(panel.getByRole("checkbox", { name: /หมายเลขทางหลวง/ })).toBeChecked();
+  await panel.getByText("ตั้งค่าเพิ่มเติม", { exact: true }).click();
+  await expect(panel.getByRole("button", { name: "รวมเหตุการณ์", exact: true })).toHaveAttribute("aria-pressed", "true");
   const [mapBounds, toolbar, bounds] = await Promise.all([map.boundingBox(), tools.boundingBox(), panel.boundingBox()]);
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(toolbar!.x);
   expect(bounds!.x).toBeGreaterThanOrEqual(mapBounds!.x);

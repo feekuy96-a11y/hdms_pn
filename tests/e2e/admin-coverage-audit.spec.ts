@@ -61,6 +61,21 @@ test("audit: actual filtered CSV and deleted incident restoration", async ({ pag
   expect(calls.filter((call) => call.action === "restoreRouteAction").map((call) => call.args)).toEqual([["FLOOD", "RESTORE-ME"]]);
 });
 
+test("office subdivision badge remains readable in both system themes", async ({ page, isMobile, baseURL }) => {
+  await setup(page, baseURL);
+  if (isMobile) await page.getByRole("navigation", { name: "เมนูจัดการแอดมินมือถือ" }).locator("summary").click();
+  await page.getByRole("button", { name: "จัดการระบบ", exact: true }).filter({ visible: true }).first().click();
+  const badge = page.getByText("หมวดทางหลวง", { exact: true }).filter({ visible: true });
+  for (const [colorScheme, color, background] of [
+    ["light", "rgb(20, 89, 116)", "rgb(226, 238, 244)"],
+    ["dark", "rgb(175, 215, 242)", "rgb(35, 62, 85)"],
+  ] as const) {
+    await page.emulateMedia({ colorScheme });
+    await expect(badge).toHaveCSS("color", color);
+    await expect(badge).toHaveCSS("background-color", background);
+  }
+});
+
 test("audit: system metadata and office saves persist and removal remains confirmed", async ({ page, isMobile, baseURL }) => {
   const calls = await setup(page, baseURL);
   const gotoSystem = async () => {

@@ -201,3 +201,9 @@
 [data-hdms-map] .hdms-map-control[aria-expanded=true] {
   box-shadow: inset 0 0 0 2px var(--hdms-control-edge);
 }
+
+.hdms-key-hint {
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--hdms-control-edge);
+}

@@ -237,7 +237,7 @@ export function GisFocusModeBar({
           <X aria-hidden="true" className="h-4 w-4" />
           <span className="sm:hidden">ออก</span>
           <span className="hidden sm:inline">ออกจากโหมดโฟกัส</span>
-          <kbd className="hidden rounded bg-slate-950/80 px-1.5 py-0.5 font-mono text-[0.65rem] text-slate-300 sm:inline">
+          <kbd className="hdms-key-hint hidden rounded px-1.5 py-0.5 font-mono text-[0.65rem] sm:inline">
             Esc
           </kbd>
         </button>

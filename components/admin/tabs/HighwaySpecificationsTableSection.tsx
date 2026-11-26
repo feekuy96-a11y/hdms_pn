@@ -201,17 +201,17 @@ export function HighwaySpecificationsTableSection({
       ) : (
         <div className="w-full min-w-0 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-inner">
           <table className="w-full min-w-[880px] text-left text-xs text-slate-300">
-            <thead className="bg-[#091122] text-slate-400 font-heading border-b border-slate-800">
+            <thead className="bg-[var(--bg-input)] text-[color:var(--text-primary)] font-heading border-b border-slate-800">
               <tr>
-                <th className="p-3 w-10 text-center sticky left-0 bg-[#091122] z-10">#</th>
-                <th className="p-3 w-16 text-center sticky left-10 bg-[#091122] z-10 whitespace-nowrap">แสดงผล</th>
+                <th className="p-3 w-10 text-center sticky left-0 bg-[var(--bg-input)] z-10">#</th>
+                <th className="p-3 w-16 text-center sticky left-10 bg-[var(--bg-input)] z-10 whitespace-nowrap">แสดงผล</th>
                 <th className="p-3 whitespace-nowrap min-w-[120px]">หมายเลขทางหลวง</th>
                 <th className="p-3 whitespace-nowrap min-w-[200px]">ชื่อสายทาง / ตอนควบคุม</th>
                 <th className="p-3 whitespace-nowrap min-w-[140px]">ช่วง กม. & ระยะทาง</th>
                 <th className="p-3 whitespace-nowrap min-w-[130px]">ช่องจราจร & ผิวทาง</th>
                 <th className="p-3 whitespace-nowrap min-w-[140px]">หน่วยงานรับผิดชอบ</th>
                 <th className="p-3 min-w-[120px]">หมายเหตุ</th>
-                <th className="p-3 text-right whitespace-nowrap sticky right-0 bg-[#091122] z-10">การจัดการ</th>
+                <th className="p-3 text-right whitespace-nowrap sticky right-0 bg-[var(--bg-input)] z-10">การจัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80 font-body">
@@ -238,8 +238,8 @@ export function HighwaySpecificationsTableSection({
                         !group.isVisible ? "opacity-50 bg-slate-950/40" : isExpanded ? "bg-slate-900/30" : ""
                       }`}
                     >
-                      <td className="p-3 text-center font-mono text-slate-400 sticky left-0 bg-[#090d16] z-10">{gIdx + 1}</td>
-                      <td className="p-3 text-center sticky left-10 bg-[#090d16] z-10">
+                      <td className="p-3 text-center font-mono text-slate-400 sticky left-0 bg-[var(--bg-card)] z-10">{gIdx + 1}</td>
+                      <td className="p-3 text-center sticky left-10 bg-[var(--bg-card)] z-10">
                         <button
                           type="button"
                           onClick={() => handleToggleGroupVisibility(group)}
@@ -302,7 +302,7 @@ export function HighwaySpecificationsTableSection({
                       <td className="p-3 text-[11px] text-slate-400 max-w-[120px] truncate" title={group.remarks}>
                         {group.remarks || "-"}
                       </td>
-                      <td className="p-3 text-right whitespace-nowrap sticky right-0 bg-[#090d16] z-10">
+                      <td className="p-3 text-right whitespace-nowrap sticky right-0 bg-[var(--bg-card)] z-10">
                         <div className="inline-flex items-center gap-1.5">
                           {isMultiBranch && (
                             <button
@@ -388,10 +388,10 @@ export function HighwaySpecificationsTableSection({
                                   : "border-l-amber-500"
                             } ${!isBranchVis ? "opacity-50" : ""}`}
                           >
-                            <td className="p-2.5 text-center font-mono text-slate-500 text-[11px] sticky left-0 bg-[#0c1322] z-10">
+                            <td className="p-2.5 text-center font-mono text-slate-500 text-[11px] sticky left-0 bg-[var(--bg-input)] z-10">
                               ↳ {bIdx + 1}
                             </td>
-                            <td className="p-2.5 text-center sticky left-10 bg-[#0c1322] z-10">
+                            <td className="p-2.5 text-center sticky left-10 bg-[var(--bg-input)] z-10">
                               <button
                                 type="button"
                                 onClick={() => handleToggleFeatureVisibility(group.layerId, branch.featureIdx)}
@@ -438,7 +438,7 @@ export function HighwaySpecificationsTableSection({
                             <td className="p-2.5 text-[11px] text-slate-500 truncate max-w-[120px]" title={branch.properties?.remarks}>
                               {branch.properties?.remarks || "-"}
                             </td>
-                            <td className="p-2.5 text-right whitespace-nowrap sticky right-0 bg-[#0c1322] z-10">
+                            <td className="p-2.5 text-right whitespace-nowrap sticky right-0 bg-[var(--bg-input)] z-10">
                               <div className="inline-flex items-center gap-1.5">
                                 <button
                                   type="button"

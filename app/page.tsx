@@ -602,7 +602,7 @@ export default function HomePage() {
         <div
           id="public-map-route-pane"
           className={`${isSidebarCollapsed ? "hidden" : "hidden lg:flex"
-            } citizen-sidebar order-2 w-full lg:w-[min(35%,25.625rem)] xl:w-[min(35%,27.5rem)] bg-surface-panel border-t lg:border-t-0 lg:border-l border-surface flex-col shrink-0 z-20 lg:h-full overflow-hidden transition-all duration-300`}
+            } citizen-sidebar lg:order-1 w-full lg:w-[min(35%,25.625rem)] xl:w-[min(35%,27.5rem)] bg-surface-panel border-t lg:border-t-0 lg:border-r border-surface flex-col shrink-0 z-20 lg:h-full overflow-hidden transition-all duration-300`}
         >
           {/* Sidebar Header & Search */}
           <div className="citizen-dock-controls p-3.5 bg-surface-panel border-b border-surface space-y-2.5 shrink-0">
@@ -795,7 +795,7 @@ export default function HomePage() {
         {/* ================================================================= */}
         {/* B. MAIN GIS MAP VIEWPORT                                          */}
         {/* ================================================================= */}
-        <section aria-label="แผนที่และข้อมูลการเดินทาง" className="citizen-map-workspace order-1 relative h-full min-h-0 flex-1 w-full overflow-hidden bg-surface-canvas">
+        <section aria-label="แผนที่และข้อมูลการเดินทาง" className="citizen-map-workspace order-1 lg:order-2 relative h-full min-h-0 flex-1 w-full overflow-hidden bg-surface-canvas">
           {readState === "loading" && (
             <div role="status" aria-live="polite" className="absolute left-1/2 top-[6.75rem] sm:top-14 z-[600] -translate-x-1/2 max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-17.5rem)] rounded-xl border border-slate-700 bg-slate-950/95 px-4 py-2.5 text-sm text-white shadow-xl">
               กำลังโหลดข้อมูลสถานการณ์ล่าสุด…

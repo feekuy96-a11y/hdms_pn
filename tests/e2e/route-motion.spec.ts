@@ -44,6 +44,26 @@ async function mockIncidentMotion(page: Page) {
   };
 }
 
+test("legacy flood arrows visibly pulse in the preview and explain reduced motion", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Style preview is checked in the desktop editor.");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  const mock = await mockIncidentMotion(page);
+  Object.assign(mock.styles().flood, { animation: "arrows", animationSpeed: 100, pattern: "dash", animationEnabled: true });
+  await page.goto(`${base}/admin/`);
+  await page.getByRole("complementary").getByRole("button", { name: /สไตล์เส้นทาง/ }).click();
+  await expect(page.locator("#line-style-animation-select")).toHaveValue("arrows");
+  const ribbon = page.locator(".doh-route-motion-preview .doh-motion-ribbon-core");
+  await expect(ribbon).toBeVisible();
+  await expect(page.getByText(/สว่าง–จางเป็นจังหวะอยู่กับที่/)).toBeVisible();
+  const path = await ribbon.getAttribute("d");
+  const opacity = Number(await ribbon.getAttribute("opacity"));
+  await expect.poll(async () => Math.abs(Number(await ribbon.getAttribute("opacity")) - opacity)).toBeGreaterThan(0.06);
+  await expect(ribbon).toHaveAttribute("d", path!);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(ribbon).toHaveCount(0);
+  await expect(page.getByText(/ตามการตั้งค่าลดการเคลื่อนไหวของอุปกรณ์/)).toBeVisible();
+});
+
 test("incident motion options save per layer and render on the public map after reload", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop style editor workflow");
   await page.emulateMedia({ reducedMotion: "no-preference" });
