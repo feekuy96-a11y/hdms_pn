@@ -151,6 +151,7 @@ function DraftPublicationChoice({
 export interface MapSubmitActionBarProps {
   saveAsDraft: boolean;
   isSubmitting: boolean;
+  linkedDetourPending?: boolean;
   onSubmit: () => void;
   routeEditId: string;
   routeMode: "FLOOD" | "DETOUR";
@@ -160,6 +161,7 @@ export interface MapSubmitActionBarProps {
 export function MapSubmitActionBar({
   saveAsDraft,
   isSubmitting,
+  linkedDetourPending,
   onSubmit,
   routeEditId,
   routeMode,
@@ -187,11 +189,13 @@ export function MapSubmitActionBar({
         >
           <Save className="w-4 h-4 shrink-0" />
           <span>
-            {saveAsDraft
-              ? routeMode === "DETOUR" ? "บันทึกร่างทางเลี่ยง" : "บันทึกร่างเหตุการณ์"
-              : routeEditId
-                ? routeMode === "DETOUR" ? "บันทึกการแก้ไขทางเลี่ยง" : "บันทึกการแก้ไขเหตุการณ์"
-                : routeMode === "DETOUR" ? "บันทึกทางเลี่ยงเข้าสู่ระบบสารสนเทศ" : "บันทึกเหตุการณ์"}
+            {routeMode === "DETOUR" && !routeEditId && linkedDetourPending
+              ? "ลองผูกเหตุการณ์อีกครั้ง"
+              : saveAsDraft
+                ? routeMode === "DETOUR" ? "บันทึกร่างทางเลี่ยง" : "บันทึกร่างเหตุการณ์"
+                : routeEditId
+                  ? routeMode === "DETOUR" ? "บันทึกการแก้ไขทางเลี่ยง" : "บันทึกการแก้ไขเหตุการณ์"
+                  : routeMode === "DETOUR" ? "บันทึกทางเลี่ยงเข้าสู่ระบบสารสนเทศ" : "บันทึกเหตุการณ์"}
           </span>
         </button>
       </div>

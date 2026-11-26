@@ -557,7 +557,7 @@ export function MapManagementTab({
   };
 
   // Submit Flood or Detour Route
-  const { handleSubmitRoute } = useMapRouteSubmit({
+  const { handleSubmitRoute, linkedDetourPending } = useMapRouteSubmit({
     systemData, onDataRefresh, onToast, showSuccessModal, showErrorModal,
     onNavigateToIncidents, onClearEditingRoute, editingRoute,
     routeMode, routeEditId, setRouteEditId, saveAsDraft, setIsSubmitting,
@@ -727,7 +727,7 @@ export function MapManagementTab({
         onImportFile={handleRouteFileImport}
         onSaveAsDraftChange={setSaveAsDraft}
         submitBarProps={{
-          saveAsDraft, isSubmitting, onSubmit: handleSubmitRoute, routeEditId,
+          saveAsDraft, isSubmitting, onSubmit: handleSubmitRoute, routeEditId, linkedDetourPending,
           onCancelEdit: cancelEditingRoute,
         }}
       />
