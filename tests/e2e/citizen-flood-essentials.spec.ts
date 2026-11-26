@@ -118,8 +118,8 @@ test("long Thai detour dossier title reflows at enlarged text while real close s
     expect(routePhotoBox.width).toBeGreaterThan(routePhotoBox.height);
     await expect(dialog.locator("[data-endpoint-photo]")).toHaveCount(0);
     const timelineStep = dialog.locator(".citizen-detour-step").first();
-    await expect(timelineStep).toHaveCSS("background-color", "rgb(229, 238, 240)");
-    await expect(timelineStep.locator("p")).toHaveCSS("color", "rgb(69, 94, 110)");
+    await expect(timelineStep).toHaveCSS("background-color", "rgb(230, 238, 241)");
+    await expect(timelineStep.locator("p")).toHaveCSS("color", "rgb(60, 84, 102)");
     const scroller = dialog.locator(".overflow-y-auto").first();
     expect(await scroller.evaluate(el => el.clientHeight)).toBeGreaterThanOrEqual(viewport.height * 0.35);
     const focusMap = dialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true });

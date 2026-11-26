@@ -40,24 +40,24 @@ import {
 function renderStepIcon(iconType: DetourTimelineStep["iconType"]) {
   switch (iconType) {
     case "start":
-      return <MapPin aria-hidden="true" className="w-4 h-4 text-emerald-400 shrink-0 stroke-[2.5]" />;
+      return <MapPin aria-hidden="true" className="w-4 h-4 hdms-guide-icon shrink-0 stroke-[2.5]" />;
     case "end":
-      return <Flag aria-hidden="true" className="w-4 h-4 text-emerald-400 shrink-0 stroke-[2.5]" />;
+      return <Flag aria-hidden="true" className="w-4 h-4 hdms-guide-icon shrink-0 stroke-[2.5]" />;
     case "turn_left":
-      return <CornerUpLeft aria-hidden="true" className="w-4 h-4 text-white shrink-0 stroke-[2.5]" />;
+      return <CornerUpLeft aria-hidden="true" className="w-4 h-4 hdms-guide-icon shrink-0 stroke-[2.5]" />;
     case "turn_right":
-      return <CornerUpRight aria-hidden="true" className="w-4 h-4 text-white shrink-0 stroke-[2.5]" />;
+      return <CornerUpRight aria-hidden="true" className="w-4 h-4 hdms-guide-icon shrink-0 stroke-[2.5]" />;
     case "slight_left":
-      return <ArrowUpLeft aria-hidden="true" className="w-4 h-4 text-sky-300 shrink-0 stroke-[2.5]" />;
+      return <ArrowUpLeft aria-hidden="true" className="w-4 h-4 hdms-guide-icon shrink-0 stroke-[2.5]" />;
     case "slight_right":
-      return <ArrowUpRight aria-hidden="true" className="w-4 h-4 text-sky-300 shrink-0 stroke-[2.5]" />;
+      return <ArrowUpRight aria-hidden="true" className="w-4 h-4 hdms-guide-icon shrink-0 stroke-[2.5]" />;
     case "uturn":
-      return <Undo2 aria-hidden="true" className="w-4 h-4 text-amber-200 shrink-0 stroke-[2.5]" />;
+      return <Undo2 aria-hidden="true" className="w-4 h-4 hdms-guide-icon shrink-0 stroke-[2.5]" />;
     case "roundabout":
-      return <RefreshCw aria-hidden="true" className="w-4 h-4 text-sky-300 shrink-0 stroke-[2.5]" />;
+      return <RefreshCw aria-hidden="true" className="w-4 h-4 hdms-guide-icon shrink-0 stroke-[2.5]" />;
     case "straight":
     default:
-      return <ArrowUp aria-hidden="true" className="w-4 h-4 text-white shrink-0 stroke-[2.5]" />;
+      return <ArrowUp aria-hidden="true" className="w-4 h-4 hdms-guide-icon shrink-0 stroke-[2.5]" />;
   }
 }
 import { getLinkedEventsForDetour } from "@/lib/event-detour-links";
@@ -280,7 +280,7 @@ export function DetourDossierModal({
               <section aria-label="คำแนะนำเส้นทาง" className="space-y-3 pt-1">
                 {/* Section Header */}
                 <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-white">
-                  <Route className="w-5 h-5 text-[#f59e0b]" />
+                  <Route className="w-5 h-5 hdms-guide-accent" />
                   <span>คำแนะนำเส้นทาง</span>
                 </div>
 
@@ -291,7 +291,7 @@ export function DetourDossierModal({
                     {timeline.steps.length > 1 && (
                       <div
                         aria-hidden="true"
-                        className="absolute left-[17px] top-4 bottom-4 w-0.5 bg-slate-600/70"
+                        className="absolute left-[17px] top-4 bottom-4 w-0.5 hdms-guide-line"
                       />
                     )}
 
@@ -300,26 +300,26 @@ export function DetourDossierModal({
                         {/* Step Number Circle */}
                         <div
                           aria-hidden="true"
-                          className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#f59e0b] text-xs font-black text-slate-950 shadow-md"
+                          className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full hdms-guide-number text-xs font-black shadow-md"
                         >
                           {st.stepNumber}
                         </div>
 
                         {/* Step Card */}
-                        <div className="citizen-detour-step ml-3 flex-1 min-w-0 rounded-2xl border border-slate-800 p-3 shadow-sm">
+                        <div className="citizen-detour-step hdms-guide-card ml-3 flex-1 min-w-0 rounded-2xl border p-3 shadow-sm">
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div className="flex items-center gap-1.5 min-w-0">
                               {renderStepIcon(st.iconType)}
-                              <span className="font-heading font-bold text-sm text-amber-300 break-words">
+                              <span className="font-heading font-bold text-sm hdms-guide-title break-words">
                                 {st.title}
                               </span>
                             </div>
-                            <span className="rounded-md border border-slate-700/80 bg-slate-900/90 px-2 py-0.5 font-mono text-xs text-slate-300 whitespace-nowrap shrink-0">
+                            <span className="hdms-guide-badge rounded-md border px-2 py-0.5 font-mono text-xs whitespace-nowrap shrink-0">
                               {st.badge}
                             </span>
                           </div>
                           {st.detail && (
-                            <p className="text-xs text-slate-300 mt-1 leading-normal break-words">
+                            <p className="text-xs hdms-guide-copy mt-1 leading-normal break-words">
                               {st.detail}
                             </p>
                           )}
@@ -328,14 +328,14 @@ export function DetourDossierModal({
                     ))}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-amber-500/40 bg-slate-900/80 p-3.5 text-xs text-amber-200 leading-relaxed">
+                  <div className="hdms-guide-card hdms-guide-warning rounded-2xl border p-3.5 text-xs leading-relaxed">
                     {timeline.directionNotice || "ไม่มีข้อมูลขั้นตอนการเดินทางสำหรับทิศทางนี้"}
                   </div>
                 )}
 
                 {/* 5. Metrics Bar: ระยะทางรวม & เวลาโดยประมาณ */}
                 <div className="grid grid-cols-2 gap-2.5 mt-3">
-                  <div className="rounded-2xl border border-slate-800/80 bg-[#0e1c36] px-3 py-2.5 flex items-center gap-2.5 shadow-sm">
+                  <div className="hdms-guide-card rounded-2xl border px-3 py-2.5 flex items-center gap-2.5 shadow-sm">
                     <Route aria-hidden="true" className="w-4 h-4 text-slate-300 shrink-0" />
                     <div className="min-w-0">
                       <div className="text-[0.75rem]/[1.1rem] text-slate-400">ระยะทางรวม</div>
@@ -344,7 +344,7 @@ export function DetourDossierModal({
                       </strong>
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-slate-800/80 bg-[#0e1c36] px-3 py-2.5 flex items-center gap-2.5 shadow-sm">
+                  <div className="hdms-guide-card rounded-2xl border px-3 py-2.5 flex items-center gap-2.5 shadow-sm">
                     <Clock aria-hidden="true" className="w-4 h-4 text-slate-300 shrink-0" />
                     <div className="min-w-0">
                       <div className="text-[0.75rem]/[1.1rem] text-slate-400">เวลาโดยประมาณ</div>

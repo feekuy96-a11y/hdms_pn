@@ -141,6 +141,16 @@ test("citizen theme inverts active filters without dimming the basemap or overla
   await expect(basemap.locator(".leaflet-overlay-pane")).toHaveCSS("filter", "none");
   await expect(basemap.locator(".leaflet-marker-pane")).toHaveCSS("filter", "none");
   await expect(basemap).toHaveCSS("background-color", mapLight);
+  const layers = page.getByRole("button", { name: "เลเยอร์", exact: true });
+  await layers.click();
+  const legend = page.getByRole("region", { name: "เลเยอร์และสัญลักษณ์แผนที่" });
+  await expect(legend).toHaveCSS("background-color", "rgb(26, 45, 62)");
+  const street = legend.getByRole("button", { name: "ถนน OSM", exact: true });
+  await street.click();
+  await expect(street).toHaveCSS("background-color", "rgb(172, 209, 226)");
+  await expect(street).toHaveAttribute("aria-pressed", "true");
+  await expect(legend.locator(".hdms-map-symbol svg").first()).toBeVisible();
+  await layers.click();
   await nav.getByRole("button", { name: "ติดต่อ", exact: true }).click();
   const contacts = page.getByRole("dialog", { name: "ติดต่อหน่วยงาน" });
   await expect(contacts).toHaveAttribute("data-hdms-popup", "panel");

@@ -42,7 +42,7 @@ export function DirectionSwitch<T extends string = string>({
     <div
       role="group"
       aria-label={ariaLabel}
-      className={`${fullWidth ? "grid w-full" : "inline-grid"} rounded-xl border border-slate-700/80 bg-[#060d1b] p-[0.25em] gap-[0.25em] ${className}`}
+      className={`${fullWidth ? "grid w-full" : "inline-grid"} hdms-guide-card hdms-contrast-switch rounded-xl border p-[0.25em] gap-[0.25em] ${className}`}
       style={{ gridTemplateColumns: `repeat(${Math.max(1, options.length)}, minmax(0, 1fr))` }}
     >
       {options.map((option) => {
@@ -56,11 +56,7 @@ export function DirectionSwitch<T extends string = string>({
             aria-label={option.ariaLabel}
             aria-pressed={isActive}
             onClick={() => onChange(option.value)}
-            className={`${sizeClass} cursor-pointer rounded-lg font-heading transition flex items-center justify-center gap-[0.333em] whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 disabled:cursor-not-allowed disabled:opacity-35 ${
-              isActive
-                ? "bg-[#f59e0b] text-slate-950 font-black shadow-sm"
-                : "text-slate-300 font-semibold hover:bg-slate-800/70 hover:text-white"
-            }`}
+            className={`${sizeClass} cursor-pointer rounded-lg font-heading transition flex items-center justify-center gap-[0.333em] whitespace-nowrap font-semibold disabled:cursor-not-allowed`}
           >
             {option.label}
           </button>

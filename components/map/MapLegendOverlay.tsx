@@ -4,6 +4,7 @@ import React from "react";
 import { Layers, Plus, Minus, Building2, ChevronUp, ChevronDown, LocateFixed, Map as MapIcon, Info, X } from "lucide-react";
 import { SystemDataPayload } from "@/db/default-data";
 import { LAYER_CONFIG } from "@/lib/constants";
+import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import { isFloodLineVisibleOnCurrentMap } from "./longdo-map-popups";
 
 interface MapLegendOverlayProps {
@@ -130,7 +131,7 @@ export function MapLegendOverlay({
       onChange: setShowSecHwy,
       checkboxAccent: "accent-sky-400",
       activeBtnClass: "border-sky-400/70 bg-sky-950/70 text-sky-300",
-      codeTextClass: "text-sky-300",
+      codeTextClass: "hdms-map-link",
     },
   ];
   const activeHighwayConfig = highwayLayerItems.find((item) => item.key === legendRouteList) ?? null;
@@ -139,10 +140,10 @@ export function MapLegendOverlay({
             <div
               role="tooltip"
               aria-label={`รายชื่อ${activeHighwayConfig.label}`}
-              className={`${publicMode ? "citizen-layer-route-list" : ""} pointer-events-auto w-full sm:w-64 max-h-40 sm:max-h-[min(20rem,75dvh)] overflow-y-auto rounded-xl border border-slate-700/80 bg-[#0b162c]/95 p-3 text-xs text-white shadow-2xl backdrop-blur-md`}
+              className={`${publicMode ? "citizen-layer-route-list" : ""} hdms-map-surface pointer-events-auto w-full sm:w-64 max-h-40 sm:max-h-[min(20rem,75dvh)] overflow-y-auto rounded-xl border p-3 text-xs shadow-2xl`}
             >
               <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-slate-800 pb-1.5">
-                <span className="font-heading font-bold text-slate-100">
+                <span className="font-heading font-bold">
                   รายชื่อ{activeHighwayConfig.label}
                 </span>
                 {pinnedRouteList && (
@@ -153,7 +154,7 @@ export function MapLegendOverlay({
                       setPinnedRouteList(null);
                       setLegendRouteList(null);
                     }}
-                    className="grid h-7 w-7 place-items-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
+                    className="hdms-map-control grid h-7 w-7 place-items-center rounded-md cursor-pointer"
                   >
                     <X className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
@@ -166,19 +167,21 @@ export function MapLegendOverlay({
                   </div>
                 ))
               ) : (
-                <p className="py-1 text-slate-400">ไม่มีสายทางที่แสดง</p>
+                <p className="py-1 hdms-map-muted">ไม่มีสายทางที่แสดง</p>
               )}
             </div>
           );
 
+  const floodSwatch = mapStyles.flood?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
+  const detourSwatch = mapStyles.detour?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
+
   const baseMapChooser = (
-            <div className="citizen-basemap-options mt-2.5 pt-2 border-t border-slate-800 grid grid-cols-3 gap-[0.333em] text-[0.75rem]/[1.1rem] font-heading font-bold">
+            <div className="citizen-basemap-options hdms-contrast-switch mt-2.5 pt-2 border-t border-slate-800 grid grid-cols-3 gap-[0.333em] text-[0.75rem]/[1.1rem] font-heading font-bold">
               <button
                 type="button"
                 onClick={() => switchBaseMap("longdo")}
                 aria-pressed={activeBaseMap === "longdo"}
-                className={`min-h-11 sm:min-h-10 py-[0.333em] rounded-lg transition text-center px-[0.333em] truncate cursor-pointer ${activeBaseMap === "longdo" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
-                  }`}
+                className="min-h-11 sm:min-h-10 py-[0.333em] rounded-lg transition text-center px-[0.333em] truncate cursor-pointer"
               >
                 Longdo
               </button>
@@ -186,8 +189,7 @@ export function MapLegendOverlay({
                 type="button"
                 onClick={() => switchBaseMap("road")}
                 aria-pressed={activeBaseMap === "road"}
-                className={`min-h-11 sm:min-h-10 py-[0.333em] rounded-lg transition text-center px-[0.333em] truncate cursor-pointer ${activeBaseMap === "road" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
-                  }`}
+                className="min-h-11 sm:min-h-10 py-[0.333em] rounded-lg transition text-center px-[0.333em] truncate cursor-pointer"
               >
                 ถนน OSM
               </button>
@@ -195,8 +197,7 @@ export function MapLegendOverlay({
                 type="button"
                 onClick={() => switchBaseMap("sat")}
                 aria-pressed={activeBaseMap === "sat"}
-                className={`min-h-11 sm:min-h-10 py-[0.333em] rounded-lg transition text-center px-[0.333em] truncate cursor-pointer ${activeBaseMap === "sat" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
-                  }`}
+                className="min-h-11 sm:min-h-10 py-[0.333em] rounded-lg transition text-center px-[0.333em] truncate cursor-pointer"
               >
                 ดาวเทียม
               </button>
@@ -206,7 +207,7 @@ export function MapLegendOverlay({
 
   const secondaryDisplaySetting = showSecHwy && (
                 <div className="pl-5 pb-1">
-                  <label className="flex min-h-11 sm:min-h-9 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 text-[0.75rem]/[1.1rem] text-slate-300 hover:text-white touch-manipulation">
+                  <label className="flex min-h-11 sm:min-h-9 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 text-[0.75rem]/[1.1rem] hdms-guide-title touch-manipulation">
                     <span className="truncate">
                       แสดงสายรองทุกระดับซูม {!showSecondaryAtCurrentZoom ? "(ซูมออกซ่อนอัตโนมัติ)" : ""}
                     </span>
@@ -220,17 +221,14 @@ export function MapLegendOverlay({
                 </div>
               );
   const floodMarkerSetting = effectiveShowFloodLayer && (
-                <div className="pl-6 pb-1 pt-0.5 flex items-center justify-between text-[0.75rem]/[1.1rem] text-slate-300">
+                <div className="pl-6 pb-1 pt-0.5 flex items-center justify-between text-[0.75rem]/[1.1rem] hdms-map-muted">
                   <span>รูปแบบหมุด:</span>
-                  <div className="inline-flex rounded-lg bg-slate-900/90 p-[0.167em] border border-slate-700">
+                  <div className="hdms-contrast-switch hdms-map-subtle inline-flex gap-0.5 rounded-lg p-[0.167em] border">
                     <button
                       type="button"
                       onClick={() => setFloodDisplayMode("SEGMENTS")}
                       aria-pressed={floodDisplayMode === "SEGMENTS"}
-                      className={`min-h-9 sm:min-h-8 px-[0.667em] py-[0.167em] rounded text-[0.75rem]/[1.1rem] font-medium transition cursor-pointer ${floodDisplayMode === "SEGMENTS"
-                        ? "bg-amber-500 text-slate-950 font-bold"
-                        : "text-slate-400 hover:text-white"
-                        }`}
+                      className="min-h-9 sm:min-h-8 px-[0.667em] py-[0.167em] rounded text-[0.75rem]/[1.1rem] font-medium transition cursor-pointer"
                     >
                       แยกช่วง
                     </button>
@@ -238,10 +236,7 @@ export function MapLegendOverlay({
                       type="button"
                       onClick={() => setFloodDisplayMode("EVENTS")}
                       aria-pressed={floodDisplayMode === "EVENTS"}
-                      className={`min-h-9 sm:min-h-8 px-[0.667em] py-[0.167em] rounded text-[0.75rem]/[1.1rem] font-medium transition cursor-pointer ${floodDisplayMode === "EVENTS"
-                        ? "bg-amber-500 text-slate-950 font-bold"
-                        : "text-slate-400 hover:text-white"
-                        }`}
+                      className="min-h-9 sm:min-h-8 px-[0.667em] py-[0.167em] rounded text-[0.75rem]/[1.1rem] font-medium transition cursor-pointer"
                     >
                       รวมเหตุการณ์
                     </button>
@@ -263,13 +258,13 @@ export function MapLegendOverlay({
               ? "lg:pl-[11rem]"
               : ""
         }`}>
-          <div className={`${mobileInteractiveClass} min-h-8 sm:min-h-9 rounded-lg border border-red-500/50 bg-slate-950/95 px-2 sm:px-3 py-1 text-[0.7rem]/[1rem] sm:text-xs font-medium text-white shadow-lg backdrop-blur shrink-0 whitespace-nowrap flex items-center gap-1.5 sm:gap-2`}>
-            <span className="inline-block h-2 w-2 rounded-full bg-red-400 animate-pulse" />
-            <span>น้ำท่วม <strong className="text-red-300 font-bold">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => item.is_active).length : 0}</strong> จุด</span>
+          <div className={`${mobileInteractiveClass} hdms-map-surface min-h-8 sm:min-h-9 rounded-lg border border-red-500/50 px-2 sm:px-3 py-1 text-[0.7rem]/[1rem] sm:text-xs font-medium shadow-lg shrink-0 whitespace-nowrap flex items-center gap-1.5 sm:gap-2`} data-map-tone="danger">
+            <span className="inline-block h-2 w-2 rounded-full bg-current animate-pulse" />
+            <span>น้ำท่วม <strong className="font-bold">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => item.is_active).length : 0}</strong> จุด</span>
           </div>
-          <div className={`${mobileInteractiveClass} min-h-8 sm:min-h-9 rounded-lg border border-amber-500/50 bg-slate-950/95 px-2 sm:px-3 py-1 text-[0.7rem]/[1rem] sm:text-xs font-medium text-white shadow-lg backdrop-blur shrink-0 whitespace-nowrap flex items-center gap-1.5 sm:gap-2`}>
-            <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
-            <span>ทางเลี่ยง <strong className="text-amber-300 font-bold">{showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</strong> เส้นทาง</span>
+          <div className={`${mobileInteractiveClass} hdms-map-surface min-h-8 sm:min-h-9 rounded-lg border border-amber-500/50 px-2 sm:px-3 py-1 text-[0.7rem]/[1rem] sm:text-xs font-medium shadow-lg shrink-0 whitespace-nowrap flex items-center gap-1.5 sm:gap-2`} data-map-tone="warning">
+            <span className="inline-block h-2 w-2 rounded-full bg-current" />
+            <span>ทางเลี่ยง <strong className="font-bold">{showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</strong> เส้นทาง</span>
           </div>
         </div>
 
@@ -279,24 +274,24 @@ export function MapLegendOverlay({
             <button
               type="button"
               onClick={() => switchBaseMap(activeBaseMap === "sat" ? "road" : "sat")}
-              className="citizen-map-action min-h-8 sm:min-h-9 bg-[#0b162c]/95 hover:bg-[#0f1d3a] border border-slate-700/80 rounded-lg px-2 sm:px-2.5 py-1 shadow-lg flex items-center gap-1.5 text-[0.7rem]/[1rem] sm:text-xs font-medium text-slate-300 hover:text-white transition backdrop-blur-md cursor-pointer"
+              className="citizen-map-action hdms-map-control min-h-8 sm:min-h-9 border rounded-lg px-2 sm:px-2.5 py-1 shadow-lg flex items-center gap-1.5 text-[0.7rem]/[1rem] sm:text-xs font-medium text-slate-300 hover:text-white transition backdrop-blur-md cursor-pointer"
               title={activeBaseMap === "sat" ? "เปลี่ยนเป็นแผนที่ถนน" : "เปลี่ยนเป็นภาพถ่ายดาวเทียม"}
               aria-label={activeBaseMap === "sat" ? "เปลี่ยนเป็นแผนที่ถนน" : "เปลี่ยนเป็นภาพถ่ายดาวเทียม"}
             >
-              <MapIcon className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+              <MapIcon className="w-3.5 h-3.5 hdms-map-link shrink-0" />
               <span className="hidden sm:inline">{activeBaseMap === "sat" ? "ดาวเทียม" : "ถนน"}</span>
             </button>
             <button
               type="button"
               onClick={() => setIsLayerControlCollapsed(false)}
-              className="citizen-map-action min-h-8 sm:min-h-9 bg-[#0b162c]/95 hover:bg-[#0f1d3a] border border-slate-700/80 rounded-lg px-2.5 sm:px-3 py-1 shadow-lg flex items-center gap-1.5 sm:gap-2 text-[0.7rem]/[1rem] sm:text-xs font-heading font-bold text-amber-300 transition backdrop-blur-md cursor-pointer"
+              className="citizen-map-action hdms-map-control min-h-8 sm:min-h-9 border rounded-lg px-2.5 sm:px-3 py-1 shadow-lg flex items-center gap-1.5 sm:gap-2 text-[0.7rem]/[1rem] sm:text-xs font-heading font-bold text-amber-300 transition backdrop-blur-md cursor-pointer"
               title="เปิดแถบควบคุมเลเยอร์แผนที่"
               aria-expanded={false}
             >
-              <Layers className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <Layers className="w-3.5 h-3.5 hdms-guide-accent shrink-0" />
               <span className="hidden xs:inline sm:inline">สัญลักษณ์บนแผนที่</span>
               <span className="inline xs:hidden sm:hidden">สัญลักษณ์</span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <ChevronDown className="w-3.5 h-3.5 hdms-map-muted shrink-0" />
             </button>
           </div>
         )}
@@ -306,17 +301,17 @@ export function MapLegendOverlay({
 
       {publicMode && (
         <div className={`citizen-map-toolwrap ${mobileOverlayHiddenClass}`}>
-          <div role="group" aria-label="เครื่องมือแผนที่" className={`citizen-map-tools ${mobileInteractiveClass}`}>
-            <button type="button" className="leaflet-control-zoom-in" aria-label="Zoom in" title="ซูมเข้า" onClick={onZoomIn} disabled={!mapReady}>
+          <div role="group" aria-label="เครื่องมือแผนที่" className={`citizen-map-tools hdms-map-surface ${mobileInteractiveClass}`}>
+            <button type="button" className="leaflet-control-zoom-in hdms-map-control" aria-label="Zoom in" title="ซูมเข้า" onClick={onZoomIn} disabled={!mapReady}>
               <Plus size={19} aria-hidden="true" />
             </button>
-            <button type="button" className="leaflet-control-zoom-out" aria-label="Zoom out" title="ซูมออก" onClick={onZoomOut} disabled={!mapReady}>
+            <button type="button" className="leaflet-control-zoom-out hdms-map-control" aria-label="Zoom out" title="ซูมออก" onClick={onZoomOut} disabled={!mapReady}>
               <Minus size={19} aria-hidden="true" />
             </button>
-            <button type="button" aria-label="ตำแหน่งของฉัน" title="ตำแหน่งของฉัน" aria-busy={isLocating} onClick={locateUser} disabled={isLocating || !mapReady}>
+            <button type="button" className="hdms-map-control" aria-label="ตำแหน่งของฉัน" title="ตำแหน่งของฉัน" aria-busy={isLocating} onClick={locateUser} disabled={isLocating || !mapReady}>
               <LocateFixed size={19} aria-hidden="true" />
             </button>
-            <button ref={citizenLayersButton} type="button" aria-label="เลเยอร์" title="เลเยอร์" aria-expanded={!isLayerControlCollapsed} aria-controls="citizen-map-layers"
+            <button ref={citizenLayersButton} type="button" className="hdms-map-control" aria-label="เลเยอร์" title="เลเยอร์" aria-expanded={!isLayerControlCollapsed} aria-controls="citizen-map-layers"
               onClick={() => isLayerControlCollapsed ? setIsLayerControlCollapsed(false) : closeLayerControl()}>
               <Layers size={19} aria-hidden="true" />
             </button>
@@ -333,13 +328,13 @@ export function MapLegendOverlay({
             onClick={locateUser}
             disabled={isLocating || !mapReady}
             aria-label="ตำแหน่งของฉัน"
-            className={`citizen-map-action ${mobileInteractiveClass} inline-flex min-h-11 sm:min-h-9 items-center gap-[0.5em] rounded-lg border border-slate-700/80 bg-[#0b162c]/95 px-[0.833em] py-[0.333em] text-[0.75rem]/[1.1rem] font-semibold text-sky-300 shadow-lg backdrop-blur-md transition hover:bg-[#0f1d3a] hover:text-sky-200 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400`}
+            className={`citizen-map-action hdms-map-control ${mobileInteractiveClass} inline-flex min-h-11 sm:min-h-9 items-center gap-[0.5em] rounded-lg border px-[0.833em] py-[0.333em] text-[0.75rem]/[1.1rem] font-semibold shadow-lg transition disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400`}
           >
             <LocateFixed className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span>{isLocating ? "กำลังหา…" : "ตำแหน่งของฉัน"}</span>
           </button>
           {locationStatus && (
-            <p role="status" aria-live="polite" className={`${mobileInteractiveClass} max-w-[13.75rem] rounded-md border border-slate-700/80 bg-slate-950/90 px-[0.833em] py-[0.333em] text-[0.75rem]/[1.1rem] leading-snug text-slate-200 shadow-lg backdrop-blur-md`}>
+            <p role="status" aria-live="polite" className={`${mobileInteractiveClass} hdms-map-surface max-w-[13.75rem] rounded-md border px-[0.833em] py-[0.333em] text-[0.75rem]/[1.1rem] leading-snug shadow-lg-md`}>
               {locationStatus}
             </p>
           )}
@@ -366,16 +361,16 @@ export function MapLegendOverlay({
             id={publicMode ? "citizen-map-layers" : undefined}
             role={publicMode ? "region" : undefined}
             aria-label={publicMode ? "เลเยอร์และสัญลักษณ์แผนที่" : undefined}
-            className={`citizen-legend pointer-events-auto bg-[#0b162c]/95 backdrop-blur-md border border-slate-700/80 rounded-2xl p-[1em] sm:p-[1.167em] shadow-2xl min-w-[14.5rem] sm:min-w-[15.5rem] max-w-full text-xs ${publicMode ? "" : "animate-fade-in"} overflow-y-auto ${
+            className={`citizen-legend hdms-map-surface pointer-events-auto border rounded-2xl p-[1em] sm:p-[1.167em] shadow-2xl min-w-[14.5rem] sm:min-w-[15.5rem] max-w-full text-xs ${publicMode ? "" : "animate-fade-in"} overflow-y-auto ${
               legendRouteList ? "max-h-[54dvh] sm:max-h-[85dvh]" : "max-h-[80dvh] sm:max-h-[85dvh]"
             }`}
           >
-            <div className="citizen-layer-head font-heading font-bold text-amber-400 flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
-              <span className="flex items-center gap-[0.5em] text-xs text-white">
-                <Layers className="w-3.5 h-3.5 text-amber-400" /> {publicMode ? "เลเยอร์" : "สัญลักษณ์บนแผนที่"}
+            <div className="citizen-layer-head font-heading font-bold flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+              <span className="flex items-center gap-[0.5em] text-xs">
+                <Layers className="w-3.5 h-3.5 hdms-guide-accent" /> {publicMode ? "เลเยอร์" : "สัญลักษณ์บนแผนที่"}
               </span>
               <div className="flex items-center gap-[0.667em]">
-                <button type="button" onClick={resetCamera} className="min-h-9 sm:min-h-8 px-1.5 text-[0.75rem]/[1.1rem] text-sky-400 hover:text-sky-300 hover:underline cursor-pointer">
+                <button type="button" onClick={resetCamera} className="min-h-9 sm:min-h-8 px-1.5 text-[0.75rem]/[1.1rem] hdms-map-link hover:underline cursor-pointer">
                   รีเซ็ต
                 </button>
                 {!publicMode && (
@@ -384,7 +379,7 @@ export function MapLegendOverlay({
                   onClick={locateUser}
                   disabled={isLocating || !mapReady}
                   aria-label="ตำแหน่งของฉัน"
-                  className="inline-flex min-h-9 sm:min-h-8 items-center gap-[0.333em] rounded-md px-[0.5em] text-[0.75rem]/[1.1rem] font-semibold text-sky-300 hover:bg-slate-800 hover:text-sky-200 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer"
+                  className="inline-flex min-h-9 sm:min-h-8 items-center gap-[0.333em] rounded-md px-[0.5em] text-[0.75rem]/[1.1rem] font-semibold hdms-map-link disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 cursor-pointer"
                 >
                   <LocateFixed className="h-3.5 w-3.5" aria-hidden="true" />
                   {isLocating ? "กำลังหา…" : "ตำแหน่งของฉัน"}
@@ -397,7 +392,7 @@ export function MapLegendOverlay({
                     setLegendRouteList(null);
                     setIsLayerControlCollapsed(true);
                   }}
-                  className="grid h-9 w-9 sm:h-8 sm:w-8 place-items-center text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                  className="grid h-9 w-9 sm:h-8 sm:w-8 place-items-center hdms-map-control rounded-lg transition cursor-pointer"
                   title="ย่อแถบควบคุมเลเยอร์"
                   aria-label="ย่อแถบควบคุมเลเยอร์"
                 >
@@ -407,7 +402,7 @@ export function MapLegendOverlay({
             </div>
 
             {!publicMode && locationStatus && (
-              <p role="status" aria-live="polite" className="mt-2 rounded-md bg-slate-900/80 px-[0.667em] py-[0.5em] text-[0.75rem]/[1.1rem] leading-snug text-slate-300">
+              <p role="status" aria-live="polite" className="mt-2 rounded-md hdms-map-subtle hdms-map-muted px-[0.667em] py-[0.5em] text-[0.75rem]/[1.1rem] leading-snug">
                 {locationStatus}
               </p>
             )}
@@ -435,9 +430,9 @@ export function MapLegendOverlay({
                       }
                     }}
                   >
-                    <label className="flex flex-1 min-w-0 min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 text-slate-200 hover:text-white touch-manipulation">
+                    <label className="flex flex-1 min-w-0 min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 hdms-guide-title touch-manipulation">
                       <span className="flex items-center gap-[0.667em] min-w-0">
-                        <span className="w-4 h-1.5 inline-block rounded shrink-0" style={{ backgroundColor: item.color }} />
+                        <span className="hdms-map-symbol w-4 h-1.5 inline-block rounded shrink-0" style={{ backgroundColor: item.color }} />
                         <span className="truncate">{item.label}</span>
                       </span>
                       <input
@@ -467,7 +462,7 @@ export function MapLegendOverlay({
                           setLegendRouteList(null);
                         }
                       }}
-                      className={`citizen-layer-info grid h-11 w-10 sm:h-8 sm:w-7 shrink-0 place-items-center rounded-lg border transition cursor-pointer touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
+                      className={`citizen-layer-info hdms-map-control grid h-11 w-10 sm:h-8 sm:w-7 shrink-0 place-items-center rounded-lg border transition cursor-pointer touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
                         isOpen
                           ? item.activeBtnClass
                           : "border-slate-800 bg-slate-900/70 text-slate-400 hover:text-white hover:border-slate-700"
@@ -482,10 +477,10 @@ export function MapLegendOverlay({
 
               {!publicMode && secondaryDisplaySetting}
 
-              <label className="flex min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 text-slate-200 hover:text-white touch-manipulation">
+              <label className="flex min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 hdms-guide-title touch-manipulation">
                 <span className="flex items-center gap-[0.667em]">
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-md text-white" style={{ backgroundColor: mapStyles.flood?.color || LAYER_CONFIG.FLOOD_RED_LINE.color }}><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /></svg></span>
-                  <span>เส้นน้ำท่วม <span className="ml-1 rounded-full bg-red-950 px-[0.5em] py-[0.167em] text-[0.75rem]/[1.1rem] text-red-300">{effectiveShowFloodLayer ? (systemData.floodRoutes || []).filter((item) => isFloodLineVisibleOnCurrentMap(item)).length : 0}</span></span>
+                  <span className="hdms-map-symbol inline-flex h-5 w-5 items-center justify-center rounded-md" style={{ backgroundColor: floodSwatch, color: resolveVisibleArrowColor(floodSwatch) }}><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /></svg></span>
+                  <span>เส้นน้ำท่วม <span data-map-tone="danger" className="ml-1 rounded-full px-[0.5em] py-[0.167em] text-[0.75rem]/[1.1rem]">{effectiveShowFloodLayer ? (systemData.floodRoutes || []).filter((item) => isFloodLineVisibleOnCurrentMap(item)).length : 0}</span></span>
                 </span>
                 <input
                   type="checkbox"
@@ -497,10 +492,10 @@ export function MapLegendOverlay({
 
               {!publicMode && floodMarkerSetting}
 
-              <label className="flex min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 text-slate-200 hover:text-white touch-manipulation">
+              <label className="flex min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 hdms-guide-title touch-manipulation">
                 <span className="flex items-center gap-[0.667em]">
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-md text-slate-950" style={{ backgroundColor: mapStyles.detour?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color }}><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9" /><path d="m15 2 3 3-3 3" /><path d="M9 19h10" /></svg></span>
-                  <span>ทางเลี่ยง <span className="ml-1 rounded-full bg-amber-950 px-[0.5em] py-[0.167em] text-[0.75rem]/[1.1rem] text-amber-300">{effectiveShowDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
+                  <span className="hdms-map-symbol inline-flex h-5 w-5 items-center justify-center rounded-md" style={{ backgroundColor: detourSwatch, color: resolveVisibleArrowColor(detourSwatch) }}><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9" /><path d="m15 2 3 3-3 3" /><path d="M9 19h10" /></svg></span>
+                  <span>ทางเลี่ยง <span data-map-tone="warning" className="ml-1 rounded-full px-[0.5em] py-[0.167em] text-[0.75rem]/[1.1rem]">{effectiveShowDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</span></span>
                 </span>
                 <input
                   type="checkbox"
@@ -510,9 +505,9 @@ export function MapLegendOverlay({
                 />
               </label>
 
-              <label className="flex min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 text-slate-200 hover:text-white touch-manipulation">
+              <label className="flex min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 hdms-guide-title touch-manipulation">
                 <span className="flex items-center gap-[0.667em]">
-                  <Building2 className="w-3.5 h-3.5 text-sky-400 inline-block shrink-0" />
+                  <Building2 className="w-3.5 h-3.5 hdms-map-link inline-block shrink-0" />
                   <span>สำนักงาน/หมวดทางหลวง</span>
                 </span>
                 <input
@@ -522,7 +517,7 @@ export function MapLegendOverlay({
                   className="accent-sky-400 rounded h-5 w-5 sm:h-4 sm:w-4 shrink-0 cursor-pointer"
                 />
               </label>
-              <label className="flex min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 text-slate-200 hover:text-white touch-manipulation">
+              <label className="flex min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 hdms-guide-title touch-manipulation">
                 <span className="flex items-center gap-[0.667em]">
                   <span className="flex h-4 min-w-5 items-center justify-center rounded-sm border border-slate-800 bg-white px-[0.167em] text-[0.625rem] font-bold text-slate-900 shrink-0">42</span>
                   <span>หมายเลขทางหลวง</span>

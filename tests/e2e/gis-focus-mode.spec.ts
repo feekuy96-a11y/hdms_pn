@@ -865,6 +865,59 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
 });
 
 test.describe("Admin Shared GIS Focus Mode", () => {
+  test("admin map legend, zoom and symbols use shared contrast without tinting map imagery", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Uses the admin map and theme menu together on a desktop split view.");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: createMockPayload() }));
+    await page.goto(`${base}/admin/`);
+    const map = page.locator("[data-hdms-map]").first();
+    const legend = map.locator(".citizen-legend");
+    const zoom = map.locator(".leaflet-control-zoom-in");
+    for (const theme of [
+      { mode: "ธีมสว่าง", surface: "rgb(255, 255, 255)", ink: "rgb(23, 53, 74)", active: "rgb(20, 89, 104)" },
+      { mode: "ธีมมืด", surface: "rgb(26, 45, 62)", ink: "rgb(244, 248, 250)", active: "rgb(172, 209, 226)" },
+    ]) {
+      await page.getByRole("button", { name: "รูปแบบสีพื้นที่จัดการ" }).click();
+      await page.getByRole("button", { name: theme.mode, exact: true }).click();
+      const toggle = map.getByTitle("เปิดแถบควบคุมเลเยอร์แผนที่");
+      await expect(toggle).toHaveCSS("background-color", theme.surface);
+      await expect(toggle).toHaveCSS("color", theme.ink);
+      await expect(zoom).toHaveCSS("color", theme.ink);
+      await toggle.click();
+      await expect(legend).toHaveCSS("background-color", theme.surface);
+      await expect(legend).toHaveCSS("color", theme.ink);
+      const rows = legend.locator(".citizen-visibility label");
+      await expect(rows).toHaveCount(7);
+      for (const label of await rows.all()) {
+        await expect(label).toHaveCSS("color", theme.ink);
+      }
+      const symbols = legend.locator(".hdms-map-symbol svg");
+      for (const symbol of await symbols.all()) {
+        const contrast = await symbol.evaluate(svg => {
+          const lum = (rgb: string) => rgb.match(/\d+/g)!.slice(0, 3).map(Number)
+            .map(v => v / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4)
+            .reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+          const a = lum(getComputedStyle(svg).stroke);
+          const b = lum(getComputedStyle(svg.parentElement!).backgroundColor);
+          return (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+        });
+        expect(contrast).toBeGreaterThanOrEqual(3);
+      }
+      const choice = legend.getByRole("button", { name: "ถนน OSM", exact: true });
+      await choice.click();
+      await expect(choice).toHaveCSS("background-color", theme.active);
+      await expect(choice).toHaveAttribute("aria-pressed", "true");
+      for (const pane of [".leaflet-tile-pane", ".leaflet-overlay-pane", ".leaflet-marker-pane"]) {
+        await expect(map.locator(pane)).toHaveCSS("filter", "none");
+      }
+      await expect(map.locator(".hdms-map-canvas")).toHaveCSS("background-color", "rgb(220, 232, 225)");
+      for (const tone of ["danger", "warning"]) {
+        await expect(legend.locator(`[data-map-tone=${tone}]`)).toBeVisible();
+      }
+      await legend.getByRole("button", { name: "ย่อแถบควบคุมเลเยอร์" }).click();
+    }
+  });
+
   test("Admin popup triggers compact Focus Exit pill (Flood + Detour B->A) and auto-exits when entering map-pick edit mode", async ({ page, isMobile }) => {
     test.skip(isMobile, "Admin split-pane map+form focus test runs on desktop layout");
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -1011,7 +1064,7 @@ test("public focus endpoint markers inspect A and B without changing travel dire
   await expect(focusBar).toContainText("ขากลับ (B → A)");
 });
 
-test("light focus advice uses readable text-surface pairs without changing the dark palette", async ({ page, isMobile }) => {
+test("focus advice uses readable shared color pairs in light and dark modes", async ({ page, isMobile }) => {
   const payload = createMockPayload();
   payload.detourRoutes[0].description = "ขาไป:\n1. เริ่มต้น\n2. เลี้ยวซ้ายที่แยก\n3. สิ้นสุด\nขากลับ:\n1. เริ่มต้นขากลับ\n2. ใช้สะพาน\n3. สิ้นสุด";
   await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
@@ -1029,8 +1082,8 @@ test("light focus advice uses readable text-surface pairs without changing the d
   const reverse = bar.getByTestId("gis-focus-dir-reverse");
   const forward = bar.getByTestId("gis-focus-dir-forward");
   await expect(theme).toHaveAttribute("data-citizen-theme", "light");
-  await expect(panel).toHaveCSS("background-color", "rgb(251, 252, 252)");
-  const ratios = await page.evaluate(() => {
+  await expect(panel).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  const ratios = () => page.evaluate(() => {
     function luminance(color: string) {
       const rgba = color.match(/[\d.]+/g)?.map(Number) ?? [];
       if (rgba.length < 3) throw new Error(`Unsupported color: ${color}`);
@@ -1042,8 +1095,8 @@ test("light focus advice uses readable text-surface pairs without changing the d
     }
     const selectors = [
       ".citizen-focus-timeline-head .citizen-focus-ink", ".citizen-focus-accent",
-      ".citizen-focus-timeline-close", ".citizen-focus-timeline-number",
-      ".citizen-focus-timeline-tile .citizen-focus-ink", ".citizen-focus-quiet",
+      ".citizen-focus-timeline-close", ".hdms-guide-number",
+      "#gis-focus-timeline-panel .hdms-guide-card .citizen-focus-ink", "#gis-focus-timeline-panel .hdms-guide-copy",
       ".citizen-focus-directions button",
     ];
     return selectors.flatMap(selector => {
@@ -1057,14 +1110,15 @@ test("light focus advice uses readable text-surface pairs without changing the d
       });
     });
   });
-  expect(Math.min(...ratios)).toBeGreaterThanOrEqual(4.5);
+  expect(Math.min(...await ratios())).toBeGreaterThanOrEqual(4.5);
   await reverse.click();
   await expect(reverse).toHaveAttribute("aria-pressed", "true");
   await expect(forward).toHaveAttribute("aria-pressed", "false");
   await expect(panel).toContainText("เริ่มต้นขากลับ");
   await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
   await expect(theme).toHaveAttribute("data-citizen-theme", "dark");
-  await expect(panel).not.toHaveCSS("background-color", "rgb(251, 252, 252)");
+  await expect(panel).toHaveCSS("background-color", "rgb(26, 45, 62)");
+  expect(Math.min(...await ratios())).toBeGreaterThanOrEqual(4.5);
   await expect(reverse).toHaveAttribute("aria-pressed", "true");
 });
 

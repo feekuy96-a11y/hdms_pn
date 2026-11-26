@@ -1489,10 +1489,10 @@ export function LongdoGisMap({
   }, [mapReady, gisFocus, systemData, mapStyles]);
 
   return (
-    <div data-active-base-map={activeBaseMap} data-public-filter-counts={`flood:${highlightFloodIds.length};detour:${highlightDetourIds.length}`} className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full`} style={{ minHeight: publicMode ? 0 : 450 }}>
+    <div data-hdms-map data-active-base-map={activeBaseMap} data-public-filter-counts={`flood:${highlightFloodIds.length};detour:${highlightDetourIds.length}`} className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full`} style={{ minHeight: publicMode ? 0 : 450 }}>
       <div
         ref={mapContainerRef}
-        className="w-full h-full bg-surface-canvas relative z-0"
+        className="hdms-map-canvas w-full h-full relative z-0"
         style={{ position: "absolute", inset: 0, minHeight: publicMode ? 0 : 450 }}
       />
 
