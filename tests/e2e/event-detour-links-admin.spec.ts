@@ -551,8 +551,8 @@ test("admin and citizen detail views render all linked detours and linked flood 
       await openSheetBtn.click();
     }
   }
-  await page.getByRole("button", { name: /ทางเลี่ยง/ }).filter({ visible: true }).first().click();
-  const detourBtn = page.getByRole("button", { name: /ทางเลี่ยงสาย 418/ }).filter({ visible: true }).first();
+  await page.locator(".citizen-section-tabs").filter({ visible: true }).getByRole("button", { name: /^ทางเลี่ยง/ }).click();
+  const detourBtn = page.getByRole("button", { name: /ทางเลี่ยงสาย 418/ }).filter({ hasText: "ทล.42, ทล.43", visible: true }).first();
   await expect(detourBtn).toContainText("ทล.42, ทล.43");
   await detourBtn.click();
   const publicDetourDialog = page.getByRole("dialog", { name: /คำแนะนำเส้นทางเลี่ยง/ });

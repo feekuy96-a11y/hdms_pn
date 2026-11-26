@@ -330,6 +330,18 @@ export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePrese
   `;
 }
 
+export function hasSeparateDetourLines(
+  detour: DetourRoute,
+  forward: [number, number][],
+  reverse: [number, number][]
+): boolean {
+  if (detour.detour_meta?.carriageway_type === "SINGLE_CENTERLINE" || forward.length < 2 || reverse.length < 2) return false;
+  if (forward.length !== reverse.length) return true;
+  const same = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
+  return !forward.every((point, i) => same(point, reverse[i])) &&
+    !forward.every((point, i) => same(point, reverse[reverse.length - 1 - i]));
+}
+
 export function buildDetourPopupHtml(
   detour: DetourRoute,
   defaultDir: DetourDirection = "FORWARD",

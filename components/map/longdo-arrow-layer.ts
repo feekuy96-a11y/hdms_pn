@@ -3,6 +3,7 @@ import { LAYER_CONFIG, type MapLineStyleItem } from "@/lib/constants";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import {
   geoJsonFeatures,
+  hasSeparateDetourLines,
   parseRouteCoordinates,
   toLeafletLatLng,
 } from "./longdo-map-popups";
@@ -89,6 +90,7 @@ export interface RenderDirectionalArrowsParams {
   mapStyles: NonNullable<SystemDataPayload["mapStyles"]>;
   highwayLayers: SystemDataPayload["highwayLayers"];
   detourRoutes: SystemDataPayload["detourRoutes"];
+  detourDisplayMode: "GROUPED" | "DIRECTIONS";
   floodRoutes: SystemDataPayload["floodRoutes"];
   visibleFloodIds: ReadonlySet<string>;
   showMainHwy: boolean;
@@ -116,6 +118,7 @@ export function renderDirectionalArrows({
   mapStyles,
   highwayLayers,
   detourRoutes,
+  detourDisplayMode,
   floodRoutes, visibleFloodIds,
   showMainHwy,
   showSecHwy,
@@ -217,7 +220,7 @@ export function renderDirectionalArrows({
           counter,
           compact
         );
-      } else if (rev.length >= 2) {
+      } else if (rev.length >= 2 && (fwd.length < 2 || (detourDisplayMode === "DIRECTIONS" && hasSeparateDetourLines(detour, fwd, rev)))) {
         placeArrowsOnLine(L, map, group, fwd, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter, compact);
         placeArrowsOnLine(L, map, group, rev, "FORWARD", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter, compact);
       } else {

@@ -23,6 +23,8 @@ interface MapLegendOverlayProps {
   showFloodLayer: boolean;
   setShowFloodLayer: (show: boolean) => void;
   effectiveShowFloodLayer: boolean;
+  detourDisplayMode: "GROUPED" | "DIRECTIONS";
+  setDetourDisplayMode: (mode: "GROUPED" | "DIRECTIONS") => void;
   floodDisplayMode: "SEGMENTS" | "EVENTS";
   setFloodDisplayMode: (mode: "SEGMENTS" | "EVENTS") => void;
   showDetourLayer: boolean;
@@ -68,6 +70,8 @@ export function MapLegendOverlay({
   showFloodLayer,
   setShowFloodLayer,
   effectiveShowFloodLayer,
+  detourDisplayMode,
+  setDetourDisplayMode,
   floodDisplayMode,
   setFloodDisplayMode,
   showDetourLayer,
@@ -251,6 +255,17 @@ export function MapLegendOverlay({
                   </div>
                 </div>
               );
+
+  const detourDirectionSetting = effectiveShowDetourLayer && (
+    <div className="pb-1 pt-0.5 text-[0.75rem]/[1.1rem] hdms-map-muted">
+      <div role="group" aria-label="รูปแบบแสดงทางเลี่ยง" className="hdms-contrast-switch hdms-map-subtle grid grid-cols-2 gap-0.5 rounded-lg border p-[0.167em]">
+        <button type="button" onClick={() => setDetourDisplayMode("GROUPED")} aria-pressed={detourDisplayMode === "GROUPED"}
+          className="min-h-9 rounded px-2 py-1 font-medium cursor-pointer">รวมทางเลี่ยง</button>
+        <button type="button" onClick={() => setDetourDisplayMode("DIRECTIONS")} aria-pressed={detourDisplayMode === "DIRECTIONS"}
+          className="min-h-9 rounded px-2 py-1 font-medium cursor-pointer">แยกตามทิศทาง</button>
+      </div>
+    </div>
+  );
 
   const PaneIcon = isSidebarCollapsed ? PanelLeftOpen : PanelLeftClose;
   const paneLabel = isSidebarCollapsed ? sidePaneControl?.openLabel : sidePaneControl?.closeLabel;
@@ -444,11 +459,12 @@ export function MapLegendOverlay({
               </label>
             </div>
 
-            {(secondaryDisplaySetting || floodMarkerSetting) && (
+            {(secondaryDisplaySetting || floodMarkerSetting || detourDirectionSetting) && (
               <details className="citizen-layer-advanced">
                 <summary>ตั้งค่าเพิ่มเติม</summary>
                 {secondaryDisplaySetting}
                 {floodMarkerSetting}
+                {detourDirectionSetting}
               </details>
             )}
             <details className="citizen-legend-explainer">

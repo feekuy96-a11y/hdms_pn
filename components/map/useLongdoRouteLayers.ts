@@ -16,6 +16,7 @@ import {
   buildDetourFallbackPinSpec,
   buildDetourPointPhotoPopupHtml,
   buildDetourPopupHtml,
+  hasSeparateDetourLines,
   buildFloodPopupHtml,
   dashArrayFor,
   escapeHtml,
@@ -196,6 +197,7 @@ export interface UseLongdoRouteLayersParams {
   effectiveShowDetourLayer: boolean;
   effectiveShowFloodLayer: boolean;
   floodDisplayMode: "EVENTS" | "SEGMENTS";
+  detourDisplayMode: "GROUPED" | "DIRECTIONS";
   currentZoom: number;
   selectedDetourPopupId: string | null;
   leafletRef: React.MutableRefObject<any>;
@@ -222,6 +224,7 @@ export function useLongdoRouteLayers({
   effectiveShowDetourLayer,
   effectiveShowFloodLayer,
   floodDisplayMode,
+  detourDisplayMode,
   currentZoom,
   selectedDetourPopupId,
   leafletRef,
@@ -303,6 +306,39 @@ export function useLongdoRouteLayers({
       const revCoords = parseRouteCoordinates(detour.reverse_coordinates_json);
 
       const defaultDir = resolveDetourDefaultDirection(detour, systemData);
+      const paired = dirMode === "TWO_WAY" && hasSeparateDetourLines(detour, fwdCoords, revCoords);
+      const grouped = paired && detourDisplayMode === "GROUPED";
+      const forwardPopupDir = paired && !grouped ? "FORWARD" : defaultDir;
+      const popupOptions = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
+      const safeDetourId = String(detour.id).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const popupFor = (direction: "FORWARD" | "REVERSE", split: boolean) => {
+        const remembered = split ? direction : (window as any).__getDetourCurrentDir?.(safeDetourId, direction) || direction;
+        return buildDetourPopupHtml(detour, isDetourDirectionAllowed(detour.direction_mode, remembered) ? remembered : direction, systemData);
+      };
+      const activateDirection = (direction: "FORWARD" | "REVERSE", split: boolean) => {
+        activationRef.current?.({ type: "DETOUR", id: detour.id });
+        if (split) (window as any).__toggleDetourPopupDir?.(safeDetourId, direction);
+      };
+      const addDirectionMarker = (latLngs: ReturnType<typeof toLeafletLatLng>[], direction: "FORWARD" | "REVERSE", split: boolean) => {
+        // Geometry, popup and filtering all keep the original detour identity.
+        const index = Math.floor(latLngs.length / 2);
+        const [lat, lon] = latLngs[index];
+        const [prevLat, prevLon] = latLngs[index - 1];
+        const center: [number, number] = latLngs.length % 2 === 0
+          ? [(lat + prevLat) / 2, (lon + prevLon) / 2]
+          : [lat, lon];
+        const marker = L.marker(center, { icon: L.divIcon(buildDetourSymbolIconSpec(detourPinColor)), interactive: true })
+          .bindPopup(() => popupFor(direction, split), popupOptions)
+          .addTo(group);
+        marker.__dohFilterId = detour.id;
+        const title = split && direction === "REVERSE" ? "ขากลับ B → A" : split ? "ขาไป A → B" : "ทางเลี่ยง";
+        marker.getElement?.()?.setAttribute("aria-label", `${title}: ${detour.route_name}`);
+        marker.on("popupopen", () => activateDirection(direction, split));
+        marker.on("click", (e: any) => {
+          L.DomEvent.stopPropagation(e);
+          marker.openPopup();
+        });
+      };
 
       // Draw forward A->B line if mode is TWO_WAY or FORWARD_ONLY
       if (dirMode !== "REVERSE_ONLY" && fwdCoords.length >= 2) {
@@ -324,34 +360,22 @@ export function useLongdoRouteLayers({
         detourLinesRef.current.push({
           id: detour.id,
           line: polyline,
-          motionDirection: dirMode === "TWO_WAY" && revCoords.length < 2 ? "both" : "forward",
+          motionDirection: dirMode === "TWO_WAY" && (!paired || grouped) ? "both" : "forward",
           baseWeight: detourStyle?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight,
           baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
           filterOpacity: 1,
         });
-        const detourPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
-        polyline.bindPopup(() => buildDetourPopupHtml(detour, defaultDir, systemData), detourPopupOpts);
-        polyline.on("popupopen", () => activationRef.current?.({ type: "DETOUR", id: detour.id }));
+        polyline.bindPopup(() => popupFor(forwardPopupDir, paired && !grouped), popupOptions);
+        polyline.on("popupopen", () => activateDirection(forwardPopupDir, paired && !grouped));
         polyline.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           polyline.openPopup(e.latlng);
         });
-
-        const midPoint = latLngs[Math.floor(latLngs.length / 2)];
-        const detourIcon = L.divIcon(buildDetourSymbolIconSpec(detourPinColor));
-        const detourMarker = L.marker(midPoint, { icon: detourIcon, interactive: true })
-          .bindPopup(() => buildDetourPopupHtml(detour, defaultDir, systemData), detourPopupOpts)
-          .addTo(group);
-        detourMarker.__dohFilterId = detour.id;
-        detourMarker.on("popupopen", () => activationRef.current?.({ type: "DETOUR", id: detour.id }));
-        detourMarker.on("click", (e: any) => {
-          L.DomEvent.stopPropagation(e);
-          detourMarker.openPopup();
-        });
+        addDirectionMarker(latLngs, forwardPopupDir, paired && !grouped);
       }
 
       // Draw reverse B->A line if present and distinct (or when REVERSE_ONLY)
-      if (dirMode !== "FORWARD_ONLY") {
+      if (dirMode === "REVERSE_ONLY" || (dirMode === "TWO_WAY" && (fwdCoords.length < 2 || (paired && !grouped)))) {
         const effectiveRev = revCoords.length >= 2 ? revCoords : dirMode === "REVERSE_ONLY" ? fwdCoords : [];
         if (effectiveRev.length >= 2) {
           const revLatLngs = effectiveRev.map(toLeafletLatLng);
@@ -378,9 +402,9 @@ export function useLongdoRouteLayers({
             baseOpacity: detourStyle?.opacity ?? LAYER_CONFIG.DETOUR_YELLOW_LINE.opacity,
             filterOpacity: 1,
           });
-          const revPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
-          revPolyline.bindPopup(() => buildDetourPopupHtml(detour, defaultDir, systemData), revPopupOpts);
-          revPolyline.on("popupopen", () => activationRef.current?.({ type: "DETOUR", id: detour.id }));
+          revPolyline.bindPopup(() => popupFor("REVERSE", true), popupOptions);
+          addDirectionMarker(revLatLngs, "REVERSE", true);
+          revPolyline.on("popupopen", () => activateDirection("REVERSE", true));
           revPolyline.on("click", (e: any) => {
             L.DomEvent.stopPropagation(e);
             revPolyline.openPopup(e.latlng);
@@ -482,7 +506,7 @@ export function useLongdoRouteLayers({
       detourPhotoMarkerRefs.current = [];
       group.clearLayers();
     };
-  }, [mapReady, systemData.detourRoutes, effectiveShowDetourLayer, mapStyles, publicMode]);
+  }, [mapReady, systemData.detourRoutes, effectiveShowDetourLayer, detourDisplayMode, mapStyles, publicMode]);
 
   // A/B photo markers reveal progressively without recreating detour layers or
   // their open popups: show only the selected detour, or nearby endpoints at close zoom.
