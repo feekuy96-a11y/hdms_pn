@@ -5,6 +5,9 @@ export type CurrentWeather = {
 };
 
 export const WEATHER_TEST_ENABLED = process.env.NEXT_PUBLIC_HDMS_MAP_WEATHER_TEST === "1";
+export const WEATHER_PUBLIC_ENABLED = process.env.NEXT_PUBLIC_HDMS_MAP_WEATHER_PUBLIC === "1";
+export const WEATHER_GPS_ENABLED = WEATHER_TEST_ENABLED && !WEATHER_PUBLIC_ENABLED &&
+  process.env.NEXT_PUBLIC_HDMS_MAP_WEATHER_TEST_GPS === "1";
 export const OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast";
 
 export function weatherUrl({ latitude, longitude }: WeatherCoordinates) {

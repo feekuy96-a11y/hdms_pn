@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 const base = process.env.BASE_PATH || "";
 const enabled = process.env.NEXT_PUBLIC_HDMS_MAP_WEATHER_TEST === "1";
+const publicEnabled = process.env.NEXT_PUBLIC_HDMS_MAP_WEATHER_PUBLIC === "1";
+const gpsEnabled = enabled && !publicEnabled && process.env.NEXT_PUBLIC_HDMS_MAP_WEATHER_TEST_GPS === "1";
 const endpoint = "https://api.open-meteo.com/v1/forecast?**";
 const fixtureHeaders = { "access-control-allow-origin": "*", "access-control-expose-headers": "x-hdms-test-fixture", "x-hdms-test-fixture": "1" };
 const forecast = () => ({
@@ -9,17 +11,17 @@ const forecast = () => ({
 });
 
 test("forecast is default-off and never calls the provider in the default build", async ({ page }) => {
-  test.skip(enabled, "Default-off build only");
+  test.skip(enabled || publicEnabled, "Default-off build only");
   const requests: string[] = [];
   await page.route(endpoint, (route) => { requests.push(route.request().url()); return route.abort(); });
   await page.goto(`${base}/`);
   await expect(page.getByRole("group", { name: "เครื่องมือแผนที่" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "สภาพอากาศ (ทดลอง)" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "สภาพอากาศปัจจุบันตามพื้นที่" })).toHaveCount(0);
   expect(requests).toEqual([]);
 });
 
 test("weather card requires a separate request, labels the model, and preserves map controls", async ({ page, isMobile }) => {
-  test.skip(!enabled, "Staging weather fixture build only");
+  test.skip(!enabled || publicEnabled, "Staging weather fixture build only");
   const requests: URL[] = [];
   await page.route(endpoint, (route) => { requests.push(new URL(route.request().url())); return route.fulfill({ json: forecast(), headers: fixtureHeaders }); });
   await page.goto(`${base}/`);
@@ -48,7 +50,7 @@ test("weather card requires a separate request, labels the model, and preserves 
 });
 
 test("opt-in GPS denial uses Pattani; stale responses cannot overwrite the newer request", async ({ page }) => {
-  test.skip(!enabled, "Staging weather fixture build only");
+  test.skip(!gpsEnabled, "Explicit staging GPS test build only");
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "geolocation", { value: {
       getCurrentPosition(_ok: PositionCallback, error: PositionErrorCallback) { error({ code: 1, message: "test denied" } as GeolocationPositionError); },
@@ -75,7 +77,7 @@ test("opt-in GPS denial uses Pattani; stale responses cannot overwrite the newer
 });
 
 test("GPS success is explicitly requested and rounded before sending; failed forecast shows an error", async ({ page }) => {
-  test.skip(!enabled, "Staging weather fixture build only");
+  test.skip(!gpsEnabled, "Explicit staging GPS test build only");
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "geolocation", { value: {
       getCurrentPosition(ok: PositionCallback) { ok({ coords: { latitude: 6.82634, longitude: 101.29382 } } as GeolocationPosition); },
@@ -95,7 +97,7 @@ test("GPS success is explicitly requested and rounded before sending; failed for
 });
 
 test("right placement keeps attribution, controls and navigation clear on standard and short screens", async ({ page, isMobile }) => {
-  test.skip(!enabled, "Staging weather fixture build only");
+  test.skip(!enabled || publicEnabled, "Staging weather fixture build only");
   await page.route(endpoint, (route) => route.fulfill({ json: forecast(), headers: fixtureHeaders }));
   for (const height of isMobile ? [844, 420] : [900, 500]) {
     const width = isMobile ? 390 : 1440;
@@ -129,7 +131,7 @@ test("right placement keeps attribution, controls and navigation clear on standa
 });
 
 test("decorative motion matches weather, respects reduced motion and stops without usable weather", async ({ page }) => {
-  test.skip(!enabled, "Staging weather fixture build only");
+  test.skip(!enabled || publicEnabled, "Staging weather fixture build only");
   let code = 61;
   await page.route(endpoint, route => code < 0
     ? route.fulfill({ status: 503 })
@@ -158,4 +160,40 @@ test("decorative motion matches weather, respects reduced motion and stops witho
   await fetchWeather.click();
   await expect(page.getByText(/โหลดสภาพอากาศไม่ได้/)).toBeVisible();
   await expect(page.locator("[data-weather-motion]")).toHaveCount(0);
+});
+
+test("public candidate uses fixed Pattani only, links attribution, and reports stale/unavailable data", async ({ page }) => {
+  test.skip(!publicEnabled, "Public candidate build only");
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "geolocation", { value: {
+      getCurrentPosition() { throw new Error("Public card must not access geolocation"); },
+    } });
+  });
+  const requests: URL[] = [];
+  await page.route(endpoint, route => {
+    requests.push(new URL(route.request().url()));
+    if (requests.length === 3) return route.fulfill({ status: 503 });
+    const current = forecast().current;
+    return route.fulfill({ json: { current: { ...current, time: requests.length === 2 ? current.time - 10_800 : current.time } } });
+  });
+  await page.goto(`${base}/`);
+  const card = page.getByRole("region", { name: "สภาพอากาศปัจจุบันตามพื้นที่" });
+  const toggle = card.getByRole("button", { name: "สภาพอากาศ", exact: true });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  expect(requests).toHaveLength(0);
+  await expect(card.getByRole("button", { name: /ใช้ตำแหน่ง/ })).toHaveCount(0);
+  const load = card.getByRole("button", { name: /ดูสภาพอากาศ: ปัตตานี/ });
+  await load.click();
+  await expect(card.getByText("ข้อมูลจากแบบจำลอง", { exact: true })).toBeVisible();
+  await expect(card.getByRole("link", { name: "Open-Meteo" })).toHaveAttribute("href", "https://open-meteo.com/");
+  await expect(card.getByRole("link", { name: "CC BY 4.0" })).toHaveAttribute("href", "https://creativecommons.org/licenses/by/4.0/");
+  expect(requests[0].searchParams.get("latitude")).toBe("6.82");
+  expect(requests[0].searchParams.get("longitude")).toBe("101.25");
+  await load.click();
+  await expect(card.getByText(/ไม่มีข้อมูลแบบจำลองล่าสุด/)).toBeVisible();
+  await expect(card.getByText("29.1 °C", { exact: true })).toHaveCount(0);
+  await load.click();
+  await expect(card.getByText(/โหลดสภาพอากาศไม่ได้/)).toBeVisible();
+  await expect(card.getByText("29.1 °C", { exact: true })).toHaveCount(0);
 });

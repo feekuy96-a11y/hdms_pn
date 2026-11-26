@@ -7,7 +7,7 @@ import { SystemDataPayload, DetourRoute } from "@/db/default-data";
 import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { MapLegendOverlay, type MapSidePaneControl } from "./MapLegendOverlay";
 import { MapCurrentWeatherCard } from "./MapCurrentWeatherCard";
-import { WEATHER_TEST_ENABLED } from "@/lib/map-current-weather";
+import { WEATHER_PUBLIC_ENABLED, WEATHER_TEST_ENABLED } from "@/lib/map-current-weather";
 import {
   escapeHtml,
   isFloodLineVisibleOnCurrentMap,
@@ -1554,7 +1554,7 @@ export function LongdoGisMap({
         style={{ position: "absolute", inset: 0, minHeight: publicMode ? 0 : 450 }}
       />
 
-      {WEATHER_TEST_ENABLED && publicMode && !isFocusMode && !isMapPopupOpen && isLayerControlCollapsed && (
+      {(WEATHER_TEST_ENABLED || WEATHER_PUBLIC_ENABLED) && publicMode && !isFocusMode && !isMapPopupOpen && isLayerControlCollapsed && (
         <MapCurrentWeatherCard key={focusCoordinates?.join(",") ?? "pattani"} focusCoordinates={focusCoordinates} />
       )}
 

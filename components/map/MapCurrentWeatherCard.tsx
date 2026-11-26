@@ -4,7 +4,7 @@ import { CloudRain } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import styles from "./MapCurrentWeatherCard.module.css";
 import { APP_CONFIG } from "@/lib/constants";
-import { currentWeather, weatherUrl, thaiWeatherCode, validWeatherCoordinates, type WeatherCoordinates, type CurrentWeather } from "@/lib/map-current-weather";
+import { currentWeather, weatherUrl, thaiWeatherCode, validWeatherCoordinates, WEATHER_GPS_ENABLED, WEATHER_PUBLIC_ENABLED, type WeatherCoordinates, type CurrentWeather } from "@/lib/map-current-weather";
 
 const thaiDateTime = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const pattani = { latitude: APP_CONFIG.DEFAULT_CENTER.lat, longitude: APP_CONFIG.DEFAULT_CENTER.lon };
@@ -47,7 +47,7 @@ export function MapCurrentWeatherCard({ focusCoordinates }: {
   const focusLongitude = focusCoordinates?.[0];
   const focusLatitude = focusCoordinates?.[1];
   const selected = { latitude: focusLatitude ?? NaN, longitude: focusLongitude ?? NaN };
-  const hasFocus = validWeatherCoordinates(selected) && (selected.latitude !== 0 || selected.longitude !== 0);
+  const hasFocus = !WEATHER_PUBLIC_ENABLED && validWeatherCoordinates(selected) && (selected.latitude !== 0 || selected.longitude !== 0);
   const fallback = hasFocus ? selected : pattani;
   const fallbackLabel = hasFocus ? "พื้นที่ที่เลือกบนแผนที่" : "ปัตตานี (ค่าเริ่มต้น)";
 
@@ -84,6 +84,7 @@ export function MapCurrentWeatherCard({ focusCoordinates }: {
   }
 
   function locate() {
+    if (!WEATHER_GPS_ENABLED) return;
     const id = begin();
     const requestFallback = () => {
       if (id !== sequence.current) return;
@@ -103,12 +104,12 @@ export function MapCurrentWeatherCard({ focusCoordinates }: {
       {open && (
         <div id={regionId} className={`${styles.panel} hdms-map-control w-[18rem] max-w-full overflow-y-auto overscroll-contain rounded-xl border px-3 py-2 text-xs shadow-lg`}>
           <h3 className="text-sm font-bold">สภาพอากาศปัจจุบันตามพื้นที่</h3>
-          <p className="mb-2">ใช้ประกอบการดูแผนที่ ไม่ใช่ค่าที่ตรวจวัดหรือประกาศเตือนภัย</p>
+          <p className="mb-2">ข้อมูลประกอบแผนที่ ไม่ใช่ค่าที่ตรวจวัด คำแนะนำการเดินทาง หรือประกาศเตือนภัย</p>
           <div className="flex flex-wrap gap-1">
             <button type="button" onClick={() => void load(fallback, fallbackLabel, begin())} className="hdms-map-control min-h-9 rounded-md border px-2">ดูสภาพอากาศ: {fallbackLabel}</button>
-            <button type="button" onClick={locate} className="hdms-map-control min-h-9 rounded-md border px-2">ใช้ตำแหน่งของฉัน</button>
+            {WEATHER_GPS_ENABLED && <button type="button" onClick={locate} className="hdms-map-control min-h-9 rounded-md border px-2">ใช้ตำแหน่งของฉัน</button>}
           </div>
-          <p className="my-1">เมื่อกดใช้ตำแหน่ง พิกัดโดยประมาณจะถูกส่งให้ Open-Meteo โดย HDMS ไม่บันทึกพิกัดนี้</p>
+          {WEATHER_GPS_ENABLED && <p className="my-1">หากใช้ตำแหน่งของคุณ HDMS ไม่บันทึกพิกัด แต่จะส่งพิกัดโดยประมาณให้ Open-Meteo ซึ่งอาจเก็บในบันทึกได้ถึง 90 วัน ดู <a href="https://open-meteo.com/en/terms#privacy" className="underline" target="_blank" rel="noreferrer">นโยบายข้อมูล</a></p>}
           <div role="status">
             {locationNote && <p>{locationNote}</p>}
             {state.type === "locating" && <p>กำลังขอตำแหน่ง…</p>}
@@ -130,13 +131,13 @@ export function MapCurrentWeatherCard({ focusCoordinates }: {
               </dl>
             </>
           )}
-          {state.type === "ready" && state.fixture ? <p className="mt-2">แหล่งข้อมูล: ชุดข้อมูลทดสอบของ HDMS</p> : <p className="mt-2">แหล่งข้อมูล: <a className="underline" href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (CC BY 4.0)</p>}
+          {state.type === "ready" && state.fixture ? <p className="mt-2">แหล่งข้อมูล: ชุดข้อมูลทดสอบของ HDMS</p> : <p className="mt-2">แหล่งข้อมูล: <a className="underline" href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (<a href="https://creativecommons.org/licenses/by/4.0/" className="underline" target="_blank" rel="noreferrer">CC BY 4.0</a>; HDMS แปลคำอธิบายและแสดงเวลาไทย)</p>}
         </div>
       )}
       <button type="button" aria-expanded={open} aria-controls={open ? regionId : undefined} className="hdms-map-control flex min-h-11 shrink-0 items-center gap-2 rounded-xl border px-3 text-xs font-bold shadow-lg" onClick={() => {
         if (open) { begin(); setState({ type: "idle" }); }
         setOpen(!open);
-      }}><CloudRain size={16} aria-hidden="true" />สภาพอากาศ (ทดลอง)</button>
+      }}><CloudRain size={16} aria-hidden="true" />{WEATHER_PUBLIC_ENABLED ? "สภาพอากาศ" : "สภาพอากาศ (ทดลอง)"}</button>
     </section>
   );
 }
