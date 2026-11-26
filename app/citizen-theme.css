@@ -250,11 +250,8 @@
 .citizen-ui .citizen-detour-context { display:flex; gap:.6rem; padding:.65rem .7rem; border-left:1px solid var(--surface-border); color:var(--cit-sub); }
 .citizen-ui .citizen-detour-direction { padding:.7rem; border-radius:12px; background:var(--cit-selected); }
 .citizen-ui .citizen-map-status { position:absolute;top:12px;left:12px;z-index:412;width:max-content;max-width:min(19rem,calc(100% - 24px));border:1px solid var(--surface-border);border-radius:12px;background:var(--surface-panel);color:var(--cit-ink);box-shadow:var(--cit-shadow);padding:3px; }
-.citizen-ui .citizen-map-status-head { display:flex;align-items:stretch;border-bottom:1px solid var(--surface-border); }
-.citizen-ui .citizen-map-status button { display:flex;align-items:center;gap:.4rem;min-height:44px;padding:.3rem .55rem;text-align:left;color:var(--cit-action);font-size:.78rem;font-weight:750;border-radius:8px; }
-.citizen-ui .citizen-map-status button:hover,.citizen-ui .citizen-map-status button[aria-pressed=true] { background:var(--cit-selected); }
-.citizen-ui .citizen-map-status-flood svg:first-child { color:#a34844; }
-.citizen-ui[data-citizen-theme=dark] .citizen-map-status-flood svg:first-child { color:#ffa8a1; }
+.citizen-ui .citizen-map-status button:not(.hdms-map-status-chip) { display:flex;align-items:center;gap:.4rem;min-height:44px;padding:.3rem .55rem;text-align:left;color:var(--cit-action);font-size:.78rem;font-weight:750;border-radius:8px; }
+.citizen-ui .citizen-map-status button:not(.hdms-map-status-chip):hover,.citizen-ui .citizen-map-status button[aria-pressed=true] { background:var(--cit-selected); }
 .citizen-ui .citizen-map-status-list { min-width:44px;justify-content:center; }
 .citizen-ui .citizen-map-status-note { padding:.45rem .55rem;color:var(--cit-sub);font-size:.78rem; }
 .citizen-ui .citizen-map-status-filters { overflow-y:auto;max-height: min(40dvh,18rem);border-top:1px solid var(--surface-border);padding-top:2px;overscroll-behavior:contain; }
@@ -263,8 +260,6 @@
 .citizen-ui .citizen-clear-status { width:100%;justify-content:space-between;background:var(--cit-selected); }
 @media (max-width: 767px) { .citizen-ui .citizen-map-status { top:66px;max-width:min(17rem,calc(100% - 24px)); } }
 @media (max-height: 430px) { .citizen-ui .citizen-map-status-filters { max-height: min(28dvh,6rem); } }
-.citizen-ui .citizen-map-status-detours { display:flex;align-items:center;gap:.4rem;min-height:34px;padding:.3rem .55rem;color:var(--cit-sub);font-size:.76rem;font-weight:700; }
-.citizen-ui .citizen-map-status-flood { width:100%; }
 .citizen-ui .citizen-incident-heading { position:relative; min-height:44px; padding-inline-end:3.3rem; display:grid; gap:.3rem; }
 .citizen-ui .citizen-incident-heading-meta { display:flex; align-items:center; flex-wrap:wrap; gap:.35rem .6rem; }
 .citizen-ui :is(.citizen-incident-heading-meta > p,.citizen-incident-area) { color:var(--cit-sub);font-size:.76rem; }
@@ -276,12 +271,6 @@
 .citizen-ui .citizen-map-status { top:12px;max-width:min(19rem,calc(100% - 78px)); }
 /* Separate quick actions keep the detour entry reachable while flood filters expand. */
 .citizen-ui .citizen-map-status { display:grid; justify-items:start; gap:6px; padding:0; background:transparent; box-shadow:none; border:0; }
-.citizen-ui .citizen-map-status-head { display:contents; }
-.citizen-ui .citizen-map-status > button,.citizen-ui .citizen-map-status-head > button { width:auto; min-height:44px; border:1px solid var(--surface-border); background:var(--surface-panel); box-shadow:var(--cit-shadow); }
-.citizen-ui .citizen-map-status .citizen-map-status-flood { color:#943a39;border-color:#ca9b95; }
-.citizen-ui .citizen-map-status .citizen-map-status-detours { color:#7b511b;border-color:#c9a96d; }
-.citizen-ui[data-citizen-theme=dark] .citizen-map-status .citizen-map-status-flood { color:#ffb4ad;border-color:#a76665; }
-.citizen-ui[data-citizen-theme=dark] .citizen-map-status .citizen-map-status-detours { color:#ffd18a;border-color:#a78142; }
 .citizen-ui .citizen-map-status > :is(button,.citizen-map-status-head > button):hover { background:var(--cit-selected); }
 .citizen-ui .citizen-map-status-filters,.citizen-ui .citizen-map-status > p { width:100%; background:var(--surface-panel);border:1px solid var(--surface-border);border-radius:10px;box-shadow:var(--cit-shadow); }
 .citizen-ui .citizen-map-status-filters { max-height:min(37dvh,18rem); }
@@ -300,20 +289,6 @@
 .citizen-ui :is(.citizen-map-status-head,.citizen-flood-filter-count,.citizen-route-id,.citizen-water-value) {
   font-variant-numeric: tabular-nums;
 }
-/* Keep both summary actions on one row; the status list opens underneath. */
-.citizen-ui .citizen-map-status-head { display:flex;align-items:stretch;gap:5px;min-width:0;max-width:100%;border:0; }
-.citizen-ui .citizen-map-status-head > button { gap:4px;padding-inline:7px;flex:none;white-space:nowrap;font-size:.76rem; }
-.citizen-ui .citizen-map-status-head > button > svg { flex:none; }
-.citizen-ui .citizen-map-status-head > button:hover { background:var(--cit-selected); }
-@media (max-width:380px) {
-  .citizen-ui .citizen-map-status-head { gap:4px; }
-  .citizen-ui .citizen-map-status-head > button { font-size:.70rem;gap:3px;padding-inline:5px; }
-}
-@media (max-width:380px) {
-  .citizen-ui .citizen-map-status { left:8px; }
-  .citizen-ui .citizen-map-status-head > button { padding-inline:4px; }
-  .citizen-ui .citizen-map-status-flood > svg:last-child { width:9px; }
-}
 
 @keyframes citizen-panel-enter {
   from { opacity:0; transform:translateY(6px); }
@@ -329,9 +304,6 @@
 
 /* Keep buttons side-by-side at narrow widths; only their labels can wrap when text is enlarged. */
 @media (max-width:380px) {
-  .citizen-ui .citizen-map-status { max-width:calc(100% - 72px); }
-  .citizen-ui .citizen-map-status-head > button { flex:0 1 auto;min-width:0;white-space:normal; }
-  .citizen-ui .citizen-map-status-head > button > span { min-width:0;overflow-wrap:anywhere; }
   .citizen-ui .citizen-nav button span.whitespace-nowrap { white-space:normal;overflow-wrap:anywhere; }
 }
 
