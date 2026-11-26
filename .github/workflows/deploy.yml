@@ -35,6 +35,8 @@ jobs:
             echo "BASE_PATH=/$REPO" >> "$GITHUB_ENV"
           fi
       - run: npm run lint && npm run typecheck && npm run build:pages
+        env:
+          NEXT_PUBLIC_HDMS_PUBLIC_OFFLINE: "1"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: out

@@ -27,3 +27,13 @@ jobs:
         env:
           PLAYWRIGHT_STATIC: "1"
           BASE_PATH: /hdms_pn
+      - name: Build and test public offline opt-in and rollback
+        env:
+          BASE_PATH: /hdms_pn
+          PLAYWRIGHT_STATIC: "1"
+          HDMS_TEST_PUBLIC_OFFLINE: "1"
+        run: |
+          DISABLED_OUTPUT="${RUNNER_TEMP}/hdms-offline-disabled"
+          mv out "$DISABLED_OUTPUT"
+          NEXT_PUBLIC_HDMS_PUBLIC_OFFLINE=1 npm run build:pages
+          HDMS_TEST_OFFLINE_DISABLED_OUTPUT="$DISABLED_OUTPUT" npm run test:e2e -- tests/e2e/public-offline.spec.ts tests/e2e/public-offline-upgrade.spec.ts

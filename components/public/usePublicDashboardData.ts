@@ -17,6 +17,10 @@ import {
 import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
 import { inspectPublicReports, resolvePublicReadState } from "./public-read-state";
+import { readPublicOfflineDisplay, writePublicOfflineDisplay } from "./public-offline-snapshot";
+import { retirePublicOfflineShell, warmPublicOfflineShell } from "./public-offline-worker";
+
+const PUBLIC_OFFLINE = process.env.NEXT_PUBLIC_HDMS_PUBLIC_OFFLINE === "1";
 
 export type PublicFloodAlbumPhoto = { dataUrl: string; sizeBytes?: number; id?: string };
 export type PublicFloodAlbum =
@@ -59,6 +63,15 @@ export function usePublicDashboardData({
   const previousDataFingerprint = useRef<string>("");
   const [floodAlbums, setFloodAlbums] = useState<Record<string, PublicFloodAlbum>>({});
   const floodAlbumCache = useRef(new Map<string, PublicFloodAlbum>());
+  const [diskSnapshot, setDiskSnapshot] = useState<ReturnType<typeof readPublicOfflineDisplay>>(null);
+  useEffect(() => {
+    if (!PUBLIC_OFFLINE) {
+      retirePublicOfflineShell();
+      return;
+    }
+    setDiskSnapshot(readPublicOfflineDisplay());
+    return warmPublicOfflineShell();
+  }, []);
 
   // TanStack Query for Data Fetching & Sync with automatic background refetch (Network-First live data)
   const { data: snapshot, dataUpdatedAt, isError, fetchStatus, refetch } = useQuery<SystemDataPayload>({
@@ -68,6 +81,7 @@ export function usePublicDashboardData({
       if (!Array.isArray(payload?.floodRoutes) || !Array.isArray(payload?.detourRoutes)) {
         throw new Error("ข้อมูลสถานการณ์ไม่ครบถ้วน");
       }
+      if (PUBLIC_OFFLINE) setDiskSnapshot(writePublicOfflineDisplay(payload));
       return payload;
     },
     staleTime: 0,
@@ -76,15 +90,16 @@ export function usePublicDashboardData({
     refetchIntervalInBackground: false,
   });
 
-  const systemData = snapshot ?? INITIAL_SYSTEM_DATA;
+  const systemData = snapshot ?? diskSnapshot?.data ?? INITIAL_SYSTEM_DATA;
   useSystemFavicon(
     systemData.systemSettings?.logoUrl,
     systemData.systemSettings?.name,
     systemData.systemSettings?.org
   );
 
-  const readState = resolvePublicReadState(snapshot !== undefined, isError || fetchStatus === "paused");
-  const reports = useMemo(() => snapshot ? inspectPublicReports(snapshot) : null, [snapshot]);
+  const showingSavedDisplay = snapshot === undefined && diskSnapshot !== null;
+  const readState = showingSavedDisplay ? "stale" : resolvePublicReadState(snapshot !== undefined, isError || fetchStatus === "paused");
+  const reports = useMemo(() => snapshot || diskSnapshot ? inspectPublicReports(systemData) : null, [snapshot, diskSnapshot, systemData]);
 
   useEffect(() => {
     if (readState !== "ready" || !reports) return;
@@ -276,7 +291,8 @@ export function usePublicDashboardData({
   return {
     systemData,
     readState,
-    dataUpdatedAt,
+    dataUpdatedAt: snapshot !== undefined ? dataUpdatedAt : diskSnapshot?.fetchedAt ?? 0,
+    showingSavedDisplay,
     latestReportMs: reports?.latestReportMs ?? null,
     refetch,
     floodAlbums,
