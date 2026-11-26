@@ -1,5 +1,6 @@
 "use client";
 
+import glass from "./CitizenMobileGlass.module.css";
 import { useEffect, useRef } from "react";
 import { Building2, MapPin, Phone, X } from "lucide-react";
 import type { DohOfficeLocation } from "@/db/default-data";
@@ -67,7 +68,7 @@ export function CitizenOfficeDirectory({ offices, onClose }: { offices?: DohOffi
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
       <div className="citizen-office-sheet">
-        <header className="citizen-office-head">
+        <header className={`citizen-office-head ${glass.sheetHeading}`}>
           <div>
             <h2 id="citizen-offices-title" className="text-lg font-bold">ติดต่อหน่วยงาน</h2>
             <p>แขวงทางหลวงปัตตานีและหมวดทางหลวง</p>
