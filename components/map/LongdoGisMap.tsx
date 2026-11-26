@@ -48,6 +48,7 @@ import { installRouteMotion } from "./longdo-route-motion";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import { renderVertexEditHandles } from "./longdo-vertex-handles";
 import { renderDraftAndConflictLayer } from "./longdo-draft-layer";
+import { useAdministrativeBoundaries } from "./useAdministrativeBoundaries";
 import { useLongdoPopupBridge, useLongdoRouteLayers } from "./useLongdoRouteLayers";
 import { getTrafficPresentation } from "@/lib/traffic-presentation";
 import {
@@ -202,6 +203,7 @@ export function LongdoGisMap({
   const [currentZoom, setCurrentZoom] = useState<number>(APP_CONFIG.DEFAULT_ZOOM);
   const [forceShowAllHighways, setForceShowAllHighways] = useState(false);
   const isFocusMode = gisFocus?.status === "focused";
+  const administrativeBoundaries = useAdministrativeBoundaries(mapReady && !isFocusMode, leafletMapRef, leafletRef);
   const [showFloodLayer, setShowFloodLayer] = useState(true);
   const [detourDisplayMode, setDetourDisplayMode] = useState<"GROUPED" | "DIRECTIONS">("GROUPED");
   const [floodDisplayMode, setFloodDisplayMode] = useState<"SEGMENTS" | "EVENTS">("EVENTS");
@@ -1524,6 +1526,7 @@ export function LongdoGisMap({
         isMapPopupOpen={isMapPopupOpen}
         isLayerControlCollapsed={isLayerControlCollapsed}
         setIsLayerControlCollapsed={setIsLayerControlCollapsed}
+        administrativeBoundaries={administrativeBoundaries}
         showFloodLayer={showFloodLayer}
         setShowFloodLayer={setShowFloodLayer}
         effectiveShowFloodLayer={effectiveShowFloodLayer}
