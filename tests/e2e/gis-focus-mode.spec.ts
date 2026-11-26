@@ -1094,6 +1094,8 @@ test("focus advice uses readable shared color pairs in light and dark modes", as
   const theme = page.locator(".citizen-ui");
   const reverse = bar.getByTestId("gis-focus-dir-reverse");
   const forward = bar.getByTestId("gis-focus-dir-forward");
+  await expect(forward).toHaveCSS("transition-property", "box-shadow");
+  await expect(reverse).toHaveCSS("transition-property", "box-shadow");
   await expect(theme).toHaveAttribute("data-citizen-theme", "light");
   await expect(panel).toHaveCSS("background-color", "rgb(255, 255, 255)");
   const ratios = () => page.evaluate(() => {
