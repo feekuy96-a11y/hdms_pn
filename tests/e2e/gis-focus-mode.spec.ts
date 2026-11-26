@@ -1521,3 +1521,130 @@ for (const endpoint of ["start", "end"]) {
     await expect(popup).toHaveCount(0);
   });
 }
+
+for (const kind of ["flood", "detour"] as const) {
+  for (const opener of ["line", "symbol"] as const) {
+    test(`${kind} ${opener} popup preserves manual map pan and zoom without entering focus`, async ({ page, context, isMobile, baseURL }) => {
+      await page.setViewportSize({ width: isMobile ? 390 : 1440, height: isMobile ? 844 : 900 });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const payload = createMockPayload();
+      const [flood] = payload.floodRoutes;
+      const [detour] = payload.detourRoutes;
+      payload.floodRoutes = [flood];
+      payload.detourRoutes = [detour];
+      function placeLine<T extends typeof flood | typeof detour>(route: T, lat: number) {
+        Object.assign(route, {
+          lat_start: lat, lat_end: lat, lon_start: 101.12, lon_end: 101.38,
+          coordinates_json: [[101.12, lat], [101.25, lat], [101.38, lat]],
+        });
+      }
+      placeLine(flood, 6.76);
+      placeLine(detour, 6.875);
+      detour.reverse_coordinates_json = [[101.38, 6.875], [101.25, 6.875], [101.12, 6.875]];
+      payload.mapStyles = structuredClone(DEFAULT_MAP_STYLES);
+      const colors = { flood: "#e52b80", detour: "#092bd9" };
+      for (const key of ["flood", "detour"] as const) {
+        Object.assign(payload.mapStyles[key], { color: colors[key], weight: 11, opacity: 1, animationEnabled: false });
+      }
+      const origin = new URL(baseURL!).origin;
+      await page.route("**/*", request => {
+        const url = new URL(request.request().url());
+        if (url.pathname === "/functions/v1/hdms-api" && /^get/.test(request.request().postDataJSON()?.action ?? "")) {
+          return request.fulfill({ json: payload });
+        }
+        return url.origin === origin ? request.continue() : request.abort();
+      });
+      await page.goto(base + "/");
+      const initialUrl = page.url();
+      const map = page.locator(".leaflet-container").first();
+      const marker = map.locator(kind === "flood" ? ".doh-map-capsule-pin" : ".doh-detour-symbol").first();
+      await expect(marker).toBeVisible();
+      if (opener === "symbol") {
+        await marker.press("Enter");
+      } else {
+        // Leaflet draws vector paths on canvas. Target a pixel from the actual
+        // synthetic route stroke, away from any symbol or overlaying control.
+        let target: { x: number; y: number } | null = null;
+        await expect.poll(async () => {
+          target = await map.evaluate((el, hex) => {
+            const canvas = el.querySelector<HTMLCanvasElement>(".leaflet-overlay-pane canvas");
+            if (!canvas) return null;
+            const cr = canvas.getBoundingClientRect(), r = el.getBoundingClientRect();
+            const pixels = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
+            const color = hex.slice(1).match(/../g)!.map(n => parseInt(n, 16));
+            const markerFrames = [...el.querySelectorAll(".leaflet-marker-icon")].map(icon => icon.getBoundingClientRect());
+            for (let row = 0; row < canvas.height; row += 2) {
+              for (let col = 0; col < canvas.width; col += 2) {
+                const i = (row * canvas.width + col) * 4;
+                if (pixels[i] !== color[0] || pixels[i + 1] !== color[1] || pixels[i + 2] !== color[2] || pixels[i + 3] < 240) continue;
+                const x = cr.x + col * cr.width / canvas.width, y = cr.y + row * cr.height / canvas.height;
+                if (x < Math.max(r.left, 0) + 22 || x > Math.min(r.right, innerWidth) - 22 ||
+                  y < Math.max(r.top, 70) + 25 || y > Math.min(r.bottom, innerHeight) - 90) continue;
+                if (markerFrames.some(b => x > b.left - 14 && x < b.right + 14 && y > b.top - 14 && y < b.bottom + 14)) continue;
+                const hit = document.elementFromPoint(x, y);
+                if (hit && el.contains(hit) && !hit.closest("a,button,.leaflet-popup,.leaflet-marker-icon")) return { x, y };
+              }
+            }
+            return null;
+          }, colors[kind]);
+          return !!target;
+        }).toBe(true);
+        const { x, y } = target!;
+        if (isMobile) await page.touchscreen.tap(x, y);
+        else await page.mouse.click(x, y);
+      }
+      const popup = map.locator(kind === "flood" ? ".doh-flood-leaflet-popup" : ".doh-detour-leaflet-popup");
+      await expect(popup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true })).toBeVisible();
+      // Wait through native initial pan and the single initial reveal guard.
+      await page.waitForTimeout(850);
+      const start = await map.evaluate(el => {
+        const r = el.getBoundingClientRect();
+        for (const fy of [.73, .68, .60, .77]) for (const fx of [.34, .18, .65, .48, .8]) {
+          const x = r.x + r.width * fx, y = r.y + r.height * fy;
+          const hit = document.elementFromPoint(x, y);
+          if (y - 276 > Math.max(r.top, 70) && hit && el.contains(hit) && !hit.closest("button,a,.leaflet-popup,.leaflet-marker-icon")) return { x, y };
+        }
+        return null;
+      });
+      expect(start).not.toBeNull();
+      const { x, y } = start!;
+      const camera = () => map.locator(".leaflet-map-pane").evaluate(el => {
+        const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+        return [m.m41, m.m42];
+      });
+      const initial = await camera();
+      const touch = isMobile ? await context.newCDPSession(page) : null;
+      if (touch) await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+      else {
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+      }
+      for (let step = 1; step <= 13; step++) {
+        if (touch) await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y - step * 26 }] });
+        else await page.mouse.move(x, y - step * 26);
+        await page.waitForTimeout(27);
+      }
+      // Paused release excludes legitimate inertia from the measured correction.
+      await page.waitForTimeout(250);
+      const release = await camera();
+      if (touch) {
+        await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await touch.detach();
+      } else await page.mouse.up();
+      await page.waitForTimeout(850);
+      expect(Math.abs(release[1] - initial[1])).toBeGreaterThan(200);
+      expect(await camera()).toEqual(release);
+      await expect(popup).toHaveCount(1);
+      const zoomLevel = () => map.evaluate(el => JSON.parse(el.getAttribute("data-public-layer-opacities") || "{}").zoom as number);
+      const zoom = await zoomLevel();
+      await page.getByRole("button", { name: "Zoom out", exact: true }).press("Enter");
+      await expect.poll(zoomLevel).toBe(zoom - 1);
+      const afterZoom = await camera();
+      await page.waitForTimeout(650);
+      expect(await camera()).toEqual(afterZoom);
+      await expect(popup).toHaveCount(1);
+      await expect(page).toHaveURL(initialUrl);
+      await expect(page.getByTestId("gis-focus-mode-bar")).toHaveCount(0);
+    });
+  }
+}
