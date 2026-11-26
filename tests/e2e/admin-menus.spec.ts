@@ -965,3 +965,131 @@ test("incident registry supports quick inline water level edit without modal", a
   expect(savedUpdates[0].trafficStatus).toBe("CLOSED");
   await expect(page.getByText("55 ซม.", { exact: true })).toBeVisible();
 });
+
+const offlineFormFixture = {
+  updatedAt: "2026-11-25T00:00:00.000Z",
+  floodRoutes: [{
+    id: "F-OFFLINE-FIXTURE", route_no: "42", section_name: "ตอนทดสอบออฟไลน์",
+    km_start: "76+000", km_end: "77+100", water_level_cm: 15, traffic_status: "PASSABLE",
+    lat_start: 6.79, lon_start: 101.14, lat_end: 6.8, lon_end: 101.15,
+    coordinates_json: [[101.14, 6.79], [101.15, 6.8]],
+    direction_meta: { sideCode: "LT", impactMode: "ONE_SIDE" },
+    updated_at: "2026-11-25T00:00:00.000Z", is_active: true,
+  }],
+  detourRoutes: [{
+    id: "D-OFFLINE-FIXTURE",
+    route_name: "ทางเลี่ยงเดิมสำหรับทดสอบออฟไลน์",
+    direction_mode: "FORWARD_ONLY",
+    lat_start: 6.81, lon_start: 101.20, lat_end: 6.84, lon_end: 101.26,
+    coordinates_json: [[101.20, 6.81], [101.26, 6.84]],
+    is_active: true,
+  }],
+  timelineUpdates: [], mitigationProjects: [], offices: [], highwayLayers: [], mapStyles: null,
+  systemSettings: { name: "ระบบทดสอบออฟไลน์", org: "แขวงทางหลวงปัตตานี", phone: "1586" },
+};
+const keepOfflineLabel = "เก็บไว้ในฟอร์มนี้ (ยังไม่ส่ง)";
+const legacyDraftKey = "hdms_admin_map_draft_v1";
+
+async function setupOfflineAdmin(page: import("@playwright/test").Page, origin: string) {
+  const writes: string[] = [];
+  await page.route("**/*", async request => {
+    const u = new URL(request.request().url());
+    if (u.pathname === "/functions/v1/hdms-api") {
+      const action: string = request.request().postDataJSON()?.action ?? "";
+      if (!action.startsWith("get") && !action.startsWith("proxy")) writes.push(action);
+      return request.fulfill({ json: action === "upsertRouteAction"
+        ? { success: true, savedId: "D-OFFLINE-FIXTURE", systemData: offlineFormFixture }
+        : offlineFormFixture });
+    }
+    return u.origin === origin ? request.continue() : request.abort();
+  });
+  return writes;
+}
+
+async function openOfflineAdminMenu(page: import("@playwright/test").Page, isMobile: boolean, menu: string) {
+  if (isMobile) {
+    await page.getByRole("navigation", { name: "เมนูจัดการแอดมินมือถือ" }).getByRole("button", { name: menu, exact: true }).tap();
+  } else await openMenu(page, menu);
+}
+
+for (const kind of ["น้ำท่วม", "ทางเลี่ยง"] as const) {
+  test(`new ${kind} offline entry stays in the current form without writing or overwriting a legacy draft`, async ({ page, context, isMobile, baseURL }) => {
+    const writes = await setupOfflineAdmin(page, new URL(baseURL!).origin);
+    const legacy = JSON.stringify({ savedAt: Date.now(), routeMode: "FLOOD", routeNo: "42" });
+    await page.addInitScript(([key, value]) => {
+      if (localStorage.getItem(key) === null) localStorage.setItem(key, value);
+    }, [legacyDraftKey, legacy]);
+    await page.goto(base + "/admin/");
+    await openOfflineAdminMenu(page, isMobile, "รายงานสถานการณ์น้ำท่วม");
+    await context.setOffline(true);
+    if (kind === "ทางเลี่ยง") await page.getByRole("button", { name: "ทางเลี่ยง", exact: true }).click();
+    const field = kind === "น้ำท่วม"
+      ? page.getByPlaceholder("เช่น หน้า รร.บ้านดอนยาง ม.2 ต.ดอนยาง อ.หนองจิก")
+      : page.getByPlaceholder("เช่น ทางเลี่ยง ทล.4092 สายหนองจิก - โคกโพธิ์");
+    const typed = `ทดสอบร่างเฉพาะหน้าจอ ${kind}`;
+    await field.fill(typed);
+    const action = page.getByRole("region", { name: "การบันทึกแบบฟอร์ม" });
+    await action.getByRole("button", { name: keepOfflineLabel, exact: true }).click();
+    await expect(action.getByRole("status")).toContainText("อย่าปิดหรือรีเฟรช");
+    expect(writes).toEqual([]);
+    await context.setOffline(false);
+    await expect(action.getByRole("status")).toContainText("กดบันทึกเอง");
+    await expect(field).toHaveValue(typed);
+    await page.waitForTimeout(750); // Longer than the legacy debounce; must not write on reconnect.
+    expect(await page.evaluate(key => localStorage.getItem(key), legacyDraftKey)).toBe(legacy);
+    expect(writes).toEqual([]);
+    await page.reload();
+    await openOfflineAdminMenu(page, isMobile, "รายงานสถานการณ์น้ำท่วม");
+    expect(await page.evaluate(key => localStorage.getItem(key), legacyDraftKey)).toBe(legacy);
+    if (kind === "ทางเลี่ยง") await page.getByRole("button", { name: "ทางเลี่ยง", exact: true }).click();
+    await expect(field).not.toHaveValue(typed);
+    expect(await page.evaluate(key => localStorage.getItem(key) ?? "", legacyDraftKey)).not.toContain(typed);
+    expect(writes).toEqual([]);
+  });
+}
+
+test("offline detour editor cancels cleanly and only explicit online save submits once", async ({ page, context, isMobile, baseURL }) => {
+  const writes = await setupOfflineAdmin(page, new URL(baseURL!).origin);
+  await page.goto(base + "/admin/");
+  await openOfflineAdminMenu(page, isMobile, "รายการทางเลี่ยง");
+  const edit = page.getByRole("button", { name: "แก้ไข", exact: true }).first();
+  await edit.click();
+  const name = page.getByPlaceholder("เช่น ทางเลี่ยง ทล.4092 สายหนองจิก - โคกโพธิ์");
+  await context.setOffline(true);
+  await name.fill("แก้ไขที่ยกเลิกทิ้ง");
+  await page.getByRole("button", { name: keepOfflineLabel, exact: true }).click();
+  await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
+  await edit.click();
+  await expect(name).toHaveValue(offlineFormFixture.detourRoutes[0].route_name);
+  await name.fill("แก้ไขรอเชื่อมต่อ");
+  await page.getByRole("button", { name: keepOfflineLabel, exact: true }).click();
+  expect(writes).toEqual([]);
+  await context.setOffline(false);
+  await expect(page.getByText(/เชื่อมต่อแล้ว แต่ยังไม่ได้ส่งข้อมูล/)).toBeVisible();
+  await expect(name).toHaveValue("แก้ไขรอเชื่อมต่อ");
+  expect(writes).toEqual([]);
+  await page.getByRole("button", { name: "บันทึกข้อมูล", exact: true }).click();
+  await expect.poll(() => writes.filter(action => action === "upsertRouteAction").length).toBe(1);
+  await expect(name).toHaveCount(0);
+  expect(writes.filter(action => action === "upsertRouteAction")).toEqual(["upsertRouteAction"]);
+});
+
+test("existing flood can be edited offline in the open form without submitting on reconnect", async ({ page, context, isMobile, baseURL }) => {
+  const writes = await setupOfflineAdmin(page, new URL(baseURL!).origin);
+  await page.goto(base + "/admin/");
+  await openOfflineAdminMenu(page, isMobile, "รายการเหตุการณ์");
+  await page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ }).first().click();
+  await page.getByRole("button", { name: "แก้ไข", exact: true }).first().click();
+  const field = page.getByPlaceholder("เช่น หน้า รร.บ้านดอนยาง ม.2 ต.ดอนยาง อ.หนองจิก");
+  await expect(field).toBeVisible();
+  await context.setOffline(true);
+  await field.fill("แก้ไขน้ำท่วมขณะออฟไลน์");
+  const action = page.getByRole("region", { name: "การบันทึกแบบฟอร์ม" });
+  await action.getByRole("button", { name: keepOfflineLabel, exact: true }).click();
+  await expect(action.getByRole("status")).toContainText("อย่าปิดหรือรีเฟรช");
+  expect(writes).toEqual([]);
+  await context.setOffline(false);
+  await expect(action.getByRole("status")).toContainText("กดบันทึกเอง");
+  await expect(field).toHaveValue("แก้ไขน้ำท่วมขณะออฟไลน์");
+  expect(writes).toEqual([]);
+});

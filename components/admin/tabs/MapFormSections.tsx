@@ -6,6 +6,7 @@ import { ClipboardList, FileText, FileUp, MapPinned, Navigation, Save } from "lu
 import { HighwayIdentificationSection } from "@/components/admin/tabs/HighwayIdentificationSection";
 import { RouteGeometryEditorSection } from "@/components/admin/tabs/RouteGeometryEditorSection";
 import { DetourAdviceSection } from "@/components/admin/tabs/DetourAdviceSection";
+import { AdminOfflineFormNotice } from "./AdminOfflineFormNotice";
 import { FloodSaveError, type FloodSaveValidation } from "./flood-save-validation";
 import { FloodSituationSection } from "@/components/admin/tabs/FloodSituationSection";
 
@@ -155,6 +156,8 @@ export interface MapSubmitActionBarProps {
   linkedDetourPending?: boolean;
   dualFloodSaveState?: "idle" | "retry-right" | "verify";
   onSubmit: () => void;
+  offline: boolean;
+  heldOffline: boolean;
   routeEditId: string;
   routeMode: "FLOOD" | "DETOUR";
   onCancelEdit?: () => void;
@@ -166,13 +169,16 @@ export function MapSubmitActionBar({
   linkedDetourPending,
   dualFloodSaveState,
   onSubmit,
+  offline,
+  heldOffline,
   routeEditId,
   routeMode,
   onCancelEdit,
 }: MapSubmitActionBarProps) {
   return (
     <div aria-label="การบันทึกแบบฟอร์ม" role="region"
-      className={`${workspace.actionBar} fixed inset-x-2 bottom-2 z-[510] grid items-center lg:sticky lg:inset-x-auto lg:bottom-0 lg:z-10 gap-1.5 rounded-xl border border-surface bg-surface-floating px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_20px_rgba(2,6,23,0.50)] sm:-mx-[0.25rem] sm:flex sm:flex-nowrap sm:p-[0.75rem] ${routeEditId && onCancelEdit ? "grid-cols-[minmax(0,1fr)_auto]" : "grid-cols-1"}`}>
+      className={`${workspace.actionBar} fixed inset-x-2 bottom-2 z-[510] grid items-center lg:sticky lg:inset-x-auto lg:bottom-0 lg:z-10 gap-1.5 rounded-xl border border-surface bg-surface-floating px-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_20px_rgba(2,6,23,0.50)] sm:-mx-[0.25rem] sm:flex sm:p-[0.75rem] ${offline || heldOffline ? "sm:flex-wrap" : "sm:flex-nowrap"} ${routeEditId && onCancelEdit ? "grid-cols-[minmax(0,1fr)_auto]" : "grid-cols-1"}`}>
+      <AdminOfflineFormNotice offline={offline} held={heldOffline} />
       <div className="contents sm:flex sm:flex-1 sm:min-w-0 sm:flex-row sm:items-center sm:gap-1.5">
         {saveAsDraft && (
           <span className="col-span-full inline-flex w-fit max-w-full items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-950/50 px-2.5 py-1 text-xs font-bold leading-snug text-amber-200 sm:py-1.5">
@@ -182,7 +188,7 @@ export function MapSubmitActionBar({
         )}
         <button
           type="button"
-          disabled={isSubmitting || dualFloodSaveState === "verify"}
+          disabled={isSubmitting || (!offline && dualFloodSaveState === "verify")}
           onClick={onSubmit}
           className={`min-w-0 flex-1 min-h-11 font-heading font-black tracking-normal py-2 px-2.5 rounded-xl text-xs sm:px-4 sm:text-sm shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 transition cursor-pointer ${
             saveAsDraft
@@ -192,7 +198,8 @@ export function MapSubmitActionBar({
         >
           <Save className="w-4 h-4 shrink-0" />
           <span>
-            {dualFloodSaveState === "verify" ? "ตรวจผลบันทึกในทะเบียนเหตุการณ์ก่อน"
+            {offline ? "เก็บไว้ในฟอร์มนี้ (ยังไม่ส่ง)"
+              : dualFloodSaveState === "verify" ? "ตรวจผลบันทึกในทะเบียนเหตุการณ์ก่อน"
               : dualFloodSaveState === "retry-right" ? "ลองบันทึกฝั่งขวาอีกครั้ง"
               : routeMode === "DETOUR" && !routeEditId && linkedDetourPending
               ? "ลองผูกเหตุการณ์อีกครั้ง"
