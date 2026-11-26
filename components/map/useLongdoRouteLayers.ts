@@ -8,6 +8,7 @@ import { defaultDetourDirection, isDetourDirectionAllowed } from "@/lib/detour-p
 import { getLinkedDetoursForFlood } from "@/lib/event-detour-links";
 import { groupFloodRoutesIntoEvents, parseFloodDirectionMeta, resolveFloodWaterReading } from "@/lib/flood-event-schema";
 import { getTrafficPresentation, TRAFFIC_ACCENT } from "@/lib/traffic-presentation";
+import { getDetourSymbolOffsets } from "./detour-symbol-spacing";
 import { drawFloodStatusAccent } from "./longdo-flood-status-accent";
 import {
   addLineCasing,
@@ -303,6 +304,32 @@ export function useLongdoRouteLayers({
     const detourPinColor = TRAFFIC_ACCENT.amber;
     const dDash = resolveMapDetourDash(detourStyle);
 
+    const symbols: Array<{ key: string; marker: any; element: HTMLElement; left: number; top: number }> = [];
+    let layoutFrame = 0;
+    const layoutSymbols = () => {
+      layoutFrame = 0;
+      const visible = symbols.filter(({ element }) => element.style.display !== "none");
+      const offsets = getDetourSymbolOffsets(visible.map(({ key, marker }) => {
+        const { x, y } = map.project(marker.getLatLng()).round();
+        return { key, x, y };
+      }));
+      for (const { key, element, left, top } of visible) {
+        const { x = 0, y = 0 } = offsets.get(key) ?? {};
+        // Shift only the icon box. Preserve Leaflet's latLng, popup anchor,
+        // transform during pan/zoom, and the original road and endpoint data.
+        element.style.marginLeft = `${left + x}px`;
+        element.style.marginTop = `${top + y}px`;
+        element.toggleAttribute("data-detour-symbol-shifted", !!(x || y));
+        if (x || y) {
+          element.style.setProperty("--hdms-detour-leader-length", `${Math.hypot(x, y)}px`);
+          element.style.setProperty("--hdms-detour-leader-angle", `${Math.atan2(-y, -x)}rad`);
+        }
+      }
+    };
+    const scheduleSymbolLayout = () => {
+      if (!layoutFrame) layoutFrame = window.requestAnimationFrame(layoutSymbols);
+    };
+
     (systemData.detourRoutes || []).forEach((detour) => {
       if (!detour.is_active) return;
       const dirMode = detour.direction_mode || "TWO_WAY";
@@ -337,7 +364,16 @@ export function useLongdoRouteLayers({
         bindMapPopupInitialReveal(map, marker);
         marker.__dohFilterId = detour.id;
         const title = split && direction === "REVERSE" ? "ขากลับ B → A" : split ? "ขาไป A → B" : "ทางเลี่ยง";
-        marker.getElement?.()?.setAttribute("aria-label", `${title}: ${detour.route_name}`);
+        const element = marker.getElement?.() as HTMLElement | undefined;
+        if (element) {
+          element.setAttribute("aria-label", `${title}: ${detour.route_name}`);
+          symbols.push({
+            key: `${String(detour.id)}:${direction}`, marker, element,
+            left: Number.parseFloat(element.style.marginLeft) || 0,
+            top: Number.parseFloat(element.style.marginTop) || 0,
+          });
+          marker.__dohAfterMarkerFilter = scheduleSymbolLayout;
+        }
         marker.on("popupopen", () => activateDirection(direction, split));
         marker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
@@ -506,10 +542,16 @@ export function useLongdoRouteLayers({
       }
     };
     if (publicMode) map.on(DETOUR_DIRECTION_CHANGED, refreshDirectionLabels);
+    if (symbols.length > 1) {
+      layoutSymbols();
+      map.on("zoomend", scheduleSymbolLayout);
+    }
     // Keep stacking order: highways (bottom) < detours < floods < drafts.
     raisePathLayers(group, floodGroupRef.current, draftGroupRef.current);
     return () => {
       if (publicMode) map.off(DETOUR_DIRECTION_CHANGED, refreshDirectionLabels);
+      map.off("zoomend", scheduleSymbolLayout);
+      if (layoutFrame) window.cancelAnimationFrame(layoutFrame);
       detourLinesRef.current = [];
       detourPhotoMarkerRefs.current = [];
       group.clearLayers();
