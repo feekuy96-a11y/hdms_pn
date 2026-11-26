@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import "./citizen-theme.css";
+import "./citizen-field-map.css";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { getPublicSystemDataAction } from "@/app/actions/doh-actions";
@@ -15,6 +16,7 @@ import { PUBLIC_READ_MESSAGES } from "@/components/public/public-read-state";
 import { CitizenPhotoViewer, publicPhotoSource, type CitizenPhoto } from "@/components/public/CitizenPhotoViewer";
 import { CitizenMapStatus, recordedPassability, mapPassabilityLabel, type MapPassability } from "@/components/public/CitizenMapStatus";
 import { CitizenOfficeDirectory } from "@/components/public/CitizenOfficeDirectory";
+import { CitizenThemeSymbol } from "@/components/public/CitizenThemeSymbol";
 import { GisFocusModeBar } from "@/components/public/GisFocusModeBar";
 import type { GisFocusViewportSnapshot } from "@/lib/gis-focus-mode";
 
@@ -641,7 +643,12 @@ export default function HomePage() {
             />
           ) : (
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl citizen-logo gold-gradient flex items-center justify-center shadow-md shrink-0">
-              <AlertTriangle className="w-5 h-5 text-slate-950 font-bold" />
+              <AlertTriangle className="citizen-brand-existing w-5 h-5 text-slate-950 font-bold" />
+              <svg className="citizen-field-sign" width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+                <path d="M14 1.8 26.2 14 14 26.2 1.8 14 14 1.8Z" stroke="currentColor" strokeWidth="1.3" />
+                <path d="M8.5 19.5c0-4.2 3.9-3.8 3.9-7.1V8m7.1 11.5c0-4.2-3.9-3.8-3.9-7.1V8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                <path d="M14 18.5v1.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
             </div>
           )}
           <div className="min-w-0">
@@ -663,9 +670,10 @@ export default function HomePage() {
           <button type="button" data-citizen-contact-desktop className="citizen-theme-button hidden lg:inline-flex" onClick={openContacts}>
             <Phone aria-hidden="true" className="size-4" />ติดต่อ
           </button>
-          <button type="button" className="citizen-theme-button" onClick={toggleCitizenTheme}
+          <button type="button" className="citizen-theme-button citizen-theme-switch" onClick={toggleCitizenTheme}
             aria-label={citizenTheme === "light" ? "เปิดธีมมืด" : "เปิดธีมสว่าง"} aria-pressed={citizenTheme === "dark"}>
-            {citizenTheme === "light" ? <Moon aria-hidden="true" className="size-4" /> : <Sun aria-hidden="true" className="size-4" />}
+            <CitizenThemeSymbol day={citizenTheme === "dark"} />
+            {citizenTheme === "light" ? <Moon aria-hidden="true" className="citizen-theme-legacy size-4" /> : <Sun aria-hidden="true" className="citizen-theme-legacy size-4" />}
           </button>
           <a
             href={`tel:${hotlinePhone}`}
@@ -1082,7 +1090,7 @@ export default function HomePage() {
 
 
       {publicPhoto && <CitizenPhotoViewer photo={publicPhoto} onClose={() => setPublicPhoto(null)} />}
-      {isContactOpen && <CitizenOfficeDirectory offices={systemData.offices} onClose={closeContacts} />}
+      {isContactOpen && <CitizenOfficeDirectory offices={systemData.offices} hotlinePhone={hotlinePhone} onClose={closeContacts} />}
 
       {/* Toast Notification (z-[640]: above map/floating-bar z-[400..600], below drawer z-[650] and modals z-[700..800]) */}
       {toastMessage && (

@@ -11,6 +11,7 @@ import type { DetourPhotoLocationState } from "@/components/admin/tabs/useMapRou
 
 export interface UseMapRouteDraftParams {
   routeEditId: string | null;
+  pauseLocalStorage?: boolean;
   editingRouteId?: string;
   routeMode: "FLOOD" | "DETOUR";
   setRouteMode: (v: "FLOOD" | "DETOUR") => void;
@@ -82,6 +83,7 @@ export interface UseMapRouteDraftParams {
 export function useMapRouteDraft(params: UseMapRouteDraftParams) {
   const {
     routeEditId,
+    pauseLocalStorage,
     editingRouteId,
     routeMode, setRouteMode,
     routeNo, setRouteNo,
@@ -122,14 +124,14 @@ export function useMapRouteDraft(params: UseMapRouteDraftParams) {
 
   // Detect unsaved draft on mount (new-record mode only)
   useEffect(() => {
-    if (editingRouteId) return;
+    if (editingRouteId || pauseLocalStorage || navigator.onLine === false) return;
     const saved = readAdminMapDraft();
     if (saved) setRecoverableDraft(saved);
-  }, [editingRouteId]);
+  }, [editingRouteId, pauseLocalStorage]);
 
   // Debounced Draft Auto-Save (600ms) for new flood/detour forms
   useEffect(() => {
-    if (routeEditId || editingRouteId) return;
+    if (routeEditId || editingRouteId || pauseLocalStorage) return;
     const snapshot: AdminMapDraftSnapshot = {
       savedAt: Date.now(),
       routeMode,
@@ -166,11 +168,12 @@ export function useMapRouteDraft(params: UseMapRouteDraftParams) {
     };
     if (!hasMeaningfulAdminMapDraft(snapshot)) return;
     const timer = window.setTimeout(() => {
-      writeAdminMapDraft(snapshot);
+      if (navigator.onLine !== false) writeAdminMapDraft(snapshot);
     }, 600);
     return () => window.clearTimeout(timer);
   }, [
     routeEditId,
+    pauseLocalStorage,
     editingRouteId,
     routeMode,
     routeNo,

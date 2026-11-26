@@ -1,5 +1,7 @@
 "use client";
 
+import { isAdminFormOffline } from "./AdminOfflineFormNotice";
+
 import React, { useEffect, useRef, useState } from "react";
 import { type DetourPointPhoto, DetourRoute, SystemDataPayload } from "@/db/default-data";
 import {
@@ -446,7 +448,7 @@ export function useDetourManagement({
     start?: DetourPhotoLocationState;
     end?: DetourPhotoLocationState;
   }) => {
-    if (!editingDetour) return;
+    if (!editingDetour || isAdminFormOffline()) return;
     const overrideLocations =
       photoLocations && typeof photoLocations === "object" && ("start" in photoLocations || "end" in photoLocations)
         ? photoLocations

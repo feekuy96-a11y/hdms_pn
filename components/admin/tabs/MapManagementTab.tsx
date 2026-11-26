@@ -4,6 +4,7 @@ import workspace from "../AdminWorkspace.module.css";
 
 import React from "react";
 import { SystemDataPayload } from "@/db/default-data";
+import { isAdminFormOffline, useAdminOfflineForm } from "./AdminOfflineFormNotice";
 import { clearAdminMapDraft } from "@/components/admin/tabs/map-draft-storage";
 import {
   MapTabHeader,
@@ -253,8 +254,10 @@ export function MapManagementTab({
     onToast,
   });
 
+  const offlineForm = useAdminOfflineForm(`${routeMode}:${editingRoute?.id || routeEditId || "new"}`);
   const { recoverableDraft, setRecoverableDraft, handleRestoreSavedDraft } = useMapRouteDraft({
     routeEditId,
+    pauseLocalStorage: offlineForm.pauseLocalStorage,
     editingRouteId: editingRoute?.id,
     routeMode, setRouteMode,
     routeNo, setRouteNo,
@@ -472,9 +475,10 @@ export function MapManagementTab({
   const handleClearRoute = () => {
     resetFreeGeometryHistory(true);
     resetFloodSituationState();
-    resetBaseFormState(editingRoute?.type === "FLOOD" && Boolean(routeEditId));
+    resetBaseFormState(offlineForm.pauseLocalStorage || isAdminFormOffline() || (editingRoute?.type === "FLOOD" && Boolean(routeEditId)));
     setFreeEditTarget("FORWARD");
     setRecoverableDraft(null);
+    offlineForm.clear();
     onToast("ล้างเส้นทางร่างและแบบฟอร์มแล้ว");
   };
 
@@ -639,7 +643,7 @@ export function MapManagementTab({
 
         {/* Phase 2.4: Draft Auto-Save Recovery Banner */}
         <DraftRecoveryBanner
-          recoverableDraft={recoverableDraft}
+          recoverableDraft={offlineForm.pauseLocalStorage ? null : recoverableDraft}
           routeEditId={routeEditId}
           onRestore={handleRestoreSavedDraft}
           onClear={() => {
@@ -744,7 +748,9 @@ export function MapManagementTab({
         onImportFile={handleRouteFileImport}
         onSaveAsDraftChange={setSaveAsDraft}
         submitBarProps={{
-          saveAsDraft, isSubmitting, onSubmit: handleSubmitRoute, routeEditId, linkedDetourPending, dualFloodSaveState,
+          saveAsDraft, isSubmitting, routeEditId, linkedDetourPending, dualFloodSaveState,
+          offline: offlineForm.offline, heldOffline: offlineForm.held,
+          onSubmit: () => isAdminFormOffline() ? offlineForm.keepOpen() : void handleSubmitRoute(),
           onCancelEdit: cancelEditingRoute,
         }}
       />

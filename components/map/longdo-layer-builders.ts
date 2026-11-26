@@ -2,7 +2,8 @@ import type { DetourRoute, FloodRoute, SystemDataPayload } from "@/db/default-da
 import { APP_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { getLinkedEventsForDetour } from "@/lib/event-detour-links";
 import { parseFloodDirectionMeta, resolveFloodWaterReading } from "@/lib/flood-event-schema";
-import { getTrafficPresentation } from "@/lib/traffic-presentation";
+import { getTrafficPresentation, TRAFFIC_ACCENT, type StatusColor } from "@/lib/traffic-presentation";
+import { MAP_STATUS_GLYPHS } from "@/lib/map-status-glyphs";
 import {
   escapeHtml,
   geoJsonFeatures,
@@ -221,10 +222,24 @@ export function resolveDetourPhotoPointCoords(
   };
 }
 
+function markerHex(color: string, fallback: string) {
+  return /^#[0-9a-f]{6}$/i.test(color) ? color : fallback;
+}
+
+const statusColorByCapsule: Readonly<Record<string, StatusColor>> = {
+  "doh-capsule-red": "red",
+  "doh-capsule-orange": "orange",
+  "doh-capsule-amber": "amber",
+  "doh-capsule-sky": "sky",
+  "doh-capsule-green": "emerald",
+  "doh-capsule-emerald": "emerald",
+  "doh-capsule-slate": "slate",
+};
+
 /** สร้างสเปกไอคอนสัญลักษณ์เส้นทางเลี่ยงกึ่งกลางแนวเส้น */
 export function buildDetourSymbolIconSpec(dColor: string): DivIconSpec {
   return {
-    html: `<div class="doh-route-symbol" style="width:30px;height:30px;border-radius:9px;background:${dColor};color:#0f172a;border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(15,23,42,.45)"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9"/><path d="m15 2 3 3-3 3"/><path d="M9 19h10"/><path d="m16 16 3 3-3 3"/></svg></div>`,
+    html: `<div class="doh-route-symbol doh-type-detour" style="--map-detour-pin-fallback:${markerHex(dColor, TRAFFIC_ACCENT.amber)}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9"/><path d="m15 2 3 3-3 3"/><path d="M9 19h10"/><path d="m16 16 3 3-3 3"/></svg></div>`,
     className: "doh-detour-symbol",
     iconSize: [30, 30],
     iconAnchor: [15, 15],
@@ -406,13 +421,20 @@ export function buildZoomAdaptiveFloodPinSpec(
   floodWaveIcon: string,
   floodWaveBadge: string
 ): DivIconSpec {
+  const statusClass = item.capsuleClass.split(" ").find((name) => Object.prototype.hasOwnProperty.call(statusColorByCapsule, name));
+  const statusGlyph = MAP_STATUS_GLYPHS[statusClass ? statusColorByCapsule[statusClass] : "slate"];
+  // The outer Leaflet marker already announces the full status. This secondary
+  // visible cue preserves the original status accent without recoloring the type icon.
+  const statusBadge = `<span class="doh-type-flood-status" title="${escapeHtml(item.statusLabel)}" aria-hidden="true" data-status-glyph="${statusGlyph.key}" style="--map-pin-status:${markerHex(fColor, TRAFFIC_ACCENT.slate)}"><svg class="hdms-status-sign" focusable="false" width="15" height="15" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path class="hdms-status-sign-halo" d="${statusGlyph.face} ${statusGlyph.route}"/><path class="hdms-status-sign-face" d="${statusGlyph.face}"/><path class="hdms-status-sign-inset" d="${statusGlyph.inset}"/><path class="hdms-status-sign-edge" d="${statusGlyph.face}"/><path class="hdms-status-sign-route" d="${statusGlyph.route}"/></svg></span>`;
+  const waveBadge = `<span class="doh-type-flood-wave" aria-hidden="true">${floodWaveBadge}</span>`;
   // The default map viewport is zoom 11. Keep that overview uncluttered and
   // progressively disclose the highway number and water level only after zooming in.
   if (currentZoom <= 11) {
     return {
       html: `
-        <div class="${item.capsuleClass} doh-capsule-zoom-far" style="background:${escapeHtml(fColor)}" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
-          ${floodWaveIcon}
+        <div class="${item.capsuleClass} doh-type-flood doh-capsule-zoom-far" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
+          <span class="doh-type-flood-wave" aria-hidden="true">${floodWaveIcon}</span>
+          ${statusBadge}
         </div>
       `,
       className: "doh-map-capsule-pin",
@@ -423,9 +445,10 @@ export function buildZoomAdaptiveFloodPinSpec(
   if (currentZoom <= 13) {
     return {
       html: `
-        <div class="${item.capsuleClass} doh-capsule-zoom-mid" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
-          ${floodWaveBadge}
+        <div class="${item.capsuleClass} doh-type-flood doh-capsule-zoom-mid" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
+          ${waveBadge}
           <span>ทล.${escapeHtml(item.flood.route_no)}</span>
+          ${statusBadge}
         </div>
       `,
       className: "doh-map-capsule-pin",
@@ -437,11 +460,12 @@ export function buildZoomAdaptiveFloodPinSpec(
   const labelWidth = (isPending ? 244 : 168) + (item.segmentCount === undefined ? 0 : 48);
   return {
     html: `
-      <div class="${item.capsuleClass} doh-capsule-zoom-near" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
-        ${floodWaveBadge}
+      <div class="${item.capsuleClass} doh-type-flood doh-capsule-zoom-near" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
+        ${waveBadge}
         <span>ทล.${escapeHtml(item.flood.route_no)}</span>
         ${item.segmentCount === undefined ? "" : `<span>${escapeHtml(item.segmentCount)} ช่วง</span>`}
         <span class="opacity-95 font-mono text-[11px]">· ${escapeHtml(item.levelText)}</span>
+        ${statusBadge}
         ${isPending ? '<span class="bg-black/25 px-1.5 py-0.5 rounded text-[10px] font-bold">รอตรวจสอบ</span>' : ""}
       </div>
     `,

@@ -6,6 +6,7 @@ import { SystemDataPayload } from "@/db/default-data";
 import { LAYER_CONFIG } from "@/lib/constants";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import type { AdministrativeBoundaryControls } from "./useAdministrativeBoundaries";
+import legendHint from "./HighwayTypeHint.module.css";
 import { MapStatusRow } from "./MapStatusRow";
 import { isFloodLineVisibleOnCurrentMap } from "./longdo-map-popups";
 
@@ -115,6 +116,30 @@ export function MapLegendOverlay({
   const layersButton = React.useRef<HTMLButtonElement>(null);
   const layersPanel = React.useRef<HTMLDivElement>(null);
   const [pinnedRouteList, setPinnedRouteList] = React.useState<"MAIN_HIGHWAY" | "SECOND_HIGHWAY" | null>(null);
+  type HighwayType = "MAIN_HIGHWAY" | "SECOND_HIGHWAY";
+  const typeHintId = React.useId();
+  const [pinnedTypeHint, setPinnedTypeHint] = React.useState<HighwayType | null>(null);
+  const [focusedTypeHint, setFocusedTypeHint] = React.useState<HighwayType | null>(null);
+  const [hoveredTypeHint, setHoveredTypeHint] = React.useState<HighwayType | null>(null);
+  const activeTypeHint = focusedTypeHint ?? hoveredTypeHint ?? pinnedTypeHint;
+  const clearTypeHint = () => {
+    setPinnedTypeHint(null);
+    setFocusedTypeHint(null);
+    setHoveredTypeHint(null);
+  };
+  React.useEffect(() => {
+    if (!pinnedTypeHint) return;
+    const dismiss = (event: PointerEvent) => {
+      const trigger = event.target instanceof Element && event.target.closest("[data-highway-type-hint]");
+      if (!trigger || !layersPanel.current?.contains(trigger)) {
+        setPinnedTypeHint(null);
+        setFocusedTypeHint(null);
+        setHoveredTypeHint(null);
+      }
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [pinnedTypeHint]);
   const mobileOverlayHiddenClass = isMapPopupOpen ? "max-sm:opacity-0 max-sm:pointer-events-none" : "";
   const mobileInteractiveClass = isMapPopupOpen ? "pointer-events-auto max-sm:pointer-events-none" : "pointer-events-auto";
 
@@ -122,6 +147,7 @@ export function MapLegendOverlay({
     if (layersPanel.current?.contains(document.activeElement)) layersButton.current?.focus();
     layersPanel.current?.querySelectorAll("details[open]").forEach(details => details.removeAttribute("open"));
     layersPanel.current?.querySelector(".citizen-legend")?.scrollTo(0, 0);
+    clearTypeHint();
     setPinnedRouteList(null);
     setLegendRouteList(null);
     setIsLayerControlCollapsed(true);
@@ -329,7 +355,9 @@ export function MapLegendOverlay({
           onKeyDown={(event) => {
             if (event.key !== "Escape") return;
             event.stopPropagation();
-            if (legendRouteList) {
+            if (activeTypeHint) {
+              clearTypeHint();
+            } else if (legendRouteList) {
               setPinnedRouteList(null);
               setLegendRouteList(null);
             } else closeLayerControl();
@@ -370,16 +398,37 @@ export function MapLegendOverlay({
             <div className="citizen-visibility space-y-1">
               {highwayLayerItems.map((item) => {
                 const isOpen = legendRouteList === item.key;
+                const hintOpen = activeTypeHint === item.key;
+                const hintId = `${typeHintId}-${item.key}`;
                 return (
                   <div
                     key={item.key}
                     className="citizen-layer-road-row flex items-center gap-1.5"
                   >
-                    <label className="flex flex-1 min-w-0 min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 hdms-guide-title touch-manipulation">
-                      <span className="flex items-center gap-[0.667em] min-w-0">
+                    <div
+                      className={legendHint.anchor}
+                      data-highway-type-hint
+                      onPointerEnter={(event) => { if (event.pointerType === "mouse") setHoveredTypeHint(item.key); }}
+                      onPointerLeave={() => setHoveredTypeHint((current) => current === item.key ? null : current)}
+                    >
+                      <button
+                        type="button"
+                        className={legendHint.swatch}
+                        aria-label={`อธิบายสัญลักษณ์${item.label}`}
+                        aria-describedby={hintOpen ? hintId : undefined}
+                        onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) setFocusedTypeHint(item.key); }}
+                        onBlur={() => setFocusedTypeHint((current) => current === item.key ? null : current)}
+                        onClick={() => {
+                          if (pinnedTypeHint === item.key) clearTypeHint();
+                          else setPinnedTypeHint(item.key);
+                        }}
+                      >
                         <span className="hdms-map-symbol w-4 h-1.5 inline-block rounded shrink-0" style={{ backgroundColor: item.color }} />
-                        <span className="truncate">{item.label}</span>
-                      </span>
+                      </button>
+                      {hintOpen && <span id={hintId} role="tooltip" className={`${legendHint.hint} hdms-map-surface`}>{item.label}</span>}
+                    </div>
+                    <label className="flex flex-1 min-w-0 min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 hdms-guide-title touch-manipulation">
+                      <span className="min-w-0 break-words">{item.label}</span>
                       <input
                         type="checkbox"
                         checked={item.checked}

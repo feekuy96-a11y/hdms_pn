@@ -5,6 +5,7 @@ import "./globals.css";
 import "./hdms-theme.css";
 import "./hdms-popup.css";
 import "./hdms-map-controls.css";
+import "./map-type-markers.css";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 
 const prompt = Prompt({

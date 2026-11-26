@@ -1,0 +1,34 @@
+.anchor {
+  position: relative;
+  flex: none;
+}
+.swatch {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: .5rem;
+  cursor: help;
+  touch-action: manipulation;
+}
+.swatch:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.swatch:hover {
+  background: var(--state-hover);
+}
+.hint {
+  position: absolute;
+  z-index: 3;
+  inset-inline-start: 100%;
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  display: block;
+  padding: .375rem .625rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: .5rem;
+  box-shadow: var(--hdms-shadow);
+  font-weight: 700;
+  white-space: nowrap;
+}
