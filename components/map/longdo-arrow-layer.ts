@@ -89,6 +89,8 @@ export interface RenderDirectionalArrowsParams {
   mapStyles: NonNullable<SystemDataPayload["mapStyles"]>;
   highwayLayers: SystemDataPayload["highwayLayers"];
   detourRoutes: SystemDataPayload["detourRoutes"];
+  floodRoutes: SystemDataPayload["floodRoutes"];
+  visibleFloodIds: ReadonlySet<string>;
   showMainHwy: boolean;
   showSecHwy: boolean;
   showDetourLayer: boolean;
@@ -114,6 +116,7 @@ export function renderDirectionalArrows({
   mapStyles,
   highwayLayers,
   detourRoutes,
+  floodRoutes, visibleFloodIds,
   showMainHwy,
   showSecHwy,
   showDetourLayer,
@@ -221,6 +224,19 @@ export function renderDirectionalArrows({
         placeArrowsOnLine(L, map, group, fwd, "TWO_WAY", dArrowColor, dArrowSize, dArrowSpacing, dBadgeBg, viewport, counter, compact);
       }
     });
+  }
+
+  // Shared flood carriageways use one saved line with arrows in both directions.
+  const floodStyle = mapStyles.flood;
+  if (floodStyle?.showArrows !== false && (isFilterOrFocusActive || z >= (floodStyle?.arrowMinZoom ?? 11))) {
+    const badge = floodStyle?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
+    const color = resolveVisibleArrowColor(badge, floodStyle?.arrowColor || "#ffffff");
+    for (const flood of floodRoutes || []) {
+      if (!visibleFloodIds.has(flood.id) || flood.direction_meta?.carriageway_type !== "SINGLE_CENTERLINE" ||
+        flood.direction_meta?.arrow_direction !== "TWO_WAY" || flood.direction_meta?.show_arrows === false) continue;
+      placeArrowsOnLine(L, map, group, parseRouteCoordinates(flood.coordinates_json), "TWO_WAY",
+        color, floodStyle?.arrowSize ?? 12, floodStyle?.arrowSpacingPx ?? 120, badge, viewport, counter);
+    }
   }
 
   // 3. Highway Network Arrows (Only draw on features with explicit directional metadata or when zoomed in >= 12)

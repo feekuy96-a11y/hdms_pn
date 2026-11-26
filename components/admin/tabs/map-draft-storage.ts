@@ -27,6 +27,7 @@ export interface AdminMapDraftSnapshot {
   detourRoadCondition: string;
   detourDurationMinFwd: string;
   detourDurationMinRev: string;
+  carriagewayChoice?: "" | "SHARED" | "DIVIDED";
   detourDirectionMode: "TWO_WAY" | "FORWARD_ONLY" | "REVERSE_ONLY";
   detourStartPhotoUrl: string;
   detourStartPhotoCaption: string;
@@ -190,6 +191,7 @@ export function readAdminMapDraft(): AdminMapDraftSnapshot | null {
       detourRoadCondition: typeof parsed.detourRoadCondition === "string" ? parsed.detourRoadCondition : "",
       detourDurationMinFwd: typeof parsed.detourDurationMinFwd === "string" ? parsed.detourDurationMinFwd : "",
       detourDurationMinRev: typeof parsed.detourDurationMinRev === "string" ? parsed.detourDurationMinRev : "",
+      carriagewayChoice: parsed.carriagewayChoice === "SHARED" || parsed.carriagewayChoice === "DIVIDED" ? parsed.carriagewayChoice : undefined,
       detourDirectionMode:
         parsed.detourDirectionMode === "FORWARD_ONLY" || parsed.detourDirectionMode === "REVERSE_ONLY"
           ? parsed.detourDirectionMode

@@ -142,6 +142,7 @@ export function useMapRouteFormState({
   const endPhotoLocManualRef = useRef(false);
   const photoAreaRequestRef = useRef({ START: 0, END: 0 });
   const [forceStraightThrough, setForceStraightThrough] = useState(false);
+  const [carriagewayChoice, setCarriagewayChoice] = useState<"" | "SHARED" | "DIVIDED">("");
   const [detourDirectionMode, setDetourDirectionMode] = useState<DetourDirectionModeType>("TWO_WAY");
   const [detourDistanceMeters, setDetourDistanceMeters] = useState<{ forward: number; reverse: number }>({
     forward: 0,
@@ -388,6 +389,7 @@ export function useMapRouteFormState({
       setSelectedParentEventId, setEventCode, setEventTitle, setVillageOrLandmark, setCauseAndNote,
     ].forEach((reset) => reset(""));
     setDetourDirectionMode("TWO_WAY");
+    setCarriagewayChoice("");
     setDetourDistanceMeters({ forward: 0, reverse: 0 });
     setDetourDurationSeconds({ forward: 0, reverse: 0 });
     setFieldImages([]);
@@ -447,7 +449,7 @@ export function useMapRouteFormState({
     resolveDetourPhotoArea,
     updateDetourPhotoLocation,
     forceStraightThrough, setForceStraightThrough,
-    detourDirectionMode, setDetourDirectionMode,
+    detourDirectionMode, setDetourDirectionMode, carriagewayChoice, setCarriagewayChoice,
     detourDistanceMeters, setDetourDistanceMeters,
     detourDurationSeconds, setDetourDurationSeconds,
     closedRoadConflicts, setClosedRoadConflicts,
@@ -503,6 +505,7 @@ interface UseMapMetaAndMarkerSyncParams {
   revEndLat: number | string;
   revEndLon: number | string;
   supportsTwoWayLineEdit: boolean;
+  showBothWays: boolean;
   onDraftPickMarkersChange?: (markers: { lat: number; lon: number; label: string; mode: string }[]) => void;
   sectionNameManuallyEdited: React.MutableRefObject<boolean>;
   startArea: { subdistrict: string; district: string } | null;
@@ -527,6 +530,7 @@ export function useMapMetaAndMarkerSync({
   revEndLat,
   revEndLon,
   supportsTwoWayLineEdit,
+  showBothWays,
   onDraftPickMarkersChange,
   sectionNameManuallyEdited,
   startArea,
@@ -538,12 +542,12 @@ export function useMapMetaAndMarkerSync({
   useEffect(() => {
     if (routeMode === "FLOOD") {
       const arrowDir = roadSide === "LEFT" ? "FORWARD" : roadSide === "RIGHT" ? "REVERSE" : roadSide === "BOTH" ? "TWO_WAY" : "UNKNOWN";
-      setDraftDirectionMeta?.({ arrowDirection: arrowDir, showArrows: roadSide === "LEFT" || roadSide === "RIGHT" });
+      setDraftDirectionMeta?.({ arrowDirection: arrowDir, showArrows: roadSide === "LEFT" || roadSide === "RIGHT" || (roadSide === "BOTH" && showBothWays) });
     } else {
       const arrowDir = detourDirectionMode === "FORWARD_ONLY" ? "FORWARD" : detourDirectionMode === "REVERSE_ONLY" ? "REVERSE" : "TWO_WAY";
       setDraftDirectionMeta?.({ arrowDirection: arrowDir, showArrows: true, directionMode: detourDirectionMode });
     }
-  }, [routeMode, roadSide, detourDirectionMode, setDraftDirectionMeta]);
+  }, [routeMode, roadSide, detourDirectionMode, showBothWays, setDraftDirectionMeta]);
 
   useEffect(() => {
     const markers: { lat: number; lon: number; label: string; mode: string }[] = [];

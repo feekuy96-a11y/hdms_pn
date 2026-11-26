@@ -26,11 +26,10 @@ interface FloodSituationSectionProps {
   setDirectionCode: (code: FloodDirectionCode) => void;
   roadSide: RoadSideType;
   setRoadSide: (side: RoadSideType) => void;
-  draftCoordinates: [number, number][];
   setDraftReverseCoordinates?: (coords: [number, number][]) => void;
   setDraftReverseWaypoints?: React.Dispatch<React.SetStateAction<[number, number][]>>;
   setFreeEditTarget: (target: "FORWARD" | "REVERSE") => void;
-  ensureReverseFloodGeometry: (forwardSource: [number, number][]) => void;
+  ensureReverseFloodGeometry: () => void;
   affectedParts: AffectedRoadPart[];
   setAffectedParts: React.Dispatch<React.SetStateAction<AffectedRoadPart[]>>;
   reverseAffectedParts: AffectedRoadPart[];
@@ -83,7 +82,6 @@ export function FloodSituationSection({
   setDirectionCode,
   roadSide,
   setRoadSide,
-  draftCoordinates,
   setDraftReverseCoordinates,
   setDraftReverseWaypoints,
   setFreeEditTarget,
@@ -191,7 +189,7 @@ export function FloodSituationSection({
                 setDirectionCode("BOTH");
                 setRoadSide("BOTH");
                 if (isSelectedHighwayDivided) {
-                  ensureReverseFloodGeometry(draftCoordinates);
+                  ensureReverseFloodGeometry();
                 } else {
                   setDraftReverseCoordinates?.([]);
                   setDraftReverseWaypoints?.([]);

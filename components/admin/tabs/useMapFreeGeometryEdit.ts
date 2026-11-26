@@ -236,11 +236,14 @@ export function useMapFreeGeometryEdit({
   };
 
   const handleClearReverseEndpoints = () => {
+    routingRequestRef.current += 1;
+    setDraftReverseCoordinates?.([]);
+    originalReverseRouteCoordinatesRef.current = [];
     setRevStartLat("");
     setRevStartLon("");
     setRevEndLat("");
     setRevEndLon("");
-    onToast("กลับไปใช้จุด B → A ร่วมกับขาไปเรียบร้อย");
+    onToast("ล้างหมุดและแนวเส้นขากลับแล้ว กรุณาเลือกหมุดบนคันทางขากลับ");
   };
 
   const handleSelectEditDirection = (nextTarget: "FORWARD" | "REVERSE") => {
@@ -249,7 +252,9 @@ export function useMapFreeGeometryEdit({
       const rsLon = Number(revStartLon);
       const reLat = Number(revEndLat);
       const reLon = Number(revEndLon);
-      if (rsLat && rsLon && reLat && reLon) {
+      if (rsLat && rsLon && reLat && reLon &&
+        (rsLat !== Number(endLat) || rsLon !== Number(endLon)) &&
+        (reLat !== Number(startLat) || reLon !== Number(startLon))) {
         const seededRev: [number, number][] = [
           [rsLon, rsLat],
           [reLon, reLat],
@@ -258,12 +263,9 @@ export function useMapFreeGeometryEdit({
         if (originalReverseRouteCoordinatesRef.current.length < 2) {
           originalReverseRouteCoordinatesRef.current = seededRev.map((p) => [...p] as [number, number]);
         }
-      } else if (draftCoordinates.length >= 2) {
-        const seeded = [...draftCoordinates].reverse().map((p) => [...p] as [number, number]);
-        setDraftReverseCoordinates?.(seeded);
-        if (originalReverseRouteCoordinatesRef.current.length < 2) {
-          originalReverseRouteCoordinatesRef.current = seeded.map((p) => [...p] as [number, number]);
-        }
+      } else {
+        onToast("กรุณาแยกหมุดต้นทางและปลายทางบนคันทางขากลับก่อนดัดเส้น");
+        return;
       }
     }
     setFreeEditTarget(nextTarget);

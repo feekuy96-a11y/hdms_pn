@@ -88,6 +88,7 @@ export interface UseMapRouteHydrationParams {
   setDetourRefId: (v: string) => void;
   setDetourName: (v: string) => void;
   setDetourDesc: (v: string) => void;
+  setCarriagewayChoice: (v: "" | "SHARED" | "DIVIDED") => void;
   setDetourDirectionMode: (v: DetourDirectionModeType) => void;
   setDetourGoogleMapsUrlFwd: (v: string) => void;
   setDetourGoogleMapsUrlRev: (v: string) => void;
@@ -166,6 +167,7 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
     setDetourName,
     setDetourDesc,
     setDetourDirectionMode,
+    setCarriagewayChoice,
     setDetourGoogleMapsUrlFwd,
     setDetourGoogleMapsUrlRev,
     setDetourRoadCondition,
@@ -280,8 +282,7 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
           const revBranch = matchedGroup?.branches.find((b) => b.directionCode === "B_TO_A" && b.coordinates.length >= 2);
           if (matchedGroup && revBranch) {
             revCoords = sliceBranchByKmRange(revBranch, fwdBranch, matchedGroup.kmStart, matchedGroup.kmEnd, flood.km_start, flood.km_end, true);
-          } else if (coords.length >= 2) {
-            revCoords = [...coords].reverse().map((p) => [...p] as [number, number]);
+
           }
         }
         setReverseRouteWaterLevel(existingRevSibling ? existingRevSibling.water_level_cm : flood.water_level_cm);
@@ -295,6 +296,11 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
         setReverseWaterLevelKnown(true);
         setReverseAffectedParts(["ALL_LANES"]);
       }
+      // Preserve the existing record shape on edit; new reports still require
+      // explicit confirmation when neither roadway metadata nor a choice exists.
+      setCarriagewayChoice(effectiveSide === "BOTH"
+        ? revCoords.length >= 2 ? "DIVIDED" : "SHARED"
+        : "");
       originalReverseRouteCoordinates.current = revCoords.map((coordinate) => [...coordinate] as [number, number]);
       setDraftReverseCoordinates?.(revCoords);
       setDraftReverseWaypoints?.([]);
@@ -533,9 +539,8 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
       else if (typeof detour.reverse_coordinates_json === "string") {
         try { revCoords = JSON.parse(detour.reverse_coordinates_json); } catch { revCoords = []; }
       }
-      originalReverseRouteCoordinates.current = (
-        revCoords.length >= 2 ? revCoords : [...coords].reverse()
-      ).map((coordinate) => [...coordinate] as [number, number]);
+      setCarriagewayChoice(revCoords.length >= 2 ? "DIVIDED" : "SHARED");
+      originalReverseRouteCoordinates.current = revCoords.map((coordinate) => [...coordinate] as [number, number]);
       setDraftReverseCoordinates?.(revCoords);
 
       let revWps: [number, number][] = [];

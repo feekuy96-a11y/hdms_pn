@@ -5,8 +5,6 @@ import type React from "react";
 import { SystemDataPayload } from "@/db/default-data";
 import {
   parseCoordinatePair,
-  findBestHighwayGroupForSelection,
-  sliceBranchByKmRange,
   buildAffectedPartSummary,
   buildDetourMetaPayload,
   type DetourPointPhotoLocationInput,
@@ -73,10 +71,6 @@ export interface UseMapRouteSubmitParams {
   startLon: string | number;
   endLat: string | number;
   endLon: string | number;
-  revStartLat: string | number;
-  revStartLon: string | number;
-  revEndLat: string | number;
-  revEndLon: string | number;
   draftCoordinates: [number, number][];
   draftReverseCoordinates: [number, number][];
   draftReverseWaypoints: [number, number][];
@@ -104,6 +98,8 @@ export interface UseMapRouteSubmitParams {
   directionCode: FloodDirectionCode;
   roadSide: RoadSideType;
   isDividedBothFlood: boolean;
+  twoWayDividedDetour: boolean;
+  needsCarriagewayChoice: boolean;
   affectedParts: AffectedRoadPart[];
   reverseAffectedParts: AffectedRoadPart[];
   routeWaterLevel: string | number;
@@ -142,14 +138,14 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
     systemData, onDataRefresh, onToast, showSuccessModal, showErrorModal,
     onNavigateToIncidents, onClearEditingRoute, editingRoute,
     routeMode, routeEditId, setRouteEditId, saveAsDraft, setIsSubmitting,
-    startLat, startLon, endLat, endLon, revStartLat, revStartLon, revEndLat, revEndLon,
+    startLat, startLon, endLat, endLon,
     draftCoordinates, draftReverseCoordinates, draftReverseWaypoints,
     closedRoadConflicts, setClosedRoadConflicts, detourName, detourRefId, detourDesc, detourDirectionMode,
     detourRoadCondition, detourDurationMinFwd, detourDurationMinRev,
     detourDistanceMeters, detourGoogleMapsUrlFwd, detourGoogleMapsUrlRev,
     detourStartPhotoUrl, detourStartPhotoCaption, detourStartPhotoLocation,
     detourEndPhotoUrl, detourEndPhotoCaption, detourEndPhotoLocation,
-    routeNo, sectionName, kmStart, kmEnd, directionCode, roadSide, isDividedBothFlood,
+    routeNo, sectionName, kmStart, kmEnd, directionCode, roadSide, isDividedBothFlood, twoWayDividedDetour, needsCarriagewayChoice,
     affectedParts, reverseAffectedParts, routeWaterLevel, reverseRouteWaterLevel,
     waterLevelKnown, reverseWaterLevelKnown, routeStatus, reverseRouteStatus,
     startedAt, selectedMeasure, reporterName, causeAndNote,
@@ -345,6 +341,15 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
       onToast("กรุณากำหนดจุดพิกัดเริ่มต้นและสิ้นสุดบนแผนที่");
       return;
     }
+    if (needsCarriagewayChoice) {
+      onToast("กรุณาเลือกโครงสร้างถนนก่อนบันทึก");
+      return;
+    }
+    if ((isDividedBothFlood || twoWayDividedDetour)
+      && (draftCoordinates.length < 2 || draftReverseCoordinates.length < 2)) {
+      onToast("กรุณาตรวจแนวเส้น A→B และ B→A ให้ครบทั้งสองทิศก่อนบันทึก");
+      return;
+    }
     if (routeMode === "DETOUR" && draftCoordinates.length < 2) {
       onToast("กรุณาคำนวณทางเลี่ยงตามถนนให้สำเร็จก่อนบันทึก");
       return;
@@ -472,7 +477,7 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
         photos: storedPhotos,
         arrow_direction: directionCode === "A_TO_B" ? "FORWARD" : directionCode === "B_TO_A" ? "REVERSE" : directionCode === "BOTH" ? "TWO_WAY" : "UNKNOWN",
         show_arrows: true,
-        carriageway_type: (useCarriagewaySnapping || isDividedBothFlood) ? "DUAL_CARRIAGEWAY" : "SINGLE_CENTERLINE",
+        carriageway_type: (roadSide === "BOTH" ? isDividedBothFlood : useCarriagewaySnapping) ? "DUAL_CARRIAGEWAY" : "SINGLE_CENTERLINE",
         water_level_known: waterLevelKnown,
       };
 
@@ -537,22 +542,8 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
           expectedUpdatedAt: systemData.floodRoutes?.find(f => f.id === existingForwardSiblingId)?.updated_at,
         };
 
-        // 2. Reverse segment (B -> A): prefer operator's edited/snapped reverse line, then explicit reverse pins, fallback to GIS B_TO_A slice
-        let reverseCoords: [number, number][] = draftReverseCoordinates.length >= 2 ? draftReverseCoordinates : [];
-        if (reverseCoords.length < 2 && revStartLat && revStartLon && revEndLat && revEndLon) {
-          reverseCoords = [[Number(revStartLon), Number(revStartLat)], [Number(revEndLon), Number(revEndLat)]];
-        }
-        if (reverseCoords.length < 2) {
-          const matchedGroup = findBestHighwayGroupForSelection(systemData.highwayLayers, chosenRouteNo, sectionName, kmStart, kmEnd);
-          const fwdBranch = matchedGroup?.branches.find((b) => b.directionCode === "A_TO_B" && b.coordinates.length >= 2) || matchedGroup?.primaryBranch;
-          const revBranch = matchedGroup?.branches.find((b) => b.directionCode === "B_TO_A" && b.coordinates.length >= 2);
-          if (matchedGroup && revBranch) {
-            reverseCoords = sliceBranchByKmRange(revBranch, fwdBranch, matchedGroup.kmStart, matchedGroup.kmEnd, kmStart, kmEnd, true);
-          }
-        }
-        if (reverseCoords.length < 2) {
-          reverseCoords = [...coords].reverse();
-        }
+        // Both directions are checked before saving either side.
+        const reverseCoords = draftReverseCoordinates;
 
         const revSLat = reverseCoords[0] ? reverseCoords[0][1] : numELat;
         const revSLon = reverseCoords[0] ? reverseCoords[0][0] : numELon;
@@ -687,14 +678,9 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
         }
       }
 
-      const resolvedDetourReverseCoords: [number, number][] =
-        routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY"
-          ? (draftReverseCoordinates.length >= 2
-              ? draftReverseCoordinates
-              : (revStartLat && revStartLon && revEndLat && revEndLon
-                  ? [[Number(revStartLon), Number(revStartLat)], ...draftReverseWaypoints, [Number(revEndLon), Number(revEndLat)]]
-                  : []))
-          : [];
+      const resolvedDetourReverseCoords = twoWayDividedDetour
+        ? draftReverseCoordinates
+        : [];
 
       const payload: Parameters<typeof upsertRouteAction>[0] = {
         id: routeEditId || linkedCreateId,
@@ -726,7 +712,9 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
         directionMeta: routeMode === "FLOOD" ? floodDirectionMeta : undefined,
         // Item 4: Detour Bidirectional & Asymmetric Fields
         reverseCoordinates: routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" ? resolvedDetourReverseCoords : undefined,
-        reverseWaypoints: routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY" ? draftReverseWaypoints : undefined,
+        reverseWaypoints: routeMode === "DETOUR" && detourDirectionMode === "TWO_WAY"
+          ? twoWayDividedDetour ? draftReverseWaypoints : []
+          : undefined,
         directionMode: routeMode === "DETOUR" ? detourDirectionMode : undefined,
         detourMeta: routeMode === "DETOUR"
           ? buildDetourMetaPayload({

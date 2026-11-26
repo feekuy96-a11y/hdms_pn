@@ -463,6 +463,7 @@ export interface AvailableHighwayOption {
   lanes?: string;
   laneCount: number;
   hasDualCarriageway: boolean;
+  carriagewayStructure?: "SHARED" | "DIVIDED";
   sortOrder: number;
 }
 
@@ -493,6 +494,7 @@ export function getAvailableHighwayRoutes(
     sawForward: boolean;
     sawReverse: boolean;
     sawDualType: boolean;
+    sawSharedType: boolean;
     sortOrder: number;
   }
 
@@ -525,7 +527,9 @@ export function getAvailableHighwayRoutes(
       const rawTextLower = String(rawSection || "").toLowerCase();
       const sawForward = dirCode === "A_TO_B" || rawTextLower.includes("ขาไป") || rawTextLower.includes("a→b") || rawTextLower.includes("a->b");
       const sawReverse = dirCode === "B_TO_A" || rawTextLower.includes("ขากลับ") || rawTextLower.includes("b→a") || rawTextLower.includes("b->a");
-      const sawDualType = String(props.carriageway_type || "").toUpperCase() === "DUAL_CARRIAGEWAY";
+      const geometryType = String(props.carriageway_type || "").toUpperCase();
+      const sawDualType = geometryType === "DUAL_CARRIAGEWAY";
+      const sawSharedType = geometryType === "SINGLE_CENTERLINE";
       const rawOffice = props.responsible_office || layer.metadata?.responsibleOffice;
 
       const key = uniqueByRouteNo ? cleanNo : `${cleanNo}::${cleanSection.toLowerCase()}`;
@@ -545,6 +549,7 @@ export function getAvailableHighwayRoutes(
           sawForward,
           sawReverse,
           sawDualType,
+          sawSharedType,
           sortOrder: num,
         });
       } else {
@@ -569,6 +574,7 @@ export function getAvailableHighwayRoutes(
         if (sawForward) existing.sawForward = true;
         if (sawReverse) existing.sawReverse = true;
         if (sawDualType) existing.sawDualType = true;
+        if (sawSharedType) existing.sawSharedType = true;
       }
     });
   });
@@ -588,6 +594,9 @@ export function getAvailableHighwayRoutes(
       lanes: entry.lanes || (effectiveLaneCount > 0 ? `${effectiveLaneCount} ช่องจราจร` : undefined),
       laneCount: effectiveLaneCount,
       hasDualCarriageway: effectiveLaneCount >= 4 || hasDualBranches,
+      carriagewayStructure: hasDualBranches === entry.sawSharedType
+        ? undefined
+        : hasDualBranches ? "DIVIDED" as const : "SHARED" as const,
       sortOrder: entry.sortOrder,
     };
   });

@@ -264,6 +264,7 @@ test("detour routing can force a straight heading through a selected intersectio
   await page.goto(`${base}/admin/`);
   await openMenu(page, "รายงานสถานการณ์น้ำท่วม");
   await page.getByRole("button", { name: "ทางเลี่ยง", exact: true }).click();
+  await page.getByLabel("โครงสร้างถนนสำหรับสองทิศทาง").selectOption("SHARED");
   await page.getByLabel("พิกัดจุด A").fill("6.8340, 101.1860");
   await page.getByLabel("พิกัดจุด A").blur();
   await page.getByLabel("พิกัดจุด B").fill("6.8390, 101.1920");
@@ -749,6 +750,9 @@ test("two-way detour uses configured line style color for both directions and ar
 test("two-way detour supports separate B->A pins and freeform endpoint/vertex customization", { tag: "@vertex-edit" }, async ({ page, isMobile }) => {
   const savedPayloads: any[] = [];
   const requestedRoutes: string[] = [];
+  let releaseForward!: () => void;
+  const forwardGate = new Promise<void>(resolve => { releaseForward = resolve; });
+  let rejectReverse = true;
 
   await page.route("**/functions/v1/hdms-api*", async (route) => {
     const body = JSON.parse(route.request().postData() || "{}");
@@ -772,6 +776,11 @@ test("two-way detour supports separate B->A pins and freeform endpoint/vertex cu
     const url = route.request().url();
     requestedRoutes.push(url);
     const isReverse = url.includes("101.31,6.88;101.2,6.81");
+    if (isReverse && rejectReverse) {
+      await route.fulfill({ json: { code: "NoRoute", routes: [] } });
+      return;
+    }
+    if (!isReverse) await forwardGate;
     const coords = isReverse
       ? [[101.31, 6.88], [101.255, 6.845], [101.20, 6.81]]
       : [[101.21, 6.82], [101.26, 6.85], [101.30, 6.87]];
@@ -799,6 +808,7 @@ test("two-way detour supports separate B->A pins and freeform endpoint/vertex cu
   await page.getByLabel("พิกัดจุด B").fill("6.8700, 101.3000");
   await page.getByLabel("พิกัดจุด B").blur();
 
+  await page.getByLabel("โครงสร้างถนนสำหรับสองทิศทาง").selectOption("DIVIDED");
   const revGroup = page.getByRole("group", { name: "หมุดเส้นทางขากลับ (B → A)" });
   await expect(revGroup).toBeVisible();
   await revGroup.getByLabel("พิกัดจุดเริ่มต้นขากลับ (B → A)").fill("6.8800, 101.3100");
@@ -809,6 +819,19 @@ test("two-way detour supports separate B->A pins and freeform endpoint/vertex cu
   await expect(page.locator(".doh-draft-endpoint")).toHaveCount(2);
   await expect(page.locator(".doh-draft-rev-endpoint")).toHaveCount(2);
 
+  await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
+  try {
+    await expect.poll(() => requestedRoutes.length).toBe(1);
+    await expect(page.getByText("กำลังคำนวณทางเลี่ยง A→B…")).toBeVisible();
+    expect(requestedRoutes[0]).toContain("101.21,6.82;101.3,6.87");
+  } finally {
+    releaseForward();
+  }
+  await expect(page.getByText(/คำนวณทางเลี่ยง B→A ไม่สำเร็จ/)).toBeVisible();
+  await page.getByRole("button", { name: /บันทึกทางเลี่ยงเข้าสู่ระบบสารสนเทศ/ }).click();
+  await expect(page.getByText("กรุณาตรวจแนวเส้น A→B และ B→A ให้ครบทั้งสองทิศก่อนบันทึก")).toBeVisible();
+  expect(savedPayloads).toHaveLength(0);
+  rejectReverse = false;
   await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
   await expect(page.getByText(/คำนวณทางเลี่ยงตามถนนสำเร็จ: A→B \(3 จุด\) และ B→A \(3 จุด\)/)).toBeVisible();
   expect(requestedRoutes.some((u) => u.includes("101.21,6.82;101.3,6.87"))).toBe(true);

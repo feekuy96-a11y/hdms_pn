@@ -98,12 +98,21 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     expect(routes[1].hasDualCarriageway).toBe(false);
   });
 
-  for (const outcome of ["both saved", "right rejected then retried", "right response lost", "right verification rejected", "left rejected"] as const) {
+  for (const outcome of ["shared carriageway", "both saved", "right rejected then retried", "right response lost", "right verification rejected", "left rejected"] as const) {
   test(`admin flood form saves split 4-lane records: ${outcome}`, async ({ page }) => {
     test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop admin form workflow");
     const savedCalls: any[] = [];
     const reportCalls: string[] = [];
     const updated_at = new Date().toISOString();
+    let releaseFloodForward!: () => void;
+    const floodForwardGate = new Promise<void>(resolve => { releaseFloodForward = resolve; });
+    const requestedDirections: string[] = [];
+    let rejectFloodReverse = true;
+    if (outcome === "both saved") {
+      await page.route("**/route/v1/driving/**", route => route.fulfill({ json: { code: "NoRoute", routes: [] } }));
+      await page.route("**/directions/v2:computeRoutes*", route => route.fulfill({ json: { routes: [] } }));
+    }
+
 
     await page.route("**/functions/v1/hdms-api", async (route) => {
       const body = route.request().postDataJSON() as { action?: string; args?: any[] };
@@ -198,6 +207,16 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
         return;
       }
 
+      if ((outcome === "both saved" || outcome === "shared carriageway") && action === "snapRouteAction") {
+        const [from, to] = body.args as [[number, number], [number, number]];
+        const reverse = from[0] > to[0];
+        requestedDirections.push(reverse ? "B→A" : "A→B");
+        if (!reverse && outcome === "both saved") await floodForwardGate;
+        const middle = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2 + (reverse ? 0.0005 : 0)];
+        await route.fulfill({ json: reverse && rejectFloodReverse ? null : [from, middle, to] });
+        return;
+      }
+
       if (action === "upsertRouteAction") {
         const arg = body.args?.[0] || {};
         savedCalls.push(arg);
@@ -273,6 +292,23 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     await expect(page.getByLabel("ระดับน้ำขาไป (ซม.) *")).toHaveCount(0);
     await expect(page.getByLabel("เลือกทิศทางสำหรับดัดเส้น")).toHaveCount(0);
 
+    if (outcome === "shared carriageway") {
+      const carriageway = page.getByLabel("โครงสร้างถนนสำหรับสองทิศทาง");
+      await expect(carriageway).toHaveValue("");
+      await carriageway.selectOption("SHARED");
+      await page.getByRole("button", { name: /คำนวณแนวเส้นจากช่วง กม\. อัตโนมัติ/ }).click();
+      await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
+      await expect(page.getByText(/คำนวณเส้นทางเกาะโครงข่ายถนนสำเร็จ/)).toBeVisible();
+      expect(requestedDirections).toEqual(["A→B"]);
+      await page.getByRole("button", { name: "บันทึกเหตุการณ์", exact: true }).click();
+      await expect.poll(() => savedCalls.length).toBe(1);
+      expect(savedCalls[0]).toMatchObject({
+        roadSide: "BOTH",
+        directionMeta: { directionCode: "BOTH", arrow_direction: "TWO_WAY", carriageway_type: "SINGLE_CENTERLINE" },
+      });
+      return;
+    }
+
     // 3. Switch to 4-lane highway -> slice KM -> verify split line switch (A->B / B->A) & separate water inputs
     await page.getByRole("button", { name: "หมายเลขทางหลวง" }).click();
     await page.getByRole("listbox", { name: "รายการทางหลวง" }).getByText("ทล.42 - ดอนยาง - บ้านดี").click();
@@ -301,6 +337,31 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
 
     if (outcome === "right rejected then retried") {
       await revSection.getByText("ไม่ทราบค่า", { exact: true }).click();
+    }
+
+    if (outcome === "both saved") {
+      const reversePins = page.getByRole("group", { name: "หมุดเส้นทางขากลับ (B → A)" });
+      const reverseStart = reversePins.getByLabel("พิกัดจุดเริ่มต้นขากลับ (B → A)");
+      const reverseEnd = reversePins.getByLabel("พิกัดจุดสิ้นสุดขากลับ (B → A)");
+      await reverseStart.fill("6.8396, 101.1906");
+      await reverseStart.blur();
+      await reverseEnd.fill("6.8297, 101.1806");
+      await reverseEnd.blur();
+      await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
+      try {
+        await expect.poll(() => requestedDirections).toEqual(["A→B"]);
+        await expect(page.getByText("กำลังคำนวณเส้นน้ำท่วม A→B…")).toBeVisible();
+      } finally {
+        releaseFloodForward();
+      }
+      await expect(page.getByText(/คำนวณเส้นน้ำท่วม B→A ไม่สำเร็จ/)).toBeVisible();
+      await page.getByRole("button", { name: "บันทึกเหตุการณ์", exact: true }).click();
+      await expect(page.getByText("กรุณาตรวจแนวเส้น A→B และ B→A ให้ครบทั้งสองทิศก่อนบันทึก")).toBeVisible();
+      expect(savedCalls).toHaveLength(0);
+      rejectFloodReverse = false;
+      await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
+      await expect(page.getByText(/คำนวณเส้นน้ำท่วม ๒ ฝั่งแยกกัน: ขาไป A→B/)).toBeVisible();
+      expect(requestedDirections).toEqual(["A→B", "B→A", "A→B", "B→A"]);
     }
 
     // Submit and inspect both payloads
@@ -347,6 +408,11 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     // Forward starts near [101.18, 6.83], Reverse runs along reverse B->A carriageway starting near [101.1906, 6.8396]
     expect(fwdPayload.coordinates[0][0]).toBeCloseTo(101.18, 3);
     expect(revPayload.coordinates[0][0]).toBeCloseTo(101.1906, 3);
+    if (outcome === "both saved") {
+      expect(revPayload.coordinates[0]).toEqual([101.1906, 6.8396]);
+      expect(revPayload.coordinates.at(-1)).toEqual([101.1806, 6.8297]);
+      expect(revPayload.coordinates).not.toEqual([...fwdPayload.coordinates].reverse());
+    }
   });
   }
 

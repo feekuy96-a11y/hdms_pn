@@ -88,6 +88,9 @@ interface RouteGeometryEditorSectionProps {
   freeVertexTool: "move" | "delete";
   setFreeVertexTool: (tool: "move" | "delete") => void;
   supportsTwoWayLineEdit: boolean;
+  bothDirections: boolean;
+  effectiveCarriageway: "" | "SHARED" | "DIVIDED";
+  onCarriagewayChange: (value: "" | "SHARED" | "DIVIDED") => void;
   activeEditTarget: "FORWARD" | "REVERSE";
   handleSelectEditDirection: (nextTarget: "FORWARD" | "REVERSE") => void;
   draftCoordinates: [number, number][];
@@ -392,7 +395,7 @@ export function RouteGeometryEditorSection({
   setFreeEditEnabled,
   freeVertexTool,
   setFreeVertexTool,
-  supportsTwoWayLineEdit,
+  supportsTwoWayLineEdit, bothDirections, effectiveCarriageway, onCarriagewayChange,
   activeEditTarget,
   handleSelectEditDirection,
   draftCoordinates,
@@ -659,6 +662,21 @@ export function RouteGeometryEditorSection({
         </div>
       )}
 
+      {bothDirections && (
+        <label className="block space-y-1 text-xs text-slate-300">
+          <span className="block font-semibold">โครงสร้างถนนสำหรับสองทิศทาง</span>
+          <select
+            value={effectiveCarriageway}
+            onChange={(e) => onCarriagewayChange(e.target.value as "" | "SHARED" | "DIVIDED")}
+            className="min-h-10 w-full rounded-lg border border-surface bg-surface-panel px-2.5 text-slate-100"
+          >
+            <option value="" disabled>เลือกตามสภาพถนนจริง</option>
+            <option value="SHARED">คันทางเดียว รถสวนกัน (เส้นเดียว มีลูกศรสองทิศ)</option>
+            <option value="DIVIDED">แยกคันทางซ้าย–ขวา (สองเส้น แยกหมุด)</option>
+          </select>
+        </label>
+      )}
+
       {/* Separate B -> A Endpoints Card when 2-way editing is active */}
       {supportsTwoWayLineEdit && (
         <div className="rounded-xl border border-amber-500/35 bg-slate-900/50 p-3 space-y-3" role="group" aria-label="หมุดเส้นทางขากลับ (B → A)">
@@ -668,12 +686,12 @@ export function RouteGeometryEditorSection({
                 หมุดเส้นทางขากลับ (B → A) แยกอิสระ
               </p>
               <p className="text-[11px] text-slate-400">
-                ปักหมุดต้นทาง–ปลายทางของขากลับแยกจากขาไปได้ (หรือปล่อยว่างเพื่อใช้จุด B → A ของขาไปอัตโนมัติ)
+                ปักหมุดต้นทาง–ปลายทางบนคันทางขากลับ ไม่ใช้หมุดของขาไป
               </p>
             </div>
             {revStartLat !== "" || revStartLon !== "" || revEndLat !== "" || revEndLon !== "" ? (
               <ActionButton variant="secondary" onClick={onClearReverseEndpoints}>
-                ใช้หมุดเดียวกับ A⇄B
+                ล้างหมุดขากลับ
               </ActionButton>
             ) : (
               <ActionButton variant="secondary" onClick={onSeedReverseEndpoints}>
@@ -833,7 +851,7 @@ export function RouteGeometryEditorSection({
         <div className="flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-amber-950/20 p-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-bold text-amber-300">สร้างแนวเส้นอัตโนมัติ (แนะนำ)</p>
-            <p className="text-[11px] text-slate-300">คำนวณเส้นทางเกาะแนวถนนจริงจากจุดเริ่มต้น (A) ไปปลายทาง (B)</p>
+            <p className="text-[11px] text-slate-300">{supportsTwoWayLineEdit ? "คำนวณ A→B ก่อน แล้วคำนวณ B→A แยกด้วยหมุดอีกชุด" : "คำนวณเส้นเกาะแนวถนนจริงระหว่างจุดที่เลือก"}</p>
           </div>
           <ActionButton
             variant="primary"
