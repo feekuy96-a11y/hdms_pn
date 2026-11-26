@@ -107,3 +107,36 @@ test("identical and reordered reports stay quiet; failed refresh preserves recor
   await expect(page.getByText(messages.fresh)).toBeVisible();
   await expect(page.getByText(messages.stale, { exact: true })).toHaveCount(0);
 });
+
+test("unknown flood water is not treated as a confirmed zero on the public map", async ({ page, isMobile }) => {
+  const cases = [
+    { flags: { waterLevelKnown: false }, showsPin: true },
+    { flags: { water_level_known: false }, showsPin: true },
+    { flags: { waterLevelKnown: false, water_level_known: true }, showsPin: true },
+    { flags: { waterLevelKnown: true, water_level_known: false }, showsPin: false },
+    { flags: {}, showsPin: false },
+  ];
+  for (const [index, scenario] of cases.entries()) {
+    await page.route("**/functions/v1/hdms-api", route => route.fulfill({
+      json: { ...empty, floodRoutes: [{ ...row, water_level_cm: 0, direction_meta: scenario.flags }] },
+    }));
+    await page.goto(base + "/");
+    await expect(page.getByText("น้ำท่วม 1 จุด", { exact: true }).first()).toBeVisible();
+    const pin = page.locator(".doh-map-capsule-pin");
+    await expect(pin).toHaveCount(scenario.showsPin ? 1 : 0);
+    if (index === 0) {
+      await pin.press("Enter");
+      const popup = page.locator(".doh-flood-leaflet-popup");
+      await expect(popup).toContainText("รอตรวจสอบระดับน้ำ");
+      await popup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).click();
+      const focus = page.getByTestId("gis-focus-mode-bar");
+      await expect(focus).toContainText("รอตรวจสอบระดับน้ำ");
+      await expect(focus).not.toContainText("สถานการณ์คลี่คลายแล้ว");
+    }
+    if (isMobile && index === 2) {
+      const list = await resultsPanel(page, isMobile);
+      await expect(list).toContainText("รอตรวจสอบ");
+    }
+    await page.unroute("**/functions/v1/hdms-api");
+  }
+});

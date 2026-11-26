@@ -75,14 +75,13 @@
 .citizen-ui :is(.citizen-legend,.citizen-map-action) svg { color: var(--cit-action); }
 .citizen-ui .citizen-map-action:hover { background: var(--cit-selected); }
 .citizen-ui .citizen-legend :is(input,button):focus-visible { outline-offset: -2px; }
-.citizen-ui [data-detour-endpoint] { background: var(--surface-panel); color: var(--cit-ink); }
-.citizen-ui [data-detour-endpoint] button[data-endpoint-select][aria-pressed=true] { background: var(--cit-action); color: var(--cit-on-action); }
 .citizen-ui .leaflet-popup-content-wrapper,.citizen-ui .leaflet-popup-tip {
   background: var(--surface-panel) !important; color: var(--cit-ink) !important; border-color: var(--surface-border) !important; box-shadow: var(--cit-shadow) !important;
 }
 .citizen-ui .leaflet-popup-close-button { color: var(--cit-ink) !important; }
 .citizen-ui .leaflet-popup:has([data-detour-endpoint]) .leaflet-popup-close-button {
-  display: grid; place-items: center; width: 38px; height: 44px; top: 5px !important; right: 3px !important; padding: 0 !important;
+  display: grid !important; place-items: center; width: 44px !important; height: 44px !important;
+  top: 8px !important; right: 4px !important; padding: 0 !important;
 }
 .citizen-ui :is(.citizen-flood-dossier,.citizen-detour-dossier) { border-color: var(--surface-border); }
 .citizen-ui .citizen-dossier-frame { background: var(--surface-panel); color: var(--cit-ink); }
@@ -159,10 +158,7 @@
 .citizen-ui .citizen-sidebar [class*="bg-gradient-to-l"] { display:none; }
 .citizen-ui .citizen-sidebar button[aria-pressed=true][class~="bg-amber-500"],
 .citizen-ui .citizen-legend button[aria-pressed=true][class~="bg-amber-500"] { background:var(--cit-action);color:var(--cit-on-action); }
-.citizen-ui .leaflet-popup:has([data-detour-endpoint]) .leaflet-popup-close-button { background:var(--cit-deep)!important;border:1px solid var(--surface-border)!important;border-radius:10px;font-size:18px; }
-@media (max-width: 639px) {
-  .citizen-ui [data-detour-endpoint] { max-height:min(42dvh,22rem); }
-}
+.citizen-ui .leaflet-popup:has([data-detour-endpoint]) .leaflet-popup-close-button { background:var(--cit-deep)!important;border:1px solid var(--surface-border)!important;border-radius:8px!important;font-size:20px!important; }
 
 .citizen-ui .citizen-office-directory {
   border:1px solid var(--surface-border); border-radius:16px; padding:0;
@@ -537,70 +533,125 @@
 .citizen-ui [data-photo-error]:not([hidden]) { display:grid; min-height:5rem; place-items:center; padding:.45rem; color:var(--cit-sub); background:var(--cit-deep); }
 .citizen-ui [data-public-photo] > img[hidden] { display:none; }
 
-/* Match the standalone detour styling without changing the route-line modal. */
-.citizen-ui [data-detour-endpoint] .citizen-detour-photo-card {
-  display: grid; gap: .35rem; padding: .55rem;
-  border: 1px solid var(--surface-border); border-radius: .75rem;
-  background: var(--cit-deep);
-}
-.citizen-ui [data-detour-endpoint] .citizen-detour-photo-title { display:flex; gap:.35rem; align-items:center; color:var(--cit-action); font-weight:750; font-size:.75rem; }
-.citizen-ui [data-detour-endpoint] .citizen-detour-photo-title svg { flex:none; }
-.citizen-ui [data-detour-endpoint] .citizen-detour-photo-image { display:block; width:100%; height:auto; aspect-ratio:1 / 1; border-radius:.5rem; object-fit:cover; background:var(--surface-panel); }
-.citizen-ui [data-detour-endpoint] .citizen-detour-timeline { --step-marker:1.5rem; display:grid; gap:.45rem; padding:0; list-style:none; }
-.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-row { display:grid; grid-template-columns:var(--step-marker) minmax(0,1fr); gap:.5rem; position:relative; align-items:start; }
-.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-row:not(:last-child)::before {
-  content:""; position:absolute; inset-block:calc(var(--step-marker) / 2) -.8rem;
-  inset-inline-start:calc(var(--step-marker) / 2); width:1px; background:var(--surface-border);
-}
-.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-marker {
-  position:relative; display:grid; place-items:center; width:var(--step-marker); height:var(--step-marker);
-  border-radius:50%; background:#f59e0b; color:#172d39; font-size:.75rem; font-weight:850;
-}
-.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-card { min-width:0; padding:.55rem; border:1px solid var(--surface-border); border-radius:.75rem; }
-.citizen-ui [data-detour-endpoint] [aria-current=step] > .citizen-detour-timeline-card { border-color:var(--cit-focus); }
-.citizen-ui [data-detour-endpoint] [aria-current=step] > .citizen-detour-timeline-marker { background:var(--cit-action); color:var(--cit-on-action); }
-.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-distance { border:1px solid var(--surface-border); border-radius:.35rem; padding:.08rem .28rem; color:var(--cit-sub); font-size:.68rem; font-variant-numeric:tabular-nums; }
-
-/* Endpoint-only accents: the selected marker and travel direction stay distinct. */
+/* Public A/B map inspector. Keep this styling off the standalone route dossier. */
 .citizen-ui [data-detour-endpoint] {
   --endpoint-accent: #14665b;
-  --endpoint-wash: color-mix(in srgb, var(--endpoint-accent) 10%, var(--surface-panel));
+  --endpoint-wash: color-mix(in srgb, var(--endpoint-accent) 12%, var(--surface-panel));
+  display: flex;
+  flex-direction: column;
+  width: min(20rem, calc(100vw - 3rem));
+  max-width: 100%;
+  max-height: min(48dvh, 27rem);
+  overflow: hidden;
+  border-radius: .85rem;
+  color: var(--cit-ink);
+  background: var(--surface-panel);
+  font-size: .8125rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .citizen-ui [data-detour-endpoint=END] { --endpoint-accent: #3f55a4; }
-.citizen-ui[data-citizen-theme=dark] [data-detour-endpoint=START] { --endpoint-accent:#9cdbcb; }
-.citizen-ui[data-citizen-theme=dark] [data-detour-endpoint=END] { --endpoint-accent:#bbc7ff; }
+.citizen-ui[data-citizen-theme=dark] [data-detour-endpoint=START] { --endpoint-accent: #9cdbcb; }
+.citizen-ui[data-citizen-theme=dark] [data-detour-endpoint=END] { --endpoint-accent: #bbc7ff; }
+@media (max-width: 639px) {
+  .citizen-ui [data-detour-endpoint] { max-height: min(46dvh, 22rem); }
+}
 .citizen-ui [data-detour-endpoint] .citizen-endpoint-header {
-  background:linear-gradient(115deg,var(--endpoint-wash),var(--surface-panel) 85%);
-  border-bottom:1px solid var(--surface-border);
-  box-shadow:inset 3px 0 var(--endpoint-accent);
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: .375rem;
+  padding: 5px 53px 5px .625rem;
+  border-bottom: 1px solid var(--surface-border);
+  background: var(--endpoint-wash);
 }
-.citizen-ui [data-detour-endpoint] .citizen-endpoint-picker {
-  padding:2px; border:1px solid var(--surface-border); border-radius:.7rem; background:var(--surface-panel);
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-label { display: grid; min-width: 0; gap: .05rem; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-label span { color: var(--endpoint-accent); font-size: .72rem; font-weight: 700; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-label strong { font-size: .875rem; line-height: 1.3; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-picker { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--surface-border); border-radius: 8px; background: var(--surface-panel); }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-picker button { width: 44px; min-height: 44px; border: 0; border-radius: 6px; color: var(--cit-ink); font-weight: 750; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-picker button[aria-pressed=true] { color: var(--surface-panel); background: var(--endpoint-accent); }
+.citizen-ui [data-detour-endpoint] button:disabled { opacity: .5; cursor: not-allowed; }
+.citizen-ui [data-detour-endpoint] :is(button,a,[data-endpoint-scroll]):focus-visible { outline: 2px solid var(--cit-focus); outline-offset: -2px; }
+.citizen-ui [data-detour-endpoint] [data-endpoint-scroll] {
+  min-height: 0;
+  padding: .625rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--cit-sub) var(--surface-panel);
 }
-.citizen-ui [data-detour-endpoint] .citizen-endpoint-picker button { border-color:transparent; }
-.citizen-ui [data-detour-endpoint] .citizen-endpoint-picker button[aria-pressed=true] {
-  border-color:var(--endpoint-accent); color:var(--endpoint-accent); background:var(--endpoint-wash);
-}
-.citizen-ui [data-detour-endpoint] .citizen-detour-photo-card {
-  background:linear-gradient(145deg,var(--endpoint-wash),var(--surface-card) 70%);
-  border-color:color-mix(in srgb,var(--endpoint-accent) 24%,var(--surface-border));
-}
-.citizen-ui [data-detour-endpoint] .citizen-detour-photo-title { color:var(--endpoint-accent); }
-.citizen-ui [data-detour-endpoint] .citizen-endpoint-photo-button { position:relative; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-photo-button { position: relative; display: block; width: 100%; overflow: hidden; border-radius: .625rem; cursor: zoom-in; }
+.citizen-ui [data-detour-endpoint] .citizen-detour-photo-image { display: block; width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; background: var(--cit-deep); }
 .citizen-ui [data-detour-endpoint] .citizen-endpoint-zoom {
-  position:absolute; inset:auto .45rem .45rem auto; display:grid; place-items:center;
-  width:2rem; height:2rem; color:#fff; background:#17354a; border:1px solid #ffffff66; border-radius:.5rem;
+  position: absolute;
+  inset: .5rem .5rem auto auto;
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .32rem .5rem;
+  border: 1px solid #ffffff66;
+  border-radius: .4rem;
+  background: #17354a;
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 700;
 }
-.citizen-ui [data-detour-endpoint] .citizen-endpoint-photo-button:has(img[hidden]) .citizen-endpoint-zoom { display:none; }
-.citizen-ui [data-detour-endpoint] .citizen-endpoint-locality-card {
-  display:flex; align-items:flex-start; gap:.5rem; padding:.5rem .6rem;
-  border:1px solid var(--surface-border); border-radius:.7rem; background:var(--surface-card);
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-photo-button:has(img[hidden]) .citizen-endpoint-zoom { display: none; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-no-photo { display: grid; min-height: 4rem; place-items: center; margin: 0; padding: .55rem; border: 1px dashed var(--surface-border); border-radius: .625rem; background: var(--cit-deep); color: var(--cit-sub); text-align: center; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-locality-card { padding: .7rem .125rem; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-locality-card h5 { margin: 0; font-size: .95rem; font-weight: 780; line-height: 1.35; }
+.citizen-ui [data-detour-endpoint] [data-endpoint-locality] { margin: .2rem 0 0; color: var(--endpoint-accent); font-weight: 650; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-caption { margin: .35rem 0 0; color: var(--cit-sub); white-space: pre-line; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-itinerary { padding: .65rem 0; border-top: 1px solid var(--surface-border); }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-timeline-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .25rem .5rem; margin-bottom: .5rem; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-trip-direction { padding: .15rem .4rem; border-radius: .3rem; color: var(--cit-ink); background: var(--cit-deep); font-size: .73rem; font-weight: 700; }
+.citizen-ui [data-detour-endpoint] .citizen-detour-timeline { --step-marker: 1.4rem; display: grid; gap: .15rem; margin: 0; padding: 0; list-style: none; }
+.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-row { position: relative; display: grid; grid-template-columns: var(--step-marker) minmax(0,1fr); align-items: start; gap: .45rem; }
+.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-row:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  inset-block: calc(var(--step-marker) / 2) -.5rem;
+  inset-inline-start: calc(var(--step-marker) / 2);
+  width: 1px;
+  background: var(--surface-border);
 }
-.citizen-ui [data-detour-endpoint] .citizen-endpoint-locality-card > svg { flex:none; margin-top:.15rem; color:var(--endpoint-accent); }
-.citizen-ui [data-detour-endpoint] .citizen-endpoint-locality-card h5 { margin:0 0 .12rem; }
-.citizen-ui [data-detour-endpoint] .citizen-endpoint-timeline-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.25rem .5rem; }
-.citizen-ui [data-detour-endpoint] .citizen-endpoint-trip-direction {
-  border:1px solid var(--surface-border); border-radius:.45rem; padding:.13rem .38rem;
-  color:var(--cit-ink); background:var(--cit-deep); font-size:.7rem; font-weight:700;
+.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-marker { position: relative; display: grid; place-items: center; width: var(--step-marker); height: var(--step-marker); margin-top: .22rem; border: 1px solid var(--surface-border); border-radius: 50%; background: var(--surface-panel); font-size: .73rem; font-weight: 750; }
+.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-card { min-width: 0; padding: .35rem .4rem; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-step-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .12rem .4rem; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-step-detail { margin: .1rem 0 0; color: var(--cit-sub); }
+.citizen-ui [data-detour-endpoint] [aria-current=step] > .citizen-detour-timeline-marker { border-color: var(--endpoint-accent); background: var(--endpoint-accent); color: var(--surface-panel); }
+.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-distance { color: var(--cit-sub); font-size: .72rem; font-variant-numeric: tabular-nums; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-actions { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,8rem),1fr)); gap: .4rem; border-top: 1px solid var(--surface-border); padding-top: .625rem; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-actions :is(a,button) { display: grid; place-items: center; min-height: 44px; min-width: 0; padding: .3rem .4rem; border: 1px solid var(--surface-border); border-radius: .45rem; color: var(--cit-ink); background: var(--surface-panel); font-weight: 700; text-decoration: none; text-align: center; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-actions a { border-color: transparent; color: var(--cit-on-action); background: var(--cit-action); }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-actions p { grid-column: 1 / -1; margin: 0; padding: .35rem .45rem; background: var(--cit-deep); color: var(--cit-sub); }
+
+/* Focus guidance: pair text and surface colors in light mode, independently of the map. */
+.citizen-ui[data-citizen-theme=light] {
+  --focus-guide-surface: #fbfcfc;
+  --focus-guide-tile: #eff4f5;
+  --focus-guide-ink: #17354a;
+  --focus-guide-quiet: #3f5665;
+  --focus-guide-accent: #754713;
+  --focus-guide-number-surface: #f6e1b7;
 }
-.citizen-ui [data-detour-endpoint] [aria-current=step] > .citizen-detour-timeline-card { border-color:var(--endpoint-accent); background:var(--endpoint-wash); }
+.citizen-ui[data-citizen-theme=light] .citizen-focus-timeline {
+  background: var(--focus-guide-surface);
+  color: var(--focus-guide-ink);
+  border-color: var(--surface-border);
+  box-shadow: 0 6px 18px #183b5233;
+  backdrop-filter: none;
+}
+.citizen-ui[data-citizen-theme=light] .citizen-focus-timeline-head { border-color: var(--surface-border); }
+.citizen-ui[data-citizen-theme=light] .citizen-focus-timeline-tile { background: var(--focus-guide-tile); border-color: var(--surface-border); }
+.citizen-ui[data-citizen-theme=light] .citizen-focus-timeline :is(.citizen-focus-timeline-close,.citizen-focus-quiet) { color: var(--focus-guide-quiet); }
+.citizen-ui[data-citizen-theme=light] .citizen-focus-timeline .citizen-focus-ink { color: var(--focus-guide-ink); }
+.citizen-ui[data-citizen-theme=light] .citizen-focus-timeline .citizen-focus-accent { color: var(--focus-guide-accent); }
+.citizen-ui[data-citizen-theme=light] .citizen-focus-timeline-number { background: var(--focus-guide-number-surface); color: var(--focus-guide-accent); }
+.citizen-ui[data-citizen-theme=light] .citizen-focus-timeline-close:hover { background: var(--cit-deep); color: var(--focus-guide-ink); }
+.citizen-ui[data-citizen-theme=light] .citizen-focus-directions { background: var(--focus-guide-tile); border-color: var(--surface-border); }
+.citizen-ui[data-citizen-theme=light] .citizen-focus-directions button { color: var(--focus-guide-quiet); }
+.citizen-ui[data-citizen-theme=light] .citizen-focus-directions button:hover { background: var(--cit-selected); color: var(--focus-guide-ink); }
+.citizen-ui[data-citizen-theme=light] .citizen-focus-directions button[aria-pressed=true] { color: var(--cit-on-action); background: var(--cit-action); }
+.citizen-ui[data-citizen-theme=light] :is(.citizen-focus-directions button,.citizen-focus-timeline-close):focus-visible { outline: 2px solid var(--cit-focus); outline-offset: 2px; }

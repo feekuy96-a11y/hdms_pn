@@ -6,7 +6,7 @@ import { LAYER_CONFIG } from "@/lib/constants";
 import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
 import { defaultDetourDirection, isDetourDirectionAllowed } from "@/lib/detour-presentation";
 import { getLinkedDetoursForFlood } from "@/lib/event-detour-links";
-import { groupFloodRoutesIntoEvents } from "@/lib/flood-event-schema";
+import { groupFloodRoutesIntoEvents, resolveFloodWaterReading } from "@/lib/flood-event-schema";
 import { getTrafficPresentation } from "@/lib/traffic-presentation";
 import {
   addLineCasing,
@@ -31,7 +31,7 @@ import {
 import {
   buildDetourPhotoBadgeSpec,
   buildDetourSymbolIconSpec,
-  type FloodMarkerCandidate,
+  type FloodPinPresentation,
   buildFloodMarkerCandidates,
   buildZoomAdaptiveFloodPinSpec,
   clusterFloodMarkerCandidates,
@@ -240,11 +240,12 @@ export function useLongdoRouteLayers({
   const activationRef = React.useRef(onActivateMapEntity);
   activationRef.current = onActivateMapEntity;
   const detourPhotoMarkerRefs = React.useRef<Array<{ marker: any; point: "START" | "END"; hasPhoto: boolean }>>([]);
-  // Segment capsule markers are retained across zoom changes. Replacing only
+  // Flood markers are retained across zoom changes in both display modes. Replacing only
   // their icon preserves an open Leaflet popup instead of destroying its layer.
-  const floodSegmentMarkerRefs = React.useRef<Array<{
+  const floodMarkerRefs = React.useRef<Array<{
     marker: any;
-    item: FloodMarkerCandidate;
+    item: FloodPinPresentation;
+    ariaLabel: string;
     color: string;
     waveIcon: string;
     waveBadge: string;
@@ -473,7 +474,7 @@ export function useLongdoRouteLayers({
     const L = leafletRef.current;
     const group = floodGroupRef.current;
     floodLinesRef.current = {};
-    floodSegmentMarkerRefs.current = [];
+    floodMarkerRefs.current = [];
     if (!mapReady || !L || !group) return;
     group.clearLayers();
     if (!effectiveShowFloodLayer) return;
@@ -535,23 +536,20 @@ export function useLongdoRouteLayers({
         const evPresentation = getTrafficPresentation(ev.mostSevereStatus, ev.maxWaterLevelCm);
         const zIndexMap = { red: 1000, orange: 800, amber: 700, sky: 600, slate: 400, emerald: 200 } as const;
         const zIndex = zIndexMap[evPresentation.color];
-        const capsuleClass = evPresentation.capsuleClass;
-
-        const pinIcon = L.divIcon({
-          html: `
-            <div class="${capsuleClass}">
-              ${floodWaveBadge}
-              <span>ทล.${escapeHtml(ev.routeNo)} [${ev.segments.length} ช่วง]</span>
-              <span class="opacity-90">(${escapeHtml(ev.maxWaterLevelCm)} ซม.)</span>
-            </div>
-          `,
-          className: "doh-map-capsule-pin",
-          iconSize: [140, 28],
-          iconAnchor: [70, 14],
-        });
+        const hasReading = ev.segments.some(seg => resolveFloodWaterReading(seg.direction_meta, seg.water_level_cm).known);
+        const level = hasReading ? `${ev.maxWaterLevelCm} ซม.` : "รอตรวจสอบระดับน้ำ";
+        const item: FloodPinPresentation = {
+          flood: { route_no: ev.routeNo },
+          capsuleClass: evPresentation.capsuleClass,
+          statusLabel: evPresentation.label,
+          sideBadge: "",
+          segmentCount: ev.segments.length,
+          levelText: level,
+        };
+        const pinIcon = L.divIcon(buildZoomAdaptiveFloodPinSpec(item, currentZoom, fColor, floodWaveIcon, floodWaveBadge));
 
         const primarySeg = ev.segments[0];
-        const clusterAriaLabel = `ทล.${ev.routeNo} (${ev.segments.length} ช่วง) ระดับน้ำสูงสุด ${ev.maxWaterLevelCm} ซม. — ${evPresentation.label}`;
+        const clusterAriaLabel = `ทล.${ev.routeNo} (${ev.segments.length} ช่วง) ${hasReading ? "ระดับน้ำสูงสุด " : ""}${level} — ${evPresentation.label}`;
         const marker = L.marker([centerLat, centerLon], {
           icon: pinIcon,
           zIndexOffset: zIndex,
@@ -560,6 +558,7 @@ export function useLongdoRouteLayers({
         }).addTo(group);
         marker.__dohFilterIds = ev.segments.map((segment) => segment.id);
         marker.getElement()?.setAttribute("aria-label", clusterAriaLabel);
+        floodMarkerRefs.current.push({ marker, item, ariaLabel: clusterAriaLabel, color: fColor, waveIcon: floodWaveIcon, waveBadge: floodWaveBadge });
         marker.bindPopup(() => buildFloodPopupHtml(primarySeg, countDetoursForFlood(primarySeg), publicMode), floodPopupOpts);
         marker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
@@ -589,9 +588,10 @@ export function useLongdoRouteLayers({
           }).addTo(group);
           marker.__dohFilterId = item.flood.id;
           marker.getElement()?.setAttribute("aria-label", markerAriaLabel);
-          floodSegmentMarkerRefs.current.push({
+          floodMarkerRefs.current.push({
             marker,
             item,
+            ariaLabel: markerAriaLabel,
             color: fColor,
             waveIcon: floodWaveIcon,
             waveBadge: floodWaveBadge,
@@ -611,7 +611,7 @@ export function useLongdoRouteLayers({
     return () => {
       group.clearLayers();
       floodLinesRef.current = {};
-      floodSegmentMarkerRefs.current = [];
+      floodMarkerRefs.current = [];
     };
   }, [mapReady, systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, floodDisplayMode, mapStyles]);
 
@@ -619,12 +619,13 @@ export function useLongdoRouteLayers({
   // so update only its responsive icon in-place.
   useEffect(() => {
     const L = leafletRef.current;
-    if (!mapReady || !L || floodDisplayMode !== "SEGMENTS") return;
+    if (!mapReady || !L) return;
 
-    floodSegmentMarkerRefs.current.forEach(({ marker, item, color, waveIcon, waveBadge }) => {
+    floodMarkerRefs.current.forEach(({ marker, item, ariaLabel, color, waveIcon, waveBadge }) => {
       marker.setIcon(
         L.divIcon(buildZoomAdaptiveFloodPinSpec(item, currentZoom, color, waveIcon, waveBadge))
       );
+      marker.getElement()?.setAttribute("aria-label", ariaLabel);
     });
   }, [mapReady, floodDisplayMode, currentZoom, leafletRef]);
 }

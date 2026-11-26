@@ -11,10 +11,14 @@ export function publicPhotoSource(value: unknown) {
 
 export type CitizenPhoto = { src: string; alt: string; trigger: HTMLElement };
 
+const SLOW_PHOTO_MS = 5_000;
+
 export function CitizenPhotoViewer({ photo, onClose }: { photo: CitizenPhoto; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const close = useRef<HTMLButtonElement>(null);
-  const [state, setState] = useState<"loading" | "loaded" | "failed">("loading");
+  const retry = useRef<HTMLButtonElement>(null);
+  const [state, setState] = useState<"loading" | "slow" | "loaded" | "failed">("loading");
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const element = dialog.current;
     if (!element) return;
@@ -25,6 +29,25 @@ export function CitizenPhotoViewer({ photo, onClose }: { photo: CitizenPhoto; on
       if (photo.trigger.isConnected) photo.trigger.focus({ preventScroll: true });
     };
   }, [photo]);
+  useEffect(() => {
+    if (state !== "loading") return;
+    const timer = window.setTimeout(() => setState(current => current === "loading" ? "slow" : current), SLOW_PHOTO_MS);
+    return () => window.clearTimeout(timer);
+  }, [state, attempt]);
+
+  function showLoadedPhoto() {
+    if (retry.current && document.activeElement === retry.current) close.current?.focus();
+    setState("loaded");
+  }
+
+  function retryPhoto() {
+    close.current?.focus();
+    setState("loading");
+    // Remount the browser image without altering the URL (including signed URLs).
+    setAttempt(current => current + 1);
+  }
+
+  const canRetry = state === "slow" || state === "failed";
   return (
     <dialog ref={dialog}
       aria-label="ภาพถ่ายสถานการณ์ขนาดเต็ม"
@@ -35,17 +58,31 @@ export function CitizenPhotoViewer({ photo, onClose }: { photo: CitizenPhoto; on
           event.preventDefault();
           event.stopPropagation();
           if (event.key === "Escape") onClose();
+          else if (retry.current && document.activeElement === close.current) retry.current.focus();
+          else close.current?.focus();
         }
       }}>
       <div className="flex h-full items-center justify-center p-4" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
         <button ref={close} type="button" aria-label="ปิดภาพขนาดเต็ม" onClick={onClose}
-          className="absolute right-4 top-4 grid size-11 place-items-center rounded-full bg-[#223548] text-[#fff] hover:bg-[#30475b]">
+          className="absolute right-4 top-4 z-10 grid size-11 place-items-center rounded-full bg-[#223548] text-[#fff] hover:bg-[#30475b]">
           <X className="size-5" aria-hidden="true" />
         </button>
-        {state === "loading" && <p role="status" className="absolute rounded-lg bg-[#223548] p-3 text-[#fff]">กำลังโหลดภาพขนาดเต็ม…</p>}
-        {state === "failed" ? <p role="alert" className="rounded-xl bg-surface-panel p-4 text-slate-100">โหลดภาพไม่สำเร็จ กรุณาปิดแล้วลองเปิดอีกครั้ง</p> : (
-          <img src={photo.src} alt={photo.alt} onLoad={() => setState("loaded")} onError={() => setState("failed")}
-            className="max-h-[85dvh] max-w-[92vw] rounded-xl bg-slate-900 object-contain" />
+        {state !== "loaded" && (
+          <div className="absolute max-w-[calc(100%-2rem)] rounded-xl bg-[#223548] p-4 text-center text-white">
+            <p role={state === "failed" ? "alert" : "status"}>
+              {state === "failed" ? "โหลดภาพไม่สำเร็จ" : state === "slow" ? "ภาพใช้เวลาโหลดนานกว่าปกติ" : "กำลังโหลดภาพขนาดเต็ม…"}
+            </p>
+            {canRetry && (
+              <button ref={retry} type="button" onClick={retryPhoto}
+                className="mt-3 min-h-11 rounded-lg bg-white px-4 py-2 font-medium text-[#223548] hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+                ลองโหลดภาพอีกครั้ง
+              </button>
+            )}
+          </div>
+        )}
+        {state !== "failed" && (
+          <img key={attempt} src={photo.src} alt={photo.alt} onLoad={showLoadedPhoto} onError={() => setState("failed")}
+            className={`max-h-[85dvh] max-w-[92vw] rounded-xl bg-slate-900 object-contain ${state === "loaded" ? "" : "pointer-events-none opacity-0"}`} />
         )}
       </div>
     </dialog>

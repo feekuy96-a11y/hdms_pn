@@ -154,6 +154,47 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
   const linkedCreateAttempt = useRef<Parameters<typeof upsertRouteAction>[0] | null>(null);
   const linkedRequestInFlight = useRef(false);
   const [linkedDetourPending, setLinkedDetourPending] = useState(false);
+  type RouteSaveResult = Awaited<ReturnType<typeof upsertRouteAction>>;
+  const dualAttempt = useRef<{
+    right: Parameters<typeof upsertRouteAction>[0] & { id: string };
+    finish: (result: RouteSaveResult) => Promise<void>;
+  } | null>(null);
+  const dualNeedsReview = useRef(false);
+  const [dualFloodSaveState, setDualFloodSaveState] = useState<"idle" | "retry-right" | "verify">("idle");
+  const showDualSaveError = (title: string, message: string) => {
+    if (showErrorModal) showErrorModal(title, message);
+    else onToast(`${title}: ${message}`);
+  };
+  const requireDualReview = (title: string, id: string) => {
+    dualNeedsReview.current = true;
+    dualAttempt.current = null;
+    setDualFloodSaveState("verify");
+    showDualSaveError(title, `ระบบยังไม่ทราบว่าฝั่งนี้ถูกบันทึกหรือไม่ โปรดตรวจทะเบียนเหตุการณ์ก่อนเปิดฟอร์มใหม่ (รหัส ${id})`);
+  };
+  const savePendingRight = async () => {
+    const pending = dualAttempt.current;
+    if (!pending) return;
+    let result: RouteSaveResult;
+    try {
+      result = await upsertRouteAction(pending.right);
+    } catch {
+      requireDualReview("บันทึกฝั่งซ้ายแล้ว แต่ยังยืนยันผลฝั่งขวาไม่ได้", pending.right.id);
+      return;
+    }
+    if (result?.success === false) {
+      setDualFloodSaveState("retry-right");
+      showDualSaveError("บันทึกได้เพียงฝั่งซ้าย", "ฝั่งขวาไม่สำเร็จ ให้ลองบันทึกฝั่งขวาอีกครั้งด้วยข้อมูลเดิม ระบบจะไม่บันทึกฝั่งซ้ายซ้ำ");
+      return;
+    }
+    if (result?.success !== true || result.savedId !== pending.right.id) {
+      requireDualReview("บันทึกฝั่งซ้ายแล้ว แต่ยังยืนยันผลฝั่งขวาไม่ได้", pending.right.id);
+      return;
+    }
+    dualAttempt.current = null;
+    setDualFloodSaveState("idle");
+    await pending.finish(result);
+  };
+
 
   const submitLinkedDetour = async (payload: Parameters<typeof upsertRouteAction>[0]) => {
     linkedCreateAttempt.current = payload;
@@ -198,7 +239,21 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
   };
 
   const handleSubmitRoute = async () => {
-    if (linkedRequestInFlight.current) return;
+    if (linkedRequestInFlight.current || dualNeedsReview.current) return;
+    if (dualAttempt.current) {
+      if (routeMode !== "FLOOD") {
+        showDualSaveError("ยังมีเหตุการณ์บันทึกไม่ครบ", "กลับไปที่ฟอร์มน้ำท่วมเพื่อบันทึกฝั่งขวาที่ค้างอยู่");
+        return;
+      }
+      linkedRequestInFlight.current = true;
+      setIsSubmitting(true);
+      try { await savePendingRight(); }
+      finally {
+        linkedRequestInFlight.current = false;
+        setIsSubmitting(false);
+      }
+      return;
+    }
     if (routeMode === "DETOUR" && !routeEditId && linkedCreateAttempt.current) {
       linkedRequestInFlight.current = true;
       setIsSubmitting(true);
@@ -325,7 +380,8 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
     let mediaPersisted = false;
     const isLinkedCreate = routeMode === "DETOUR" && !routeEditId && Boolean(detourRefId);
     const linkedCreateId = isLinkedCreate ? `D-${crypto.randomUUID()}` : undefined;
-    if (isLinkedCreate) linkedRequestInFlight.current = true;
+    const isDualFloodSave = routeMode === "FLOOD" && isDividedBothFlood;
+    if (isLinkedCreate || isDualFloodSave) linkedRequestInFlight.current = true;
     setIsSubmitting(true);
     try {
       const coords = (
@@ -443,8 +499,8 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
               })?.id
             : routeEditId || undefined;
 
-        const forwardRes = await upsertRouteAction({
-          id: existingForwardSiblingId,
+        const left: Parameters<typeof upsertRouteAction>[0] & { id: string } = {
+          id: existingForwardSiblingId || `F-${crypto.randomUUID()}`,
           recordType: "FLOOD",
           routeNo: chosenRouteNo,
           kmStart,
@@ -466,10 +522,8 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
           affectedShoulder: shoulderSummary,
           reporterName: reporterName.trim() || "เจ้าหน้าที่แขวงทางหลวงปัตตานี",
           directionMeta: forwardDirectionMeta,
-        });
-        if (forwardRes.success) {
-          mediaPersisted = true;
-        }
+          expectedUpdatedAt: systemData.floodRoutes?.find(f => f.id === existingForwardSiblingId)?.updated_at,
+        };
 
         // 2. Reverse segment (B -> A): prefer operator's edited/snapped reverse line, then explicit reverse pins, fallback to GIS B_TO_A slice
         let reverseCoords: [number, number][] = draftReverseCoordinates.length >= 2 ? draftReverseCoordinates : [];
@@ -505,6 +559,7 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
           trafficStatusDetail: mapTrafficStatusToDetail(revTrafficStatus),
           status_verified: true,
           waterLevelKnown: reverseWaterLevelKnown,
+          water_level_known: reverseWaterLevelKnown,
           arrow_direction: "REVERSE",
           roadSide: "RIGHT",
           carriageway_type: "DUAL_CARRIAGEWAY",
@@ -526,8 +581,8 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
         const revEffectiveDistrict = endArea?.district?.trim() || effectiveDistrict || revFallbackArea.amphoe || "";
         const revEffectiveSubdistrict = endArea?.subdistrict?.trim() || effectiveSubdistrict || revFallbackArea.tambon || "";
 
-        const res = await upsertRouteAction({
-          id: existingReverseSiblingId,
+        const right: Parameters<typeof upsertRouteAction>[0] & { id: string } = {
+          id: existingReverseSiblingId || `F-${crypto.randomUUID()}`,
           recordType: "FLOOD",
           routeNo: chosenRouteNo,
           kmStart,
@@ -549,10 +604,25 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
           affectedShoulder: revShoulderSummary,
           reporterName: reporterName.trim() || "เจ้าหน้าที่แขวงทางหลวงปัตตานี",
           directionMeta: reverseDirectionMeta,
-        });
+          expectedUpdatedAt: systemData.floodRoutes?.find(f => f.id === existingReverseSiblingId)?.updated_at,
+        };
 
-        if (res.success) {
-          mediaPersisted = true;
+        let forwardRes: RouteSaveResult;
+        try {
+          forwardRes = await upsertRouteAction(left);
+        } catch {
+          // A lost response can follow a commit. Keep staged photos and do
+          // not send the other side or transparently create a second event.
+          requireDualReview("ยังยืนยันผลการบันทึกฝั่งซ้ายไม่ได้", left.id);
+          return;
+        }
+        if (forwardRes?.success === false) throw new Error("ฝั่งซ้ายไม่สำเร็จ ระบบยังไม่ได้บันทึกฝั่งขวา");
+        mediaPersisted = true;
+        if (forwardRes?.success !== true || forwardRes.savedId !== left.id) {
+          requireDualReview("ยังยืนยันผลการบันทึกฝั่งซ้ายไม่ได้", left.id);
+          return;
+        }
+        const finish = async (res: RouteSaveResult) => {
           await syncReport(forwardRes.savedId, String(dbTrafficStatus));
           await syncReport(res.savedId, String(revTrafficStatus));
           try { await onDataRefresh(res.systemData); } catch { onToast("บันทึกแล้ว แต่ไม่สามารถโหลดข้อมูลล่าสุด กรุณารีเฟรชหน้าจอ"); }
@@ -565,7 +635,9 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
           handleClearRoute();
           if (onClearEditingRoute) onClearEditingRoute();
           if (onNavigateToIncidents) onNavigateToIncidents();
-        }
+        };
+        dualAttempt.current = { right, finish };
+        await savePendingRight();
         return;
       }
 
@@ -714,10 +786,10 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
         onToast("ข้อผิดพลาด: " + err.message);
       }
     } finally {
-      if (isLinkedCreate) linkedRequestInFlight.current = false;
+      if (isLinkedCreate || isDualFloodSave) linkedRequestInFlight.current = false;
       setIsSubmitting(false);
     }
   };
 
-  return { handleSubmitRoute, linkedDetourPending };
+  return { handleSubmitRoute, linkedDetourPending, dualFloodSaveState };
 }

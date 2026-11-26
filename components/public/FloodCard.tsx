@@ -38,7 +38,7 @@ export function FloodCard({
   const routeLabel = /^(?:ทล|ปน)\.?\s*/i.test(flood.route_no) ? flood.route_no : `ทล.${flood.route_no}`;
   const trimmedSection = flood.section_name.trim();
   const sectionLabel = trimmedSection.startsWith("ตอน") ? trimmedSection : `ตอน ${trimmedSection}`;
-  const waterDisplay = meta.waterLevelKnown === false && flood.water_level_cm === 0 ? "รอตรวจสอบ" : `${flood.water_level_cm} ซม.`;
+  const waterDisplay = !meta.waterLevelKnown ? "รอตรวจสอบ" : `${flood.water_level_cm} ซม.`;
   const relativeUpdated = formatRelativeUpdateTime(flood.updated_at || meta.updatedAt);
 
   const detailActionButton = (

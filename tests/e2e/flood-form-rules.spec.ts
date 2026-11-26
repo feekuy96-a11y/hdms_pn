@@ -98,9 +98,11 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     expect(routes[1].hasDualCarriageway).toBe(false);
   });
 
-  test("admin flood form supports clean highway combobox, auto-status, and split BOTH line/water for >= 4-lane roads", async ({ page }) => {
+  for (const outcome of ["both saved", "right rejected then retried", "right response lost", "left rejected"] as const) {
+  test(`admin flood form saves split 4-lane records: ${outcome}`, async ({ page }) => {
     test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop admin form workflow");
     const savedCalls: any[] = [];
+    const reportCalls: string[] = [];
     const updated_at = new Date().toISOString();
 
     await page.route("**/functions/v1/hdms-api", async (route) => {
@@ -194,15 +196,22 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
       if (action === "upsertRouteAction") {
         const arg = body.args?.[0] || {};
         savedCalls.push(arg);
+        if (outcome === "right response lost" && arg.roadSide === "RIGHT") {
+          await route.abort("failed");
+          return;
+        }
+        const rejected = (outcome === "left rejected" && arg.roadSide === "LEFT") ||
+          (outcome === "right rejected then retried" && arg.roadSide === "RIGHT" && savedCalls.length === 2);
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ success: true, savedId: `F-SAVED-${savedCalls.length}` }),
+          body: JSON.stringify(rejected ? { success: false } : { success: true, savedId: arg.id }),
         });
         return;
       }
 
       if (action === "syncReportingRowAction") {
+        reportCalls.push(body.args?.[0]?.recordId);
         await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ synced: true }) });
         return;
       }
@@ -275,9 +284,37 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     await revSection.getByLabel("ระดับน้ำขากลับ (ซม.) *").fill("30");
     await expect(revSection.getByLabel("สถานะสภาพการจราจรขากลับ (๕ สถานะ)")).toHaveValue("ONE_LANE");
 
+    if (outcome === "right rejected then retried") {
+      await revSection.getByText("ไม่ทราบค่า", { exact: true }).click();
+    }
+
     // Submit and inspect both payloads
     await page.getByRole("button", { name: "บันทึกเหตุการณ์", exact: true }).click();
+    if (outcome === "left rejected") {
+      await expect(page.getByText("ฝั่งซ้ายไม่สำเร็จ ระบบยังไม่ได้บันทึกฝั่งขวา", { exact: true })).toBeVisible();
+      expect(savedCalls.map(call => call.roadSide)).toEqual(["LEFT"]);
+      expect(reportCalls).toEqual([]);
+      return;
+    }
     await expect.poll(() => savedCalls.length).toBe(2);
+    if (outcome === "right response lost") {
+      await expect(page.getByText("บันทึกฝั่งซ้ายแล้ว แต่ยังยืนยันผลฝั่งขวาไม่ได้", { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "ปิดหน้าต่าง", exact: true }).click();
+      await expect(page.getByRole("button", { name: "ตรวจผลบันทึกในทะเบียนเหตุการณ์ก่อน" })).toBeDisabled();
+      expect(reportCalls).toEqual([]);
+      return;
+    }
+    if (outcome === "right rejected then retried") {
+      await expect(page.getByText("บันทึกได้เพียงฝั่งซ้าย", { exact: true })).toBeVisible();
+      expect(reportCalls).toEqual([]);
+      await page.getByRole("button", { name: "ปิดหน้าต่าง", exact: true }).click();
+      await page.getByRole("button", { name: "ลองบันทึกฝั่งขวาอีกครั้ง", exact: true }).click();
+      await expect.poll(() => savedCalls.length).toBe(3);
+      expect(savedCalls.map(call => call.roadSide)).toEqual(["LEFT", "RIGHT", "RIGHT"]);
+      expect(savedCalls[2]).toEqual(savedCalls[1]);
+    }
+    await expect(page.getByText("บันทึกเหตุการณ์ ๒ ทิศทางสำเร็จ", { exact: true })).toBeVisible();
+    expect(reportCalls).toEqual([savedCalls[0].id, savedCalls[1].id]);
 
     const fwdPayload = savedCalls.find((c) => c.roadSide === "LEFT");
     const revPayload = savedCalls.find((c) => c.roadSide === "RIGHT");
@@ -286,13 +323,17 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     expect(fwdPayload.waterLevelCm).toBe(42);
     expect(fwdPayload.trafficStatus).toBe("CLOSED");
     expect(fwdPayload.directionMeta.directionCode).toBe("A_TO_B");
-    expect(revPayload.waterLevelCm).toBe(30);
-    expect(revPayload.trafficStatus).toBe("ONE_LANE");
+    expect(revPayload.waterLevelCm).toBe(outcome === "both saved" ? 30 : 0);
+    if (outcome === "both saved") expect(revPayload.trafficStatus).toBe("ONE_LANE");
+    expect(revPayload.directionMeta.waterLevelKnown).toBe(outcome === "both saved");
+    expect(revPayload.directionMeta.water_level_known).toBe(outcome === "both saved");
+    expect(revPayload.directionMeta.eventId).toBe(fwdPayload.directionMeta.eventId);
     expect(revPayload.directionMeta.directionCode).toBe("B_TO_A");
     // Forward starts near [101.18, 6.83], Reverse runs along reverse B->A carriageway starting near [101.1906, 6.8396]
     expect(fwdPayload.coordinates[0][0]).toBeCloseTo(101.18, 3);
     expect(revPayload.coordinates[0][0]).toBeCloseTo(101.1906, 3);
   });
+  }
 
   test("Step 1 quick direction selector & long KM span warning work without regressing step 3, and passability warnings flag WARNING/ONE_LANE floods", async ({ page }) => {
     const detourCoords: [number, number][] = [[101.18, 6.83], [101.20, 6.83]];

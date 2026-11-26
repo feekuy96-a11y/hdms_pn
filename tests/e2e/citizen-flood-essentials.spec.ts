@@ -237,3 +237,75 @@ test("public flood map and dossier photos open a single accessible viewer and le
   await expect(dossier).toBeVisible();
   await expect(dossierPhoto).toBeFocused();
 });
+
+for (const initialResult of ["slow success", "retry while waiting", "failure and retry"] as const) {
+  test(`public fullscreen flood photo handles ${initialResult} without closing its popup`, async ({ page }) => {
+    const imageUrl = "https://images.example.test/flood-fullscreen.gif";
+    const image = Buffer.from("R0lGODlhAQABAAAAACwAAAAAAQABAAA=", "base64");
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    let recovering = false;
+    let retryRequests = 0;
+    await page.route(imageUrl, async route => {
+      if (!recovering) {
+        await pending;
+        if (initialResult === "failure and retry") return route.abort("failed");
+      } else {
+        retryRequests++;
+      }
+      await route.fulfill({ contentType: "image/gif", body: image });
+    });
+    await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: {
+      updatedAt: checkedAt, floodRoutes: [{ ...fakeFlood, latest_photo_url: imageUrl }],
+      detourRoutes: [], highwayLayers: [], timelineUpdates: [], mitigationProjects: [], offices: [], mapStyles: null,
+      systemSettings: { name: "แผนที่ประชาชน", org: "แขวงทางหลวง", phone: "1586" },
+    } }));
+    try {
+      await page.goto(base + "/");
+      await page.locator(".doh-map-capsule-pin").first().press("Enter");
+      const popup = page.locator(".doh-flood-leaflet-popup");
+      const trigger = popup.getByRole("button", { name: "ขยายภาพสถานการณ์เต็มจอ" });
+      const viewer = page.getByRole("dialog", { name: "ภาพถ่ายสถานการณ์ขนาดเต็ม" });
+      const close = viewer.getByRole("button", { name: "ปิดภาพขนาดเต็ม" });
+      const retry = viewer.getByRole("button", { name: "ลองโหลดภาพอีกครั้ง" });
+      // The image has not loaded, so activate the accessible button rather than the image box.
+      await trigger.press("Enter");
+      await expect(viewer.getByRole("status")).toHaveText("กำลังโหลดภาพขนาดเต็ม…");
+      await expect(close).toBeFocused();
+      if (initialResult === "failure and retry") {
+        release();
+        await expect(viewer.getByRole("alert")).toHaveText("โหลดภาพไม่สำเร็จ");
+        await page.keyboard.press("Tab");
+        await expect(retry).toBeFocused();
+        await page.keyboard.press("Tab");
+        await expect(close).toBeFocused();
+        await page.keyboard.press("Shift+Tab");
+        await expect(retry).toBeFocused();
+        recovering = true;
+        await page.keyboard.press("Enter");
+        await expect.poll(() => retryRequests).toBe(1);
+      } else {
+        await expect(viewer.getByRole("status")).toHaveText("ภาพใช้เวลาโหลดนานกว่าปกติ", { timeout: 10_000 });
+        await expect(viewer.getByRole("alert")).toHaveCount(0);
+        await page.keyboard.press("Tab");
+        await expect(retry).toBeFocused();
+        if (initialResult === "retry while waiting") {
+          await page.keyboard.press("Enter");
+          await expect(viewer.getByRole("status")).toHaveText("กำลังโหลดภาพขนาดเต็ม…");
+          await expect(viewer).toBeVisible();
+          await expect(close).toBeFocused();
+        }
+        release();
+      }
+      await expect.poll(() => viewer.getByRole("img").evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+      await expect(retry).toHaveCount(0);
+      await expect(close).toBeFocused();
+      await close.click();
+      await expect(viewer).toHaveCount(0);
+      await expect(popup).toBeVisible();
+      await expect(trigger).toBeFocused();
+    } finally {
+      release();
+    }
+  });
+}

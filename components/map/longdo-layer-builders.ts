@@ -1,7 +1,7 @@
 import type { DetourRoute, FloodRoute, SystemDataPayload } from "@/db/default-data";
 import { APP_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { getLinkedEventsForDetour } from "@/lib/event-detour-links";
-import { parseFloodDirectionMeta } from "@/lib/flood-event-schema";
+import { parseFloodDirectionMeta, resolveFloodWaterReading } from "@/lib/flood-event-schema";
 import { getTrafficPresentation } from "@/lib/traffic-presentation";
 import {
   escapeHtml,
@@ -33,6 +33,11 @@ export interface FloodMarkerCandidate {
   sideBadge: string;
   levelText: string;
 }
+
+export type FloodPinPresentation = Pick<FloodMarkerCandidate, "capsuleClass" | "statusLabel" | "sideBadge" | "levelText"> & {
+  flood: Pick<FloodRoute, "route_no">;
+  segmentCount?: number;
+};
 
 const FLOOD_PIN_Z_INDEX = {
   red: 1000,
@@ -290,7 +295,7 @@ export function buildFloodMarkerCandidates(visibleFloods: FloodRoute[]): FloodMa
 
     const meta = flood.direction_meta;
     const trafficDetail = meta?.trafficStatusDetail;
-    const waterKnown = meta?.water_level_known !== false;
+    const waterKnown = resolveFloodWaterReading(meta, flood.water_level_cm).known;
     const levelText = waterKnown ? `${flood.water_level_cm} ซม.` : "รอวัดระดับน้ำ";
 
     const presentation = getTrafficPresentation(
@@ -402,7 +407,7 @@ export function computeDeoverlappedMarkerCoord(
 
 /** สร้างสเปกไอคอนหมุดน้ำท่วม 3 ระดับตามค่าซูม (Far / Mid / Near) */
 export function buildZoomAdaptiveFloodPinSpec(
-  item: FloodMarkerCandidate,
+  item: FloodPinPresentation,
   currentZoom: number,
   fColor: string,
   floodWaveIcon: string,
@@ -436,17 +441,19 @@ export function buildZoomAdaptiveFloodPinSpec(
     };
   }
   const isPending = item.statusLabel === "รอตรวจสอบสถานะ";
+  const labelWidth = (isPending ? 244 : 168) + (item.segmentCount === undefined ? 0 : 48);
   return {
     html: `
       <div class="${item.capsuleClass} doh-capsule-zoom-near" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
         ${floodWaveBadge}
         <span>ทล.${escapeHtml(item.flood.route_no)}</span>
+        ${item.segmentCount === undefined ? "" : `<span>${escapeHtml(item.segmentCount)} ช่วง</span>`}
         <span class="opacity-95 font-mono text-[11px]">· ${escapeHtml(item.levelText)}</span>
         ${isPending ? '<span class="bg-black/25 px-1.5 py-0.5 rounded text-[10px] font-bold">รอตรวจสอบ</span>' : ""}
       </div>
     `,
     className: "doh-map-capsule-pin",
-    iconSize: [isPending ? 244 : 168, 28],
-    iconAnchor: [isPending ? 122 : 84, 14],
+    iconSize: [labelWidth, 28],
+    iconAnchor: [labelWidth / 2, 14],
   };
 }

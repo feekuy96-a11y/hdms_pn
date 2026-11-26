@@ -23,6 +23,7 @@ import {
 import {
   AFFECTED_ROAD_PART_LABELS,
   parseFloodDirectionMeta,
+  resolveFloodWaterReading,
   normalizeMediaUrl,
 } from "@/lib/flood-event-schema";
 import { getLinkedEventsForDetour } from "@/lib/event-detour-links";
@@ -51,9 +52,9 @@ export const formatKmPost = (value: unknown) => {
 
 export function isFloodLineVisibleOnCurrentMap(flood: FloodRoute): boolean {
   if (!flood.is_active) return false;
-  const known = flood.direction_meta?.water_level_known !== false;
+  const reading = resolveFloodWaterReading(flood.direction_meta, flood.water_level_cm);
   // รายการที่ 3: หากยืนยันระดับน้ำล่าสุดเป็น 0 ซม. ให้ซ่อนเส้นน้ำท่วมออกจากแผนที่สถานการณ์ปัจจุบัน (แต่ถ้าไม่ทราบระดับน้ำ ไม่ตีความเป็น 0)
-  if (known && Number(flood.water_level_cm) === 0) return false;
+  if (reading.confirmedZero) return false;
   return true;
 }
 
@@ -692,51 +693,44 @@ export function buildPublicDetourEndpointPopup(
         const current = label === (point === "START" ? "A" : "B");
         return `<li class="citizen-detour-timeline-row"${current ? ' aria-current="step"' : ""}>
           <span class="citizen-detour-timeline-marker">${label}</span>
-          <div class="citizen-detour-step citizen-detour-timeline-card">
-            <div class="flex flex-wrap items-start justify-between gap-1">
-              <strong class="font-heading font-bold text-amber-300">${escapeHtml(step.title)}</strong>
+          <div class="citizen-detour-timeline-card">
+            <div class="citizen-endpoint-step-heading">
+              <strong>${escapeHtml(step.title)}</strong>
               <span class="citizen-detour-timeline-distance">${escapeHtml(step.badge)}</span>
             </div>
-            ${step.detail ? `<p class="leading-snug">${escapeHtml(step.detail)}</p>` : ""}
+            ${step.detail ? `<p class="citizen-endpoint-step-detail">${escapeHtml(step.detail)}</p>` : ""}
           </div>
         </li>`;
       }).join("")}</ol>`
     : `<p class="text-slate-300">${escapeHtml(timeline?.directionNotice || "ยังไม่มีลำดับจุดที่บันทึกไว้สำหรับทิศนี้")}</p>`;
   const nav = resolveDetourGoogleMapsNavigation(detour, direction, floodRoutes);
   return `
-    <section data-detour-endpoint="${point}" class="doh-detour-point-photo-popup flex w-[min(20rem,calc(100vw-3rem))] max-h-[min(56dvh,31rem)] max-w-full flex-col overflow-hidden rounded-2xl bg-[#070d1e] font-body text-xs text-white" aria-label="${title}">
-      <div class="citizen-endpoint-header flex shrink-0 items-center justify-between gap-1.5 px-2.5 py-1.5 pr-12">
-        <strong class="min-w-0 font-heading">${title}</strong>
-        <div role="group" aria-label="เลือกจุดบนเส้นทาง" class="citizen-endpoint-picker flex shrink-0 gap-1">
-          ${(["START", "END"] as const).map((role) => `<button type="button" data-endpoint-select="${role}" aria-pressed="${role === point}" ${availablePoints.has(role) ? "" : "disabled"} class="size-11 rounded-lg border border-slate-600 font-bold aria-pressed:border-sky-300 aria-pressed:bg-sky-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50">${role === "START" ? "A" : "B"}</button>`).join("")}
+    <section data-detour-endpoint="${point}" class="doh-detour-point-photo-popup font-body" aria-label="${title}">
+      <header class="citizen-endpoint-header">
+        <div class="citizen-endpoint-label"><span>${point === "START" ? "จุดเริ่มต้น" : "จุดสิ้นสุด"}</span><strong>จุด ${point === "START" ? "A" : "B"}</strong></div>
+        <div role="group" aria-label="เลือกจุดบนเส้นทาง" class="citizen-endpoint-picker">
+          ${(["START", "END"] as const).map((role) => `<button type="button" data-endpoint-select="${role}" aria-pressed="${role === point}" ${availablePoints.has(role) ? "" : "disabled"}>${role === "START" ? "A" : "B"}</button>`).join("")}
         </div>
-      </div>
-      <div data-endpoint-scroll tabindex="0" aria-label="ภาพ พื้นที่ และข้อมูลทางเลี่ยง" class="min-h-0 space-y-2 overflow-y-auto overscroll-contain p-2.5">
+      </header>
+      <div data-endpoint-scroll tabindex="0" aria-label="ภาพ พื้นที่ และข้อมูลทางเลี่ยง">
         <div class="citizen-detour-photo-card">
-          <div class="citizen-detour-photo-title">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg>
-            <span>${title} · ภาพทางเลี่ยง</span>
-          </div>
-          ${safePhotoUrl ? `<button type="button" data-endpoint-photo data-public-photo aria-haspopup="dialog" aria-label="เปิดภาพขนาดเต็ม ${title}" class="citizen-endpoint-photo-button block w-full cursor-zoom-in overflow-hidden rounded-lg"><img src="${safePhotoUrl}" alt="${title}" class="citizen-detour-photo-image"><span class="citizen-endpoint-zoom" aria-hidden="true"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4"/></svg></span><span data-photo-error hidden>โหลดภาพตัวอย่างไม่สำเร็จ · แตะเพื่อลองเปิดภาพ</span></button>` : `<p class="rounded-lg border border-dashed border-slate-700 p-2 text-center text-slate-300">ยังไม่มีภาพถ่ายประกอบจุดนี้</p>`}
-          <p class="text-slate-300 break-words">${escapeHtml(photo?.caption?.trim() || "ยังไม่มีคำอธิบายจุดนี้")}</p>
+          ${safePhotoUrl ? `<button type="button" data-endpoint-photo data-public-photo aria-haspopup="dialog" aria-label="เปิดภาพขนาดเต็ม ${title}" class="citizen-endpoint-photo-button"><img src="${safePhotoUrl}" alt="${title}" class="citizen-detour-photo-image"><span class="citizen-endpoint-zoom" aria-hidden="true"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4"/></svg><span>ขยายภาพ</span></span><span data-photo-error hidden>โหลดภาพตัวอย่างไม่สำเร็จ · แตะเพื่อลองเปิดภาพ</span></button>` : `<p class="citizen-endpoint-no-photo">ยังไม่มีภาพถ่ายประกอบจุดนี้</p>`}
         </div>
         <div class="citizen-endpoint-locality-card">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
-          <div class="min-w-0">
-            <h5 class="text-sm font-bold break-words">${escapeHtml(detour.route_name)}</h5>
-            <p data-endpoint-locality class="text-sky-200 break-words">${escapeHtml(area || "ยังไม่พบข้อมูลพื้นที่ ต./อ./จ.")}</p>
-          </div>
+          <h5>${escapeHtml(detour.route_name)}</h5>
+          <p data-endpoint-locality>${escapeHtml(area || "ยังไม่พบข้อมูลพื้นที่ ต./อ./จ.")}</p>
+          <p class="citizen-endpoint-caption">${escapeHtml(photo?.caption?.trim() || "ยังไม่มีคำอธิบายจุดนี้")}</p>
         </div>
-        <div class="space-y-2 pt-1">
+        <div class="citizen-endpoint-itinerary">
           <div class="citizen-endpoint-timeline-heading">
             <h6 class="font-bold">ลำดับจุดทางเลี่ยง</h6>
             <span class="citizen-endpoint-trip-direction">${reverse ? "ขากลับ B → A" : "ขาไป A → B"}</span>
           </div>
           ${timelineHtml}
         </div>
-        <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2 border-t border-slate-700 pt-2">
-          ${nav.isValid && nav.url ? `<a href="${escapeHtml(nav.url)}" target="_blank" rel="noopener noreferrer" class="grid min-h-11 place-items-center rounded-lg bg-amber-400 px-2 text-center font-bold text-slate-950">ดูบน Google Maps</a>` : `<span title="${escapeHtml(nav.warning || "")}" class="grid min-h-11 place-items-center rounded-lg border border-slate-700 p-2 text-center text-slate-300">${escapeHtml(nav.warning || "ยังไม่ยืนยันนำทาง")}</span>`}
-          <button type="button" data-endpoint-focus class="min-h-11 rounded-lg border border-slate-600 bg-[#13203c] px-2 font-bold">ดูตำแหน่งบนแผนที่</button>
+        <div class="citizen-endpoint-actions">
+          ${nav.isValid && nav.url ? `<a href="${escapeHtml(nav.url)}" target="_blank" rel="noopener noreferrer">ดูบน Google Maps</a>` : `<p>${escapeHtml(nav.warning || "ยังไม่ยืนยันนำทาง")}</p>`}
+          <button type="button" data-endpoint-focus>ดูตำแหน่งบนแผนที่</button>
         </div>
       </div>
     </section>
@@ -853,7 +847,7 @@ export function resolvePopupTrafficStatus(flood: FloodRoute): { label: string; b
 
 export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMode = false): string {
   const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
-  const waterKnown = flood.direction_meta?.water_level_known !== false && meta.waterLevelKnown !== false;
+  const waterKnown = meta.waterLevelKnown;
   const levelDisplay = waterKnown ? `${flood.water_level_cm} ซม.` : "รอตรวจสอบระดับน้ำ";
   const lanesText = resolveRecordedLanesText(flood);
   const statusInfo = resolvePopupTrafficStatus(flood);

@@ -18,6 +18,7 @@ import type { DetourRoute, FloodRoute, SystemDataPayload } from "@/db/default-da
 import type { extractDirectionalAdvice } from "@/lib/gis-utils";
 import {
   AFFECTED_ROAD_PART_LABELS,
+  resolveFloodWaterReading,
   type parseFloodDirectionMeta,
 } from "@/lib/flood-event-schema";
 import { getTrafficPresentation, type TrafficPresentation } from "@/lib/traffic-presentation";
@@ -113,7 +114,7 @@ export function FloodDossierModal({
   const recordedUpdate = selectedFlood.updated_at ? new Date(selectedFlood.updated_at) : null;
   const updateTime = recordedUpdate && Number.isFinite(recordedUpdate.getTime()) ? recordedUpdate : null;
   const displayUpdate = updateTime?.toLocaleString("th-TH") ?? "ไม่ระบุ";
-  const waterKnown = selectedFlood.direction_meta?.water_level_known !== false && selectedFloodMeta.waterLevelKnown !== false;
+  const waterKnown = selectedFloodMeta.waterLevelKnown;
   const embeddedPhotos = (selectedFloodMeta.photos || []).filter((p) => Boolean(p?.dataUrl));
   const knownPhotos = embeddedPhotos.length
     ? embeddedPhotos
@@ -397,7 +398,7 @@ export function FloodDossierModal({
                       >
                         <div className="flex items-center justify-between gap-1.5 text-xs">
                           <span className="font-semibold text-amber-300">กม.{s.km_start}–{s.km_end}</span>
-                          <span className="text-[0.75rem]/[1.1rem] font-mono font-bold text-white">{s.water_level_cm} ซม.</span>
+                          <span className="text-[0.75rem]/[1.1rem] font-mono font-bold text-white">{resolveFloodWaterReading(s.direction_meta, s.water_level_cm).known ? `${s.water_level_cm} ซม.` : "รอตรวจสอบ"}</span>
                         </div>
                         <span className="text-[0.75rem]/[1.1rem] text-slate-300">{pres.icon} {pres.label}</span>
                       </button>
