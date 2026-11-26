@@ -1377,3 +1377,69 @@ test("grouped detours keep linked alternatives separate and split only the recor
   await page.getByRole("button", { name: "ทางเลี่ยง: ทางเลี่ยงอีกสายที่ผูกเหตุเดียวกัน", exact: true }).press("Enter");
   await expect(popup.getByRole("button", { name: "ขากลับ B → A" })).toBeDisabled();
 });
+
+test("public detour focus returns keyboard to the opener or a usable map control", async ({ page, isMobile }) => {
+  await page.route(/https?:\/\/(?:[^/]+\.)?(?:longdo\.com|openstreetmap\.org|arcgisonline\.com)\//, route => route.abort());
+  await page.route(/\/functions\/v1\/hdms-api\/?$/, route => route.fulfill({ json: createMockPayload() }));
+  await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+  await page.goto(`${base}/`);
+  const mapTools = page.getByRole("group", { name: "เครื่องมือแผนที่" });
+  const zoomIn = mapTools.getByRole("button", { name: "Zoom in", exact: true });
+  const zoomOut = mapTools.getByRole("button", { name: "Zoom out", exact: true });
+  const summaryDetours = page.getByRole("complementary", { name: "สรุปสถานการณ์บนแผนที่" })
+    .getByRole("button", { name: /ทางเลี่ยง/ });
+  const opener = page.getByRole("region", { name: "รายการทางเลี่ยง", exact: true })
+    .getByRole("button", { name: /เส้นทางเลี่ยง ปน\.2043/ });
+  const dossier = page.getByRole("dialog", { name: /คำแนะนำเส้นทางเลี่ยง/ });
+  const focusBar = page.getByTestId("gis-focus-mode-bar");
+  const exit = page.getByTestId("gis-focus-exit-btn");
+  await summaryDetours.press("Enter");
+  await opener.press("Enter");
+  await expect(dossier).toBeVisible();
+  await dossier.getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).press("Enter");
+  await expect(focusBar).toBeVisible();
+  // Drive the visible exit explicitly; Escape uses the same shared exit lifecycle.
+  await exit.press(isMobile ? "Escape" : "Enter");
+  await expect(focusBar).toHaveCount(0);
+  await expect(dossier).toHaveCount(0);
+  await expect(isMobile ? zoomIn : opener).toBeFocused();
+  await page.keyboard.press("Tab");
+  if (isMobile) await expect(zoomOut).toBeFocused();
+  else await expect.poll(() => page.evaluate(() => document.activeElement !== document.body)).toBe(true);
+});
+
+test("public detour popup keyboard focus exits without trapping Tab or stealing search focus", async ({ page, isMobile }) => {
+  await page.route(/https?:\/\/(?:[^/]+\.)?(?:longdo\.com|openstreetmap\.org|arcgisonline\.com)\//, route => route.abort());
+  await page.route(/\/functions\/v1\/hdms-api\/?$/, route => route.fulfill({ json: createMockPayload() }));
+  await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+  await page.goto(`${base}/`);
+  const pin = page.locator(".doh-detour-symbol").first();
+  const popup = page.locator(".doh-detour-leaflet-popup");
+  const focusBar = page.getByTestId("gis-focus-mode-bar");
+  const exit = page.getByTestId("gis-focus-exit-btn");
+  const mapTools = page.getByRole("group", { name: "เครื่องมือแผนที่" });
+  const enterFromPin = async () => {
+    await pin.press("Enter");
+    await expect(popup).toBeVisible();
+    await popup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).press("Enter");
+    await expect(focusBar).toBeVisible();
+    await expect(popup).toHaveCount(0);
+  };
+  await enterFromPin();
+  await exit.press(isMobile ? "Enter" : "Escape");
+  await expect(focusBar).toHaveCount(0);
+  await expect(popup).toHaveCount(0);
+  await expect(mapTools.getByRole("button", { name: "Zoom in", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(mapTools.getByRole("button", { name: "Zoom out", exact: true })).toBeFocused();
+
+  if (!isMobile) {
+    await enterFromPin();
+    const search = page.getByPlaceholder(/ค้นหาสายทาง/);
+    await search.fill("42");
+    await expect(focusBar).toHaveCount(0);
+    await expect(search).toHaveValue("42");
+    await expect(search).toBeFocused();
+    await expect(popup).toHaveCount(0);
+  }
+});
