@@ -203,13 +203,13 @@ export function LongdoGisMap({
   const [forceShowAllHighways, setForceShowAllHighways] = useState(false);
   const isFocusMode = gisFocus?.status === "focused";
   const [showFloodLayer, setShowFloodLayer] = useState(true);
-  const [floodDisplayMode, setFloodDisplayMode] = useState<"SEGMENTS" | "EVENTS">("SEGMENTS");
+  const [floodDisplayMode, setFloodDisplayMode] = useState<"SEGMENTS" | "EVENTS">("EVENTS");
   const [showDetourLayer, setShowDetourLayer] = useState(true);
   const effectiveShowFloodLayer = isFocusMode ? false : showFloodLayer;
   const effectiveShowDetourLayer = isFocusMode ? false : showDetourLayer;
   const [showMainHwy, setShowMainHwy] = useState(true);
   const [showSecHwy, setShowSecHwy] = useState(true);
-  const [showHighwayShields, setShowHighwayShields] = useState(false);
+  const [showHighwayShields, setShowHighwayShields] = useState(true);
   const [showOffices, setShowOffices] = useState(true);
   const effectiveShowMainHwy = isFocusMode ? false : showMainHwy;
   const effectiveShowSecHwy = isFocusMode ? false : showSecHwy;
@@ -1190,7 +1190,7 @@ export function LongdoGisMap({
           onOfficeDraggedRef.current?.(office.id, { lat: Number(position.lat.toFixed(6)), lon: Number(position.lng.toFixed(6)) });
         });
       }
-      marker.bindPopup(() => buildOfficePopupHtml(office), getResponsivePopupOptions(L, 320, 220, ""));
+      marker.bindPopup(() => buildOfficePopupHtml(office), getResponsivePopupOptions(L, 320, 220, "doh-office-leaflet-popup"));
     });
 
     return () => {

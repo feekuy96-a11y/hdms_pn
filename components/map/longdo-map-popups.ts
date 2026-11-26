@@ -212,8 +212,8 @@ export function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color:
   const name = routeNameOf(props);
   const lengthKm = props.length_km || "";
   return `
-    <div class="doh-highway-popup w-[min(18.5rem,calc(100vw-2.25rem))] max-w-full text-xs p-[0.833em] sm:p-[1em] pr-8 font-body bg-slate-950 text-white rounded-xl" style="border-top: 3px solid ${color}">
-      <div class="flex items-center justify-between pb-1.5 border-b border-slate-800 gap-[0.667em]">
+    <div class="doh-highway-popup w-[min(18.5rem,calc(100vw-2.25rem))] max-w-full text-xs p-[0.833em] sm:p-[1em] font-body bg-slate-950 text-white rounded-xl" style="border-top: 3px solid ${color}">
+      <div class="hdms-map-popup-heading flex items-center justify-between pb-1.5 border-b border-slate-800 gap-[0.667em]">
         <span class="text-white text-sm sm:text-base font-bold font-heading tracking-wide break-words">
           ${code ? `ทล.${escapeHtml(code)} ` : ""}${escapeHtml(name)}
         </span>
@@ -388,12 +388,12 @@ export function buildDetourPopupHtml(
   return `
     <div class="doh-detour-popup text-xs p-3 sm:p-3.5 w-[min(20.25rem,calc(100vw-2rem))] sm:w-[23.75rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body rounded-2xl border-t-4 border-amber-500 flex flex-col gap-2.5 select-text">
       <!-- ส่วนที่ 1: Header (แถวเดียว: ไอคอนทางเลี่ยง + ชื่อ + ป้ายโหมดทิศทาง) -->
-      <div class="doh-detour-header flex items-center justify-between gap-2 pb-2 pr-9 border-b border-surface shrink-0">
+      <div class="doh-detour-header hdms-map-popup-heading flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-surface shrink-0">
         <div class="flex items-center gap-2 min-w-0">
           <span class="doh-detour-header-badge inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-amber-500/45 bg-amber-500/15 text-amber-300" aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H9a4 4 0 0 0-4 4v1"/><path d="m8 21-4-4 4-4"/><path d="M4 17h11a4 4 0 0 0 4-4v-1"/></svg>
           </span>
-          <h4 class="doh-detour-heading font-bold text-sm sm:text-base font-heading leading-tight truncate">เส้นทางเลี่ยง</h4>
+          <h4 class="doh-detour-heading font-bold text-sm sm:text-base font-heading leading-tight break-words">เส้นทางเลี่ยง</h4>
         </div>
         <span class="doh-detour-mode-badge rounded-full border border-amber-500/45 bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-bold text-amber-300 whitespace-nowrap shrink-0">
           ${escapeHtml(detourDirectionDetailedBadge(dirMode))}
@@ -601,7 +601,7 @@ export function buildDetourPointPhotoPopupHtml(
 
   return `
     <div class="doh-detour-point-photo-popup text-xs p-[0.833em] sm:p-[1.167em] w-[min(20.25rem,calc(100vw-2rem))] sm:w-[21.25rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl select-text space-y-2 sm:space-y-2.5">
-      <div class="flex items-center justify-between gap-[0.667em] pb-2 pr-9 border-b border-slate-800/80">
+      <div class="hdms-map-popup-heading flex items-center justify-between gap-[0.667em] pb-2 border-b border-slate-800/80">
         <span class="inline-flex items-center gap-[0.5em] rounded-full px-[0.833em] py-[0.167em] text-[0.75rem] font-heading font-bold ${
           isStart
             ? "bg-emerald-950/90 border border-emerald-500/60 text-emerald-300"
@@ -861,7 +861,7 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMo
   return `
     <div class="doh-flood-popup-card w-[min(360px,calc(100vw-24px))] max-w-full max-h-[min(52dvh,21rem)] sm:max-h-[min(85dvh,34rem)] overflow-y-auto overscroll-contain p-3 font-body text-slate-100 bg-[#142638] rounded-2xl shadow-2xl flex flex-col gap-2 border border-[#526D83]/40">
       <!-- ส่วนที่ 1: Header (แถวเดียว) -->
-      <div class="flex items-center justify-between gap-2 pr-8 shrink-0">
+      <div class="hdms-map-popup-heading flex items-center justify-between gap-2 shrink-0">
         <div class="flex items-center gap-2 min-w-0 flex-wrap">
           <span class="shrink-0 rounded-lg bg-[#F6A52F] px-2 py-0.5 font-heading text-xs font-black text-slate-950 shadow">
             ${escapeHtml(routeBadge)}
@@ -972,13 +972,15 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMo
 export function buildOfficePopupHtml(office: DohOfficeLocation): string {
   const isHq = office.type === "HEADQUARTERS";
   return `
-    <div class="w-[min(17.5rem,calc(100vw-2.25rem))] max-w-full text-xs p-[0.833em] pr-8 font-body text-slate-100">
+    <div class="w-[min(17.5rem,calc(100vw-2.25rem))] max-w-full text-xs p-[0.833em] font-body text-slate-100">
+      <div class="hdms-map-popup-heading">
       <div class="flex items-center gap-[0.5em] mb-1">
         <span class="bg-amber-400 text-slate-950 text-[0.75rem] font-bold px-[0.5em] py-[0.067em] rounded font-heading">
           ${isHq ? "สำนักงานใหญ่" : "หมวดทางหลวง"}
         </span>
       </div>
       <h4 class="font-bold text-white text-sm font-heading break-words">${escapeHtml(office.name)}</h4>
+      </div>
       <p class="text-slate-300 text-[0.75rem] mt-1 break-words">${escapeHtml(office.address)}</p>
       <div class="mt-2 pt-1.5 border-t border-slate-700 flex items-center justify-between gap-[0.667em]">
         <a href="tel:${String(office.phone ?? "").replace(/[^0-9]/g, "")}" class="text-amber-300 hover:underline font-bold text-xs inline-flex items-center gap-[0.333em] min-h-[2.75rem]">

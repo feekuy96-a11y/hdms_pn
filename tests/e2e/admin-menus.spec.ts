@@ -105,6 +105,26 @@ test("highway specifications use kilometer posts, office data, and calculated di
   await expect(page.getByRole("button", { name: "บันทึกคุณสมบัติทางวิศวกรรม" })).toBeVisible();
 });
 
+test("highway table header and sticky cells use readable surfaces in both themes", async ({ page, isMobile }) => {
+  test.skip(isMobile, "The full highway table is validated in the desktop administration workspace.");
+  await mockHighwayAndOffice(page);
+  await page.goto(`${base}/admin/`);
+  await openMenu(page, "โครงข่ายสายทาง");
+  const headingCells = page.getByRole("columnheader");
+  await expect(headingCells.first()).toBeVisible();
+  const row = page.getByRole("row").filter({ hasText: "ตอนทดสอบแก้แนว" }).first();
+  const sticky = row.locator("td.sticky").first();
+  for (const [colorScheme, titleColor, headerBg, stickyBg] of [
+    ["light", "rgb(23, 53, 74)", "rgb(230, 238, 241)", "rgb(255, 255, 255)"],
+    ["dark", "rgb(244, 248, 250)", "rgb(34, 53, 72)", "rgb(26, 45, 62)"],
+  ] as const) {
+    await page.emulateMedia({ colorScheme });
+    await expect(headingCells.first()).toHaveCSS("color", titleColor);
+    await expect(headingCells.first()).toHaveCSS("background-color", headerBg);
+    await expect(sticky).toHaveCSS("background-color", stickyBg);
+  }
+});
+
 test("route geometry editor opens with coordinate selection and export controls", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Geometry editor is covered in desktop layout");
   await mockHighwayAndOffice(page);

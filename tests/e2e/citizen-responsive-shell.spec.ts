@@ -192,7 +192,11 @@ for (const [status, label] of [
             return sum + (n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4) * [0.2126, 0.7152, 0.0722][channel];
           }, 0);
           const foreground = luma(rgb(getComputedStyle(element).color));
-          for (let node: Element | null = element; node; node = node.parentElement) {
+          // The transparent Leaflet close link is a sibling painted over the popup surface.
+          const backdrop = element.matches(".leaflet-popup-close-button")
+            ? element.closest(".leaflet-popup")?.querySelector(".leaflet-popup-content-wrapper") ?? element
+            : element;
+          for (let node: Element | null = backdrop; node; node = node.parentElement) {
             const bg = rgb(getComputedStyle(node).backgroundColor);
             if (bg.length === 3 || bg[3] === 1) {
               const background = luma(bg);
@@ -208,6 +212,43 @@ for (const [status, label] of [
     }
   });
 }
+
+test("flood popup close is borderless and clears the photo and heading", async ({ page }) => {
+  await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
+  await page.goto(base + "/");
+  await page.locator(".doh-map-capsule-pin").first().press("Enter");
+  const popup = page.locator(".doh-flood-leaflet-popup");
+  const close = popup.getByRole("button", { name: "Close popup" });
+  await expect(close).toHaveCSS("border-top-width", "0px");
+  await expect(close).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  const x = (await close.boundingBox())!;
+  const heading = (await popup.locator(".hdms-map-popup-heading > div").boundingBox())!;
+  const photo = (await popup.locator(".doh-flood-popup-card > div").nth(1).boundingBox())!;
+  expect(x.x).toBeGreaterThanOrEqual(heading.x + heading.width);
+  expect(x.y + x.height).toBeLessThanOrEqual(photo.y);
+  await close.press("Enter");
+  await expect(popup).toHaveCount(0);
+});
+
+test("office map popup uses a borderless close control without covering the office name", async ({ page }) => {
+  const name = "แขวงทางหลวงปัตตานี (สำนักงานใหญ่สำหรับทดสอบชื่อยาว)";
+  await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: {
+    ...payload,
+    offices: [{ id: "OFFICE-QA", type: "HEADQUARTERS", name, address: "ถนนทดสอบ", phone: "073-336051", lat: 6.81, lon: 101.17, is_active: true }],
+  } }));
+  await page.goto(base + "/");
+  await page.locator(".doh-office-marker").press("Enter");
+  const popup = page.locator(".doh-office-leaflet-popup");
+  const close = popup.getByRole("button", { name: "Close popup" });
+  const title = popup.getByRole("heading", { name, exact: true });
+  await expect(title).toBeVisible();
+  await expect(close).toHaveCSS("border-top-width", "0px");
+  await expect(close).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  expect((await close.boundingBox())!.width).toBeGreaterThanOrEqual(43.99);
+  expect((await title.boundingBox())!.x + (await title.boundingBox())!.width).toBeLessThan((await close.boundingBox())!.x);
+  await close.press("Enter");
+  await expect(popup).toHaveCount(0);
+});
 
 test("citizen directory lists six offices in order and enables only verified stored actions", async ({ page, isMobile }) => {
   const officeNames = ["แขวงทางหลวงปัตตานี", "หมวดทางหลวงโคกโพธิ์", "หมวดทางหลวงหนองจิก", "หมวดทางหลวงปะนาเระ", "หมวดทางหลวงสายบุรี", "หมวดทางหลวงยะรัง"];
@@ -290,7 +331,7 @@ test("map-first hierarchy keeps travel status and source time above the detour l
   } else {
     const dock = page.locator(".citizen-sidebar");
     await expect(dock.getByRole("heading", { name: "ตรวจสอบเส้นทาง" })).toBeVisible();
-    expect((await map.boundingBox())!.x).toBeLessThan((await dock.boundingBox())!.x);
+    expect((await dock.boundingBox())!.x).toBeLessThan((await map.boundingBox())!.x);
   }
   const card = page.locator(".citizen-card:visible").first();
   await expect(card.locator(".citizen-flood-row-top")).toContainText("อัปเดต");
@@ -308,6 +349,25 @@ test("map-first hierarchy keeps travel status and source time above the detour l
       Boolean(metadata.compareDocumentPosition(facts) & Node.DOCUMENT_POSITION_FOLLOWING) &&
       Boolean(facts.compareDocumentPosition(detour) & Node.DOCUMENT_POSITION_FOLLOWING);
   })).toBe(true);
+});
+
+test("public route dock moves left on desktop without changing mobile navigation", async ({ page }) => {
+  await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(base + "/");
+  const dock = page.locator("#public-map-route-pane");
+  const map = page.locator("[data-hdms-map]");
+  const tools = map.getByRole("group", { name: "เครื่องมือแผนที่" });
+  await expect(dock).toBeVisible();
+  const [d, m, t] = await Promise.all([dock.boundingBox(), map.boundingBox(), tools.boundingBox()]);
+  expect(d!.x + d!.width).toBeLessThanOrEqual(m!.x);
+  expect(m!.x + m!.width - t!.x - t!.width).toBeLessThanOrEqual(14);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(dock).toBeHidden();
+  await expect(map).toBeVisible();
+  const nav = page.getByRole("navigation", { name: "เมนูประชาชน" });
+  await nav.getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "เหตุการณ์น้ำท่วม", exact: true })).toBeVisible();
 });
 
 test("public map starts with four grouped tools and keeps one layer panel and the same viewport", async ({ page, isMobile }) => {
@@ -391,6 +451,17 @@ test("grouped and split floods use the same wave pin and reveal labels at the sa
     await expect(option).toHaveAttribute("aria-pressed", "true");
     await layers.click();
   };
+  // The viewer starts grouped and numbered; users can still turn either option off.
+  await expect(pins).toHaveCount(1);
+  await layers.click();
+  const shields = page.getByRole("checkbox", { name: /หมายเลขทางหลวง/ });
+  await expect(shields).toBeChecked();
+  await shields.uncheck();
+  await expect(shields).not.toBeChecked();
+  await shields.check();
+  await page.getByText("ตั้งค่าเพิ่มเติม", { exact: true }).click();
+  await expect(page.getByRole("button", { name: "รวมเหตุการณ์", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await layers.click();
   const wave = () => pins.first().locator("svg").evaluate(svg => svg.outerHTML);
   await chooseMode("แยกช่วง");
   await expect(pins).toHaveCount(2);

@@ -7,7 +7,7 @@ import { SystemDataPayload } from "@/db/default-data";
 import { DEFAULT_MAP_STYLES, LINE_STYLE_PRESET_THEMES, MapLineStyleItem } from "@/lib/constants";
 import { Palette, Save, Sparkles } from "lucide-react";
 import { updateMapStyleAction } from "@/app/actions/doh-actions";
-import { routeMotionEffect, routeMotionSpeedPercent, routeMotionToggle } from "@/lib/route-motion";
+import { routeIncidentMotionEffect, routeMotionEffect, routeMotionSpeedPercent, routeMotionToggle } from "@/lib/route-motion";
 import { RouteMotionPreview } from "@/components/map/RouteMotionPreview";
 
 interface LineStylingTabProps {
@@ -76,6 +76,8 @@ export function LineStylingTab({
   const currentItem = lineStyles[selectedStyleKey] || DEFAULT_MAP_STYLES[selectedStyleKey];
   const incidentLayer = selectedStyleKey === "flood" || selectedStyleKey === "detour" ? selectedStyleKey : null;
   const speed = routeMotionSpeedPercent(currentItem.animationSpeed);
+  const previewEffect = routeIncidentMotionEffect(routeMotionEffect(currentItem), incidentLayer);
+  const ribbon = incidentLayer === "flood" && previewEffect === "ribbon";
 
   return (
     <div className={`${workspace.registry} max-w-4xl space-y-3`}>
@@ -158,6 +160,12 @@ export function LineStylingTab({
               เอฟเฟกต์: {currentItem.animation} • ลวดลาย: {currentItem.pattern}
             </div>
           </div>
+          {incidentLayer && previewEffect !== "none" && speed > 0 && (
+            <p className="text-xs text-[color:var(--text-secondary)]">
+              <span className="hidden motion-reduce:inline">หยุดการเคลื่อนไหวตามการตั้งค่าลดการเคลื่อนไหวของอุปกรณ์</span>
+              {ribbon && <span className="motion-reduce:hidden">แถบน้ำท่วมสว่าง–จางเป็นจังหวะอยู่กับที่ ไม่เลื่อนไปตามแนวถนน</span>}
+            </p>
+          )}
         </div>
       )}
 

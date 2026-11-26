@@ -98,6 +98,12 @@ test.describe("Public detour endpoints on mobile", () => {
       }
       await expect(page.locator(".citizen-ui")).toHaveAttribute("data-citizen-theme", theme);
       await page.locator(".doh-detour-symbol").press("Enter");
+      const close = page.getByRole("button", { name: "Close popup", exact: true });
+      await expect(close).toHaveCSS("border-top-width", "0px");
+      await expect(close).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      const closeBox = (await close.boundingBox())!;
+      const badge = (await popup.locator(".doh-detour-mode-badge").boundingBox())!;
+      expect(badge.x + badge.width).toBeLessThanOrEqual(closeBox.x);
       for (const direction of [forward, reverse]) {
         await expect(direction).toHaveCSS("transition-property", "box-shadow");
         await direction.click();

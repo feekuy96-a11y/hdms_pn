@@ -35,7 +35,7 @@
 div[data-hdms-popup=photo] { background: var(--hdms-scrim); }
 [data-hdms-popup=photo] [data-hdms-photo-status] { background: var(--bg-card); color: var(--text-primary); }
 
-:is([data-hdms-popup] [data-hdms-popup-close], .leaflet-popup.hdms-popup-map .leaflet-popup-close-button) {
+[data-hdms-popup] [data-hdms-popup-close] {
   box-sizing: border-box;
   min-inline-size: 44px;
   min-block-size: 44px;
@@ -44,8 +44,31 @@ div[data-hdms-popup=photo] { background: var(--hdms-scrim); }
   border: 1px solid var(--hdms-control-edge) !important;
   border-radius: .625rem;
 }
-:is([data-hdms-popup] [data-hdms-popup-close], .leaflet-popup.hdms-popup-map .leaflet-popup-close-button):hover {
+[data-hdms-popup] [data-hdms-popup-close]:hover {
   background: var(--state-hover) !important;
+}
+/* Leaflet owns the close element; reserve its target without painting over data. */
+.leaflet-popup.hdms-popup-map .leaflet-popup-close-button,
+.leaflet-popup.hdms-popup-map .leaflet-popup-close-button:hover {
+  display: grid !important;
+  place-items: center;
+  box-sizing: border-box;
+  width: 44px !important;
+  height: 44px !important;
+  top: 6px !important;
+  right: 6px !important;
+  color: var(--text-primary) !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+}
+.leaflet-popup.hdms-popup-map .leaflet-popup-close-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -3px;
+}
+.hdms-map-popup-heading {
+  min-block-size: 44px;
+  padding-inline-end: 46px;
 }
 [data-hdms-popup] :is(button,a,input,select,textarea,summary,[tabindex]):focus-visible {
   outline: 2px solid var(--focus-ring) !important;

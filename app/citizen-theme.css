@@ -70,10 +70,6 @@
   background: var(--surface-panel) !important; color: var(--cit-ink) !important; border-color: var(--surface-border) !important; box-shadow: var(--cit-shadow) !important;
 }
 .citizen-ui .leaflet-popup-close-button { color: var(--cit-ink) !important; }
-.citizen-ui .leaflet-popup:has([data-detour-endpoint]) .leaflet-popup-close-button {
-  display: grid !important; place-items: center; width: 44px !important; height: 44px !important;
-  top: 8px !important; right: 4px !important; padding: 0 !important;
-}
 .citizen-ui :is(.citizen-flood-dossier,.citizen-detour-dossier) { border-color: var(--surface-border); }
 .citizen-ui [class~="bg-[#070d1e]"],.citizen-ui [class~="bg-[#081120]"],.citizen-ui [class~="bg-[#0c182e]"] { background-color: var(--surface-panel); }
 .citizen-ui :is([class*="bg-[#0d19"],[class*="bg-[#0b15"],[class*="bg-[#060d"],[class*="bg-[#1320"],[class*="bg-[#0e21"],[class*="bg-[#0f1d"]) { background-color: var(--cit-deep); }
@@ -162,12 +158,6 @@
   color: var(--text-primary);
 }
 .citizen-ui .doh-flood-popup-card button[class*="bg-[#20384A]"]:hover { background: var(--state-hover); }
-.citizen-ui :is(.doh-flood-leaflet-popup,.doh-detour-leaflet-popup) .leaflet-popup-close-button {
-  background: var(--cit-deep) !important; color: var(--cit-ink) !important; border-color: var(--surface-border) !important;
-}
-.citizen-ui :is(.doh-flood-leaflet-popup,.doh-detour-leaflet-popup) .leaflet-popup-close-button:hover {
-  background: var(--cit-selected) !important;
-}
 .citizen-ui [role=status][class*="bg-slate-950"] { background: var(--surface-floating); color: var(--cit-ink); }
 .citizen-ui[data-citizen-theme=light] [role=alert][class*="bg-slate-950"] { background: #f9e5e6; color: #84242c; }
 .citizen-ui .citizen-legend { scrollbar-color: var(--cit-sub) var(--surface-panel); }
@@ -195,7 +185,6 @@
 .citizen-ui[data-citizen-theme=light] :is([class*="text-amber-100/"],[class*="text-amber-200/"],[class*="text-amber-300/"],[class~="text-amber-100"]) { color:#704619; }
 .citizen-ui .citizen-sidebar [class*="bg-gradient-to-l"] { display:none; }
 .citizen-ui .citizen-sidebar button[aria-pressed=true][class~="bg-amber-500"] { background:var(--cit-action);color:var(--cit-on-action); }
-.citizen-ui .leaflet-popup:has([data-detour-endpoint]) .leaflet-popup-close-button { background:var(--cit-deep)!important;border:1px solid var(--surface-border)!important;border-radius:8px!important;font-size:20px!important; }
 
 .citizen-ui .citizen-office-directory {
   border-width:1px; border-style:solid; border-radius:16px; padding:0;

@@ -427,7 +427,7 @@ export function SystemSettingsTab({
                     className={`text-[10px] font-bold px-2 py-0.5 rounded font-heading ${
                       off.type === "HEADQUARTERS"
                         ? "bg-amber-400 text-slate-950"
-                        : "bg-sky-900 text-sky-300 border border-sky-700"
+                        : "bg-[var(--status-info-wash)] text-[color:var(--status-info-ink)] border border-[var(--border-subtle)]"
                     }`}
                   >
                     {off.type === "HEADQUARTERS" ? "สำนักงานใหญ่" : "หมวดทางหลวง"}

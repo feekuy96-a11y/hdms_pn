@@ -1077,8 +1077,8 @@ test.describe("Admin Shared GIS Focus Mode", () => {
     await page.keyboard.press("Escape");
     await expect(adminExitBar).toHaveCount(0);
 
-    // 3. Re-enter Focus Mode, then trigger map pick mode -> isEditingBlocked must auto-exit Focus Mode
-    await floodPin.click();
+    // Re-enter by keyboard; the first step already asserts opening by pointer.
+    await floodPin.press("Enter");
     await expect(floodPopup).toBeVisible();
     await floodPopup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).click();
     await expect(adminExitBar).toBeVisible();
@@ -1172,6 +1172,11 @@ test("focus advice uses readable shared color pairs in light and dark modes", as
   await expect(forward).toHaveCSS("transition-property", "box-shadow");
   await expect(reverse).toHaveCSS("transition-property", "box-shadow");
   await expect(theme).toHaveAttribute("data-citizen-theme", "light");
+  const keyboardHint = bar.locator("kbd");
+  if (!isMobile) {
+    await expect(keyboardHint).toHaveCSS("color", "rgb(23, 53, 74)");
+    await expect(keyboardHint).toHaveCSS("background-color", "rgb(230, 238, 241)");
+  }
   await expect(panel).toHaveCSS("background-color", "rgb(255, 255, 255)");
   const ratios = () => page.evaluate(() => {
     function luminance(color: string) {
@@ -1207,6 +1212,10 @@ test("focus advice uses readable shared color pairs in light and dark modes", as
   await expect(panel).toContainText("เริ่มต้นขากลับ");
   await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
   await expect(theme).toHaveAttribute("data-citizen-theme", "dark");
+  if (!isMobile) {
+    await expect(keyboardHint).toHaveCSS("color", "rgb(244, 248, 250)");
+    await expect(keyboardHint).toHaveCSS("background-color", "rgb(34, 53, 72)");
+  }
   await expect(panel).toHaveCSS("background-color", "rgb(26, 45, 62)");
   expect(Math.min(...await ratios())).toBeGreaterThanOrEqual(4.5);
   await expect(reverse).toHaveAttribute("aria-pressed", "true");
