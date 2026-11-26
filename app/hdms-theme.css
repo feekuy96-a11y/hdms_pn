@@ -25,7 +25,11 @@
   --bg-input: var(--hdms-slate-100);
   --border-subtle: var(--hdms-slate-200);
   --text-primary: var(--hdms-ink-900);
-  --text-secondary: var(--hdms-slate-500);
+  --text-secondary: var(--hdms-slate-700);
+  --hdms-control-edge: #647c8c;
+  --hdms-guide-edge: #9cabb8;
+  --hdms-primary-hover: #0f4251;
+  --hdms-map-base: #dce8e1;
   --text-location: var(--hdms-ochre-750);
   --brand-active-bg: var(--hdms-teal-700);
   --brand-active-text: var(--hdms-white);
@@ -42,7 +46,10 @@
   --bg-input: var(--hdms-slate-800);
   --border-subtle: var(--hdms-slate-700);
   --text-primary: var(--hdms-slate-50);
-  --text-secondary: var(--hdms-slate-200);
+  --text-secondary: #d6e3ec;
+  --hdms-control-edge: #90abbe;
+  --hdms-guide-edge: #587084;
+  --hdms-primary-hover: #c5def3;
   --text-location: var(--hdms-amber-300);
   --brand-active-bg: var(--hdms-ice-200);
   --brand-active-text: var(--hdms-slate-900);
@@ -60,7 +67,10 @@
     --bg-input: var(--hdms-slate-800);
     --border-subtle: var(--hdms-slate-700);
     --text-primary: var(--hdms-slate-50);
-    --text-secondary: var(--hdms-slate-200);
+    --text-secondary: #d6e3ec;
+    --hdms-control-edge: #90abbe;
+    --hdms-guide-edge: #587084;
+    --hdms-primary-hover: #c5def3;
     --text-location: var(--hdms-amber-300);
     --brand-active-bg: var(--hdms-ice-200);
     --brand-active-text: var(--hdms-slate-900);
@@ -110,4 +120,80 @@
     --status-normal-ink: #a2e4cc;
     --status-normal-wash: #244339;
   }
+}
+
+/* Shared contrast roles for Leaflet markup, React panels and floating map controls. */
+:is([data-citizen-theme], [data-admin-theme]) :is(.hdms-guide-card, .hdms-map-subtle) {
+  background: var(--bg-input);
+  border-color: var(--hdms-guide-edge);
+}
+:is([data-citizen-theme], [data-admin-theme]) :is(.hdms-guide-copy, .hdms-map-muted) { color: var(--text-secondary); }
+:is([data-citizen-theme], [data-admin-theme]) .hdms-guide-title { color: var(--text-primary); }
+:is([data-citizen-theme], [data-admin-theme]) :is(.hdms-guide-warning, .hdms-guide-accent) { color: var(--status-warning-low-ink); }
+:is([data-citizen-theme], [data-admin-theme]) .hdms-guide-icon { color: var(--brand-active-bg); }
+:is([data-citizen-theme], [data-admin-theme]) .hdms-guide-line { background: var(--hdms-control-edge); }
+:is([data-citizen-theme], [data-admin-theme]) .hdms-guide-number {
+  background: var(--cta-primary-bg);
+  color: var(--cta-primary-text);
+}
+:is([data-citizen-theme], [data-admin-theme]) .hdms-guide-icon-tile {
+  background: var(--brand-active-bg);
+  color: var(--brand-active-text);
+}
+:is([data-citizen-theme], [data-admin-theme]) .hdms-guide-badge,
+:is([data-citizen-theme], [data-admin-theme]) :is(.hdms-contrast-switch > button, .hdms-map-control, .hdms-map-surface) {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--hdms-control-edge);
+}
+:is([data-citizen-theme], [data-admin-theme]) :is(.hdms-contrast-switch > button:not(:disabled), .hdms-map-control):hover { background: var(--state-hover); }
+:is([data-citizen-theme], [data-admin-theme]) .hdms-contrast-switch > button[aria-pressed=true]:not(:disabled) {
+  background: var(--brand-active-bg);
+  color: var(--brand-active-text);
+  border-color: var(--brand-active-bg);
+  box-shadow: inset 0 -2px 0 currentColor;
+}
+:is([data-citizen-theme], [data-admin-theme]) .hdms-contrast-switch > button:disabled {
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  border-style: dashed;
+  opacity: 1;
+}
+:is([data-citizen-theme], [data-admin-theme]) .doh-detour-popup .doh-detour-nav-icon {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+:is([data-citizen-theme], [data-admin-theme]) .hdms-contrast-switch > button { border-width: 1px; }
+:is([data-citizen-theme], [data-admin-theme]) :is(.hdms-contrast-switch > button, .hdms-map-control, .hdms-map-surface):focus-visible { outline-offset: 2px; }
+
+/* Theme the map UI, never the tile or geometry imagery. */
+[data-hdms-map] .hdms-map-canvas { background-color: var(--hdms-map-base) !important; }
+[data-hdms-map] .leaflet-control-zoom { border: 1px solid var(--hdms-control-edge); border-radius: .55rem; overflow: hidden; }
+[data-hdms-map] .leaflet-control-zoom a { border-color: var(--hdms-control-edge); }
+[data-hdms-map] :is(.leaflet-control-zoom a, .leaflet-control-attribution) {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+[data-hdms-map] .leaflet-control-zoom a:hover { background: var(--state-hover); }
+[data-hdms-map] .leaflet-control-attribution a { color: var(--status-info-ink); }
+[data-hdms-map] .hdms-map-link { color: var(--status-info-ink); }
+[data-hdms-map] .hdms-map-primary-code { color: var(--status-normal-ink); }
+[data-hdms-map] [data-map-tone=danger] {
+  background: var(--status-danger-wash);
+  color: var(--status-danger-ink);
+}
+[data-hdms-map] [data-map-tone=warning] {
+  background: var(--status-warning-low-wash);
+  color: var(--status-warning-low-ink);
+}
+[data-hdms-map] .hdms-map-symbol {
+  outline: 1px solid var(--hdms-control-edge);
+  outline-offset: 1px;
+}
+[data-hdms-map] :is(button,a,input,summary):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+[data-hdms-map] .hdms-map-control[aria-expanded=true] {
+  box-shadow: inset 0 0 0 2px var(--hdms-control-edge);
 }

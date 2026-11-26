@@ -152,14 +152,7 @@ export function useLongdoPopupBridge({
       const navSub = document.getElementById(`detour-nav-subtext-${id}`);
       if (!fwdBtn || !revBtn || !fwdDesc || !revDesc) return;
 
-      const activeClasses =
-        "min-h-[38px] py-1.5 px-2.5 text-xs font-black rounded-lg transition cursor-pointer flex items-center justify-center gap-1 bg-[#f59e0b] text-slate-950 shadow-sm disabled:opacity-35 disabled:cursor-not-allowed";
-      const inactiveClasses =
-        "min-h-[38px] py-1.5 px-2.5 text-xs font-semibold rounded-lg transition cursor-pointer flex items-center justify-center gap-1 text-slate-300 hover:bg-slate-800/70 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed";
-
       if (dir === "FORWARD") {
-        fwdBtn.className = activeClasses;
-        revBtn.className = inactiveClasses;
         fwdBtn.setAttribute("aria-pressed", "true");
         revBtn.setAttribute("aria-pressed", "false");
         fwdDesc.classList.remove("hidden");
@@ -168,8 +161,6 @@ export function useLongdoPopupBridge({
         revDesc.classList.add("hidden");
         if (navSub) navSub.textContent = "(ขาไป A ➔ B)";
       } else {
-        revBtn.className = activeClasses;
-        fwdBtn.className = inactiveClasses;
         revBtn.setAttribute("aria-pressed", "true");
         fwdBtn.setAttribute("aria-pressed", "false");
         revDesc.classList.remove("hidden");
@@ -337,7 +328,7 @@ export function useLongdoRouteLayers({
           filterOpacity: 1,
         });
         const detourPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
-        polyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), detourPopupOpts);
+        polyline.bindPopup(() => buildDetourPopupHtml(detour, defaultDir, systemData), detourPopupOpts);
         polyline.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           activationRef.current?.({ type: "DETOUR", id: detour.id });
@@ -347,7 +338,7 @@ export function useLongdoRouteLayers({
         const midPoint = latLngs[Math.floor(latLngs.length / 2)];
         const detourIcon = L.divIcon(buildDetourSymbolIconSpec(dColor));
         const detourMarker = L.marker(midPoint, { icon: detourIcon, interactive: true })
-          .bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), detourPopupOpts)
+          .bindPopup(() => buildDetourPopupHtml(detour, defaultDir, systemData), detourPopupOpts)
           .addTo(group);
         detourMarker.__dohFilterId = detour.id;
         detourMarker.on("click", (e: any) => {
@@ -386,7 +377,7 @@ export function useLongdoRouteLayers({
             filterOpacity: 1,
           });
           const revPopupOpts = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
-          revPolyline.bindPopup(() => buildDetourPopupHtml(detour, dColor, defaultDir, systemData), revPopupOpts);
+          revPolyline.bindPopup(() => buildDetourPopupHtml(detour, defaultDir, systemData), revPopupOpts);
           revPolyline.on("click", (e: any) => {
             activationRef.current?.({ type: "DETOUR", id: detour.id });
             L.DomEvent.stopPropagation(e);

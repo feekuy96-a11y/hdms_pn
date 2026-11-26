@@ -821,7 +821,7 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => setIsSidebarCollapsed(false)}
-              className="hidden lg:flex absolute top-3 left-[17.5rem] z-[400] min-h-9 bg-slate-950/95 hover:bg-slate-900 text-amber-400 border border-amber-400/50 px-3 py-1.5 rounded-xl shadow-2xl items-center gap-1.5 text-xs font-heading font-bold transition cursor-pointer"
+              className="hidden lg:flex absolute top-3 left-[17.5rem] z-[400] min-h-9 hdms-map-control border px-3 py-1.5 rounded-xl shadow-2xl items-center gap-1.5 text-xs font-heading font-bold transition cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" /> แสดงรายการสายทาง
             </button>

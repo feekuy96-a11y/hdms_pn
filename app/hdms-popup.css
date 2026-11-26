@@ -23,7 +23,7 @@
 [data-hdms-popup=panel] :is(input:not([type=checkbox],[type=radio],[type=range],[type=file],[type=color]), select, textarea) {
   color: var(--text-primary);
   background-color: var(--bg-input);
-  border-color: var(--border-subtle);
+  border-color: var(--hdms-control-edge);
 }
 [data-hdms-popup=panel] :is(input,textarea)::placeholder { color: var(--text-secondary); }
 [data-hdms-popup-header] {
@@ -41,7 +41,7 @@ div[data-hdms-popup=photo] { background: var(--hdms-scrim); }
   min-block-size: 44px;
   color: var(--text-primary) !important;
   background: var(--bg-input) !important;
-  border: 1px solid var(--border-subtle) !important;
+  border: 1px solid var(--hdms-control-edge) !important;
   border-radius: .625rem;
 }
 :is([data-hdms-popup] [data-hdms-popup-close], .leaflet-popup.hdms-popup-map .leaflet-popup-close-button):hover {

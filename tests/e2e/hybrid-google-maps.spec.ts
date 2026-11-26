@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -59,6 +59,90 @@ test.describe("Public detour endpoints on mobile", () => {
     mapStyles: null,
     systemSettings: { name: "HDMS Test", desc: "ระบบเฝ้าระวังน้ำท่วม", org: "แขวงทางหลวงปัตตานี", phone: "1586" },
   };
+
+  test("detour overview text, symbols and direction controls contrast in both themes", async ({ page }) => {
+    await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
+    await page.goto(`${process.env.BASE_PATH || ""}/`);
+
+    const popup = page.locator(".doh-detour-popup");
+    const forward = popup.getByRole("button", { name: "ขาไป A → B", exact: true });
+    const reverse = popup.getByRole("button", { name: "ขากลับ B → A", exact: true });
+    const ratio = (locator: Locator, part: "color" | "stroke" | "fill" | "edge" = "color") =>
+      locator.evaluate((el, property) => {
+        const style = getComputedStyle(el);
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = 1;
+        const ctx = canvas.getContext("2d")!;
+        const luminance = (color: string) => {
+          ctx.clearRect(0, 0, 1, 1);
+          ctx.fillStyle = color;
+          ctx.fillRect(0, 0, 1, 1);
+          const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+          const linear = (v: number) => (v /= 255) <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4;
+          return { value: .2126 * linear(r) + .7152 * linear(g) + .0722 * linear(b), a };
+        };
+        let surface = property === "edge" ? el.parentElement : el as Element | null;
+        while (surface && luminance(getComputedStyle(surface).backgroundColor).a === 0) {
+          surface = surface.parentElement;
+        }
+        if (!surface) throw new Error("No opaque background for contrast measurement");
+        const bg = luminance(getComputedStyle(surface).backgroundColor);
+        const fg = luminance(property === "edge" ? style.borderTopColor : style[property]);
+        if (bg.a !== 255 || fg.a !== 255) throw new Error("Contrast test expects opaque colors");
+        return (Math.max(bg.value, fg.value) + .05) / (Math.min(bg.value, fg.value) + .05);
+      }, part);
+
+    for (const theme of ["light", "dark"] as const) {
+      if (theme === "dark") {
+        await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
+      }
+      await expect(page.locator(".citizen-ui")).toHaveAttribute("data-citizen-theme", theme);
+      await page.locator(".doh-detour-symbol").press("Enter");
+      for (const direction of [forward, reverse]) {
+        await direction.click();
+        await expect(direction).toHaveAttribute("aria-pressed", "true");
+
+        const text = [
+          popup.getByRole("heading", { name: "เส้นทางเลี่ยง", exact: true }),
+          popup.locator(".hdms-guide-title:visible").first(),
+          popup.locator(".hdms-guide-copy:visible").first(),
+          popup.locator(".hdms-guide-badge:visible").first(),
+          popup.locator("[id^=detour-nav-subtext]"),
+          forward,
+          reverse,
+        ];
+        for (const label of text) expect(await ratio(label), theme + " text: " + await label.innerText()).toBeGreaterThanOrEqual(4.5);
+        const startIcon = popup.locator('.hdms-guide-icon[fill="currentColor"]:visible').first();
+        const turnIcon = popup.locator('.hdms-guide-icon[stroke="currentColor"]:visible').first();
+        for (const [symbol, channel] of [[startIcon, "fill"], [turnIcon, "stroke"],
+          [popup.locator(".hdms-guide-icon-tile svg"), "stroke"],
+          [popup.locator(".hdms-guide-accent[stroke]"), "stroke"]] as const) {
+          expect(await ratio(symbol, channel), theme + " icon").toBeGreaterThanOrEqual(3);
+        }
+        expect(await ratio(forward, "edge"), theme + " forward button edge").toBeGreaterThanOrEqual(3);
+        expect(await ratio(reverse, "edge"), theme + " reverse button edge").toBeGreaterThanOrEqual(3);
+      }
+      await expect(page.locator(".leaflet-tile-pane").first()).toHaveCSS("filter", "none");
+      await page.locator(".leaflet-popup-close-button").click();
+    }
+  });
+
+  test("floating route-list button follows the theme rather than staying dark", async ({ page, isMobile }) => {
+    test.skip(isMobile, "The floating route-list control only appears on desktop.");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
+    await page.goto(`${process.env.BASE_PATH || ""}/`);
+    const collapse = page.getByRole("button", { name: "ย่อรายการสายทาง" });
+    const expand = page.getByRole("button", { name: "แสดงรายการสายทาง" });
+    await collapse.click();
+    await expect(expand).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(expand).toHaveCSS("color", "rgb(23, 53, 74)");
+    await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
+    await expect(expand).toHaveCSS("background-color", "rgb(26, 45, 62)");
+    await expect(expand).toHaveCSS("color", "rgb(244, 248, 250)");
+    await expand.click();
+    await expect(collapse).toBeVisible();
+  });
 
   for (const scenario of [
     { trip: "ขาไป A → B", focus: "ขาไป (A → B)", a: "จุดเริ่มต้น", b: "จุดสิ้นสุด" },
