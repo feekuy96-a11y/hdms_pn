@@ -664,14 +664,36 @@ export function buildDetourPointPhotoPopupHtml(
   `;
 }
 
-/** Public focus inspector: endpoint selection does not change travel direction. */
+/** Keep the saved A/B identity separate from its role in the current direction. */
+export function getPublicDetourEndpointLabel(
+  detour: DetourRoute,
+  point: "START" | "END",
+  direction: DetourDirection,
+) {
+  const reverse = direction === "REVERSE";
+  const confirmed = isRecordedDetourDirection(detour.direction_mode) && isDetourDirectionAllowed(detour.direction_mode, direction);
+  const letter = point === "START" ? "A" : "B";
+  const begins = (point === "START") !== reverse;
+  const role = !confirmed ? "ยังไม่ยืนยันทิศทาง" : begins ? "จุดเริ่มต้น" : "จุดสิ้นสุด";
+  return { title: `${letter} · ${role}`, trip: confirmed ? (reverse ? "ขากลับ B → A" : "ขาไป A → B") : null };
+}
+
+export function labelPublicDetourEndpointMarker(
+  marker: { getElement: () => HTMLElement | undefined; setTooltipContent: (content: string) => unknown },
+  { title, trip }: ReturnType<typeof getPublicDetourEndpointLabel>,
+) {
+  const name = trip ? `${title} (${trip})` : title;
+  marker.getElement()?.setAttribute("aria-label", name);
+  marker.setTooltipContent(name);
+}
+
 export function buildPublicDetourEndpointPopup(
   detour: DetourRoute,
   point: "START" | "END",
   photo: DetourPointPhoto | null | undefined,
   direction: DetourDirection,
   floodRoutes: FloodRoute[],
-  availablePoints: ReadonlySet<"START" | "END">,
+  _availablePoints: ReadonlySet<"START" | "END">,
 ): string {
   const photoUrl = normalizeMediaUrl(photo?.url);
   const safePhotoUrl = /^(?:https?:\/\/|data:image\/(?:png|jpe?g|webp|gif);base64,)/i.test(photoUrl) ? escapeHtml(photoUrl) : "";
@@ -680,54 +702,25 @@ export function buildPublicDetourEndpointPopup(
     formatPopupAreaSegment("อ.", photo?.district),
     formatPopupAreaSegment("จ.", photo?.province),
   ].filter(Boolean).join(" ");
-  const title = point === "START" ? "จุดเริ่มต้น A" : "จุดสิ้นสุด B";
-  const reverse = direction === "REVERSE";
-  const availableDirection = isRecordedDetourDirection(detour.direction_mode) && isDetourDirectionAllowed(detour.direction_mode, direction);
-  const advice = splitDetourAdviceByDirection(detour.description || "", detour.direction_mode ?? "");
-  const description = reverse ? advice.reverseText : advice.forwardText;
-  const timeline = availableDirection && description ? getDetourTimelinePresentation(description) : null;
-  const steps = timeline?.steps ?? [];
-  const timelineHtml = steps.length && !timeline?.directionNotice
-    ? `<ol aria-label="ลำดับจุดทางเลี่ยง" class="citizen-detour-timeline">${steps.map((step, i) => {
-        const label = i === 0 ? (reverse ? "B" : "A") : i === steps.length - 1 ? (reverse ? "A" : "B") : String(step.stepNumber);
-        const current = label === (point === "START" ? "A" : "B");
-        return `<li class="citizen-detour-timeline-row"${current ? ' aria-current="step"' : ""}>
-          <span class="citizen-detour-timeline-marker">${label}</span>
-          <div class="citizen-detour-timeline-card">
-            <div class="citizen-endpoint-step-heading">
-              <strong>${escapeHtml(step.title)}</strong>
-              <span class="citizen-detour-timeline-distance">${escapeHtml(step.badge)}</span>
-            </div>
-            ${step.detail ? `<p class="citizen-endpoint-step-detail">${escapeHtml(step.detail)}</p>` : ""}
-          </div>
-        </li>`;
-      }).join("")}</ol>`
-    : `<p class="text-slate-300">${escapeHtml(timeline?.directionNotice || "ยังไม่มีลำดับจุดที่บันทึกไว้สำหรับทิศนี้")}</p>`;
+  const { title, trip } = getPublicDetourEndpointLabel(detour, point, direction);
+  const caption = photo?.caption?.trim();
   const nav = resolveDetourGoogleMapsNavigation(detour, direction, floodRoutes);
   return `
-    <section data-detour-endpoint="${point}" class="doh-detour-point-photo-popup font-body" aria-label="${title}">
-      <header class="citizen-endpoint-header">
-        <div class="citizen-endpoint-label"><span>${point === "START" ? "จุดเริ่มต้น" : "จุดสิ้นสุด"}</span><strong>จุด ${point === "START" ? "A" : "B"}</strong></div>
-        <div role="group" aria-label="เลือกจุดบนเส้นทาง" class="citizen-endpoint-picker">
-          ${(["START", "END"] as const).map((role) => `<button type="button" data-endpoint-select="${role}" aria-pressed="${role === point}" ${availablePoints.has(role) ? "" : "disabled"}>${role === "START" ? "A" : "B"}</button>`).join("")}
-        </div>
+    <section data-detour-endpoint="${point}" class="doh-detour-point-photo-popup font-body" aria-label="${title}" style="width:min(320px,calc(100vw - 26px));max-height:none;overflow:visible">
+      <header class="citizen-endpoint-header" style="min-height:54px">
+        <h3 data-endpoint-heading tabindex="-1" class="m-0 text-sm font-bold text-[var(--cit-ink)]">${title}</h3>
+        ${trip ? `<span class="citizen-endpoint-trip-direction">${trip}</span>` : ""}
       </header>
-      <div data-endpoint-scroll tabindex="0" aria-label="ภาพ พื้นที่ และข้อมูลทางเลี่ยง">
-        <div class="citizen-detour-photo-card">
-          ${safePhotoUrl ? `<button type="button" data-endpoint-photo data-public-photo aria-haspopup="dialog" aria-label="เปิดภาพขนาดเต็ม ${title}" class="citizen-endpoint-photo-button"><img src="${safePhotoUrl}" alt="${title}" class="citizen-detour-photo-image"><span class="citizen-endpoint-zoom" aria-hidden="true"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4"/></svg><span>ขยายภาพ</span></span><span data-photo-error hidden>โหลดภาพตัวอย่างไม่สำเร็จ · แตะเพื่อลองเปิดภาพ</span></button>` : `<p class="citizen-endpoint-no-photo">ยังไม่มีภาพถ่ายประกอบจุดนี้</p>`}
-        </div>
-        <div class="citizen-endpoint-locality-card">
-          <h5>${escapeHtml(detour.route_name)}</h5>
-          <p data-endpoint-locality>${escapeHtml(area || "ยังไม่พบข้อมูลพื้นที่ ต./อ./จ.")}</p>
-          <p class="citizen-endpoint-caption">${escapeHtml(photo?.caption?.trim() || "ยังไม่มีคำอธิบายจุดนี้")}</p>
-        </div>
-        <div class="citizen-endpoint-itinerary">
-          <div class="citizen-endpoint-timeline-heading">
-            <h6 class="font-bold">ลำดับจุดทางเลี่ยง</h6>
-            <span class="citizen-endpoint-trip-direction">${reverse ? "ขากลับ B → A" : "ขาไป A → B"}</span>
-          </div>
-          ${timelineHtml}
-        </div>
+      <div class="grid min-w-0 gap-1.5 p-2.5 text-xs">
+        ${safePhotoUrl ? `<div class="mx-auto w-full max-w-[224px] [@media(max-height:460px)]:hidden">
+          <button type="button" data-endpoint-photo data-public-photo aria-haspopup="dialog" aria-label="เปิดภาพขนาดเต็ม ${title}" class="citizen-endpoint-photo-button">
+            <img src="${safePhotoUrl}" alt="ภาพจุด ${title}" class="citizen-detour-photo-image" style="aspect-ratio:16 / 9">
+            <span class="citizen-endpoint-zoom" aria-hidden="true">ขยายภาพ</span>
+            <span data-photo-error hidden>โหลดภาพตัวอย่างไม่สำเร็จ · แตะเพื่อลองเปิดภาพ</span>
+          </button>
+        </div>` : ""}
+        ${area ? `<p data-endpoint-locality class="line-clamp-1 !m-0" title="${escapeHtml(area)}">${escapeHtml(area)}</p>` : ""}
+        ${caption ? `<p class="citizen-endpoint-caption line-clamp-2 !m-0" title="${escapeHtml(caption)}">${escapeHtml(caption)}</p>` : ""}
         <div class="citizen-endpoint-actions">
           ${nav.isValid && nav.url ? `<a href="${escapeHtml(nav.url)}" target="_blank" rel="noopener noreferrer">ดูบน Google Maps</a>` : `<p>${escapeHtml(nav.warning || "ยังไม่ยืนยันนำทาง")}</p>`}
           <button type="button" data-endpoint-focus>ดูตำแหน่งบนแผนที่</button>
@@ -739,7 +732,7 @@ export function buildPublicDetourEndpointPopup(
 
 /** Both public overview and focused endpoints bind the same one-popup interaction. */
 export function bindPublicEndpointInspector(
-  L: any, map: any, marker: any, markers: Map<"START" | "END", any>, point: "START" | "END",
+  L: any, map: any, marker: any, _markers: Map<"START" | "END", any>, _point: "START" | "END",
   openFocus: () => void, keepFocusBarClear: boolean,
 ) {
   marker.on("popupopen", (event: { popup: { getElement: () => HTMLElement | null; options: { autoPanPaddingTopLeft: unknown; autoPanPaddingBottomRight: unknown }; update: () => void } }) => {
@@ -748,23 +741,16 @@ export function bindPublicEndpointInspector(
       const bar = map.getContainer().parentElement?.parentElement?.querySelector('[data-testid="gis-focus-mode-bar"]')?.getBoundingClientRect();
       if (bar) {
         const wide = window.innerWidth >= 640;
-        event.popup.options.autoPanPaddingTopLeft = L.point(20, wide ? Math.max(64, Math.ceil(bar.bottom - bounds.top + 12)) : 20);
-        if (!wide) event.popup.options.autoPanPaddingBottomRight = L.point(20, Math.max(112, Math.ceil(bounds.bottom - bar.top + 8)));
+        event.popup.options.autoPanPaddingTopLeft = L.point(12, wide ? Math.max(64, Math.ceil(bar.bottom - bounds.top + 12)) : 16);
+        event.popup.options.autoPanPaddingBottomRight = L.point(12, wide ? 24 : Math.max(112, Math.ceil(bounds.bottom - bar.top + 8)));
         event.popup.update();
       }
     }
     const popup = event.popup.getElement()?.querySelector<HTMLElement>("[data-detour-endpoint]");
     if (!popup) return;
-    popup.querySelector<HTMLButtonElement>("[data-endpoint-select][aria-pressed=true]")?.focus({ preventScroll: true });
+    popup.querySelector<HTMLElement>("[data-endpoint-heading]")?.focus({ preventScroll: true });
     popup.onclick = (click) => {
-      const button = click.target instanceof Element ? click.target.closest("button") : null;
-      if (!button) return;
-      const destination = button.getAttribute("data-endpoint-select");
-      if (destination === "START" || destination === "END") {
-        if (destination !== point) markers.get(destination)?.openPopup();
-        return;
-      }
-      if (button.hasAttribute("data-endpoint-focus")) {
+      if (click.target instanceof Element && click.target.closest("[data-endpoint-focus]")) {
         map.closePopup();
         openFocus();
       }

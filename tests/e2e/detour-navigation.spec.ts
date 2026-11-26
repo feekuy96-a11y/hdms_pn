@@ -105,33 +105,38 @@ test.describe("Phase 5.7: Google Maps Detour Navigation Architecture (5 Steps)",
     expect(forwardNav.url).toContain("travelmode=driving");
   });
 
-  test("Step 3 (Reverse): Reverses origin/destination for B -> A when no reverse coords specified", () => {
-    const safeDetour: DetourRoute = {
-      id: "detour-safe-rev",
-      flood_id_ref: null,
-      route_name: "ทางเลี่ยงไปกลับ",
-      lat_start: 6.84,
-      lon_start: 101.22,
-      lat_end: 6.88,
-      lon_end: 101.29,
-      coordinates_json: [
-        [101.22, 6.84],
-        [101.25, 6.86],
-        [101.29, 6.88],
-      ],
-      description: "ทางเลี่ยง",
-      is_active: true,
-      updated_at: new Date().toISOString(),
-      direction_mode: "TWO_WAY",
-    };
+  for (const [direction, start, end] of [
+    ["FORWARD", "6.84,101.22", "6.88,101.29"],
+    ["REVERSE", "6.88,101.29", "6.84,101.22"],
+  ] as const) {
+    test(`Step 3: Sets the start and end coordinates for ${direction === "FORWARD" ? "A → B" : "B → A"}`, () => {
+      const safeDetour: DetourRoute = {
+        id: "detour-safe-rev",
+        flood_id_ref: null,
+        route_name: "ทางเลี่ยงไปกลับ",
+        lat_start: 6.84,
+        lon_start: 101.22,
+        lat_end: 6.88,
+        lon_end: 101.29,
+        coordinates_json: [
+          [101.22, 6.84],
+          [101.25, 6.86],
+          [101.29, 6.88],
+        ],
+        description: "ทางเลี่ยง",
+        is_active: true,
+        updated_at: new Date().toISOString(),
+        direction_mode: "TWO_WAY",
+      };
 
-    const revNav = resolveDetourGoogleMapsNavigation(safeDetour, "REVERSE", []);
-    expect(revNav.isValid).toBe(true);
-    expect(revNav.source).toBe("GENERATED_WAYPOINTS");
-    // ต้นทางต้องกลายเป็นจุด B (6.88, 101.29) และปลายทางเป็นจุด A (6.84, 101.22)
-    expect(revNav.url).toContain("origin=6.88,101.29");
-    expect(revNav.url).toContain("destination=6.84,101.22");
-  });
+      const nav = resolveDetourGoogleMapsNavigation(safeDetour, direction, []);
+      expect(nav.isValid).toBe(true);
+      expect(nav.source).toBe("GENERATED_WAYPOINTS");
+      const params = new URL(nav.url!).searchParams;
+      expect(params.get("origin")).toBe(start);
+      expect(params.get("destination")).toBe(end);
+    });
+  }
 
   test("Waypoint sampling respects the <= 8 waypoints limit", () => {
     const manyCoords: [number, number][] = [];

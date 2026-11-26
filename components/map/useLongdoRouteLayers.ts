@@ -19,8 +19,10 @@ import {
   dashArrayFor,
   escapeHtml,
   getResponsivePopupOptions,
+  getPublicDetourEndpointLabel,
   hasDetourPointMetadata,
   isFloodLineVisibleOnCurrentMap,
+  labelPublicDetourEndpointMarker,
   parseRouteCoordinates,
   raisePathLayers,
   resolveDetourPointPinCoord,
@@ -40,6 +42,8 @@ import {
   resolveDetourDefaultDirection,
   resolveDetourPhotoPointCoords,
 } from "./longdo-layer-builders";
+
+const DETOUR_DIRECTION_CHANGED = "hdms:detourdirectionchange";
 
 export interface UseLongdoPopupBridgeParams {
   leafletMapRef: React.MutableRefObject<any>;
@@ -140,6 +144,7 @@ export function useLongdoPopupBridge({
       const route = routes.find((d) => String(d.id || "").replace(/[^a-zA-Z0-9_-]/g, "_") === id);
       if (!isDetourDirectionAllowed(route?.direction_mode, dir)) return;
       activeDirMap[id] = dir;
+      if (route) leafletMapRef.current?.fire(DETOUR_DIRECTION_CHANGED, { detourId: route.id });
       const fwdBtn = document.getElementById(`detour-btn-fwd-${id}`);
       const revBtn = document.getElementById(`detour-btn-rev-${id}`);
       const fwdDesc = document.getElementById(`detour-desc-fwd-${id}`);
@@ -239,7 +244,13 @@ export function useLongdoRouteLayers({
   overviewFocusRef.current = onFocusOverviewDetour;
   const activationRef = React.useRef(onActivateMapEntity);
   activationRef.current = onActivateMapEntity;
-  const detourPhotoMarkerRefs = React.useRef<Array<{ marker: any; point: "START" | "END"; hasPhoto: boolean }>>([]);
+  const detourPhotoMarkerRefs = React.useRef<Array<{
+    marker: any;
+    point: "START" | "END";
+    hasPhoto: boolean;
+    detourId: string;
+    refreshLabel?: () => void;
+  }>>([]);
   // Flood markers are retained across zoom changes in both display modes. Replacing only
   // their icon preserves an open Leaflet popup instead of destroying its layer.
   const floodMarkerRefs = React.useRef<Array<{
@@ -432,14 +443,24 @@ export function useLongdoRouteLayers({
             () => publicMode
               ? buildPublicDetourEndpointPopup(detour, point, photo, directionForEndpoint(), systemData.floodRoutes || [], availablePoints)
               : buildDetourPointPhotoPopupHtml(detour, point, photo, pin.lat, pin.lon),
-            getResponsivePopupOptions(L, 380, 260, "doh-detour-leaflet-popup")
+            publicMode
+              ? {
+                  ...getResponsivePopupOptions(L, 320, 0, "doh-detour-leaflet-popup"),
+                  autoPanPaddingTopLeft: L.point(12, 16),
+                  autoPanPaddingBottomRight: L.point(12, 112),
+                }
+              : getResponsivePopupOptions(L, 380, 260, "doh-detour-leaflet-popup")
           )
           .addTo(group);
         markers.set(point, marker);
+        const refreshLabel = publicMode
+          ? () => labelPublicDetourEndpointMarker(marker, getPublicDetourEndpointLabel(detour, point, directionForEndpoint()))
+          : undefined;
         if (publicMode) bindPublicEndpointInspector(L, map, marker, markers, point,
           () => overviewFocusRef.current(detour.id, directionForEndpoint()), false);
-        detourPhotoMarkerRefs.current.push({ marker, point, hasPhoto });
+        detourPhotoMarkerRefs.current.push({ marker, point, hasPhoto, detourId: detour.id, refreshLabel });
         syncDetourPhotoMarker(L, marker, point, currentZoom, hasPhoto);
+        refreshLabel?.();
         marker.__dohFilterId = detour.id;
         marker.on("click", (e: any) => {
           activationRef.current?.({ type: "DETOUR", id: detour.id });
@@ -449,9 +470,16 @@ export function useLongdoRouteLayers({
       });
     });
 
+    const refreshDirectionLabels = ({ detourId }: { detourId: string }) => {
+      for (const entry of detourPhotoMarkerRefs.current) {
+        if (entry.detourId === detourId) entry.refreshLabel?.();
+      }
+    };
+    if (publicMode) map.on(DETOUR_DIRECTION_CHANGED, refreshDirectionLabels);
     // Keep stacking order: highways (bottom) < detours < floods < drafts.
     raisePathLayers(group, floodGroupRef.current, draftGroupRef.current);
     return () => {
+      if (publicMode) map.off(DETOUR_DIRECTION_CHANGED, refreshDirectionLabels);
       detourLinesRef.current = [];
       detourPhotoMarkerRefs.current = [];
       group.clearLayers();
@@ -464,8 +492,9 @@ export function useLongdoRouteLayers({
   useEffect(() => {
     const L = leafletRef.current;
     if (!mapReady || !L) return;
-    detourPhotoMarkerRefs.current.forEach(({ marker, point, hasPhoto }) => {
+    detourPhotoMarkerRefs.current.forEach(({ marker, point, hasPhoto, refreshLabel }) => {
       syncDetourPhotoMarker(L, marker, point, currentZoom, hasPhoto);
+      refreshLabel?.();
     });
   }, [mapReady, currentZoom, leafletRef]);
 
