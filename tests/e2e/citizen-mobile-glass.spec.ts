@@ -341,33 +341,58 @@ test("citizen glass transmits measurable map pixels and the accessible fallback 
   await page.setViewportSize({ width: 320, height: 568 });
   const nav = await openFixture(page);
   const map = page.locator(".leaflet-container").first();
-  async function sampleMapThroughNav(underlay: string, w: number, h: number) {
+  async function sampleMapThroughNav(underlay: string) {
     await map.evaluate((el, tone) => {
       (el as HTMLElement).style.backgroundImage = `linear-gradient(${tone},${tone})`;
+      // Wait for this fixture change to reach the compositor before capturing.
+      return new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     }, underlay);
-    const strip = await page.screenshot({ scale: "css", animations: "disabled",
-      clip: { x: Math.round(w * .96875), y: h - 34, width: 1, height: 1 } });
-    return page.evaluate(async (png) => {
+    const points = await nav.evaluate((element) => {
+      const rail = element.getBoundingClientRect();
+      const last = element.querySelector("button:last-child")!.getBoundingClientRect();
+      // Use the nav's reserved edge padding, not a position inside a label.
+      const x = Math.floor((last.right + rail.right) / 2);
+      const y = Math.floor(rail.top + rail.height * .35);
+      if (document.elementFromPoint(x, y) !== element) throw new Error("Glass probe is covered by a foreground control");
+      return { rail: { x, y }, underlay: { x, y: Math.floor(rail.top - 30) } };
+    });
+    // Capture the complete viewport so the backing map remains in the paint
+    // viewport even on headless compositors. Read a strip of actual raster pixels.
+    const screenshot = await page.screenshot({ scale: "css", animations: "disabled" });
+    return page.evaluate(async ({ png, points }) => {
       const img = new Image();
       img.src = "data:image/png;base64," + png;
       await img.decode();
-      const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
       ctx.drawImage(img, 0, 0);
-      return Array.from(ctx.getImageData(0, 0, 1, 1).data).slice(0, 3);
-    }, strip.toString("base64"));
+      const sample = ({ x, y }: { x: number; y: number }) => {
+        const pixels = ctx.getImageData(x, y, 1, 5).data;
+        return [0, 1, 2].map((channel) => Array.from({ length: 5 }, (_, row) => pixels[4 * row + channel])
+          .reduce((sum, value) => sum + value, 0) / 5);
+      };
+      return { rail: sample(points.rail), underlay: sample(points.underlay) };
+    }, { png: screenshot.toString("base64"), points });
   }
+
   for (const theme of ["light", "dark"]) {
     if (theme === "dark") await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
     for (const [w, h] of [[320, 568], [390, 844]]) {
       await page.setViewportSize({ width: w, height: h });
       await expect(nav).toHaveCSS("backdrop-filter", "blur(5px) saturate(1.25)");
-      const ink = await sampleMapThroughNav("black", w, h);
-      const paper = await sampleMapThroughNav("white", w, h);
-      // An opaque strip would return identical RGB; 16% transmission was ~40.
-      expect(Math.min(...paper.map((channel, i) => channel - ink[i]))).toBeGreaterThanOrEqual(60);
+      const ink = await sampleMapThroughNav("black");
+      const paper = await sampleMapThroughNav("white");
+      const channelDelta = (light: number[], dark: number[]) =>
+        Math.min(...light.map((channel, i) => channel - dark[i]));
+      expect(channelDelta(paper.underlay, ink.underlay), `map fixture at ${theme}/${w}`).toBeGreaterThanOrEqual(220);
+      // An opaque strip returns identical RGB; 16% transmission measured ~40.
+      expect(channelDelta(paper.rail, ink.rail),
+        `glass at ${theme}/${w}, black ${ink.rail}, white ${paper.rail}`).toBeGreaterThanOrEqual(60);
     }
   }
   await page.emulateMedia({ forcedColors: "active" });
   await expect(nav).toHaveCSS("backdrop-filter", "none");
-  expect(await sampleMapThroughNav("white", 390, 844)).toEqual(await sampleMapThroughNav("black", 390, 844));
+  expect((await sampleMapThroughNav("white")).rail).toEqual((await sampleMapThroughNav("black")).rail);
 });
