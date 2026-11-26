@@ -2,8 +2,7 @@ import type { DetourRoute, FloodRoute, SystemDataPayload } from "@/db/default-da
 import { APP_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { getLinkedEventsForDetour } from "@/lib/event-detour-links";
 import { parseFloodDirectionMeta, resolveFloodWaterReading } from "@/lib/flood-event-schema";
-import { getTrafficPresentation, TRAFFIC_ACCENT, type StatusColor } from "@/lib/traffic-presentation";
-import { MAP_STATUS_GLYPHS } from "@/lib/map-status-glyphs";
+import { getTrafficPresentation, TRAFFIC_ACCENT } from "@/lib/traffic-presentation";
 import {
   escapeHtml,
   geoJsonFeatures,
@@ -226,16 +225,6 @@ function markerHex(color: string, fallback: string) {
   return /^#[0-9a-f]{6}$/i.test(color) ? color : fallback;
 }
 
-const statusColorByCapsule: Readonly<Record<string, StatusColor>> = {
-  "doh-capsule-red": "red",
-  "doh-capsule-orange": "orange",
-  "doh-capsule-amber": "amber",
-  "doh-capsule-sky": "sky",
-  "doh-capsule-green": "emerald",
-  "doh-capsule-emerald": "emerald",
-  "doh-capsule-slate": "slate",
-};
-
 /** สร้างสเปกไอคอนสัญลักษณ์เส้นทางเลี่ยงกึ่งกลางแนวเส้น */
 export function buildDetourSymbolIconSpec(dColor: string): DivIconSpec {
   return {
@@ -413,28 +402,39 @@ export function computeDeoverlappedMarkerCoord(
   return [renderLat, renderLon];
 }
 
+// One compact sign per flood marker: the flood wave is common, while the
+// upper silhouette signals passability even when the colors look alike.
+const floodStatusSilhouettes = {
+  red: "M4 4h16v7H4zM8 4l4 7m1-7 4 7", // barricade
+  orange: "m12 3 8 9H4zM12 6.5v2", // warning triangle
+  amber: "m7 3-2 9m12-9 2 9M12 4v3m0 2.5V12", // narrowed lane
+  sky: "M6 4h12M9 8h6m-4 4h2", // slow: graduated horizontal lines
+  green: "m6 7 4 4 8-8", // clear: check
+  slate: "M12 2l7 5-7 5-7-5z", // pending: diamond
+} as const;
+
+function floodStatusSymbol(capsuleClass: string) {
+  const tone = capsuleClass.match(/(?:^|\s)doh-capsule-(red|orange|amber|sky|green|emerald|slate)(?=\s|$)/)?.[1];
+  const key = (tone === "emerald" ? "green" : tone ?? "slate") as keyof typeof floodStatusSilhouettes;
+  return `<span class="doh-type-flood-wave" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path data-flood-status-shape="${key}" d="${floodStatusSilhouettes[key]}"/><path d="M3 18c2 1.7 4 1.7 6 0s4-1.7 6 0 4 1.7 6 0"/></svg></span>`;
+}
+
 /** สร้างสเปกไอคอนหมุดน้ำท่วม 3 ระดับตามค่าซูม (Far / Mid / Near) */
 export function buildZoomAdaptiveFloodPinSpec(
   item: FloodPinPresentation,
   currentZoom: number,
-  fColor: string,
-  floodWaveIcon: string,
-  floodWaveBadge: string
+  fColor: string
 ): DivIconSpec {
-  const statusClass = item.capsuleClass.split(" ").find((name) => Object.prototype.hasOwnProperty.call(statusColorByCapsule, name));
-  const statusGlyph = MAP_STATUS_GLYPHS[statusClass ? statusColorByCapsule[statusClass] : "slate"];
-  // The outer Leaflet marker already announces the full status. This secondary
-  // visible cue preserves the original status accent without recoloring the type icon.
-  const statusBadge = `<span class="doh-type-flood-status" title="${escapeHtml(item.statusLabel)}" aria-hidden="true" data-status-glyph="${statusGlyph.key}" style="--map-pin-status:${markerHex(fColor, TRAFFIC_ACCENT.slate)}"><svg class="hdms-status-sign" focusable="false" width="15" height="15" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path class="hdms-status-sign-halo" d="${statusGlyph.face} ${statusGlyph.route}"/><path class="hdms-status-sign-face" d="${statusGlyph.face}"/><path class="hdms-status-sign-inset" d="${statusGlyph.inset}"/><path class="hdms-status-sign-edge" d="${statusGlyph.face}"/><path class="hdms-status-sign-route" d="${statusGlyph.route}"/></svg></span>`;
-  const waveBadge = `<span class="doh-type-flood-wave" aria-hidden="true">${floodWaveBadge}</span>`;
+  // Encode only a safe CSS color on the badge; its text label is still exposed.
+  const accent = markerHex(fColor, TRAFFIC_ACCENT.slate);
+  const waveBadge = floodStatusSymbol(item.capsuleClass);
   // The default map viewport is zoom 11. Keep that overview uncluttered and
   // progressively disclose the highway number and water level only after zooming in.
   if (currentZoom <= 11) {
     return {
       html: `
-        <div class="${item.capsuleClass} doh-type-flood doh-capsule-zoom-far" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
-          <span class="doh-type-flood-wave" aria-hidden="true">${floodWaveIcon}</span>
-          ${statusBadge}
+        <div class="${item.capsuleClass} doh-type-flood doh-capsule-zoom-far" style="--flood-pin-accent:${accent}" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
+          ${waveBadge}
         </div>
       `,
       className: "doh-map-capsule-pin",
@@ -445,27 +445,25 @@ export function buildZoomAdaptiveFloodPinSpec(
   if (currentZoom <= 13) {
     return {
       html: `
-        <div class="${item.capsuleClass} doh-type-flood doh-capsule-zoom-mid" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
+        <div class="${item.capsuleClass} doh-type-flood doh-capsule-zoom-mid" style="--flood-pin-accent:${accent}" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
           ${waveBadge}
           <span>ทล.${escapeHtml(item.flood.route_no)}</span>
-          ${statusBadge}
         </div>
       `,
       className: "doh-map-capsule-pin",
-      iconSize: [96, 28],
-      iconAnchor: [48, 14],
+      iconSize: [78, 28],
+      iconAnchor: [39, 14],
     };
   }
   const isPending = item.statusLabel === "รอตรวจสอบสถานะ";
-  const labelWidth = (isPending ? 244 : 168) + (item.segmentCount === undefined ? 0 : 48);
+  const labelWidth = (isPending ? 226 : 150) + (item.segmentCount === undefined ? 0 : 48);
   return {
     html: `
-      <div class="${item.capsuleClass} doh-type-flood doh-capsule-zoom-near" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
+      <div class="${item.capsuleClass} doh-type-flood doh-capsule-zoom-near" style="--flood-pin-accent:${accent}" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
         ${waveBadge}
         <span>ทล.${escapeHtml(item.flood.route_no)}</span>
         ${item.segmentCount === undefined ? "" : `<span>${escapeHtml(item.segmentCount)} ช่วง</span>`}
         <span class="opacity-95 font-mono text-[11px]">· ${escapeHtml(item.levelText)}</span>
-        ${statusBadge}
         ${isPending ? '<span class="bg-black/25 px-1.5 py-0.5 rounded text-[10px] font-bold">รอตรวจสอบ</span>' : ""}
       </div>
     `,

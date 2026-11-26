@@ -58,13 +58,14 @@ for (const admin of [false, true]) {
     await expect(c).toBeVisible();
     await expect(w).toBeVisible();
     await expect(c).toHaveCSS("color", "rgb(255, 255, 255)");
-    await expect(w).toHaveCSS("background-image", /linear-gradient.*169, 37, 59.*133, 27, 49/);
+    await expect(w).toHaveCSS("background-image", /linear-gradient/);
     await expect(detour).toHaveCSS("background-image", /linear-gradient.*255, 227, 148.*246, 187, 71/);
     await expect(detour).toHaveCSS("color", "rgb(20, 35, 49)");
-    await expect(c.locator(".doh-type-flood-status")).toHaveAttribute("data-status-glyph", "closed");
-    await expect(w.locator(".doh-type-flood-status")).toHaveAttribute("data-status-glyph", "vehicle");
-    await expect(w.locator(".doh-type-flood-status")).toHaveAttribute("title", /รถเล็กผ่านไม่ได้/);
-    expect(await w.locator(".doh-type-flood-status").evaluate((el) => getComputedStyle(el).getPropertyValue("--status-sign-color").trim())).toBe("#f97316");
+    await expect(map.locator(".doh-type-flood .hdms-status-sign")).toHaveCount(0);
+    await expect(c).toHaveCSS("--flood-pin-accent", "#dc2626");
+    await expect(w).toHaveCSS("--flood-pin-accent", "#f97316");
+    await expect(w).toHaveAttribute("title", /รถเล็กผ่านไม่ได้/);
+    expect(await c.evaluate(el => getComputedStyle(el).backgroundImage)).not.toBe(await w.evaluate(el => getComputedStyle(el).backgroundImage));
 
     const contrast = await map.evaluate(() => {
       const lum = (r: number, g: number, b: number) => [r, g, b].map((x) => x / 255)
@@ -72,9 +73,17 @@ for (const admin of [false, true]) {
         .reduce((s, v, i) => s + [0.2126, 0.7152, 0.0722][i] * v, 0);
       return [".doh-type-flood", ".doh-type-detour"].map((selector) => {
         const css = getComputedStyle(document.querySelector(selector)!);
-        const rgb = (s: string) => [...s.matchAll(/rgb\((\d+), (\d+), (\d+)\)/g)].map((m) => lum(+m[1], +m[2], +m[3]));
-        const [fg] = rgb(css.color);
-        return Math.min(...rgb(css.backgroundImage).map((bg) => (Math.max(fg, bg) + .05) / (Math.min(fg, bg) + .05)));
+        const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+        const read = (value: string) => {
+          ctx.clearRect(0, 0, 1, 1);
+          ctx.fillStyle = value;
+          ctx.fillRect(0, 0, 1, 1);
+          const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+          return lum(r, g, b);
+        };
+        const fg = read(css.color);
+        const stops = css.backgroundImage.match(/(?:rgba?|color)\([^()]+\)/g) || [css.backgroundColor];
+        return Math.min(...stops.map(read).map((bg) => (Math.max(fg, bg) + .05) / (Math.min(fg, bg) + .05)));
       });
     });
     expect(contrast).toHaveLength(2);
@@ -84,14 +93,14 @@ for (const admin of [false, true]) {
 }
 
 const knownStatuses = [
-  ["CLOSED", "closed", "ผ่านไม่ได้"],
-  ["NO_SMALL_VEHICLES", "vehicle", "รถเล็กไม่สามารถผ่านได้"],
-  ["ONE_LANE", "warning", "รถเล็กผ่านได้ ๑ ช่องทาง"],
-  ["LIGHT_VEHICLES_ONLY", "slow", "รถทุกชนิดผ่านได้แต่ไม่สะดวก"],
-  ["PASSABLE", "passable", "ผ่านได้ปกติ"],
+  ["CLOSED", "red", "ผ่านไม่ได้"],
+  ["NO_SMALL_VEHICLES", "orange", "รถเล็กไม่สามารถผ่านได้"],
+  ["ONE_LANE", "amber", "รถเล็กผ่านได้ ๑ ช่องทาง"],
+  ["LIGHT_VEHICLES_ONLY", "sky", "รถทุกชนิดผ่านได้แต่ไม่สะดวก"],
+  ["PASSABLE", "emerald", "ผ่านได้ปกติ"],
 ] as const;
 
-test("five actual map icon silhouettes are legible in both themes", async ({ page, baseURL, isMobile }, testInfo) => {
+test("five flood markers communicate the original status bands and distinct shapes in both themes", async ({ page, baseURL, isMobile }, testInfo) => {
   test.skip(isMobile || before, "Desktop capture of all five distinct route fixtures");
   await page.setViewportSize({ width: 1440, height: 900 });
   await fixture(page, new URL(baseURL!).origin);
@@ -106,18 +115,25 @@ test("five actual map icon silhouettes are legible in both themes", async ({ pag
     }),
   } }));
   await page.goto(base + "/");
-  const paths = new Set<string>();
+  const bands = new Set<string>();
+  const shapes = new Set<string>();
   for (const theme of ["light", "dark"] as const) {
     if (theme === "dark") await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
     for (const [, key, label] of knownStatuses) {
-      const glyph = page.locator(`[data-status-glyph="${key}"]`);
-      await expect(glyph).toHaveAttribute("title", label);
-      await expect(glyph.locator(".hdms-status-sign-route")).toHaveCSS("stroke", "rgb(20, 35, 49)");
-      paths.add((await glyph.locator(".hdms-status-sign-face").getAttribute("d"))!);
-      await glyph.screenshot({ path: testInfo.outputPath(`map-status-${key}-${theme}.png`), animations: "disabled" });
+      const marker = page.locator(`.doh-type-flood.doh-capsule-${key === "emerald" ? "green" : key}`);
+      await expect(marker).toHaveAttribute("title", new RegExp(label));
+      await expect(marker.locator("svg")).toHaveCount(1);
+      const shape = marker.locator(`svg [data-flood-status-shape="${key === "emerald" ? "green" : key}"]`);
+      await expect(shape).toHaveCount(1);
+      shapes.add((await shape.getAttribute("d"))!);
+      await expect(marker.locator(".doh-type-flood-wave svg")).toHaveCSS("stroke", "rgb(255, 255, 255)");
+      await expect(marker.locator(".hdms-status-sign")).toHaveCount(0);
+      bands.add(await marker.evaluate(el => getComputedStyle(el).getPropertyValue("--flood-pin-accent").trim()));
+      await marker.screenshot({ path: testInfo.outputPath(`map-status-${key}-${theme}.png`), animations: "disabled" });
     }
   }
-  expect(paths.size).toBe(5);
+  expect(bands.size).toBe(5);
+  expect(shapes.size).toBe(5);
 });
 
 for (const admin of [false, true]) {

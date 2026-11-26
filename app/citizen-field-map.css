@@ -238,69 +238,17 @@
   .citizen-ui .citizen-office-card { border-color: var(--atlas-line); }
   .citizen-ui .citizen-detour-context { border-color: var(--atlas-line); background: var(--atlas-detail); border-radius: 6px; }
 
-  /* Chroma lives on decision cards. The neutral pending state and the map's
-     existing semantic tokens are deliberately not recolored. */
+  /* Keep the compact card layout; paints come from the shared status surfaces. */
   .citizen-ui .citizen-drawer .citizen-traffic-card {
-    --atlas-status-face: var(--cit-deep);
-    --atlas-status-ink: var(--traffic-accent);
-    --atlas-closure-400: #ff5a62;
-    --atlas-caution-400: #ff9652;
-    --atlas-lane-300: #ffd34c;
-    --atlas-delay-300: #67ccff;
-    --atlas-open-400: #53d79c;
-    --atlas-closure-750: #9f233b;
-    --atlas-caution-750: #924017;
-    --atlas-lane-750: #795400;
-    --atlas-delay-750: #005a87;
-    --atlas-open-750: #00684a;
-    --atlas-closure-ink: #430814;
-    --atlas-caution-ink: #4a1b08;
-    --atlas-lane-ink: #3d2500;
-    --atlas-delay-ink: #0a2b42;
-    --atlas-open-ink: #043423;
-    --atlas-closure-glow: #fff4f6;
-    --atlas-caution-glow: #fff2e5;
-    --atlas-lane-glow: #fff7d4;
-    --atlas-delay-glow: #effaff;
-    --atlas-open-glow: #e9fff4;
-    background-color: var(--atlas-status-face);
-    background-image: linear-gradient(to bottom,
-      color-mix(in srgb, var(--hdms-white) 9%, transparent),
-      transparent 54%,
-      color-mix(in srgb, var(--atlas-shadow-950) 6%, transparent));
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hdms-white) 47%, transparent),
-      0 2px 3px color-mix(in srgb, var(--atlas-shadow-950) 16%, transparent);
     align-content: center;
     text-align: center;
-    border-color: color-mix(in srgb, var(--atlas-status-ink) 35%, var(--atlas-status-face));
-    border-radius: .55rem;
   }
-  .citizen-ui .citizen-drawer .citizen-traffic-card[data-traffic-card="red"] { --atlas-status-face: var(--atlas-closure-400); --atlas-status-ink: var(--atlas-closure-ink); }
-  .citizen-ui .citizen-drawer .citizen-traffic-card[data-traffic-card="orange"] { --atlas-status-face: var(--atlas-caution-400); --atlas-status-ink: var(--atlas-caution-ink); }
-  .citizen-ui .citizen-drawer .citizen-traffic-card[data-traffic-card="amber"] { --atlas-status-face: var(--atlas-lane-300); --atlas-status-ink: var(--atlas-lane-ink); }
-  .citizen-ui .citizen-drawer .citizen-traffic-card[data-traffic-card="sky"] { --atlas-status-face: var(--atlas-delay-300); --atlas-status-ink: var(--atlas-delay-ink); }
-  .citizen-ui .citizen-drawer .citizen-traffic-card[data-traffic-card="emerald"] { --atlas-status-face: var(--atlas-open-400); --atlas-status-ink: var(--atlas-open-ink); }
-  .citizen-ui[data-citizen-theme="dark"] .citizen-drawer .citizen-traffic-card[data-traffic-card="red"] { --atlas-status-face: var(--atlas-closure-750); --atlas-status-ink: var(--atlas-closure-glow); }
-  .citizen-ui[data-citizen-theme="dark"] .citizen-drawer .citizen-traffic-card[data-traffic-card="orange"] { --atlas-status-face: var(--atlas-caution-750); --atlas-status-ink: var(--atlas-caution-glow); }
-  .citizen-ui[data-citizen-theme="dark"] .citizen-drawer .citizen-traffic-card[data-traffic-card="amber"] { --atlas-status-face: var(--atlas-lane-750); --atlas-status-ink: var(--atlas-lane-glow); }
-  .citizen-ui[data-citizen-theme="dark"] .citizen-drawer .citizen-traffic-card[data-traffic-card="sky"] { --atlas-status-face: var(--atlas-delay-750); --atlas-status-ink: var(--atlas-delay-glow); }
-  .citizen-ui[data-citizen-theme="dark"] .citizen-drawer .citizen-traffic-card[data-traffic-card="emerald"] { --atlas-status-face: var(--atlas-open-750); --atlas-status-ink: var(--atlas-open-glow); }
-  .citizen-ui .citizen-drawer .citizen-traffic-card:is(:hover,[aria-pressed="true"]) {
-    background-color: color-mix(in srgb, var(--atlas-status-ink) 3%, var(--atlas-status-face));
-    border-color: var(--atlas-status-ink);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--atlas-status-ink) 38%, transparent);
-  }
-  .citizen-ui .citizen-drawer :is(.citizen-traffic-card-label,.citizen-traffic-card-top) { color: var(--atlas-status-ink); }
   .citizen-ui .citizen-drawer .citizen-traffic-card-value {
     display: inline-flex;
     align-items: center;
     gap: .24rem;
     border-radius: .38rem;
     padding-inline: .3rem;
-    background: color-mix(in srgb, var(--atlas-status-face) 88%, var(--atlas-shadow-950));
-  }
-  .citizen-ui[data-citizen-theme="light"] .citizen-drawer .citizen-traffic-card-value {
-    background: color-mix(in srgb, var(--atlas-status-face) 80%, var(--hdms-white));
   }
   .citizen-ui .citizen-drawer .citizen-traffic-card-top {
     position: relative;

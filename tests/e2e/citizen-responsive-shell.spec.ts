@@ -110,7 +110,7 @@ test("citizen theme inverts active filters without dimming the basemap or overla
   await expect(pane).toHaveCSS("filter", "none");
   const mapLight = await basemap.evaluate(el => getComputedStyle(el).backgroundColor);
   const summary = page.getByRole("complementary", { name: "สรุปสถานการณ์บนแผนที่" });
-  const filter = summary.locator("[data-map-flood-status]").first();
+  const filter = summary.locator('[data-map-flood-status="NO_SMALL_VEHICLES"]');
   const activeColors = () => filter.evaluate(el => {
     const css = getComputedStyle(el);
     return { bg: css.backgroundColor, text: css.color };
@@ -125,7 +125,8 @@ test("citizen theme inverts active filters without dimming the basemap or overla
   await summary.getByRole("button", { name: /น้ำท่วม \d+ จุด/ }).click();
   await filter.click();
   await expect(filter).toHaveAttribute("aria-pressed", "true");
-  await expect(filter.locator("svg.citizen-flood-filter-icon")).toBeVisible();
+  const restrictionGlyph = filter.locator('svg[data-traffic-glyph="vehicle"]');
+  await expect(restrictionGlyph).toBeVisible();
   const lightPair = await activeColors();
   expect(contrast(lightPair)).toBeGreaterThanOrEqual(4.5);
   const light = await shell.evaluate(el => getComputedStyle(el).getPropertyValue("--surface-panel").trim());
@@ -133,6 +134,7 @@ test("citizen theme inverts active filters without dimming the basemap or overla
   await expect(shell).toHaveAttribute("data-citizen-theme", "dark");
   expect(await shell.evaluate(el => getComputedStyle(el).getPropertyValue("--surface-panel").trim())).not.toBe(light);
   await expect(filter).toHaveAttribute("aria-pressed", "true");
+  await expect(restrictionGlyph).toBeVisible();
   const darkPair = await activeColors();
   expect(darkPair).not.toEqual(lightPair);
   expect(contrast(darkPair)).toBeGreaterThanOrEqual(4.5);
@@ -436,7 +438,7 @@ test("public map starts with four grouped tools and keeps one layer panel and th
   }
 });
 
-test("grouped and split floods use the same wave pin and reveal labels at the same zooms", async ({ page }) => {
+test("grouped and split floods keep the wave, use the correct status shape and reveal labels at the same zooms", async ({ page }) => {
   const first = { ...payload.floodRoutes[0], direction_meta: { eventId: "EV-WAVE-PARITY" } };
   await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: {
     ...payload,
@@ -467,28 +469,32 @@ test("grouped and split floods use the same wave pin and reveal labels at the sa
   await page.getByText("ตั้งค่าเพิ่มเติม", { exact: true }).click();
   await expect(page.getByRole("button", { name: "รวมเหตุการณ์", exact: true })).toHaveAttribute("aria-pressed", "true");
   await layers.click();
-  const wave = () => pins.first().locator(".doh-type-flood-wave svg").evaluate(svg => svg.outerHTML);
+  const wave = (pin = pins.first()) => pin.locator(".doh-type-flood-wave svg path:not([data-flood-status-shape])");
   await chooseMode("แยกช่วง");
   await expect(pins).toHaveCount(2);
   const warning = pins.filter({ has: page.locator(".doh-capsule-orange") });
   const closed = pins.filter({ has: page.locator(".doh-capsule-red") });
   for (const pin of [warning, closed]) {
-    await expect(pin.locator(".doh-capsule-zoom-far")).toHaveCSS("background-color", "rgb(133, 27, 49)");
+    await expect(pin.locator(".doh-capsule-zoom-far")).toHaveCSS("background-image", /linear-gradient/);
+    await expect(pin.locator(".hdms-status-sign")).toHaveCount(0);
   }
-  expect(await warning.locator(".doh-type-flood-status").evaluate((el) => getComputedStyle(el).getPropertyValue("--status-sign-color").trim())).toBe("#f97316");
-  await expect(warning.locator(".doh-type-flood-status")).toHaveAttribute("data-status-glyph", "vehicle");
-  expect(await closed.locator(".doh-type-flood-status").evaluate((el) => getComputedStyle(el).getPropertyValue("--status-sign-color").trim())).toBe("#dc2626");
-  await expect(closed.locator(".doh-type-flood-status")).toHaveAttribute("data-status-glyph", "closed");
+  await expect(warning.locator(".doh-type-flood")).toHaveCSS("--flood-pin-accent", "#f97316");
+  await expect(closed.locator(".doh-type-flood")).toHaveCSS("--flood-pin-accent", "#dc2626");
   await expect(pins.first().locator(".doh-capsule-zoom-far")).toBeVisible();
-  const svg = await wave();
+  await expect(warning.locator("[data-flood-status-shape]")).toHaveAttribute("data-flood-status-shape", "orange");
+  await expect(closed.locator("[data-flood-status-shape]")).toHaveAttribute("data-flood-status-shape", "red");
+  const wavePath = await wave(closed).getAttribute("d");
+  expect(wavePath).toBeTruthy();
+  await expect(wave(warning)).toHaveAttribute("d", wavePath!);
   await chooseMode("รวมเหตุการณ์");
   await expect(pins).toHaveCount(1);
   const far = pins.locator(".doh-capsule-zoom-far");
   await expect(far).toBeVisible();
-  await expect(far).toHaveCSS("background-color", "rgb(133, 27, 49)");
-  await expect(far.locator(".doh-type-flood-status")).toHaveAttribute("data-status-glyph", "closed");
+  await expect(far).toHaveCSS("--flood-pin-accent", "#dc2626");
+  await expect(far.locator(".hdms-status-sign")).toHaveCount(0);
   await expect(far).not.toContainText("ทล.");
-  expect(await wave()).toBe(svg);
+  await expect(wave()).toHaveAttribute("d", wavePath!);
+  await expect(pins.locator("[data-flood-status-shape]")).toHaveAttribute("data-flood-status-shape", "red");
   await expect(pins).toHaveAttribute("aria-label", /ทล\.43 \(2 ช่วง\).*45 ซม\./);
   await pins.press("Enter");
   const popup = page.locator(".doh-flood-leaflet-popup");
@@ -504,12 +510,14 @@ test("grouped and split floods use the same wave pin and reveal labels at the sa
   await zoomTo(12);
   const mid = pins.locator(".doh-capsule-zoom-mid");
   await expect(mid).toHaveText("ทล.43");
-  expect(await wave()).toBe(svg);
+  await expect(wave()).toHaveAttribute("d", wavePath!);
+  await expect(pins.locator("[data-flood-status-shape]")).toHaveAttribute("data-flood-status-shape", "red");
   await expect(popup).toBeVisible();
   await zoomTo(14);
   const near = pins.locator(".doh-capsule-zoom-near");
   await expect(near).toContainText(/ทล\.43[\s\S]*2 ช่วง[\s\S]*45 ซม\./);
-  expect(await wave()).toBe(svg);
+  await expect(wave()).toHaveAttribute("d", wavePath!);
+  await expect(pins.locator("[data-flood-status-shape]")).toHaveAttribute("data-flood-status-shape", "red");
   await expect(popup).toBeVisible();
 });
 
@@ -606,7 +614,7 @@ test("separate map summary buttons remain usable during flood breakdown", async 
   }
 });
 
-test("flood breakdown uses original map colors as accents in both themes", async ({ page }) => {
+test("flood breakdown uses shared status signs and full gradients in both themes", async ({ page }) => {
   const statuses = ["CLOSED", "WARNING", "LIGHT_VEHICLES_ONLY", "ONE_LANE", "PASSABLE"] as const;
   const floods = statuses.map((status, i) => ({ ...payload.floodRoutes[0], id:"status-" + i,
     section_name:"ตัวอย่าง " + i, traffic_status:status, direction_meta:{}, latest_photo_url:"" }));
@@ -622,7 +630,8 @@ test("flood breakdown uses original map colors as accents in both themes", async
     const actual = await rows.evaluateAll(els => els.map(el => ({
       id: el.getAttribute("data-map-flood-status"),
       color: getComputedStyle(el).getPropertyValue("--flood-status-color").trim(),
-      swatch:getComputedStyle(el.querySelector(".citizen-flood-filter-swatch")!).backgroundColor,
+      gradient:getComputedStyle(el).backgroundImage,
+      glyph:el.querySelector("[data-traffic-glyph]")?.getAttribute("data-traffic-glyph"),
       ink:getComputedStyle(el).color,
       count:getComputedStyle(el.querySelector(".citizen-flood-filter-count")!).color,
     })));
@@ -630,7 +639,8 @@ test("flood breakdown uses original map colors as accents in both themes", async
     for (const row of actual) {
       expect(row.color).toBe(source[row.id as keyof typeof source].hex);
       expect(row.ink).toBe(row.count);
-      expect(row.swatch).not.toBe(row.ink);
+      expect(row.gradient).toMatch(/linear-gradient/);
+      expect(row.glyph).toBeTruthy();
     }
     const closed = rows.filter({hasText:"ผ่านไม่ได้"}).first();
     await closed.click();

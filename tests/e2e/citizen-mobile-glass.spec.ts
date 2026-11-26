@@ -171,15 +171,14 @@ test("mobile flood status cards lead the switch and adapt to one through five st
     };
     return cards.every((card) => {
       const style = getComputedStyle(card);
-      const bg = rgb(style.backgroundColor);
-      const shadow = rgb(style.getPropertyValue("--atlas-shadow-950").trim());
+      const top = rgb(style.getPropertyValue("--status-card-start").trim());
+      const bottom = rgb(style.getPropertyValue("--status-card-end").trim());
       const badge = card.querySelector(".citizen-traffic-card-value")!;
       const label = card.querySelector(".citizen-traffic-card-label")!;
       const badgeStyle = getComputedStyle(badge);
       const ink = rgb(getComputedStyle(label).color);
-      const top = bg.map((v) => v * .91 + .09);
-      const bottom = bg.map((v, i) => v * .94 + shadow[i] * .06);
-      return [top, bg, bottom].every((face) => contrast(face, ink) >= 4.5) &&
+      const grade = Math.max(...top.map((v, i) => Math.abs(v - bottom[i])));
+      return grade >= .16 && [top, bottom].every((face) => contrast(face, ink) >= 4.5) &&
         contrast(rgb(badgeStyle.backgroundColor), rgb(badgeStyle.color)) >= 4.5;
     });
   });

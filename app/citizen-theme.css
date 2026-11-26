@@ -278,8 +278,6 @@
 /* Use the recorded map color as an accent, not as the text color. */
 .citizen-ui .citizen-map-status-filters [data-map-flood-status] { color:var(--cit-ink); }
 .citizen-ui .citizen-flood-filter-label { display:flex;align-items:center;gap:.5rem;min-width:0; }
-.citizen-ui .citizen-flood-filter-icon { width:16px;height:16px;flex:none; }
-.citizen-ui .citizen-flood-filter-swatch { width:6px;height:6px;border-radius:50%;flex:none;background:var(--flood-status-color); }
 .citizen-ui .citizen-flood-filter-count { min-width:1.5rem;padding:.05rem .3rem;text-align:center;border-radius:6px;border:1px solid var(--surface-border);background:var(--cit-deep);color:var(--cit-ink); }
 .citizen-ui .citizen-map-status-filters [data-map-flood-status][aria-pressed=true] {
   background: var(--brand-active-bg);
