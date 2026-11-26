@@ -117,6 +117,15 @@ import { FloodDossierModal } from "@/components/public/FloodDossierModal";
 import { MobileCitizenDrawer } from "@/components/public/MobileCitizenDrawer";
 import { usePublicDashboardData } from "@/components/public/usePublicDashboardData";
 
+function isFocusableAfterFocusExit(element: Element | null): element is HTMLElement {
+  return element instanceof HTMLElement &&
+    element !== document.body && element !== document.documentElement &&
+    element.isConnected && element.getClientRects().length > 0 &&
+    !element.matches(":disabled, [aria-disabled='true']") &&
+    !element.closest("[inert], [aria-hidden='true']") &&
+    getComputedStyle(element).visibility === "visible";
+}
+
 export default function HomePage() {
   const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL?.startsWith("https://")
     ? process.env.NEXT_PUBLIC_ADMIN_URL
@@ -188,6 +197,8 @@ export default function HomePage() {
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
   const mapViewportApiRef = useRef<GisMapViewportApi | null>(null);
   const preModalViewportRef = useRef<GisFocusViewportSnapshot | null>(null);
+  const mapWorkspaceRef = useRef<HTMLElement | null>(null);
+  const detourFocusReturn = useRef<{ opener: HTMLElement | null; requested: boolean } | null>(null);
 
   const focusFilters = useMemo(
     () => ({
@@ -208,13 +219,14 @@ export default function HomePage() {
   }, []);
 
   const handleAfterExitFocus = useCallback(() => {
+    if (detourFocusReturn.current) detourFocusReturn.current.requested = true;
     setFocusCoordinates(null);
   }, []);
 
   const {
     gisFocus,
     enterFloodFocus: handleEnterFloodFocus,
-    enterDetourFocus: handleEnterDetourFocus,
+    enterDetourFocus,
     updateFocusOptions,
     exitFocus: handleExitGisFocus,
   } = useSharedGisFocus({
@@ -225,6 +237,35 @@ export default function HomePage() {
     onBeforeEnterFocus: handleBeforeEnterFocus,
     onAfterExitFocus: handleAfterExitFocus,
   });
+
+  const handleEnterDetourFocus = (...args: Parameters<typeof enterDetourFocus>) => {
+    if (!args[0]) return;
+    if (!detourFocusReturn.current) {
+      const candidate = viewingDetourModal ? detourPreviousFocus.current
+        : showDossier ? previousFocus.current : document.activeElement;
+      detourFocusReturn.current = { opener: isFocusableAfterFocusExit(candidate) ? candidate : null, requested: false };
+    }
+    enterDetourFocus(...args);
+  };
+
+  useEffect(() => {
+    if (gisFocus.status === "focused") {
+      if (gisFocus.targetType !== "DETOUR") detourFocusReturn.current = null;
+      return;
+    }
+    const intent = detourFocusReturn.current;
+    detourFocusReturn.current = null;
+    // Auto-exit on filters or opening another route does not claim keyboard focus.
+    if (!intent?.requested) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (isFocusableAfterFocusExit(document.activeElement)) return;
+      if (Array.from(document.querySelectorAll("dialog[open], [aria-modal='true']")).some(isFocusableAfterFocusExit)) return;
+      const target = isFocusableAfterFocusExit(intent.opener) ? intent.opener
+        : mapWorkspaceRef.current?.querySelector(".leaflet-control-zoom-in") ?? null;
+      if (isFocusableAfterFocusExit(target)) target.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [gisFocus.status, gisFocus.targetType]);
 
   // Clear pre-modal snapshot if user closes FloodDossierModal without entering Focus Mode
   useEffect(() => {
@@ -795,7 +836,7 @@ export default function HomePage() {
         {/* ================================================================= */}
         {/* B. MAIN GIS MAP VIEWPORT                                          */}
         {/* ================================================================= */}
-        <section aria-label="แผนที่และข้อมูลการเดินทาง" className="citizen-map-workspace order-1 lg:order-2 relative h-full min-h-0 flex-1 w-full overflow-hidden bg-surface-canvas">
+        <section ref={mapWorkspaceRef} aria-label="แผนที่และข้อมูลการเดินทาง" className="citizen-map-workspace order-1 lg:order-2 relative h-full min-h-0 flex-1 w-full overflow-hidden bg-surface-canvas">
           {readState === "loading" && (
             <div role="status" aria-live="polite" className="absolute left-1/2 top-[6.75rem] sm:top-14 z-[600] -translate-x-1/2 max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-17.5rem)] rounded-xl border border-slate-700 bg-slate-950/95 px-4 py-2.5 text-sm text-white shadow-xl">
               กำลังโหลดข้อมูลสถานการณ์ล่าสุด…
