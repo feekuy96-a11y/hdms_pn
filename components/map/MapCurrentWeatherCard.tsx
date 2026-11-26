@@ -2,6 +2,7 @@
 
 import { CloudRain } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import styles from "./MapCurrentWeatherCard.module.css";
 import { APP_CONFIG } from "@/lib/constants";
 import { currentWeather, weatherUrl, thaiWeatherCode, validWeatherCoordinates, type WeatherCoordinates, type CurrentWeather } from "@/lib/map-current-weather";
 
@@ -10,6 +11,29 @@ const pattani = { latitude: APP_CONFIG.DEFAULT_CENTER.lat, longitude: APP_CONFIG
 type ForecastState =
   | { type: "idle" | "locating" | "loading" | "error" | "empty" }
   | { type: "ready"; current: CurrentWeather; label: string; fixture: boolean };
+
+function WeatherIllustration({ code }: { code: number | null }) {
+  const kind = code === 0 ? "sun"
+    : code !== null && [1, 2, 3].includes(code) ? "cloud"
+    : code !== null && [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code) ? "rain"
+    : null;
+  if (!kind) return null;
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      {kind === "sun" ? (
+        <>
+          <circle cx="12" cy="12" r="3.4" />
+          <path className={styles.motion} data-weather-motion={kind} d="M12 3.5v2m0 13v2M3.5 12h2m13 0h2M6 6l1.4 1.4m9.2 9.2 1.4 1.4M18 6l-1.4 1.4m-9.2 9.2L6 18" />
+        </>
+      ) : (
+        <>
+          <path className={kind === "cloud" ? styles.motion : undefined} data-weather-motion={kind === "cloud" ? kind : undefined} d="M7 15a3.5 3.5 0 0 1-.2-7 5 5 0 0 1 9.4.8A3.1 3.1 0 1 1 18 15Z" />
+          {kind === "rain" && <path className={styles.motion} data-weather-motion={kind} d="m8 17-1 2m5-2-1 2m5-2-1 2" />}
+        </>
+      )}
+    </svg>
+  );
+}
 
 export function MapCurrentWeatherCard({ focusCoordinates }: {
   focusCoordinates: [number, number] | null;
@@ -75,9 +99,9 @@ export function MapCurrentWeatherCard({ focusCoordinates }: {
   }
 
   return (
-    <section aria-label="สภาพอากาศปัจจุบันตามพื้นที่" className="absolute bottom-[max(4.5rem,calc(env(safe-area-inset-bottom)+4rem))] left-2 z-[440] flex max-h-[60%] w-max max-w-[calc(100%-4rem)] flex-col items-start gap-1 lg:bottom-3 lg:left-3">
+    <section aria-label="สภาพอากาศปัจจุบันตามพื้นที่" className={`${styles.card} absolute z-[440] flex w-max max-w-[calc(100%-4.5rem)] flex-col items-end gap-1`}>
       {open && (
-        <div id={regionId} className="hdms-map-control max-h-[42dvh] w-[18rem] max-w-full overflow-y-auto overscroll-contain rounded-xl border px-3 py-2 text-xs shadow-lg">
+        <div id={regionId} className={`${styles.panel} hdms-map-control w-[18rem] max-w-full overflow-y-auto overscroll-contain rounded-xl border px-3 py-2 text-xs shadow-lg`}>
           <h3 className="text-sm font-bold">สภาพอากาศปัจจุบันตามพื้นที่</h3>
           <p className="mb-2">ใช้ประกอบการดูแผนที่ ไม่ใช่ค่าที่ตรวจวัดหรือประกาศเตือนภัย</p>
           <div className="flex flex-wrap gap-1">
@@ -97,7 +121,7 @@ export function MapCurrentWeatherCard({ focusCoordinates }: {
               <p className="mt-2 font-semibold">{state.label}</p>
               <p className="font-semibold">{state.fixture ? "ข้อมูลจำลอง (ใช้ทดสอบเท่านั้น)" : "ข้อมูลจากแบบจำลอง"}</p>
               <p>{state.fixture ? "เวลาข้อมูลจำลอง " : "เวลาแบบจำลอง "}<time dateTime={new Date(state.current.timestamp).toISOString()}>{thaiDateTime.format(state.current.timestamp)} น.</time> (เวลาไทย)</p>
-              <p className="my-1 font-semibold">{thaiWeatherCode(state.current.code)}</p>
+              <p className="my-1 flex items-center gap-2 font-semibold"><WeatherIllustration code={state.current.code} />{thaiWeatherCode(state.current.code)}</p>
               <dl className="grid grid-cols-2 gap-x-2 gap-y-0.5">
                 <div><dt>อุณหภูมิ</dt><dd className="font-semibold">{state.current.temperature === null ? "–" : `${state.current.temperature} °C`}</dd></div>
                 <div><dt>ความชื้น</dt><dd className="font-semibold">{state.current.humidity === null ? "–" : `${state.current.humidity}%`}</dd></div>

@@ -93,3 +93,69 @@ test("GPS success is explicitly requested and rounded before sending; failed for
   expect(requests[0].searchParams.get("longitude")).toBe("101.29");
   await expect(page.getByText("29.1 °C")).toHaveCount(0);
 });
+
+test("right placement keeps attribution, controls and navigation clear on standard and short screens", async ({ page, isMobile }) => {
+  test.skip(!enabled, "Staging weather fixture build only");
+  await page.route(endpoint, (route) => route.fulfill({ json: forecast(), headers: fixtureHeaders }));
+  for (const height of isMobile ? [844, 420] : [900, 500]) {
+    const width = isMobile ? 390 : 1440;
+    await page.setViewportSize({ width, height });
+    await page.goto(`${base}/`);
+    const card = page.getByRole("region", { name: "สภาพอากาศปัจจุบันตามพื้นที่" });
+    const toggle = card.getByRole("button", { name: "สภาพอากาศ (ทดลอง)" });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await toggle.click();
+    await card.getByRole("button", { name: /ดูสภาพอากาศ: ปัตตานี/ }).click();
+    await expect(card.getByText(/ข้อมูลจำลอง \(ใช้ทดสอบเท่านั้น\)/)).toBeVisible();
+    const rect = (await card.boundingBox())!;
+    const rightInset = await card.evaluate(node => Number.parseFloat(getComputedStyle(node).right));
+    expect(rightInset).toBe(height <= 704 ? 64 : isMobile ? 8 : 12);
+    const toggleRect = (await toggle.boundingBox())!;
+    expect(toggleRect.x + toggleRect.width / 2).toBeGreaterThan(width / 2);
+    expect(rect.y).toBeGreaterThanOrEqual(0);
+    expect(rect.y + rect.height).toBeLessThanOrEqual(height);
+    const reserved = [
+      page.getByRole("group", { name: "เครื่องมือแผนที่" }),
+      page.locator(".leaflet-control-attribution"),
+    ];
+    if (isMobile) reserved.push(page.getByRole("navigation", { name: "เมนูประชาชน" }));
+    for (const element of reserved) {
+      await expect(element).toBeVisible();
+      const b = (await element.boundingBox())!;
+      expect(rect.x + rect.width <= b.x || b.x + b.width <= rect.x || rect.y + rect.height <= b.y || b.y + b.height <= rect.y).toBeTruthy();
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+  }
+});
+
+test("decorative motion matches weather, respects reduced motion and stops without usable weather", async ({ page }) => {
+  test.skip(!enabled, "Staging weather fixture build only");
+  let code = 61;
+  await page.route(endpoint, route => code < 0
+    ? route.fulfill({ status: 503 })
+    : route.fulfill({ json: { current: { ...forecast().current, weather_code: code } }, headers: fixtureHeaders }));
+  await page.goto(`${base}/`);
+  await page.getByRole("button", { name: "สภาพอากาศ (ทดลอง)" }).click();
+  const fetchWeather = page.getByRole("button", { name: /ดูสภาพอากาศ: ปัตตานี/ });
+  for (const [weather, kind, label] of [[61, "rain", "มีฝน"], [3, "cloud", "เมฆมาก"], [0, "sun", "ท้องฟ้าแจ่มใส"]] as const) {
+    code = weather;
+    await fetchWeather.click();
+    const icon = page.locator(`[data-weather-motion="${kind}"]`);
+    await expect(icon).toHaveCount(1);
+    await expect(page.getByText(label, { exact: true })).toBeVisible();
+    expect(await icon.evaluate(node => node.closest("svg")?.getAttribute("aria-hidden"))).toBe("true");
+    expect(await icon.evaluate(node => getComputedStyle(node).animationName)).not.toBe("none");
+    expect(await icon.evaluate(node => getComputedStyle(node).animationIterationCount)).not.toBe("infinite");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    expect(await icon.evaluate(node => getComputedStyle(node).animationName)).toBe("none");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+  }
+  code = 45;
+  await fetchWeather.click();
+  await expect(page.getByText("แบบจำลองระบุหมอก", { exact: true })).toBeVisible();
+  await expect(page.locator("[data-weather-motion]")).toHaveCount(0);
+  code = -1;
+  await fetchWeather.click();
+  await expect(page.getByText(/โหลดสภาพอากาศไม่ได้/)).toBeVisible();
+  await expect(page.locator("[data-weather-motion]")).toHaveCount(0);
+});
