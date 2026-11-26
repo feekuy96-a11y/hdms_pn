@@ -119,3 +119,64 @@ test("five actual map icon silhouettes are legible in both themes", async ({ pag
   }
   expect(paths.size).toBe(5);
 });
+
+for (const admin of [false, true]) {
+  test(`${admin ? "Admin" : "Public"} detour symbols clear collisions without merging route identities`, async ({ page, isMobile, baseURL }) => {
+    await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+    await fixture(page, new URL(baseURL!).origin);
+    const start = [101.240, 6.858];
+    const end = [101.256, 6.866];
+    const midpoint = [101.248, 6.862];
+    const detour = { ...sample.detourRoutes[0], id: "SPACE-A", route_name: "ทางเลี่ยงทดสอบคู่",
+      lon_start: start[0], lat_start: start[1], lon_end: end[0], lat_end: end[1],
+      coordinates_json: [start, midpoint, end],
+      reverse_coordinates_json: [[end[0], end[1] + .002], midpoint, [start[0], start[1] + .002]],
+    };
+    await page.route(/\/functions\/v1\/hdms-api\/?$/, (route) => route.fulfill({ json: {
+      ...sample, floodRoutes: [], detourRoutes: [detour, {
+        ...detour, id: "SPACE-B", route_name: "ทางเลี่ยงทดสอบอิสระ", direction_mode: "FORWARD_ONLY", reverse_coordinates_json: [],
+        coordinates_json: [[101.240, 6.854], [midpoint[0] + .004, midpoint[1]], [101.256, 6.865]],
+      }],
+    } }));
+    await page.goto(base + (admin ? "/admin/" : "/"));
+    if (admin && isMobile) await page.getByRole("button", { name: "แผนที่ GIS", exact: true }).click();
+    const map = page.locator("[data-hdms-map]");
+    const symbols = map.locator(".doh-detour-symbol");
+    const shifted = symbols.locator("xpath=self::*[@data-detour-symbol-shifted]");
+    const partlyMoved = () => symbols.evaluateAll((items) => {
+      const rects = items.map((item) => item.getBoundingClientRect());
+      return rects.every((a, i) => rects.slice(i + 1).every((b) =>
+        a.right + 4 <= b.left || b.right + 4 <= a.left || a.bottom + 4 <= b.top || b.bottom + 4 <= a.top));
+    });
+    await expect(symbols).toHaveCount(2);
+    await expect(shifted).toHaveCount(1);
+    await expect.poll(partlyMoved).toBe(true);
+    const layers = map.getByRole("button", { name: "เลเยอร์", exact: true });
+    await layers.click();
+    const panel = map.getByRole("region", { name: "เลเยอร์และสัญลักษณ์แผนที่" });
+    const split = panel.getByRole("button", { name: "แยกตามทิศทาง", exact: true });
+    if (!await split.isVisible()) await panel.getByText("ตั้งค่าเพิ่มเติม", { exact: true }).click();
+    await split.click();
+    await layers.click();
+    await expect(symbols).toHaveCount(3);
+    await expect(shifted).toHaveCount(2);
+    await expect.poll(partlyMoved).toBe(true);
+    const zoom = map.getByRole("button", { name: "Zoom in", exact: true });
+    const zoomLevel = () => map.locator("[data-public-layer-opacities]").evaluate((e) => JSON.parse(e.getAttribute("data-public-layer-opacities") || "{}").zoom as number);
+    const initialZoom = await zoomLevel();
+    expect(initialZoom).toBeLessThan(14);
+    for (let level = initialZoom; level < 14; level++) {
+      await zoom.click();
+      await expect.poll(zoomLevel).toBe(level + 1);
+    }
+    await expect(shifted).toHaveCount(1);
+    await expect(map.locator('.doh-detour-symbol[aria-label*="อิสระ"]')).not.toHaveAttribute("data-detour-symbol-shifted", "");
+    await expect.poll(partlyMoved).toBe(true);
+    const inMap = map.locator('.doh-detour-symbol[aria-label^="ขากลับ B → A:"]');
+    await expect(inMap).toHaveAttribute("aria-label", /ทางเลี่ยงทดสอบคู่/);
+    await inMap.press("Enter");
+    const popup = map.locator(".doh-detour-leaflet-popup");
+    await expect(popup).toContainText("ทางเลี่ยงทดสอบคู่");
+    await expect(popup.getByRole("button", { name: "ขากลับ B → A", exact: true })).toHaveAttribute("aria-pressed", "true");
+  });
+}

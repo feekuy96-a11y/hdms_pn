@@ -1009,6 +1009,7 @@ export function LongdoGisMap({
         element.style.display = visible ? "" : "none";
         element.style.pointerEvents = visible ? "" : "none";
         element.dataset.filterOpacity = String(opacity);
+        layer.__dohAfterMarkerFilter?.();
       }
     });
     applyGroupOpacity(floodGroupRef.current, floodMatches);
