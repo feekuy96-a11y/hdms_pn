@@ -518,7 +518,7 @@ export function useLongdoRouteLayers({
           casing,
           baseBorderWidth: Number(floodStyle?.borderWidth) || 0,
         };
-        polyline.bindPopup(() => buildFloodPopupHtml(flood, countDetoursForFlood(flood)), floodPopupOpts);
+        polyline.bindPopup(() => buildFloodPopupHtml(flood, countDetoursForFlood(flood), publicMode), floodPopupOpts);
         polyline.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           activationRef.current?.({ type: "FLOOD", id: flood.id });
@@ -560,7 +560,7 @@ export function useLongdoRouteLayers({
         }).addTo(group);
         marker.__dohFilterIds = ev.segments.map((segment) => segment.id);
         marker.getElement()?.setAttribute("aria-label", clusterAriaLabel);
-        marker.bindPopup(() => buildFloodPopupHtml(primarySeg, countDetoursForFlood(primarySeg)), floodPopupOpts);
+        marker.bindPopup(() => buildFloodPopupHtml(primarySeg, countDetoursForFlood(primarySeg), publicMode), floodPopupOpts);
         marker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           activationRef.current?.({ type: "FLOOD", id: primarySeg.id });
@@ -597,7 +597,7 @@ export function useLongdoRouteLayers({
             waveBadge: floodWaveBadge,
           });
 
-          marker.bindPopup(() => buildFloodPopupHtml(item.flood, countDetoursForFlood(item.flood)), floodPopupOpts);
+          marker.bindPopup(() => buildFloodPopupHtml(item.flood, countDetoursForFlood(item.flood), publicMode), floodPopupOpts);
           marker.on("click", (e: any) => {
             L.DomEvent.stopPropagation(e);
             activationRef.current?.({ type: "FLOOD", id: item.flood.id });

@@ -3,6 +3,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { ChevronDown, Route, Waves } from "lucide-react";
 import type { FloodRoute, SystemDataPayload } from "@/db/default-data";
 import { DETAILED_TRAFFIC_STATUS_CONFIG, mapTrafficStatusToDetail, type DetailedTrafficStatus } from "@/lib/flood-event-schema";
+import { PUBLIC_READ_MESSAGES, type PublicReadState } from "./public-read-state";
 import { getEventIdForFloodRoute } from "@/lib/event-detour-links";
 
 export type MapPassability = Exclude<DetailedTrafficStatus, "CAUTION">;
@@ -19,13 +20,12 @@ export function recordedPassability(route: FloodRoute): MapPassability {
   return status === "CAUTION" ? "NO_SMALL_VEHICLES" : status;
 }
 
-export function CitizenMapStatus({ systemData, selected, onFilter, onDetours, isPending, isError }: {
+export function CitizenMapStatus({ systemData, selected, onFilter, onDetours, readState }: {
   systemData: SystemDataPayload;
   selected: MapPassability | "ALL";
   onFilter: (value: MapPassability | "ALL") => void;
   onDetours: () => void;
-  isPending: boolean;
-  isError: boolean;
+  readState: PublicReadState;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { count, detours, totals } = useMemo(() => {
@@ -43,11 +43,11 @@ export function CitizenMapStatus({ systemData, selected, onFilter, onDetours, is
     return { count: keys.size, detours: (systemData.detourRoutes || []).filter(route => route.is_active).length, totals: matched };
   }, [systemData]);
   const pending = totals.get("PENDING_VERIFICATION")?.size ?? 0;
-  const unavailable = isError && count === 0 && detours === 0;
+  const showCounts = readState === "ready" || (readState === "stale" && (count > 0 || detours > 0));
   return (
     <aside aria-label="สรุปสถานการณ์บนแผนที่" className="citizen-map-status">
-      {isPending || unavailable ? (
-        <p className="citizen-map-status-note" role="status">{isPending ? "กำลังโหลดข้อมูล" : "ตรวจสอบข้อมูลล่าสุดไม่ได้"}</p>
+      {!showCounts ? (
+        <p className="citizen-map-status-note">{PUBLIC_READ_MESSAGES[readState]}</p>
       ) : (
         <>
           <div className="citizen-map-status-head">
@@ -56,7 +56,7 @@ export function CitizenMapStatus({ systemData, selected, onFilter, onDetours, is
           </button>
           <button type="button" className="citizen-map-status-detours" onClick={onDetours}><Route size={13} aria-hidden="true" /><span>ทางเลี่ยง {detours} เส้นทาง</span></button>
           </div>
-          {isError && <p className="citizen-map-status-note">อาจไม่ใช่ข้อมูลล่าสุด</p>}
+          {readState === "stale" && <p className="citizen-map-status-note">{PUBLIC_READ_MESSAGES.stale}</p>}
         </>
       )}
       {selected !== "ALL" && (
@@ -64,10 +64,10 @@ export function CitizenMapStatus({ systemData, selected, onFilter, onDetours, is
           {mapPassabilityLabel(selected)}<span aria-hidden="true">×</span>
         </button>
       )}
-      {expanded && !unavailable && !isPending && (
+      {expanded && showCounts && (
         <div id="citizen-map-status-filters" className="citizen-map-status-filters" aria-label="กรองตามการผ่านทาง">
           {pending > 0 && <p className="citizen-map-status-note">มี {pending} จุดรอตรวจสอบสถานะ</p>}
-          {count === 0 && <p className="citizen-map-status-note">ยังไม่พบจุดที่รายงาน</p>}
+          {readState === "ready" && count === 0 && <p className="citizen-map-status-note">ยังไม่พบจุดที่รายงาน</p>}
           {statuses.filter((key) => (totals.get(key)?.size ?? 0) > 0 || selected === key).map(key => {
             const status = DETAILED_TRAFFIC_STATUS_CONFIG[key];
             return (

@@ -9,9 +9,11 @@
   --cit-ink: #17354a;
   --cit-sub: #455e6e;
   --cit-action: #175974;
+  --cit-water: #794706;
   --cit-on-action: #fff;
   --cit-selected: #e1edf1;
   --cit-deep: #e5eef0;
+  /* Keep basemap tiles and their loading backdrop independent of the interface theme. */
   --cit-map: #dce8e1;
   --cit-map-grain: #94ada824;
   --cit-focus: #1f7190;
@@ -28,11 +30,10 @@
   --cit-ink: #edf5f8;
   --cit-sub: #b9cbd5;
   --cit-action: #acd1e2;
+  --cit-water: #ffd48b;
   --cit-on-action: #143249;
   --cit-selected: #2c495d;
   --cit-deep: #182939;
-  --cit-map: #213731;
-  --cit-map-grain: #83a59c25;
   --cit-focus: #95d1e5;
   --cit-shadow: 0 3px 12px #0005;
 }
@@ -104,10 +105,29 @@
 .citizen-ui .citizen-header [class~="bg-amber-400"] { background: var(--cit-selected); color: var(--cit-action); }
 .citizen-ui .citizen-header .citizen-live { background: var(--cit-selected); border-color: var(--surface-border); color: var(--cit-action); }
 .citizen-ui .citizen-dossier-frame > div:first-child { box-shadow: none; }
+.citizen-ui .citizen-detour-step { background: var(--cit-deep); color: var(--cit-ink); }
+.citizen-ui .citizen-detour-step :where(p) { color: var(--cit-sub); }
 .citizen-ui :is(.citizen-flood-dossier,.citizen-detour-dossier) { background: #112b4059; backdrop-filter: none; }
 .citizen-ui .citizen-dossier-frame button[class*="bg-[#1320"] { color: var(--cit-action); }
 .citizen-ui .citizen-dossier-frame a[class*="bg-[#10b981]"] { background: var(--cit-action); color: var(--cit-on-action); }
 .citizen-ui .citizen-dossier-frame a[class*="bg-[#10b981]"] * { color: inherit; }
+/* Pair foreground and background in the public flood popup (including over map tiles). */
+.citizen-ui .doh-highway-popup { background: var(--surface-panel); color: var(--cit-ink); }
+.citizen-ui .doh-detour-popup [class~="bg-[#0d1b36]"] { background: var(--cit-deep); }
+.citizen-ui .doh-detour-popup .doh-detour-nav-btn { background: var(--cit-action); color: var(--cit-on-action); }
+.citizen-ui .doh-detour-popup .doh-detour-nav-btn [class~="text-emerald-100"] { color: inherit; }
+.citizen-ui .doh-flood-popup-area { background: var(--cit-deep); color: var(--cit-ink); }
+.citizen-ui .doh-flood-popup-area svg { stroke: currentColor; }
+.citizen-ui .doh-flood-popup-water { color: var(--cit-water); }
+.citizen-ui .doh-flood-popup-status[class~="bg-red-600"] { background: #a3202e; color: #fff; }
+.citizen-ui .doh-flood-popup-status[class~="bg-emerald-500"] { color: #102a21; }
+.citizen-ui .doh-flood-popup-status[class~="bg-slate-600/80"] { background: #455668; color: #fff; }
+.citizen-ui :is(.doh-flood-leaflet-popup,.doh-detour-leaflet-popup) .leaflet-popup-close-button {
+  background: var(--cit-deep) !important; color: var(--cit-ink) !important; border-color: var(--surface-border) !important;
+}
+.citizen-ui :is(.doh-flood-leaflet-popup,.doh-detour-leaflet-popup) .leaflet-popup-close-button:hover {
+  background: var(--cit-selected) !important;
+}
 .citizen-ui [role=status][class*="bg-slate-950"] { background: var(--surface-floating); color: var(--cit-ink); }
 .citizen-ui[data-citizen-theme=light] [role=alert][class*="bg-slate-950"] { background: #f9e5e6; color: #84242c; }
 .citizen-ui .citizen-legend { scrollbar-color: var(--cit-sub) var(--surface-panel); }
@@ -126,7 +146,6 @@
 .citizen-ui .leaflet-popup-tip { box-shadow:none!important }
 .citizen-ui .citizen-map-focus { background:var(--surface-panel);border-color:var(--surface-border);box-shadow:var(--cit-shadow);backdrop-filter:none; }
 .citizen-ui .citizen-card:has(>button[aria-pressed=true]) { box-shadow:none; }
-.citizen-ui[data-citizen-theme=dark] [data-active-base-map]:not([data-active-base-map=sat]) .leaflet-tile-pane { filter:brightness(.65) saturate(.62); }
 .citizen-ui .citizen-drawer :is([class*="bg-slate-950"],[class*="bg-slate-900"]):not([class*="bg-slate-950/65"]) { color:var(--cit-ink); }
 .citizen-ui .citizen-dossier-frame button[class*="bg-slate-800"] { color:var(--cit-ink); }
 .citizen-ui .citizen-test-note { background: var(--cit-deep); color: var(--cit-sub); }
@@ -390,10 +409,10 @@
   .citizen-ui .citizen-incident-road h3 { min-width:0;overflow-wrap:anywhere; }
   .citizen-ui .citizen-incident-update { display:flex;align-items:baseline;gap:.4rem;color:var(--cit-sub);font-size:.76rem; }
   .citizen-ui .citizen-incident-update > svg { align-self:center;flex:none; }
-  .citizen-ui .citizen-incident-photo > img { height:clamp(76px,18dvh,112px); }
+  .citizen-ui .citizen-incident-photo .citizen-photo-open > img { height:clamp(76px,18dvh,112px); }
 }
 @media (max-width:639px) and (max-height:430px) {
-  .citizen-ui .citizen-incident-photo > img { height:80px; }
+  .citizen-ui .citizen-incident-photo .citizen-photo-open > img { height:80px; }
   .citizen-ui .citizen-photo-controls { bottom:.3rem; }
 }
 
@@ -453,7 +472,7 @@
 .citizen-ui .citizen-incident-update svg { flex:none; }
 @media (min-width:900px) {
   .citizen-ui :is(.citizen-incident-photo,.citizen-incident-details,.citizen-incident-facts) { grid-column:1 / -1;grid-row:auto; }
-  .citizen-ui .citizen-incident-photo > img { height:clamp(110px,22dvh,178px); }
+  .citizen-ui .citizen-incident-photo .citizen-photo-open > img { height:clamp(110px,22dvh,178px); }
   .citizen-ui .citizen-incident-details { display:flex;align-items:baseline;flex-wrap:wrap;gap:.35rem .9rem; }
 }
 @media (max-width:639px) {
@@ -466,5 +485,122 @@
   .citizen-ui .citizen-gallery-arrows { position:absolute;left:.28rem;display:flex;gap:.16rem; }
   .citizen-ui .citizen-gallery-arrows > button { position:static;transform:none;translate:none;min-width:44px;min-height:44px; }
   .citizen-ui .citizen-gallery-dots { display:none; }
-  .citizen-ui .citizen-incident-photo:has(.citizen-gallery-arrows) > :is(img,.citizen-photo-placeholder) { min-height:114px; }
+  .citizen-ui .citizen-incident-photo:has(.citizen-gallery-arrows) > :is(.citizen-photo-open,.citizen-photo-placeholder) { min-height:114px; }
+  .citizen-ui .citizen-incident-photo:has(.citizen-gallery-arrows) .citizen-photo-open > img { min-height:114px; }
 }
+
+/* Traffic cards show the count and an explicit label; color is a secondary cue. */
+.citizen-status-card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
+  gap: .4rem;
+}
+.citizen-status-card-list > li { min-inline-size: 0; }
+.citizen-traffic-card {
+  --traffic-accent: var(--traffic-light);
+  display: grid;
+  inline-size: 100%;
+  block-size: 100%;
+  min-block-size: 44px;
+  gap: .2rem;
+  align-content: start;
+  padding: .34rem .48rem;
+  border: 1px solid color-mix(in srgb, var(--traffic-accent) 36%, var(--surface-border));
+  border-radius: .75rem;
+  background: color-mix(in srgb, var(--traffic-accent) 7%, var(--surface-card));
+  color: var(--cit-ink);
+  text-align: start;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+[data-citizen-theme=dark] .citizen-traffic-card { --traffic-accent: var(--traffic-dark); }
+.citizen-traffic-card[data-traffic-card=red] { --traffic-light: #9b2535; --traffic-dark: #ffaeb4; }
+.citizen-traffic-card[data-traffic-card=orange] { --traffic-light: #8b4018; --traffic-dark: #ffbe8f; }
+.citizen-traffic-card[data-traffic-card=amber] { --traffic-light: #794a0d; --traffic-dark: #ffd48b; }
+.citizen-traffic-card[data-traffic-card=sky] { --traffic-light: #165775; --traffic-dark: #9edaf6; }
+.citizen-traffic-card[data-traffic-card=emerald] { --traffic-light: #196345; --traffic-dark: #9ce2be; }
+.citizen-traffic-card[data-traffic-card=slate] { --traffic-light: #4b5d72; --traffic-dark: #c1d1e2; }
+.citizen-traffic-card:hover { background: color-mix(in srgb, var(--traffic-accent) 12%, var(--surface-card)); }
+.citizen-traffic-card[aria-pressed=true] {
+  border-color: var(--traffic-accent);
+  background: color-mix(in srgb, var(--traffic-accent) 15%, var(--surface-card));
+}
+.citizen-traffic-card-top { display: flex; align-items: center; gap: .3rem; color: var(--traffic-accent); }
+.citizen-traffic-card-top svg { flex: none; }
+.citizen-traffic-card-top strong { font-size: .96rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.citizen-traffic-card-check { margin-inline-start: auto; }
+.citizen-traffic-card-label { font-size: .75rem; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; }
+@media (min-width: 1024px) {
+  .citizen-dock-controls:has(.citizen-status-card-list) { max-block-size: 72%; overflow-y: auto; }
+}
+
+.citizen-ui [data-photo-error]:not([hidden]) { display:grid; min-height:5rem; place-items:center; padding:.45rem; color:var(--cit-sub); background:var(--cit-deep); }
+.citizen-ui [data-public-photo] > img[hidden] { display:none; }
+
+/* Match the standalone detour styling without changing the route-line modal. */
+.citizen-ui [data-detour-endpoint] .citizen-detour-photo-card {
+  display: grid; gap: .35rem; padding: .55rem;
+  border: 1px solid var(--surface-border); border-radius: .75rem;
+  background: var(--cit-deep);
+}
+.citizen-ui [data-detour-endpoint] .citizen-detour-photo-title { display:flex; gap:.35rem; align-items:center; color:var(--cit-action); font-weight:750; font-size:.75rem; }
+.citizen-ui [data-detour-endpoint] .citizen-detour-photo-title svg { flex:none; }
+.citizen-ui [data-detour-endpoint] .citizen-detour-photo-image { display:block; width:100%; height:auto; aspect-ratio:1 / 1; border-radius:.5rem; object-fit:cover; background:var(--surface-panel); }
+.citizen-ui [data-detour-endpoint] .citizen-detour-timeline { --step-marker:1.5rem; display:grid; gap:.45rem; padding:0; list-style:none; }
+.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-row { display:grid; grid-template-columns:var(--step-marker) minmax(0,1fr); gap:.5rem; position:relative; align-items:start; }
+.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-row:not(:last-child)::before {
+  content:""; position:absolute; inset-block:calc(var(--step-marker) / 2) -.8rem;
+  inset-inline-start:calc(var(--step-marker) / 2); width:1px; background:var(--surface-border);
+}
+.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-marker {
+  position:relative; display:grid; place-items:center; width:var(--step-marker); height:var(--step-marker);
+  border-radius:50%; background:#f59e0b; color:#172d39; font-size:.75rem; font-weight:850;
+}
+.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-card { min-width:0; padding:.55rem; border:1px solid var(--surface-border); border-radius:.75rem; }
+.citizen-ui [data-detour-endpoint] [aria-current=step] > .citizen-detour-timeline-card { border-color:var(--cit-focus); }
+.citizen-ui [data-detour-endpoint] [aria-current=step] > .citizen-detour-timeline-marker { background:var(--cit-action); color:var(--cit-on-action); }
+.citizen-ui [data-detour-endpoint] .citizen-detour-timeline-distance { border:1px solid var(--surface-border); border-radius:.35rem; padding:.08rem .28rem; color:var(--cit-sub); font-size:.68rem; font-variant-numeric:tabular-nums; }
+
+/* Endpoint-only accents: the selected marker and travel direction stay distinct. */
+.citizen-ui [data-detour-endpoint] {
+  --endpoint-accent: #14665b;
+  --endpoint-wash: color-mix(in srgb, var(--endpoint-accent) 10%, var(--surface-panel));
+}
+.citizen-ui [data-detour-endpoint=END] { --endpoint-accent: #3f55a4; }
+.citizen-ui[data-citizen-theme=dark] [data-detour-endpoint=START] { --endpoint-accent:#9cdbcb; }
+.citizen-ui[data-citizen-theme=dark] [data-detour-endpoint=END] { --endpoint-accent:#bbc7ff; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-header {
+  background:linear-gradient(115deg,var(--endpoint-wash),var(--surface-panel) 85%);
+  border-bottom:1px solid var(--surface-border);
+  box-shadow:inset 3px 0 var(--endpoint-accent);
+}
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-picker {
+  padding:2px; border:1px solid var(--surface-border); border-radius:.7rem; background:var(--surface-panel);
+}
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-picker button { border-color:transparent; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-picker button[aria-pressed=true] {
+  border-color:var(--endpoint-accent); color:var(--endpoint-accent); background:var(--endpoint-wash);
+}
+.citizen-ui [data-detour-endpoint] .citizen-detour-photo-card {
+  background:linear-gradient(145deg,var(--endpoint-wash),var(--surface-card) 70%);
+  border-color:color-mix(in srgb,var(--endpoint-accent) 24%,var(--surface-border));
+}
+.citizen-ui [data-detour-endpoint] .citizen-detour-photo-title { color:var(--endpoint-accent); }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-photo-button { position:relative; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-zoom {
+  position:absolute; inset:auto .45rem .45rem auto; display:grid; place-items:center;
+  width:2rem; height:2rem; color:#fff; background:#17354a; border:1px solid #ffffff66; border-radius:.5rem;
+}
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-photo-button:has(img[hidden]) .citizen-endpoint-zoom { display:none; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-locality-card {
+  display:flex; align-items:flex-start; gap:.5rem; padding:.5rem .6rem;
+  border:1px solid var(--surface-border); border-radius:.7rem; background:var(--surface-card);
+}
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-locality-card > svg { flex:none; margin-top:.15rem; color:var(--endpoint-accent); }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-locality-card h5 { margin:0 0 .12rem; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-timeline-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.25rem .5rem; }
+.citizen-ui [data-detour-endpoint] .citizen-endpoint-trip-direction {
+  border:1px solid var(--surface-border); border-radius:.45rem; padding:.13rem .38rem;
+  color:var(--cit-ink); background:var(--cit-deep); font-size:.7rem; font-weight:700;
+}
+.citizen-ui [data-detour-endpoint] [aria-current=step] > .citizen-detour-timeline-card { border-color:var(--endpoint-accent); background:var(--endpoint-wash); }

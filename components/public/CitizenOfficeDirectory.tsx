@@ -49,10 +49,20 @@ export function CitizenOfficeDirectory({ offices, onClose }: { offices?: DohOffi
     <dialog ref={dialogRef} className="citizen-office-directory" aria-labelledby="citizen-offices-title"
       onCancel={(event) => { event.preventDefault(); event.stopPropagation(); onClose(); }}
       onKeyDown={(event) => {
-        if (event.key !== "Escape") return;
-        event.preventDefault();
-        event.stopPropagation();
-        onClose();
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        } else if (event.key === "Tab") {
+          const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+            "button:not([disabled]),a[href]"
+          )).filter(control => control.getClientRects().length > 0);
+          const first = controls[0], last = controls.at(-1);
+          if (event.shiftKey ? document.activeElement === first : document.activeElement === last) {
+            event.preventDefault();
+            (event.shiftKey ? last : first)?.focus();
+          }
+        }
       }}
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >

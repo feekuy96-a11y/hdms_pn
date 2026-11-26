@@ -305,8 +305,8 @@ export function DetourDossierModal({
                         </div>
 
                         {/* Step Card */}
-                        <div className="ml-3 flex-1 min-w-0 rounded-2xl border border-slate-800 bg-[#0d1b36] p-3 shadow-sm">
-                          <div className="flex items-start justify-between gap-2">
+                        <div className="citizen-detour-step ml-3 flex-1 min-w-0 rounded-2xl border border-slate-800 p-3 shadow-sm">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
                             <div className="flex items-center gap-1.5 min-w-0">
                               {renderStepIcon(st.iconType)}
                               <span className="font-heading font-bold text-sm text-amber-300 break-words">
@@ -368,93 +368,93 @@ export function DetourDossierModal({
               </section>
             );
           })()}
-        </div>
 
-        {/* 7. Bottom Action Footer (Outside scroll container — zero scroll overlap) */}
-        {(() => {
-          const nav = resolveDetourGoogleMapsNavigation(
-            viewingDetourModal,
-            modalDetourDirection,
-            systemData.floodRoutes
-          );
+          {/* Navigation stays at the end of the scroll, leaving room to read on small screens. */}
+          {(() => {
+            const nav = resolveDetourGoogleMapsNavigation(
+              viewingDetourModal,
+              modalDetourDirection,
+              systemData.floodRoutes
+            );
 
-          const getFocusCoords = (): [number, number] | undefined => {
-            const fwdCoords = parseRouteCoordinates(viewingDetourModal.coordinates_json);
-            const revCoords = parseRouteCoordinates(viewingDetourModal.reverse_coordinates_json);
-            if (modalDetourDirection === "REVERSE") {
-              if (revCoords.length > 0 && Number.isFinite(revCoords[0][0]) && Number.isFinite(revCoords[0][1])) {
-                return revCoords[0];
+            const getFocusCoords = (): [number, number] | undefined => {
+              const fwdCoords = parseRouteCoordinates(viewingDetourModal.coordinates_json);
+              const revCoords = parseRouteCoordinates(viewingDetourModal.reverse_coordinates_json);
+              if (modalDetourDirection === "REVERSE") {
+                if (revCoords.length > 0 && Number.isFinite(revCoords[0][0]) && Number.isFinite(revCoords[0][1])) {
+                  return revCoords[0];
+                }
+                if (Number.isFinite(viewingDetourModal.lon_end) && Number.isFinite(viewingDetourModal.lat_end)) {
+                  return [viewingDetourModal.lon_end, viewingDetourModal.lat_end];
+                }
+                if (fwdCoords.length > 0) {
+                  const last = fwdCoords[fwdCoords.length - 1];
+                  if (Number.isFinite(last[0]) && Number.isFinite(last[1])) return last;
+                }
               }
-              if (Number.isFinite(viewingDetourModal.lon_end) && Number.isFinite(viewingDetourModal.lat_end)) {
-                return [viewingDetourModal.lon_end, viewingDetourModal.lat_end];
+              if (Number.isFinite(viewingDetourModal.lon_start) && Number.isFinite(viewingDetourModal.lat_start)) {
+                return [viewingDetourModal.lon_start, viewingDetourModal.lat_start];
               }
-              if (fwdCoords.length > 0) {
-                const last = fwdCoords[fwdCoords.length - 1];
-                if (Number.isFinite(last[0]) && Number.isFinite(last[1])) return last;
+              if (fwdCoords.length > 0 && Number.isFinite(fwdCoords[0][0]) && Number.isFinite(fwdCoords[0][1])) {
+                return fwdCoords[0];
               }
-            }
-            if (Number.isFinite(viewingDetourModal.lon_start) && Number.isFinite(viewingDetourModal.lat_start)) {
-              return [viewingDetourModal.lon_start, viewingDetourModal.lat_start];
-            }
-            if (fwdCoords.length > 0 && Number.isFinite(fwdCoords[0][0]) && Number.isFinite(fwdCoords[0][1])) {
-              return fwdCoords[0];
-            }
-            return undefined;
-          };
+              return undefined;
+            };
 
-          return (
-            <div className="shrink-0 z-20 space-y-2 border-t border-slate-800/90 bg-[#081120] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_20px_rgba(8,17,32,0.95)] sm:rounded-b-[1.75rem]">
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] items-stretch gap-2.5">
-                {nav.isValid && nav.url ? (
-                  <a
-                    href={nav.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full min-w-0 min-h-[2.75rem] flex items-center justify-between rounded-2xl bg-[#10b981] hover:bg-[#059669] px-3.5 py-2.5 text-white shadow-lg shadow-emerald-950/40 transition-all touch-manipulation cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 rounded-full bg-white p-1 flex items-center justify-center shadow">
-                        <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
-                          <path fill="#EA4335" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
-                          <circle fill="#FFFFFF" cx="12" cy="9" r="2.8" />
-                          <circle fill="#4285F4" cx="12" cy="9" r="1.8" />
-                        </svg>
-                      </div>
-                      <div className="text-left min-w-0">
-                        <div className="font-heading text-xs sm:text-sm font-bold text-white leading-tight break-words">
-                          ดูบน Google Maps
+            return (
+              <div className="space-y-2 border-t border-slate-800/90 pt-3 pb-[env(safe-area-inset-bottom)]">
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] items-stretch gap-2.5">
+                  {nav.isValid && nav.url ? (
+                    <a
+                      href={nav.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full min-w-0 min-h-[2.75rem] flex items-center justify-between rounded-2xl bg-[#10b981] hover:bg-[#059669] px-3.5 py-2.5 text-white shadow-lg shadow-emerald-950/40 transition-all touch-manipulation cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 rounded-full bg-white p-1 flex items-center justify-center shadow">
+                          <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
+                            <path fill="#EA4335" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+                            <circle fill="#FFFFFF" cx="12" cy="9" r="2.8" />
+                            <circle fill="#4285F4" cx="12" cy="9" r="1.8" />
+                          </svg>
                         </div>
-                        <div className="text-[0.75rem]/[1.1rem] font-medium text-emerald-100 mt-0.5 break-words">
-                          {modalDetourDirection === "FORWARD" ? "(ขาไป A ➔ B)" : "(ขากลับ B ➔ A)"}
+                        <div className="text-left min-w-0">
+                          <div className="font-heading text-xs sm:text-sm font-bold text-white leading-tight break-words">
+                            ดูบน Google Maps
+                          </div>
+                          <div className="text-[0.75rem]/[1.1rem] font-medium text-emerald-100 mt-0.5 break-words">
+                            {modalDetourDirection === "FORWARD" ? "(ขาไป A ➔ B)" : "(ขากลับ B ➔ A)"}
+                          </div>
                         </div>
                       </div>
+                      <ExternalLink aria-hidden="true" className="w-4 h-4 sm:w-5 sm:h-5 text-white shrink-0 ml-1 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                    </a>
+                  ) : (
+                    <div className="w-full min-w-0 min-h-[2.75rem] flex items-center justify-center rounded-2xl border border-amber-500/40 bg-slate-900 px-3.5 py-2.5 text-center text-xs text-amber-200">
+                      ⚠️ {nav.warning || "เส้นทางยังไม่พร้อมสำหรับการนำทาง"}
                     </div>
-                    <ExternalLink aria-hidden="true" className="w-4 h-4 sm:w-5 sm:h-5 text-white shrink-0 ml-1 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                  </a>
-                ) : (
-                  <div className="w-full min-w-0 min-h-[2.75rem] flex items-center justify-center rounded-2xl border border-amber-500/40 bg-slate-900 px-3.5 py-2.5 text-center text-xs text-amber-200">
-                    ⚠️ {nav.warning || "เส้นทางยังไม่พร้อมสำหรับการนำทาง"}
-                  </div>
-                )}
+                  )}
 
-                <button
-                  type="button"
-                  onClick={() => onFocusMapLocation(getFocusCoords())}
-                  className="w-full min-w-0 min-h-[2.75rem] flex items-center justify-center gap-2 rounded-2xl border border-slate-700/80 bg-[#13203c] hover:bg-[#1a2b50] px-3.5 py-2.5 font-heading text-xs sm:text-sm font-bold text-white shadow transition-all touch-manipulation cursor-pointer shrink-0"
-                >
-                  <BookOpen aria-hidden="true" className="w-4 h-4 sm:w-5 sm:h-5 text-white shrink-0" />
-                  <span>ดูตำแหน่งบนแผนที่</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => onFocusMapLocation(getFocusCoords())}
+                    className="w-full min-w-0 min-h-[2.75rem] flex items-center justify-center gap-2 rounded-2xl border border-slate-700/80 bg-[#13203c] hover:bg-[#1a2b50] px-3.5 py-2.5 font-heading text-xs sm:text-sm font-bold text-white shadow transition-all touch-manipulation cursor-pointer shrink-0"
+                  >
+                    <BookOpen aria-hidden="true" className="w-4 h-4 sm:w-5 sm:h-5 text-white shrink-0" />
+                    <span>ดูตำแหน่งบนแผนที่</span>
+                  </button>
+                </div>
+                {nav.disclaimer && (
+                  <details className="text-xs text-slate-300">
+                    <summary className="cursor-pointer py-0.5 text-center text-slate-300 underline underline-offset-2 hover:text-white">ข้อควรทราบก่อนนำทาง</summary>
+                    <p className="mt-1 text-center leading-relaxed text-slate-300">{nav.disclaimer}</p>
+                  </details>
+                )}
               </div>
-              {nav.disclaimer && (
-                <details className="text-xs text-slate-300">
-                  <summary className="cursor-pointer py-0.5 text-center text-slate-300 underline underline-offset-2 hover:text-white">ข้อควรทราบก่อนนำทาง</summary>
-                  <p className="mt-1 text-center leading-relaxed text-slate-300">{nav.disclaimer}</p>
-                </details>
-              )}
-            </div>
-          );
-        })()}
+            );
+          })()}
+        </div>
       </div>
     </div>
   );

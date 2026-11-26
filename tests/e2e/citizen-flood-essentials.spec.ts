@@ -58,7 +58,7 @@ test("mobile flood essentials remain above scroll with compact loaded photo or n
     expect(await capture.evaluate(node => {
       const r = node.getBoundingClientRect();
       const b = node.querySelector(".citizen-photo-status")!.getBoundingClientRect();
-      const conflicts = Array.from(node.querySelectorAll("button, .citizen-photo-caption, .citizen-photo-placeholder > p"))
+      const conflicts = Array.from(node.querySelectorAll("button:not(.citizen-photo-open), .citizen-photo-caption, .citizen-photo-placeholder > p"))
         .filter(el => el.getBoundingClientRect().width > 0)
         .some(el => {const x=el.getBoundingClientRect();return x.left < b.right && x.right > b.left && x.top < b.bottom && x.bottom > b.top;});
       return b.top >= r.top && b.right <= r.right && b.right > r.left + r.width * .75 && !conflicts;
@@ -84,6 +84,7 @@ test("long Thai detour dossier title reflows at enlarged text while real close s
     updatedAt: checkedAt, floodRoutes: [{ ...fakeFlood, latest_photo_url: photo }],
     detourRoutes: [{ id: "D-LONG", flood_id_ref: fakeFlood.id, route_name: longRoad, description: "1. เลี้ยวซ้าย\n2. กลับสู่ถนนหลัก",
       direction_mode: "TWO_WAY", is_active: true, updated_at: checkedAt,
+      detour_meta: { start_point_photo: { url: photo, caption: "ภาพแนวกว้างสำหรับหน้ารายละเอียดจากเส้น" } },
       lat_start: 6.89, lon_start: 101.183, lat_end: 6.895, lon_end: 101.21,
       coordinates_json: [[101.183, 6.89], [101.21, 6.895]] }],
     highwayLayers: [], timelineUpdates: [], mitigationProjects: [], offices: [], mapStyles: null,
@@ -111,6 +112,20 @@ test("long Thai detour dossier title reflows at enlarged text while real close s
       range.selectNodeContents(el);
       return Array.from(range.getClientRects()).every(r => r.left >= panel.left && r.right <= panel.right && r.bottom <= panel.bottom);
     })).toBe(true);
+    const routePhoto = dialog.getByRole("img", { name: "ภาพแนวกว้างสำหรับหน้ารายละเอียดจากเส้น", exact: true });
+    await expect.poll(() => routePhoto.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+    const routePhotoBox = (await routePhoto.boundingBox())!;
+    expect(routePhotoBox.width).toBeGreaterThan(routePhotoBox.height);
+    await expect(dialog.locator("[data-endpoint-photo]")).toHaveCount(0);
+    const timelineStep = dialog.locator(".citizen-detour-step").first();
+    await expect(timelineStep).toHaveCSS("background-color", "rgb(229, 238, 240)");
+    await expect(timelineStep.locator("p")).toHaveCSS("color", "rgb(69, 94, 110)");
+    const scroller = dialog.locator(".overflow-y-auto").first();
+    expect(await scroller.evaluate(el => el.clientHeight)).toBeGreaterThanOrEqual(viewport.height * 0.35);
+    const focusMap = dialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true });
+    await focusMap.scrollIntoViewIfNeeded();
+    await expect(focusMap).toBeInViewport();
+    await expect(close).toBeInViewport();
     await close.click();
     await expect(dialog).toHaveCount(0);
   }
@@ -139,7 +154,8 @@ test("public photo album shows loading, preserves known photos, and retries a fa
     }
   });
   const open = async () => {
-    await page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
+    const nav = page.getByRole("navigation", { name: "เมนูประชาชน" });
+    if (await nav.isVisible()) await nav.getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
     await page.locator(".citizen-card").filter({ hasText: section }).getByRole("button", { name: "ดูรายละเอียด", exact: true }).click();
   };
   const dialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
@@ -177,4 +193,47 @@ test("public photo album shows loading, preserves known photos, and retries a fa
   await expect.poll(() => reads).toBe(4);
   await expect.poll(() => dialog.locator(".citizen-incident-photo img").evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   await expect(dialog.getByText("ยังไม่มีภาพแนบ", { exact: true })).toHaveCount(0);
+});
+
+
+test("public flood map and dossier photos open a single accessible viewer and leave the parent open", async ({ page, isMobile }) => {
+  const photoPng = "data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=";
+  await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: {
+    updatedAt: checkedAt, floodRoutes: [{ ...fakeFlood, latest_photo_url: photoPng }],
+    detourRoutes: [], highwayLayers: [], timelineUpdates: [], mitigationProjects: [], offices: [], mapStyles: null,
+    systemSettings: { name: "แผนที่ประชาชน", org: "แขวงทางหลวง", phone: "1586" },
+  } }));
+  await page.setViewportSize(isMobile ? { width: 320, height: 568 } : { width: 1280, height: 850 });
+  await page.goto(base + "/");
+  await page.locator(".doh-map-capsule-pin").first().press("Enter");
+  const popup = page.locator(".doh-flood-leaflet-popup");
+  await expect(popup).toBeVisible();
+  await expect(popup.getByText("ผ่านไม่ได้", { exact: true })).toBeVisible();
+  const contents = await popup.innerText();
+  expect(contents.indexOf(section)).toBeLessThan(contents.indexOf("ผ่านไม่ได้"));
+  expect(contents.indexOf("ผ่านไม่ได้")).toBeLessThan(contents.indexOf("ระหว่าง กม."));
+  expect(contents.indexOf("อัปเดต")).toBeLessThan(contents.indexOf("ระดับน้ำล่าสุด"));
+  const viewer = page.getByRole("dialog", { name: "ภาพถ่ายสถานการณ์ขนาดเต็ม" });
+  const popupPhoto = popup.getByRole("button", { name: "ขยายภาพสถานการณ์เต็มจอ" });
+  await popupPhoto.locator("img").click();
+  await expect(viewer.getByRole("img")).toBeVisible();
+  await expect(viewer.getByRole("button", { name: "ปิดภาพขนาดเต็ม" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(viewer.getByRole("button", { name: "ปิดภาพขนาดเต็ม" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(viewer).toHaveCount(0);
+  await expect(popupPhoto).toBeFocused();
+  await popup.getByRole("button", { name: "ดูรายละเอียด", exact: true }).click();
+  const dossier = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
+  const close = dossier.getByRole("button", { name: "ปิดรายละเอียด", exact: true });
+  await expect(close).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  expect(await dossier.evaluate(el => el.contains(document.activeElement))).toBe(true);
+  const dossierPhoto = dossier.getByRole("button", { name: "ขยายภาพสถานการณ์เต็มจอ", exact: true });
+  await dossierPhoto.locator("img").click();
+  await expect(viewer).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(viewer).toHaveCount(0);
+  await expect(dossier).toBeVisible();
+  await expect(dossierPhoto).toBeFocused();
 });

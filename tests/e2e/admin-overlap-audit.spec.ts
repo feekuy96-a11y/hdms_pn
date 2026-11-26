@@ -34,6 +34,7 @@ const views = [
   { name: "short-landscape", width: 568, height: 320, scale: 100 },
   { name: "intermediate", width: 768, height: 630, scale: 100 },
   { name: "desktop", width: 1440, height: 900, scale: 100 },
+  { name: "320-text150", width: 320, height: 568, scale: 150 },
   { name: "320-text120", width: 320, height: 568, scale: 120 },
   { name: "landscape-text120", width: 640, height: 360, scale: 120 },
 ];
@@ -55,6 +56,23 @@ for (const v of views) test(`admin overlap audit ${v.name}`, async ({ page, isMo
   await page.goto(`${process.env.BASE_PATH || ""}/admin/`);
   if (v.scale !== 100) await page.addStyleTag({ content: `html { font-size: ${v.scale}%; }` });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(v.width);
+  if (v.width === 320) {
+    const fieldNav = page.getByRole("group", { name: "งานภาคสนาม", exact: true });
+    for (const label of ["รายงานสถานการณ์", "รายการเหตุการณ์", "รายการทางเลี่ยง"]) {
+      const text = fieldNav.getByText(label, { exact: true });
+      await expect(text).toBeVisible();
+      expect(await text.evaluate(el => {
+        const button = el.closest("button")!.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const badge = el.parentElement?.querySelector('[class*="navCount"]')?.getBoundingClientRect();
+        return Array.from(range.getClientRects()).every(rect =>
+          rect.left >= button.left - 1 && rect.right <= button.right + 1 &&
+          (!badge || rect.top >= badge.bottom || rect.bottom <= badge.top || rect.left >= badge.right || rect.right <= badge.left)
+        );
+      }), label).toBeTruthy();
+    }
+  }
   const fieldSave = page.getByRole("button", { name: "บันทึกเหตุการณ์", exact: true });
   await hit(fieldSave, "field save initial");
   const heading = page.getByRole("heading", { name: "รายงานสถานการณ์น้ำท่วม", exact: true });
@@ -69,7 +87,11 @@ for (const v of views) test(`admin overlap audit ${v.name}`, async ({ page, isMo
   await hit(theme, "theme control");
   const government = page.getByText("ส่วนราชการ", { exact: true });
   const [governmentRect, themeRect] = await Promise.all([government.boundingBox(), theme.boundingBox()]);
-  expect(governmentRect!.x + governmentRect!.width, "header badge does not overlap theme control").toBeLessThanOrEqual(themeRect!.x);
+  if (v.width >= 360) {
+    expect(governmentRect!.x + governmentRect!.width, "header badge does not overlap theme control").toBeLessThanOrEqual(themeRect!.x);
+  } else {
+    await expect(government).toHaveCSS("position", "absolute"); // Screen-reader only on narrow screens.
+  }
   if (v.width >= 640) {
     await expect(government, "government badge stays on one line alongside long organization name").toHaveCSS("white-space", "nowrap");
     expect(await government.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBeTruthy();

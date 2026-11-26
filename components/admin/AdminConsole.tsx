@@ -348,13 +348,13 @@ export function AdminConsole({
         aria-describedby={item.badge ? countId("mobile", id) : undefined}
         aria-current={activeTab === id ? "page" : undefined}
         onClick={() => openWorkspace(id, false)}
-        className={`flex min-h-11 min-w-0 items-center gap-1 rounded-lg border border-transparent text-xs font-semibold leading-snug ${compact ? "justify-center px-1" : "justify-start px-2.5"}`}>
-        <Icon className="size-3.5 shrink-0" aria-hidden="true" />
-        <span className="min-w-0">{id === "map" ? "รายงานสถานการณ์" : item.label}</span>
-        {!!item.badge && <>
-          <span className={workspace.navCount} aria-hidden="true">{item.badge > 99 ? "99+" : item.badge}</span>
-          <span id={countId("mobile", id)} className="sr-only">{describeCount(item)}</span>
-        </>}
+        className={`${workspace.mobileNavItem} ${compact ? workspace.mobileNavPrimary : ""} min-h-11 min-w-0 rounded-lg border border-transparent text-xs font-semibold leading-snug`}>
+        <span className={workspace.mobileNavGlyph} aria-hidden="true">
+          <Icon className="size-3.5 shrink-0" />
+          {!!item.badge && <span className={workspace.navCount}>{item.badge > 99 ? "99+" : item.badge}</span>}
+        </span>
+        <span className={workspace.mobileNavLabel}>{id === "map" ? "รายงานสถานการณ์" : item.label}</span>
+        {!!item.badge && <span id={countId("mobile", id)} className="sr-only">{describeCount(item)}</span>}
       </button>
     );
   };
