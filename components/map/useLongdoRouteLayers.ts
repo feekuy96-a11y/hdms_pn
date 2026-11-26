@@ -291,7 +291,8 @@ export function useLongdoRouteLayers({
     if (!effectiveShowDetourLayer) return;
     const renderer = rendererRef.current;
     const detourStyle = mapStyles.detour;
-    const dColor = publicMode ? TRAFFIC_ACCENT.amber : detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
+    const dColor = detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
+    const detourPinColor = publicMode ? TRAFFIC_ACCENT.amber : dColor;
     const dDash = dashArrayFor(detourStyle) || (publicMode ? "8 6" : undefined);
 
     (systemData.detourRoutes || []).forEach((detour) => {
@@ -336,7 +337,7 @@ export function useLongdoRouteLayers({
         });
 
         const midPoint = latLngs[Math.floor(latLngs.length / 2)];
-        const detourIcon = L.divIcon(buildDetourSymbolIconSpec(dColor));
+        const detourIcon = L.divIcon(buildDetourSymbolIconSpec(detourPinColor));
         const detourMarker = L.marker(midPoint, { icon: detourIcon, interactive: true })
           .bindPopup(() => buildDetourPopupHtml(detour, defaultDir, systemData), detourPopupOpts)
           .addTo(group);
@@ -527,7 +528,7 @@ export function useLongdoRouteLayers({
           casing.__dohBaseOpacity = fOpacity;
         }
         const polyline = L.polyline(coords.map(toLeafletLatLng) as any, {
-          color: segmentAccent(flood),
+          color: fColor,
           weight: selectedWeight,
           opacity: fOpacity,
           dashArray: fDash,

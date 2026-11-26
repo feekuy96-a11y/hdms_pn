@@ -461,19 +461,14 @@ export function AdminConsole({
           <button
             type="button"
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="w-full min-h-10 flex items-center justify-center p-2 rounded-xl text-slate-400 hover:bg-white/10 hover:text-white text-xs transition cursor-pointer"
+            className="hdms-map-control w-full min-h-11 flex items-center justify-center p-2 rounded-xl transition cursor-pointer"
             title={isSidebarCollapsed ? "ขยายเมนู" : "ย่อเมนู"}
             aria-label={isSidebarCollapsed ? "ขยายเมนู" : "ย่อเมนู"}
             aria-expanded={!isSidebarCollapsed}
           >
-            {isSidebarCollapsed ? (
-              <ChevronRight className="w-4 h-4" />
-            ) : (
-              <div className="flex items-center gap-2">
-                <ChevronLeft className="w-4 h-4" />
-                <span className="text-[0.75rem]">ย่อแถบเมนูข้าง</span>
-              </div>
-            )}
+            {isSidebarCollapsed
+              ? <ChevronRight className="w-4 h-4" aria-hidden="true" />
+              : <ChevronLeft className="w-4 h-4" aria-hidden="true" />}
           </button>
         </div>
         {!isPaneCollapsed && !isSidebarCollapsed && (

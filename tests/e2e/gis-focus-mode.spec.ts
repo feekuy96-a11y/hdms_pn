@@ -8,6 +8,7 @@ import {
   updateGisFocusOptions,
 } from "../../lib/gis-focus-mode";
 import type { SystemDataPayload } from "../../db/default-data";
+import { DEFAULT_MAP_STYLES } from "../../lib/constants";
 
 const base = process.env.BASE_PATH || "";
 const mockUpdatedAt = "2026-11-24T06:00:00.000Z";
@@ -864,6 +865,62 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
   });
 });
 
+for (const admin of [false, true]) {
+  test(`${admin ? "admin" : "public"} draws saved road, flood and detour colors in the map and focus views`, async ({ page, isMobile }) => {
+    const colors = { flood: "#8b214f", detour: "#2875a3", primary: "#39632b", secondary: "#6451ad" };
+    const payload = createMockPayload();
+    payload.mapStyles = structuredClone(DEFAULT_MAP_STYLES);
+    for (const key of ["flood", "detour", "primary", "secondary"] as const) {
+      payload.mapStyles[key].color = colors[key];
+      payload.mapStyles[key].animationEnabled = false;
+    }
+    payload.highwayLayers = (["MAIN_HIGHWAY", "SECOND_HIGHWAY"] as const).map((layer_id, index) => ({
+      layer_id, layer_name: layer_id, is_visible: true, color_hex: "#112233", line_width: 5,
+      geojson_data: { type: "FeatureCollection", features: [{
+        type: "Feature", properties: { route_no: "42", section_name: "ช่วงทดสอบ" },
+        geometry: { type: "LineString", coordinates: [[101.13, 6.83 + index * .01], [101.2, 6.83 + index * .01]] },
+      }] },
+    }));
+    await page.addInitScript(() => {
+      const events = new Map<string, number>();
+      Object.defineProperty(window, "__mapStrokeCounts", { value: events });
+      const stroke = CanvasRenderingContext2D.prototype.stroke;
+      CanvasRenderingContext2D.prototype.stroke = function (...args: [Path2D?]) {
+        const color = this.strokeStyle;
+        if (this.canvas.closest("[data-hdms-map]") && typeof color === "string") {
+          events.set(color, (events.get(color) ?? 0) + 1);
+        }
+        return Reflect.apply(stroke, this, args);
+      };
+    });
+    const count = (color: string) => page.evaluate(c =>
+      ((window as unknown as { __mapStrokeCounts: Map<string, number> }).__mapStrokeCounts.get(c) ?? 0), color);
+    await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
+    await page.goto(`${base}/${admin ? "admin/" : ""}`);
+    if (admin && isMobile) await page.getByRole("button", { name: "แผนที่ GIS", exact: true }).click();
+    const tools = page.getByRole("group", { name: "เครื่องมือแผนที่" });
+    await tools.getByRole("button", { name: "เลเยอร์", exact: true }).click();
+    const legend = page.getByRole("region", { name: "เลเยอร์และสัญลักษณ์แผนที่" });
+    await legend.getByText("ตั้งค่าเพิ่มเติม", { exact: true }).click();
+    await legend.getByRole("checkbox", { name: /แสดงสายรองทุกระดับซูม/ }).check();
+    await tools.getByRole("button", { name: "เลเยอร์", exact: true }).click();
+    for (const color of Object.values(colors)) await expect.poll(() => count(color)).toBeGreaterThan(0);
+
+    for (const [pin, popup, color] of [
+      [".doh-map-capsule-pin", ".doh-flood-leaflet-popup", colors.flood],
+      [".doh-detour-symbol", ".doh-detour-leaflet-popup", colors.detour],
+    ]) {
+      await page.locator(pin).first().press("Enter");
+      await page.locator(popup).getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).click();
+      await expect(page.getByTestId(admin ? "admin-gis-focus-exit-bar" : "gis-focus-mode-bar")).toBeVisible();
+      const beforeRedraw = await count(color);
+      await tools.getByRole("button", { name: "Zoom out", exact: true }).click();
+      await expect.poll(() => count(color)).toBeGreaterThan(beforeRedraw);
+      await page.getByTestId("gis-focus-exit-btn").click();
+    }
+  });
+}
+
 test.describe("Admin Shared GIS Focus Mode", () => {
   test("admin map legend, zoom and symbols use shared contrast without tinting map imagery", async ({ page, isMobile }) => {
     test.skip(isMobile, "Uses the admin map and theme menu together on a desktop split view.");
@@ -887,7 +944,9 @@ test.describe("Admin Shared GIS Focus Mode", () => {
     ]) {
       await page.getByRole("button", { name: "รูปแบบสีพื้นที่จัดการ" }).click();
       await page.getByRole("button", { name: theme.mode, exact: true }).click();
-      const toggle = map.getByTitle("เปิดแถบควบคุมเลเยอร์แผนที่");
+      const tools = map.getByRole("group", { name: "เครื่องมือแผนที่" });
+      const toggle = tools.getByRole("button", { name: "เลเยอร์", exact: true });
+      await expect(tools.getByRole("button")).toHaveCount(4);
       await expect(toggle).toHaveCSS("background-color", theme.surface);
       await expect(toggle).toHaveCSS("color", theme.ink);
       await expect(zoom).toHaveCSS("color", theme.ink);
@@ -895,7 +954,7 @@ test.describe("Admin Shared GIS Focus Mode", () => {
       await expect(legend).toHaveCSS("background-color", theme.surface);
       await expect(legend).toHaveCSS("color", theme.ink);
       const rows = legend.locator(".citizen-visibility label");
-      await expect(rows).toHaveCount(7);
+      await expect(rows).toHaveCount(6);
       for (const label of await rows.all()) {
         await expect(label).toHaveCSS("color", theme.ink);
       }
@@ -912,10 +971,12 @@ test.describe("Admin Shared GIS Focus Mode", () => {
         expect(contrast).toBeGreaterThanOrEqual(3);
       }
       const routeListToggle = legend.getByRole("button", { name: "ดูรายชื่อทางหลวงสายหลัก", exact: true });
-      await routeListToggle.focus();
+      await routeListToggle.press("Enter");
       const routeList = map.getByRole("tooltip", { name: "รายชื่อทางหลวงสายหลัก", exact: true });
       await expect(routeList).toHaveCSS("background-color", theme.surface);
       await expect(routeList.getByText("ทล.42", { exact: true })).toHaveCSS("color", theme.primaryCode);
+      await expect(legend.getByRole("button", { name: "Longdo", exact: true })).toBeVisible();
+      await expect(legend.getByRole("button", { name: "ดาวเทียม", exact: true })).toBeVisible();
       const choice = legend.getByRole("button", { name: "ถนน OSM", exact: true });
       await choice.click();
       await expect(choice).toHaveCSS("background-color", theme.active);

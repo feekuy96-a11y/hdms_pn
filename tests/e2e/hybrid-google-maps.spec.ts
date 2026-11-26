@@ -135,7 +135,8 @@ test.describe("Public detour endpoints on mobile", () => {
     await page.goto(`${process.env.BASE_PATH || ""}/`);
     const collapse = page.getByRole("button", { name: "ย่อรายการสายทาง" });
     const expand = page.getByRole("button", { name: "แสดงรายการสายทาง" });
-    await collapse.click();
+    // Keyboard activation leaves the in-place toggle unhovered for the resting palette check.
+    await collapse.press("Enter");
     await expect(expand).toHaveCSS("background-color", "rgb(255, 255, 255)");
     await expect(expand).toHaveCSS("color", "rgb(23, 53, 74)");
     await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
