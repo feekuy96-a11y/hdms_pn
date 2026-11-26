@@ -733,7 +733,15 @@ test("two-way detour uses configured line style color for both directions and ar
   });
 
   await page.goto(`${base}/`);
-  await expect(page.locator(".doh-detour-symbol")).toBeVisible({ timeout: 10_000 });
+  const symbols = page.locator(".doh-detour-symbol");
+  await expect(symbols).toHaveCount(1);
+  const layerButton = page.getByRole("group", { name: "เครื่องมือแผนที่" }).getByRole("button", { name: "เลเยอร์", exact: true });
+  await layerButton.click();
+  const legend = page.getByRole("region", { name: "เลเยอร์และสัญลักษณ์แผนที่" });
+  await legend.getByText("ตั้งค่าเพิ่มเติม", { exact: true }).click();
+  await legend.getByRole("button", { name: "แยกตามทิศทาง", exact: true }).click();
+  await layerButton.click();
+  await expect(symbols).toHaveCount(2);
   const arrowBadges = page.locator(".doh-dir-arrow-icon > div");
   await expect.poll(async () => await arrowBadges.count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
 

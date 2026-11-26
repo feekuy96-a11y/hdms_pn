@@ -283,8 +283,9 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
 
     await page.goto(`${base}/`);
     await page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
-    await page.getByRole("button", { name: /ทางเลี่ยง/ }).first().click();
-    await page.getByRole("button", { name: /เส้นทางเลี่ยง ปน\.2043/ }).first().click();
+    const drawer = page.locator(".citizen-drawer");
+    await drawer.getByRole("group", { name: "ประเภทข้อมูล" }).getByRole("button", { name: /^ทางเลี่ยง/ }).click();
+    await drawer.getByRole("button", { name: /เส้นทางเลี่ยง ปน\.2043/ }).first().click();
 
     const detourDialog = page.getByRole("dialog", { name: /คำแนะนำเส้นทางเลี่ยง/ });
     await expect(detourDialog).toBeVisible();
@@ -1323,4 +1324,56 @@ test("public recommendation and both endpoint cards use the identical Maps URL f
     await expect(maps(popup)).toHaveAttribute("href", url!);
     await expect(focusBar).toContainText(reverse ? "ขากลับ (B → A)" : "ขาไป (A → B)");
   }
+});
+
+test("grouped detours keep linked alternatives separate and split only the recorded directional pair", async ({ page }) => {
+  const payload = createMockPayload();
+  const primary = payload.detourRoutes[0];
+  primary.description = "ขาไป:\n1. เลนขาไป\nขากลับ:\n1. เลนขากลับ";
+  primary.reverse_coordinates_json = [[101.17, 6.812], [101.15, 6.803], [101.13, 6.792]];
+  payload.detourRoutes.push({
+    ...primary,
+    id: "D-OTHER",
+    route_name: "ทางเลี่ยงอีกสายที่ผูกเหตุเดียวกัน",
+    direction_mode: "FORWARD_ONLY",
+    coordinates_json: [[101.13, 6.85], [101.15, 6.86], [101.17, 6.87]],
+    reverse_coordinates_json: [],
+  } as typeof primary);
+  payload.detourRoutes.push({
+    ...primary,
+    id: "D-SHARED",
+    route_name: "ทางเลี่ยงคันทางเดียว",
+    coordinates_json: [[101.13, 6.83], [101.17, 6.84]],
+    reverse_coordinates_json: [[101.17, 6.84], [101.13, 6.83]],
+  } as typeof primary);
+  await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
+  await page.goto(base + "/");
+
+  const symbols = page.locator(".doh-detour-symbol");
+  await expect(symbols).toHaveCount(3);
+  const layerButton = page.getByRole("group", { name: "เครื่องมือแผนที่" }).getByRole("button", { name: "เลเยอร์", exact: true });
+  await layerButton.click();
+  const legend = page.getByRole("region", { name: "เลเยอร์และสัญลักษณ์แผนที่" });
+  await legend.getByText("ตั้งค่าเพิ่มเติม", { exact: true }).click();
+  const mode = legend.getByRole("group", { name: "รูปแบบแสดงทางเลี่ยง" });
+  await expect(mode.getByRole("button", { name: "รวมทางเลี่ยง" })).toHaveAttribute("aria-pressed", "true");
+  await mode.getByRole("button", { name: "แยกตามทิศทาง" }).click();
+  await expect(symbols).toHaveCount(4);
+  await layerButton.click();
+  const reverseMarker = page.getByRole("button", { name: "ขากลับ B → A: เส้นทางเลี่ยง ปน.2043", exact: true });
+  await reverseMarker.press("Enter");
+  const popup = page.locator(".doh-detour-popup");
+  await expect(popup.getByRole("button", { name: "ขากลับ B → A" })).toHaveAttribute("aria-pressed", "true");
+  await expect(popup.getByText("เลนขากลับ")).toBeVisible();
+  await popup.getByRole("button", { name: "ดูตำแหน่งบนแผนที่" }).click();
+  await expect(page.getByTestId("gis-focus-mode-bar")).toContainText("ขากลับ (B → A)");
+  await page.getByRole("button", { name: "ออกจากโหมดโฟกัส" }).click();
+
+  await layerButton.click();
+  if (!(await mode.isVisible())) await legend.getByText("ตั้งค่าเพิ่มเติม", { exact: true }).click();
+  await mode.getByRole("button", { name: "รวมทางเลี่ยง" }).click();
+  await expect(symbols).toHaveCount(3);
+  await layerButton.click();
+  await page.getByRole("button", { name: "ทางเลี่ยง: ทางเลี่ยงอีกสายที่ผูกเหตุเดียวกัน", exact: true }).press("Enter");
+  await expect(popup.getByRole("button", { name: "ขากลับ B → A" })).toBeDisabled();
 });

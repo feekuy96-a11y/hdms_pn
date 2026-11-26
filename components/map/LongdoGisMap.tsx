@@ -203,6 +203,7 @@ export function LongdoGisMap({
   const [forceShowAllHighways, setForceShowAllHighways] = useState(false);
   const isFocusMode = gisFocus?.status === "focused";
   const [showFloodLayer, setShowFloodLayer] = useState(true);
+  const [detourDisplayMode, setDetourDisplayMode] = useState<"GROUPED" | "DIRECTIONS">("GROUPED");
   const [floodDisplayMode, setFloodDisplayMode] = useState<"SEGMENTS" | "EVENTS">("EVENTS");
   const [showDetourLayer, setShowDetourLayer] = useState(true);
   const effectiveShowFloodLayer = isFocusMode ? false : showFloodLayer;
@@ -882,6 +883,7 @@ export function LongdoGisMap({
     effectiveShowDetourLayer,
     effectiveShowFloodLayer,
     floodDisplayMode,
+    detourDisplayMode,
     currentZoom,
     selectedDetourPopupId: activePopupEntity?.type === "DETOUR" ? activePopupEntity.id : null,
     leafletRef,
@@ -907,7 +909,7 @@ export function LongdoGisMap({
     ], animationsEnabled);
   }, [mapReady, animationsEnabled, isFocusMode, vertexEditable, mapStyles,
     systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, effectiveShowDetourLayer,
-    floodDisplayMode, activeCardFocus, activePopupEntity, isFilterActive, searchQuery,
+    floodDisplayMode, detourDisplayMode, activeCardFocus, activePopupEntity, isFilterActive, searchQuery,
     highlightFloodIds, highlightDetourIds, routeFilteringEnabled]);
 
   // 4e. Selected flood: restyle one polyline in place instead of redrawing the map.
@@ -1092,6 +1094,7 @@ export function LongdoGisMap({
         mapStyles,
         highwayLayers: systemData.highwayLayers,
         detourRoutes: systemData.detourRoutes,
+        detourDisplayMode,
         floodRoutes: systemData.floodRoutes,
         visibleFloodIds,
         showMainHwy: effectiveShowMainHwy,
@@ -1121,7 +1124,7 @@ export function LongdoGisMap({
       map.off("moveend zoomend", schedule);
       group.clearLayers();
     };
-  }, [mapReady, systemData.highwayLayers, systemData.detourRoutes, systemData.floodRoutes, mapStyles, effectiveShowMainHwy, effectiveShowSecHwy, effectiveShowDetourLayer, effectiveShowFloodLayer, showSecondaryAtCurrentZoom, currentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode, vertexEditable, routeFilteringEnabled, isFilterActive, searchQuery, activeCardFocus, activePopupEntity, highlightDetourIds, highlightHighwayRouteNos]);
+  }, [mapReady, systemData.highwayLayers, systemData.detourRoutes, systemData.floodRoutes, detourDisplayMode, mapStyles, effectiveShowMainHwy, effectiveShowSecHwy, effectiveShowDetourLayer, effectiveShowFloodLayer, showSecondaryAtCurrentZoom, currentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode, vertexEditable, routeFilteringEnabled, isFilterActive, searchQuery, activeCardFocus, activePopupEntity, highlightDetourIds, highlightHighwayRouteNos]);
 
   // 4h. Freeform vertex editor: draggable handle on every vertex + "+" handle on every segment middle.
   // Only vertices inside the viewport are drawn (at most MAX_VERTEX_HANDLES), so long lines stay fast.
@@ -1524,6 +1527,8 @@ export function LongdoGisMap({
         showFloodLayer={showFloodLayer}
         setShowFloodLayer={setShowFloodLayer}
         effectiveShowFloodLayer={effectiveShowFloodLayer}
+        detourDisplayMode={detourDisplayMode}
+        setDetourDisplayMode={setDetourDisplayMode}
         floodDisplayMode={floodDisplayMode}
         setFloodDisplayMode={setFloodDisplayMode}
         showDetourLayer={showDetourLayer}
