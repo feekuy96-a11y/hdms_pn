@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { websiteEmblemClip } from "@/lib/website-emblem";
 import "./citizen-theme.css";
 import "./citizen-field-map.css";
 import dynamic from "next/dynamic";
@@ -639,8 +640,9 @@ export default function HomePage() {
           {systemData.systemSettings?.logoUrl ? (
             <img
               src={systemData.systemSettings.logoUrl}
-              alt="Logo"
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-contain shadow-md shrink-0 bg-slate-900 border border-surface p-0.5"
+              alt=""
+              className="w-9 h-9 sm:w-10 sm:h-10 object-contain shrink-0"
+              style={{ clipPath: websiteEmblemClip(systemData.systemSettings.logoUrl) }}
             />
           ) : (
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl citizen-logo gold-gradient flex items-center justify-center shadow-md shrink-0">

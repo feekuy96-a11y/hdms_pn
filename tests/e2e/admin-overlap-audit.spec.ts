@@ -85,17 +85,16 @@ for (const v of views) test(`admin overlap audit ${v.name}`, async ({ page, isMo
   await page.screenshot({ path: testInfo.outputPath(`initial-${v.name}.png`) });
   const theme = page.getByRole("button", { name: "รูปแบบสีพื้นที่จัดการ" });
   await hit(theme, "theme control");
-  const government = page.getByText("ส่วนราชการ", { exact: true });
-  const [governmentRect, themeRect] = await Promise.all([government.boundingBox(), theme.boundingBox()]);
-  if (v.width >= 360) {
-    expect(governmentRect!.x + governmentRect!.width, "header badge does not overlap theme control").toBeLessThanOrEqual(themeRect!.x);
-  } else {
-    await expect(government).toHaveCSS("position", "absolute"); // Screen-reader only on narrow screens.
-  }
-  if (v.width >= 640) {
-    await expect(government, "government badge stays on one line alongside long organization name").toHaveCSS("white-space", "nowrap");
-    expect(await government.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBeTruthy();
-  }
+  const brand = page.getByRole("group", { name: "ระบบจัดการของส่วนราชการ", exact: true });
+  const brandTitle = brand.getByRole("heading", { level: 1 });
+  const brandOrg = brand.locator("p");
+  await expect(brandTitle).toHaveText(data.systemSettings.name);
+  await expect(brandOrg).toHaveText(data.systemSettings.org);
+  const [titleBox, orgBox, themeRect] = await Promise.all([brandTitle.boundingBox(), brandOrg.boundingBox(), theme.boundingBox()]);
+  expect(titleBox!.x + titleBox!.width, "brand stays clear of theme control").toBeLessThanOrEqual(themeRect!.x);
+  expect(orgBox!.y).toBeGreaterThanOrEqual(titleBox!.y + titleBox!.height - 1);
+  expect(await brandTitle.evaluate(el => el.scrollWidth <= el.clientWidth)).toBeTruthy();
+  expect(await brandOrg.evaluate(el => el.scrollWidth <= el.clientWidth)).toBeTruthy();
   await theme.click();
   const dark = page.getByRole("button", { name: "ธีมมืด", exact: true });
   await hit(dark, "theme choices during opening");
