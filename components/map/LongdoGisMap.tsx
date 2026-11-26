@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
+import type { LatLng, Polyline } from "leaflet";
 import { SystemDataPayload, DetourRoute } from "@/db/default-data";
 import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { MapLegendOverlay, type MapSidePaneControl } from "./MapLegendOverlay";
@@ -44,6 +45,7 @@ import {
 import { placeArrowsOnLine, renderDirectionalArrows } from "./longdo-arrow-layer";
 import { drawFloodStatusAccent } from "./longdo-flood-status-accent";
 import { installRouteMotion } from "./longdo-route-motion";
+import { HIGHWAY_MOTION_MIN_ZOOM, routeMotionEffect, routeMotionSpeedPercent } from "@/lib/route-motion";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import { renderVertexEditHandles } from "./longdo-vertex-handles";
 import { renderDraftAndConflictLayer } from "./longdo-draft-layer";
@@ -169,6 +171,7 @@ export function LongdoGisMap({
   const leafletRef = useRef<any>(null);
   const rendererRef = useRef<any>(null);
   const highwayGroupRef = useRef<any>(null);
+  const highwayMotionLinesRef = useRef<Record<"primary" | "secondary", Polyline[]>>({ primary: [], secondary: [] });
   const highwayFeatureKeysRef = useRef(new WeakMap<object, string>());
   const shieldGroupRef = useRef<any>(null);
   const detourGroupRef = useRef<any>(null);
@@ -677,6 +680,14 @@ export function LongdoGisMap({
     group.clearLayers();
     const renderer = rendererRef.current;
     const isLowZoom = currentZoom < 11;
+    const motionLines: Record<"primary" | "secondary", Polyline[]> = { primary: [], secondary: [] };
+    highwayMotionLinesRef.current = motionLines;
+    const collectMotion = (kind: "primary" | "secondary") => {
+      const style = mapStyles[kind];
+      return currentZoom >= HIGHWAY_MOTION_MIN_ZOOM && routeMotionEffect(style) !== "none"
+        && routeMotionSpeedPercent(style?.animationSpeed) > 0;
+    };
+    const motionRequested = { primary: collectMotion("primary"), secondary: collectMotion("secondary") };
 
     (systemData.highwayLayers || []).forEach((layer) => {
       if (!layer.is_visible || !layer.geojson_data) return;
@@ -744,6 +755,12 @@ export function LongdoGisMap({
             const props = feature.properties || {};
             const featureIsMain = props.highway_type === "MAIN_HIGHWAY" ? true : props.highway_type === "SECOND_HIGHWAY" ? false : isMain;
 
+            const kind = featureIsMain ? "primary" : "secondary";
+            if (motionRequested[kind] && featureLayer instanceof L.Polyline &&
+              (feature.geometry?.type === "LineString" || feature.geometry?.type === "MultiLineString")) {
+              motionLines[kind].push(featureLayer);
+            }
+
             // Tooltip text is produced only when the tooltip opens.
             if (showRoadLabels) {
               featureLayer.bindTooltip(() => {
@@ -781,6 +798,7 @@ export function LongdoGisMap({
     });
 
     return () => {
+      highwayMotionLinesRef.current = { primary: [], secondary: [] };
       group.clearLayers();
     };
   }, [mapReady, systemData.highwayLayers, mapStyles, effectiveShowMainHwy, effectiveShowSecHwy, showRoadLabels, showSecondaryAtCurrentZoom, criticalHighwayRouteNos, currentZoom, publicMode]);
@@ -897,19 +915,40 @@ export function LongdoGisMap({
     selectedFloodIdRef,
   });
 
-  // Animate only visible incident overlays; a large highway dataset does not disable them.
+  // Incident and highway overlays have separate budgets so network density cannot disable incident cues.
   useEffect(() => {
     const L = leafletRef.current;
     const map = leafletMapRef.current;
     if (!mapReady || !L || !map || isFocusMode || vertexEditable) return;
+    const highwayBounds = () => map.getBounds();
+    const highwayGroup = (name: "primary" | "secondary") => ({
+      name,
+      style: mapStyles[name] ?? DEFAULT_MAP_STYLES[name],
+      minZoom: HIGHWAY_MOTION_MIN_ZOOM,
+      sources: function* () {
+        const bounds = highwayBounds();
+        for (const line of highwayMotionLinesRef.current[name]) {
+          const opacity = line.options.opacity ?? 1;
+          if (opacity === 0 || !bounds.intersects(line.getBounds())) continue;
+          const coordinates = line.getLatLngs() as LatLng[] | LatLng[][];
+          const spans = Array.isArray(coordinates[0]) ? coordinates as LatLng[][] : [coordinates as LatLng[]];
+          for (const span of spans) {
+            // Geometry order alone does not establish a permitted direction on a highway.
+            yield { line, coordinates: span, baseOpacity: opacity, filterOpacity: 1, motionDirection: "both" as const };
+          }
+        }
+      },
+    });
     return installRouteMotion(L, map, [
       { name: "flood", style: mapStyles.flood ?? DEFAULT_MAP_STYLES.flood,
         sources: () => effectiveShowFloodLayer ? Object.values(floodLinesRef.current) : [] },
       { name: "detour", style: mapStyles.detour ?? DEFAULT_MAP_STYLES.detour,
         sources: () => effectiveShowDetourLayer ? detourLinesRef.current : [] },
+      highwayGroup("primary"), highwayGroup("secondary"),
     ], animationsEnabled);
   }, [mapReady, animationsEnabled, isFocusMode, vertexEditable, mapStyles,
-    systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, effectiveShowDetourLayer,
+    systemData.floodRoutes, systemData.detourRoutes, systemData.highwayLayers, effectiveShowMainHwy, effectiveShowSecHwy,
+    showRoadLabels, showSecondaryAtCurrentZoom, currentZoom, effectiveShowFloodLayer, effectiveShowDetourLayer,
     floodDisplayMode, detourDisplayMode, activeCardFocus, activePopupEntity, isFilterActive, searchQuery,
     highlightFloodIds, highlightDetourIds, routeFilteringEnabled]);
 

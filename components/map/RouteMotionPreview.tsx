@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type * as Leaflet from "leaflet";
 import type { MapLineStyleItem } from "@/lib/constants";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
+import { isHighwayMotionLayer, type RouteMotionLayer } from "@/lib/route-motion";
 import { addLineCasing, dashArrayFor } from "./longdo-map-popups";
 import { placeArrowsOnLine, usesCompactDetourArrows } from "./longdo-arrow-layer";
 import { installRouteMotion } from "./longdo-route-motion";
@@ -12,7 +13,7 @@ import { installRouteMotion } from "./longdo-route-motion";
 // scaled SVG preview, second animation clock, or separate set of glyph shapes.
 export function RouteMotionPreview({ style, layer }: {
   style: MapLineStyleItem;
-  layer: "flood" | "detour" | null;
+  layer: RouteMotionLayer;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
@@ -83,8 +84,8 @@ export function RouteMotionPreview({ style, layer }: {
           style.arrowSpacingPx || 120, style.color, map.getBounds(), { count: 0 },
           usesCompactDetourArrows(style.animation));
       }
-      if (layer) stopMotion = installRouteMotion(L, map, [{ name: layer, style,
-        sources: () => [{ line, baseOpacity: opacity, filterOpacity: 1 }],
+      stopMotion = installRouteMotion(L, map, [{ name: layer, style,
+        sources: () => [{ line, baseOpacity: opacity, filterOpacity: 1, motionDirection: isHighwayMotionLayer(layer) ? "both" : "forward" }],
       }], allowMotion);
     };
     render();

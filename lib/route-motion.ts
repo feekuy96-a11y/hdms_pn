@@ -1,17 +1,22 @@
 import type { MapLineStyleItem } from "./constants";
 
 type Effect = MapLineStyleItem["animation"];
-type Layer = "flood" | "detour";
+export type RouteMotionLayer = "flood" | "detour" | "primary" | "secondary";
+export const HIGHWAY_MOTION_MIN_ZOOM = 11;
+
+export function isHighwayMotionLayer(layer: RouteMotionLayer) {
+  return layer === "primary" || layer === "secondary";
+}
 type XY = { x: number; y: number };
 
 export function routeMotionEffect(style?: MapLineStyleItem): Effect {
   return style?.animationEnabled === false ? "none" : style?.animation ?? "none";
 }
 
-export function routeMotionToggle(style: MapLineStyleItem, layer: Layer, enabled: boolean): Partial<MapLineStyleItem> {
+export function routeMotionToggle(style: MapLineStyleItem, layer: RouteMotionLayer, enabled: boolean): Partial<MapLineStyleItem> {
   return {
     animationEnabled: enabled,
-    animation: enabled && style.animation === "none" ? (layer === "flood" ? "wave" : "flow") : style.animation,
+    animation: enabled && style.animation === "none" ? (layer === "flood" ? "wave" : layer === "detour" ? "flow" : "pulse") : style.animation,
   };
 }
 
@@ -37,8 +42,12 @@ export function routeMotionPeriod(effect: Effect, speed?: MapLineStyleItem["anim
 export type MotionDirection = "forward" | "reverse" | "both";
 type Segment = { a: XY; dx: number; dy: number; length: number; end: number; spanStart: number };
 
-export function routeIncidentMotionEffect(effect: Effect, layer: Layer | null) {
+export function routeIncidentMotionEffect(effect: Effect, layer: RouteMotionLayer) {
   if (effect === "pulse" || effect === "blink" || effect === "none") return effect;
+  if (isHighwayMotionLayer(layer)) {
+    if (effect === "arrows" || effect === "chaser" || effect === "flow") return "highlight";
+    return effect === "wave" ? "ribbon" : "none";
+  }
   // Route vertex order is not evidence of water flow; legacy moving flood
   // styles retain their stored values but all render as a stationary cue.
   if (effect === "extent") return layer === "flood" ? "extent" : "none";

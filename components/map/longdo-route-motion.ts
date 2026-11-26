@@ -2,13 +2,13 @@ import type { LatLng, Map as LeafletMap, Polyline } from "leaflet";
 import type { MapLineStyleItem } from "@/lib/constants";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import {
-  routeIncidentMotionEffect, routeMotionChevronPath, routeMotionEffect, routeMotionEndpointPath, routeMotionPathData, routeMotionPeriod,
+  isHighwayMotionLayer, routeIncidentMotionEffect, routeMotionChevronPath, routeMotionEffect, routeMotionEndpointPath, routeMotionPathData, routeMotionPeriod,
   routeMotionSpeedPercent, routeMotionTrailPositions, routeMotionTravelPeriod, routeRibbonOpacity, visibleMotionSegments,
-  type MotionDirection,
+  type MotionDirection, type RouteMotionLayer,
 } from "@/lib/route-motion";
 
-type Source = { line: Polyline; baseOpacity: number; filterOpacity: number; motionDirection?: MotionDirection };
-type Group = { sources: () => Source[]; style: MapLineStyleItem; name: "flood" | "detour" };
+type Source = { line: Polyline; baseOpacity: number; filterOpacity: number; motionDirection?: MotionDirection; coordinates?: LatLng[] };
+type Group = { sources: () => Iterable<Source>; style: MapLineStyleItem; name: RouteMotionLayer; minZoom?: number };
 type Effect = ReturnType<typeof routeIncidentMotionEffect>;
 type Overlay = { layer: Polyline; node: SVGPathElement };
 type ActiveRoute = {
@@ -16,6 +16,8 @@ type ActiveRoute = {
   overlays: Overlay[]; staggered: boolean;
 };
 const MAX_VISIBLE_PER_LAYER = 24;
+const HIGHWAY_MOTION_CAP_WIDE = 8;
+const HIGHWAY_MOTION_CAP_NARROW = 4;
 
 export function installRouteMotion(L: typeof import("leaflet"), map: LeafletMap, groups: Group[], allowMotion = true) {
   if (!groups.some(({ style, name }) => {
@@ -52,7 +54,14 @@ export function installRouteMotion(L: typeof import("leaflet"), map: LeafletMap,
       const opacity = source.baseOpacity * source.filterOpacity;
       if (effect === "blink" || effect === "pulse") {
         const factor = effect === "blink" ? (phase < 0.5 ? 1 : 0.25) : (0.65 + 0.35 * (1 - Math.cos(phase * Math.PI * 2)) / 2);
-        source.line.setStyle({ opacity: opacity * factor });
+        const emphasis = overlays[0]?.node;
+        if (emphasis) {
+          // Keep the base highway legible, and avoid per-frame redraws of the shared road canvas.
+          const alpha = effect === "blink" ? (phase < 0.5 ? 0.45 : 0.08) : (factor - 0.65) * 1.2;
+          emphasis.setAttribute("opacity", (opacity * alpha).toFixed(3));
+        } else {
+          source.line.setStyle({ opacity: opacity * factor });
+        }
       } else if (effect === "ribbon") {
         const intensity = opacity * routeRibbonOpacity(phase);
         overlays[0].node.setAttribute("opacity", intensity.toFixed(3));
@@ -91,7 +100,10 @@ export function installRouteMotion(L: typeof import("leaflet"), map: LeafletMap,
     const bounds = map.getBounds();
     origin = map.containerPointToLayerPoint([0, 0]);
     for (const group of groups) {
-      const { style } = group;
+      const { style, name } = group;
+      if (group.minZoom !== undefined && map.getZoom() < group.minZoom) continue;
+      const highway = isHighwayMotionLayer(name);
+      const cap = highway ? (width < 640 ? HIGHWAY_MOTION_CAP_NARROW : HIGHWAY_MOTION_CAP_WIDE) : MAX_VISIBLE_PER_LAYER;
       const savedEffect = routeMotionEffect(style);
       const effect = routeIncidentMotionEffect(savedEffect, group.name);
       if (effect === "none" || (!allowMotion && effect !== "extent")) continue;
@@ -99,18 +111,21 @@ export function installRouteMotion(L: typeof import("leaflet"), map: LeafletMap,
       if (freeze && effect !== "ribbon" && effect !== "spotlight" && effect !== "extent") continue;
       let drawn = 0;
       for (const source of group.sources()) {
-        if (drawn >= MAX_VISIBLE_PER_LAYER) break;
+        if (drawn >= cap) break;
         if (!source.filterOpacity || !source.baseOpacity || !map.hasLayer(source.line) || !source.line.getBounds().intersects(bounds)) continue;
-        const latLngs = source.line.getLatLngs();
+        const latLngs = source.coordinates ?? source.line.getLatLngs();
         if (!latLngs.length || Array.isArray(latLngs[0])) continue;
         const projected = (latLngs as LatLng[]).map((latLng) => map.latLngToContainerPoint(latLng));
         const path = visibleMotionSegments(L.LineUtil.simplify(projected, 0.65), width, height);
         const endpointPath = effect === "extent" ? routeMotionEndpointPath(projected, width, height, origin) : "";
         if (path.total < 8 && !endpointPath) continue;
         const overlays: Overlay[] = [];
-        if (effect === "ribbon" || effect === "highlight" || effect === "spotlight" || effect === "chevrons" || effect === "extent") {
+        const highwayEmphasis = highway && (effect === "pulse" || effect === "blink");
+        if (highwayEmphasis || effect === "ribbon" || effect === "highlight" || effect === "spotlight" || effect === "chevrons" || effect === "extent") {
           const weight = Math.max(2, Math.min(10, style.weight || 5));
-          const options = effect === "extent"
+          const options = highwayEmphasis
+            ? [{ color: resolveVisibleArrowColor(style.color, style.arrowColor || "#ffffff"), weight: 2 }]
+            : effect === "extent"
             ? [{ color: style.glow ? style.glowColor || style.color : style.color, weight: weight + 9 },
               { color: "#e8f6fc", weight: 1.3 },
               ...(endpointPath ? [{ color: "#0e2230", weight: 5 }, { color: "#edfbff", weight: 2.25 }] : [])]
@@ -132,7 +147,7 @@ export function installRouteMotion(L: typeof import("leaflet"), map: LeafletMap,
             const node = layer.getElement();
             if (!(node instanceof SVGPathElement)) { layer.remove(); continue; }
             if (extentEndpoint) node.setAttribute("d", endpointPath);
-            else if (effect === "extent" || effect === "ribbon") node.setAttribute("d", routeMotionPathData(path, 0, path.total, origin));
+            else if (highwayEmphasis || effect === "extent" || effect === "ribbon") node.setAttribute("d", routeMotionPathData(path, 0, path.total, origin));
             if (effect === "spotlight") {
               const center = path.total * (index === 0 ? 0.34 : 0.68);
               const half = Math.min(14, path.total * 0.12);

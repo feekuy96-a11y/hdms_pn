@@ -7,7 +7,7 @@ import { SystemDataPayload } from "@/db/default-data";
 import { DEFAULT_MAP_STYLES, LINE_STYLE_PRESET_THEMES, MapLineStyleItem } from "@/lib/constants";
 import { Palette, Save, Sparkles } from "lucide-react";
 import { updateMapStyleAction } from "@/app/actions/doh-actions";
-import { routeIncidentMotionEffect, routeMotionEffect, routeMotionSpeedPercent, routeMotionToggle } from "@/lib/route-motion";
+import { HIGHWAY_MOTION_MIN_ZOOM, routeIncidentMotionEffect, routeMotionEffect, routeMotionSpeedPercent, routeMotionToggle } from "@/lib/route-motion";
 import { RouteMotionPreview } from "@/components/map/RouteMotionPreview";
 
 interface LineStylingTabProps {
@@ -76,7 +76,7 @@ export function LineStylingTab({
   const currentItem = lineStyles[selectedStyleKey] || DEFAULT_MAP_STYLES[selectedStyleKey];
   const incidentLayer = selectedStyleKey === "flood" || selectedStyleKey === "detour" ? selectedStyleKey : null;
   const speed = routeMotionSpeedPercent(currentItem.animationSpeed);
-  const previewEffect = routeIncidentMotionEffect(routeMotionEffect(currentItem), incidentLayer);
+  const previewEffect = routeIncidentMotionEffect(routeMotionEffect(currentItem), selectedStyleKey);
   const ribbon = incidentLayer === "flood" && previewEffect === "ribbon";
 
   return (
@@ -154,13 +154,13 @@ export function LineStylingTab({
           <div className={`${workspace.motionStage} relative flex h-24 w-full items-center justify-center overflow-hidden rounded-xl border`}>
             <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:12px_12px]" />
 
-            <RouteMotionPreview style={currentItem} layer={incidentLayer} />
+            <RouteMotionPreview style={currentItem} layer={selectedStyleKey} />
 
             <div className="absolute z-[500] bottom-2 right-3 bg-slate-950/80 px-2 py-0.5 rounded text-[10px] text-slate-300 font-mono border border-slate-800">
               เอฟเฟกต์: {currentItem.animation} • ลวดลาย: {currentItem.pattern}
             </div>
           </div>
-          {incidentLayer && previewEffect !== "none" && speed > 0 && (
+          {previewEffect !== "none" && speed > 0 && (
             <p className="text-xs text-[color:var(--text-secondary)]">
               <span className="hidden motion-reduce:inline">หยุดการเคลื่อนไหวตามการตั้งค่าลดการเคลื่อนไหวของอุปกรณ์</span>
               {ribbon && <span className="motion-reduce:hidden">แถบน้ำท่วมสว่าง–จางเป็นจังหวะอยู่กับที่ ไม่เลื่อนไปตามแนวถนน</span>}
@@ -314,16 +314,14 @@ export function LineStylingTab({
               </select>
             </div>
 
-            {incidentLayer && (
-              <label className="flex items-center gap-2 text-xs text-slate-200">
+            <label className="flex items-center gap-2 text-xs text-slate-200">
                 <input
                   type="checkbox"
                   checked={routeMotionEffect(currentItem) !== "none"}
-                  onChange={(e) => handleUpdateCurrentStyle(routeMotionToggle(currentItem, incidentLayer, e.target.checked))}
+                  onChange={(e) => handleUpdateCurrentStyle(routeMotionToggle(currentItem, selectedStyleKey, e.target.checked))}
                 />
                 เปิดแอนิเมชันชั้นนี้
-              </label>
-            )}
+            </label>
             <div>
               <label htmlFor="line-style-animation-select" className="text-xs text-slate-300 block mb-1.5 font-heading font-medium">อนิเมชันลูกเล่น (Animation Effect)</label>
               <select
@@ -331,7 +329,7 @@ export function LineStylingTab({
                 value={currentItem.animation}
                 onChange={(e) => {
                   const animation = e.target.value as MapLineStyleItem["animation"];
-                  handleUpdateCurrentStyle(incidentLayer ? { animation, animationEnabled: animation !== "none" } : { animation });
+                  handleUpdateCurrentStyle({ animation, animationEnabled: animation !== "none" });
                 }}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
               >
@@ -363,7 +361,9 @@ export function LineStylingTab({
                 onChange={(e) => handleUpdateCurrentStyle({ animationSpeed: e.currentTarget.valueAsNumber })}
                 className="min-h-8 w-full accent-amber-400"
               />
-              <p id="line-style-speed-hint" className="text-[11px] text-slate-400">0% คงสไตล์เส้นไว้โดยไม่เคลื่อนไหว · 100% เร็วที่สุด</p>
+              <p id="line-style-speed-hint" className="text-[11px] text-slate-400">0% คงสไตล์เส้นไว้โดยไม่เคลื่อนไหว · 100% เร็วที่สุด
+                {!incidentLayer && <> · บนแผนที่แสดงเอฟเฟกต์เฉพาะบางช่วงที่มองเห็น ตั้งแต่ระดับซูม {HIGHWAY_MOTION_MIN_ZOOM} ขึ้นไป</>}
+              </p>
             </div>
           </div>
 
