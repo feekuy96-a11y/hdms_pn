@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Layers, Plus, Minus, Building2, ChevronUp, LocateFixed, Info, X, PanelLeftOpen, PanelLeftClose } from "lucide-react";
+import { Layers, Plus, Minus, Building2, ChevronUp, LocateFixed, Info, X, PanelLeftOpen, PanelLeftClose, ArrowLeftRight, Check } from "lucide-react";
 import { SystemDataPayload } from "@/db/default-data";
 import { LAYER_CONFIG } from "@/lib/constants";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
@@ -117,10 +117,11 @@ export function MapLegendOverlay({
   const layersPanel = React.useRef<HTMLDivElement>(null);
   const [pinnedRouteList, setPinnedRouteList] = React.useState<"MAIN_HIGHWAY" | "SECOND_HIGHWAY" | null>(null);
   type HighwayType = "MAIN_HIGHWAY" | "SECOND_HIGHWAY";
+  type HighwayHint = `${"layers" | "guide"}:${HighwayType}`;
   const typeHintId = React.useId();
-  const [pinnedTypeHint, setPinnedTypeHint] = React.useState<HighwayType | null>(null);
-  const [focusedTypeHint, setFocusedTypeHint] = React.useState<HighwayType | null>(null);
-  const [hoveredTypeHint, setHoveredTypeHint] = React.useState<HighwayType | null>(null);
+  const [pinnedTypeHint, setPinnedTypeHint] = React.useState<HighwayHint | null>(null);
+  const [focusedTypeHint, setFocusedTypeHint] = React.useState<HighwayHint | null>(null);
+  const [hoveredTypeHint, setHoveredTypeHint] = React.useState<HighwayHint | null>(null);
   const activeTypeHint = focusedTypeHint ?? hoveredTypeHint ?? pinnedTypeHint;
   const clearTypeHint = () => {
     setPinnedTypeHint(null);
@@ -157,7 +158,7 @@ export function MapLegendOverlay({
       key: "MAIN_HIGHWAY" as const,
       label: "ทางหลวงสายหลัก",
       infoLabel: "ดูรายชื่อทางหลวงสายหลัก",
-      color: mapStyles.primary?.color,
+      color: mapStyles.primary?.color || LAYER_CONFIG.MAIN_HIGHWAY.color,
       checked: showMainHwy,
       onChange: setShowMainHwy,
       checkboxAccent: "accent-emerald-500",
@@ -168,7 +169,7 @@ export function MapLegendOverlay({
       key: "SECOND_HIGHWAY" as const,
       label: "ทางหลวงสายรอง",
       infoLabel: "ดูรายชื่อทางหลวงสายรอง",
-      color: mapStyles.secondary?.color,
+      color: mapStyles.secondary?.color || LAYER_CONFIG.SECONDARY_HIGHWAY.color,
       checked: showSecHwy,
       onChange: setShowSecHwy,
       checkboxAccent: "accent-sky-400",
@@ -262,39 +263,98 @@ export function MapLegendOverlay({
                   </label>
                 </div>
               );
+  const displayOptionClass = "min-h-11 min-w-0 rounded px-1 py-1 font-semibold cursor-pointer inline-flex flex-wrap items-center justify-center gap-1";
   const floodMarkerSetting = effectiveShowFloodLayer && (
-                <div className="pl-6 pb-1 pt-0.5 flex items-center justify-between text-[0.75rem]/[1.1rem] hdms-map-muted">
-                  <span>รูปแบบหมุด:</span>
-                  <div className="hdms-contrast-switch hdms-map-subtle inline-flex gap-0.5 rounded-lg p-[0.167em] border">
-                    <button
-                      type="button"
-                      onClick={() => setFloodDisplayMode("SEGMENTS")}
-                      aria-pressed={floodDisplayMode === "SEGMENTS"}
-                      className="min-h-9 sm:min-h-8 px-[0.667em] py-[0.167em] rounded text-[0.75rem]/[1.1rem] font-medium transition cursor-pointer"
-                    >
-                      แยกช่วง
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFloodDisplayMode("EVENTS")}
-                      aria-pressed={floodDisplayMode === "EVENTS"}
-                      className="min-h-9 sm:min-h-8 px-[0.667em] py-[0.167em] rounded text-[0.75rem]/[1.1rem] font-medium transition cursor-pointer"
-                    >
-                      รวมเหตุการณ์
-                    </button>
-                  </div>
-                </div>
-              );
+    <fieldset className="hdms-legend-setting">
+      <legend>หมุดน้ำท่วม</legend>
+      <p>เลือกรวมช่วงของเหตุการณ์เดียวกัน หรือดูหมุดทีละช่วง</p>
+      <div role="group" aria-label="รูปแบบแสดงหมุดน้ำท่วม" className="hdms-contrast-switch hdms-map-subtle grid grid-cols-2 gap-0.5 rounded-lg border p-[0.167em]">
+        <button type="button" onClick={() => setFloodDisplayMode("EVENTS")} aria-pressed={floodDisplayMode === "EVENTS"} className={displayOptionClass}>
+          {floodDisplayMode === "EVENTS" && <Check size={13} aria-hidden="true" />} รวมเหตุการณ์
+        </button>
+        <button type="button" onClick={() => setFloodDisplayMode("SEGMENTS")} aria-pressed={floodDisplayMode === "SEGMENTS"} className={displayOptionClass}>
+          {floodDisplayMode === "SEGMENTS" && <Check size={13} aria-hidden="true" />} แยกช่วง
+        </button>
+      </div>
+    </fieldset>
+  );
 
   const detourDirectionSetting = effectiveShowDetourLayer && (
-    <div className="pb-1 pt-0.5 text-[0.75rem]/[1.1rem] hdms-map-muted">
+    <fieldset className="hdms-legend-setting">
+      <legend>หมุดทางเลี่ยง</legend>
+      <p>ใช้หมุดเดียวต่อทางเลี่ยง หรือดูขาไปกับขากลับแยกกันเมื่อมีคนละเส้น</p>
       <div role="group" aria-label="รูปแบบแสดงทางเลี่ยง" className="hdms-contrast-switch hdms-map-subtle grid grid-cols-2 gap-0.5 rounded-lg border p-[0.167em]">
-        <button type="button" onClick={() => setDetourDisplayMode("GROUPED")} aria-pressed={detourDisplayMode === "GROUPED"}
-          className="min-h-9 rounded px-2 py-1 font-medium cursor-pointer">รวมทางเลี่ยง</button>
-        <button type="button" onClick={() => setDetourDisplayMode("DIRECTIONS")} aria-pressed={detourDisplayMode === "DIRECTIONS"}
-          className="min-h-9 rounded px-2 py-1 font-medium cursor-pointer">แยกตามทิศทาง</button>
+        <button type="button" onClick={() => setDetourDisplayMode("GROUPED")} aria-pressed={detourDisplayMode === "GROUPED"} className={displayOptionClass}>
+          {detourDisplayMode === "GROUPED" && <Check size={13} aria-hidden="true" />} รวมทางเลี่ยง
+        </button>
+        <button type="button" onClick={() => setDetourDisplayMode("DIRECTIONS")} aria-pressed={detourDisplayMode === "DIRECTIONS"} className={displayOptionClass}>
+          {detourDisplayMode === "DIRECTIONS" && <Check size={13} aria-hidden="true" />} แยกตามทิศทาง
+        </button>
       </div>
-    </div>
+    </fieldset>
+  );
+
+  const highwayTypeSample = (item: (typeof highwayLayerItems)[number], where: "layers" | "guide") => {
+    const key: HighwayHint = `${where}:${item.key}`;
+    const isOpen = activeTypeHint === key;
+    const hintId = `${typeHintId}-${where}-${item.key}`;
+    return (
+      <div
+        className={where === "guide" ? "hdms-legend-road-example" : legendHint.anchor}
+        data-highway-type-hint
+        onPointerEnter={(event) => { if (event.pointerType === "mouse") setHoveredTypeHint(key); }}
+        onPointerLeave={() => setHoveredTypeHint((current) => current === key ? null : current)}
+      >
+        <button
+          type="button"
+          className={where === "guide" ? "hdms-legend-road-sample hdms-map-control" : legendHint.swatch}
+          aria-label={`อธิบายสัญลักษณ์${item.label}`}
+          aria-expanded={isOpen}
+          aria-describedby={isOpen ? hintId : undefined}
+          onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) setFocusedTypeHint(key); }}
+          onBlur={() => setFocusedTypeHint((current) => current === key ? null : current)}
+          onClick={() => {
+            if (pinnedTypeHint === key) clearTypeHint();
+            else { setFocusedTypeHint(null); setHoveredTypeHint(null); setPinnedTypeHint(key); }
+          }}
+        >
+          <span className="hdms-map-symbol w-4 h-1.5 inline-block rounded shrink-0" style={{ backgroundColor: item.color }} />
+          {where === "guide" && <span>{item.key === "MAIN_HIGHWAY" ? "เส้นสายหลัก" : "เส้นสายรอง"}</span>}
+        </button>
+        {isOpen && (
+          <span id={hintId} role="tooltip" className={`${where === "guide" ? "hdms-legend-road-hint" : legendHint.hint} hdms-map-surface`}>
+            {item.label}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const mapSymbolGuide = (
+    <details className="citizen-legend-explainer" onToggle={(event) => {
+      if (!event.currentTarget.open && pinnedTypeHint?.startsWith("guide:")) clearTypeHint();
+    }}>
+      <summary>คำอธิบายสัญลักษณ์</summary>
+      <ul className="hdms-legend-key">
+        <li>
+          <span className="hdms-legend-sample" data-kind="flood" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /></svg></span>
+          <div><strong>จุดน้ำท่วม</strong><p>หมุดรูปคลื่นระบุจุดน้ำท่วม แตะเพื่อดูสถานะการผ่านทาง ขีดสีบนเส้นบอกสถานะตามรายงาน</p></div>
+        </li>
+        <li>
+          <span className="hdms-legend-sample" data-kind="detour" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9m-3-3 3 3-3 3M9 19h10m-3-3 3 3-3 3" /></svg></span>
+          <div><strong>ทางเลี่ยง</strong><p>แตะหมุดสี่เหลี่ยมเพื่อดูเส้นทางและทิศที่แนะนำ</p></div>
+        </li>
+        <li>
+          <span className="hdms-legend-sample" data-kind="direction" aria-hidden="true"><ArrowLeftRight size={17} /></span>
+          <div><strong>ลูกศรบนเส้น</strong><p>ลูกศรบอกทิศที่แสดงบนแผนที่ ลูกศรสองหัวหมายถึงแสดงทั้งขาไปและขากลับ</p></div>
+        </li>
+      </ul>
+      <div className="hdms-legend-road-keys" role="group" aria-label="ตัวอย่างเส้นทางหลวง">
+        <p>แตะเส้นตัวอย่างเพื่อดูประเภททางหลวง</p>
+        {highwayLayerItems.map((item) => <React.Fragment key={item.key}>{highwayTypeSample(item, "guide")}</React.Fragment>)}
+      </div>
+      <p className="hdms-legend-caution">ไม่มีหมุด ไม่ได้แปลว่าถนนผ่านได้เสมอ ให้ตรวจสถานะล่าสุดก่อนเดินทาง</p>
+    </details>
   );
 
   const PaneIcon = isSidebarCollapsed ? PanelLeftOpen : PanelLeftClose;
@@ -390,6 +450,7 @@ export function MapLegendOverlay({
               </div>
             </div>
 
+            {mapSymbolGuide}
             <div className="citizen-basemap">
               <h3>แผนที่ฐาน</h3>
               {baseMapChooser}
@@ -398,35 +459,12 @@ export function MapLegendOverlay({
             <div className="citizen-visibility space-y-1">
               {highwayLayerItems.map((item) => {
                 const isOpen = legendRouteList === item.key;
-                const hintOpen = activeTypeHint === item.key;
-                const hintId = `${typeHintId}-${item.key}`;
                 return (
                   <div
                     key={item.key}
                     className="citizen-layer-road-row flex items-center gap-1.5"
                   >
-                    <div
-                      className={legendHint.anchor}
-                      data-highway-type-hint
-                      onPointerEnter={(event) => { if (event.pointerType === "mouse") setHoveredTypeHint(item.key); }}
-                      onPointerLeave={() => setHoveredTypeHint((current) => current === item.key ? null : current)}
-                    >
-                      <button
-                        type="button"
-                        className={legendHint.swatch}
-                        aria-label={`อธิบายสัญลักษณ์${item.label}`}
-                        aria-describedby={hintOpen ? hintId : undefined}
-                        onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) setFocusedTypeHint(item.key); }}
-                        onBlur={() => setFocusedTypeHint((current) => current === item.key ? null : current)}
-                        onClick={() => {
-                          if (pinnedTypeHint === item.key) clearTypeHint();
-                          else setPinnedTypeHint(item.key);
-                        }}
-                      >
-                        <span className="hdms-map-symbol w-4 h-1.5 inline-block rounded shrink-0" style={{ backgroundColor: item.color }} />
-                      </button>
-                      {hintOpen && <span id={hintId} role="tooltip" className={`${legendHint.hint} hdms-map-surface`}>{item.label}</span>}
-                    </div>
+                    {highwayTypeSample(item, "layers")}
                     <label className="flex flex-1 min-w-0 min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 hdms-guide-title touch-manipulation">
                       <span className="min-w-0 break-words">{item.label}</span>
                       <input
@@ -462,7 +500,7 @@ export function MapLegendOverlay({
               <label className="flex min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 hdms-guide-title touch-manipulation">
                 <span className="flex items-center gap-[0.667em]">
                   <span className="hdms-map-symbol inline-flex h-5 w-5 items-center justify-center rounded-md" style={{ backgroundColor: floodSwatch, color: resolveVisibleArrowColor(floodSwatch) }}><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /></svg></span>
-                  <span>เส้นน้ำท่วม <span data-map-tone="danger" className="ml-1 rounded-full px-[0.5em] py-[0.167em] text-[0.75rem]/[1.1rem]">{effectiveShowFloodLayer ? (systemData.floodRoutes || []).filter((item) => isFloodLineVisibleOnCurrentMap(item)).length : 0}</span></span>
+                  <span>จุดน้ำท่วม <span data-map-tone="danger" className="ml-1 rounded-full px-[0.5em] py-[0.167em] text-[0.75rem]/[1.1rem]">{effectiveShowFloodLayer ? (systemData.floodRoutes || []).filter((item) => isFloodLineVisibleOnCurrentMap(item)).length : 0}</span></span>
                 </span>
                 <input
                   type="checkbox"
@@ -576,11 +614,6 @@ export function MapLegendOverlay({
                 {detourDirectionSetting}
               </details>
             )}
-            <details className="citizen-legend-explainer">
-                <summary>คำอธิบายสัญลักษณ์</summary>
-                <p>หมุดรูปคลื่นระบุจุดน้ำท่วม หมุดลูกศรและเส้นทางเลี่ยงระบุทางเลือก เส้นสีของทางหลวงใช้สีเดียวกับตัวอย่างในรายการด้านบน</p>
-                <p>ขีดสีบนเส้นน้ำท่วมบอกสถานะการผ่านทาง ส่วนสีพื้นเส้นใช้สไตล์ที่บันทึกไว้</p>
-            </details>
             {highwayListPanel}
           </div>
         </div>
