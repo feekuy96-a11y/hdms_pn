@@ -1121,13 +1121,13 @@ test("public focus endpoint markers inspect A and B without changing travel dire
   await pointA.press("Enter");
   const popup = page.locator("[data-detour-endpoint]");
   const leafletPopup = page.locator(".leaflet-popup");
-  await expect(popup.getByRole("heading", { name: "A · จุดสิ้นสุด" })).toBeVisible();
-  await expect(pointA).toHaveAccessibleName("A · จุดสิ้นสุด (ขากลับ B → A)");
+  await expect(popup.getByRole("heading", { name: "A · จุดเริ่มต้นที่ปัก" })).toBeVisible();
+  await expect(pointA).toHaveAccessibleName("A · จุดเริ่มต้นที่ปัก (ปลายทางของขากลับ B → A)");
   await expect(popup.locator(".citizen-endpoint-caption")).toHaveText("ทะเบียนภาพจุด A");
   await expect(popup).not.toContainText("สะพานขากลับ");
   await expect(popup.locator("[data-endpoint-scroll]")).toHaveCount(0);
   await expect(popup.locator("[data-endpoint-locality]")).toContainText("ต.ตัวอย่าง ก");
-  const endpointPhoto = popup.getByRole("button", { name: "เปิดภาพขนาดเต็ม A · จุดสิ้นสุด" });
+  const endpointPhoto = popup.getByRole("button", { name: "เปิดภาพขนาดเต็ม A · จุดเริ่มต้นที่ปัก" });
   const photoBox = await endpointPhoto.locator("img").boundingBox();
   expect(photoBox!.width / photoBox!.height).toBeCloseTo(16 / 9, 1);
   await endpointPhoto.click();
@@ -1141,10 +1141,10 @@ test("public focus endpoint markers inspect A and B without changing travel dire
   await expect(popup).toHaveCount(0);
   await expect(pointA).toBeFocused();
 
-  await expect(pointB).toHaveAccessibleName("B · จุดเริ่มต้น (ขากลับ B → A)");
+  await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุดที่ปัก (ต้นทางของขากลับ B → A)");
   await pointB.press("Enter");
   await expect(leafletPopup).toHaveCount(1);
-  await expect(popup.getByRole("heading", { name: "B · จุดเริ่มต้น" })).toBeVisible();
+  await expect(popup.getByRole("heading", { name: "B · จุดสิ้นสุดที่ปัก" })).toBeVisible();
   await expect(popup.locator("[data-endpoint-locality]")).toContainText("ต.ตัวอย่าง ข");
   await expect(popup.getByRole("img")).toHaveCount(0);
   await expect(focusBar).toContainText("ขากลับ (B → A)");
@@ -1253,17 +1253,17 @@ test("public overview A and B use the same anchored inspector, retaining the cho
     await zoomIn.click();
     await expect.poll(zoomLevel).toBeGreaterThan(previous);
   }
-  await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุด (ขาไป A → B)");
+  await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุดที่ปัก (ปลายทางของขาไป A → B)");
   await symbol.press("Enter");
   await page.locator(".doh-detour-popup").getByRole("button", { name: "ขากลับ B → A" }).click();
   await page.locator(".leaflet-popup-close-button").click();
-  await expect(pointB).toHaveAccessibleName("B · จุดเริ่มต้น (ขากลับ B → A)");
+  await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุดที่ปัก (ต้นทางของขากลับ B → A)");
   await zoomIn.click();
-  await expect(pointB).toHaveAccessibleName("B · จุดเริ่มต้น (ขากลับ B → A)");
+  await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุดที่ปัก (ต้นทางของขากลับ B → A)");
   await pointB.press("Enter");
   const popup = page.locator("[data-detour-endpoint]");
-  await expect(popup.getByRole("heading", { name: "B · จุดเริ่มต้น" })).toBeVisible();
-  const photoB = popup.getByRole("button", { name: "เปิดภาพขนาดเต็ม B · จุดเริ่มต้น" });
+  await expect(popup.getByRole("heading", { name: "B · จุดสิ้นสุดที่ปัก" })).toBeVisible();
+  const photoB = popup.getByRole("button", { name: "เปิดภาพขนาดเต็ม B · จุดสิ้นสุดที่ปัก" });
   await photoB.click();
   const viewer = page.getByRole("dialog", { name: "ภาพถ่ายสถานการณ์ขนาดเต็ม" });
   await expect(viewer.getByRole("img")).toBeVisible();
@@ -1273,13 +1273,13 @@ test("public overview A and B use the same anchored inspector, retaining the cho
   await page.keyboard.press("Escape");
   await expect(popup).toHaveCount(0);
 
-  await expect(pointA).toHaveAccessibleName("A · จุดสิ้นสุด (ขากลับ B → A)");
+  await expect(pointA).toHaveAccessibleName("A · จุดเริ่มต้นที่ปัก (ปลายทางของขากลับ B → A)");
   if (isMobile) {
     await page.setViewportSize({ width: 320, height: 568 });
     await page.evaluate(() => { document.documentElement.style.fontSize = "150%"; });
   }
   await pointA.press("Enter");
-  await expect(popup.getByRole("heading", { name: "A · จุดสิ้นสุด" })).toBeVisible();
+  await expect(popup.getByRole("heading", { name: "A · จุดเริ่มต้นที่ปัก" })).toBeVisible();
   await expect(popup).toContainText("ข้อมูลปลาย A ในแผนที่รวม");
   await expect(popup).not.toContainText("ผ่านแยกกลับ");
   await expect.poll(() => popup.evaluate(el => el.scrollWidth - el.clientWidth)).toBe(0);
@@ -1443,3 +1443,81 @@ test("public detour popup keyboard focus exits without trapping Tab or stealing 
     await expect(popup).toHaveCount(0);
   }
 });
+
+for (const endpoint of ["start", "end"]) {
+  test(`opening focused detour ${endpoint} endpoint reveals it once without pulling a drag back`, async ({ page, context, isMobile, baseURL }) => {
+    await page.setViewportSize({ width: isMobile ? 390 : 1440, height: isMobile ? 844 : 900 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const payload = createMockPayload();
+    payload.detourRoutes = payload.detourRoutes.slice(0, 1);
+    const route = payload.detourRoutes[0];
+    route.detour_meta = {
+      ...route.detour_meta,
+      start_point_photo: { caption: "รายละเอียด A", district: "ตัวอย่าง ก", province: "ปัตตานี" },
+      end_point_photo: { url: "data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=", caption: "รายละเอียด B", district: "ตัวอย่าง ข", province: "ยะลา" },
+    };
+    const allowedOrigin = new URL(baseURL!).origin;
+    await page.route("**/*", (request) => {
+      const url = new URL(request.request().url());
+      if (url.pathname === "/functions/v1/hdms-api" && /^get/.test(request.request().postDataJSON()?.action ?? "")) {
+        return request.fulfill({ json: payload });
+      }
+      return url.origin === allowedOrigin ? request.continue() : request.abort();
+    });
+    await page.goto(base + "/");
+    await page.locator(".doh-detour-symbol").first().press("Enter");
+    const overview = page.locator(".doh-detour-popup");
+    await overview.getByRole("button", { name: "ขากลับ B → A", exact: true }).click();
+    await overview.getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).click();
+    await expect(page.getByTestId("gis-focus-mode-bar")).toBeVisible();
+    const marker = page.locator(`.hdms-focus-endpoint.doh-detour-photo-${endpoint}`);
+    await marker.press("Enter");
+    const popup = page.locator("[data-detour-endpoint]");
+    const map = page.locator(".leaflet-container").first();
+    await expect(popup).toBeVisible();
+    await expect.poll(async () => {
+      const [frame, bounds] = await Promise.all([popup.boundingBox(), map.boundingBox()]);
+      return !!frame && !!bounds && frame.y >= bounds.y && frame.y + frame.height <= bounds.y + bounds.height;
+    }).toBe(true);
+    // Wait for the first auto-pan to settle before deliberately taking the map.
+    await page.waitForTimeout(850);
+    const start = await map.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      for (const fy of [.73, .68, .60]) for (const fx of [.34, .18, .65, .48, .8]) {
+        const x = box.x + box.width * fx, y = box.y + box.height * fy;
+        const hit = document.elementFromPoint(x, y);
+        if (y - 275 > box.top && hit && el.contains(hit) && !hit.closest("button,a,.leaflet-popup,.leaflet-marker-icon")) return { x, y };
+      }
+      return null;
+    });
+    expect(start).not.toBeNull();
+    const { x, y } = start!;
+    const panY = () => map.locator(".leaflet-map-pane").evaluate(el => new DOMMatrixReadOnly(getComputedStyle(el).transform).m42);
+    const original = await panY();
+    const step = Math.min(26, (y - 70) / 14);
+    const touch = isMobile ? await context.newCDPSession(page) : null;
+    if (touch) await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    else {
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+    }
+    for (let i = 1; i <= 13; i++) {
+      if (touch) await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y - i * step }] });
+      else await page.mouse.move(x, y - i * step);
+      await page.waitForTimeout(27);
+    }
+    // A paused release intentionally avoids Leaflet drag inertia.
+    await page.waitForTimeout(250);
+    const beforeRelease = await panY();
+    if (touch) {
+      await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await touch.detach();
+    } else await page.mouse.up();
+    await page.waitForTimeout(850);
+    expect(Math.abs(beforeRelease - original)).toBeGreaterThan(200);
+    expect(Math.abs(await panY() - beforeRelease)).toBeLessThan(4);
+    await expect(popup).toHaveCount(1);
+    await page.locator(".leaflet-popup-close-button").press("Enter");
+    await expect(popup).toHaveCount(0);
+  });
+}

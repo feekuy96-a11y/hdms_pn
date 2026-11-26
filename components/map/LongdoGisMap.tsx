@@ -29,6 +29,7 @@ import {
   buildDetourPointPhotoPopupHtml,
   buildPublicDetourEndpointPopup,
   bindPublicEndpointInspector,
+  bindDetourEndpointReveal,
   getPublicDetourEndpointLabel,
   labelPublicDetourEndpointMarker,
   parseRouteCoordinates,
@@ -1354,9 +1355,10 @@ export function LongdoGisMap({
         marker.bindPopup(
           () => publicMode
             ? buildPublicDetourEndpointPopup(detour, point, photo, direction, systemData.floodRoutes || [], { lat, lon })
-            : buildDetourPointPhotoPopupHtml(detour, point, photo, lat, lon),
-          { ...getResponsivePopupOptions(L, 350, 240, "doh-detour-leaflet-popup"), keepInView: true }
+            : buildDetourPointPhotoPopupHtml(detour, point, photo, lat, lon, direction),
+          { ...getResponsivePopupOptions(L, 350, 240, "doh-detour-leaflet-popup"), keepInView: false }
         );
+        bindDetourEndpointReveal(map, marker);
         if (publicMode) {
           labelPublicDetourEndpointMarker(marker, getPublicDetourEndpointLabel(detour, point, direction));
           bindPublicEndpointInspector(L, map, marker, markers, point, () => {
