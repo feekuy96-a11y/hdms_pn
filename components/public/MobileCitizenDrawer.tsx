@@ -6,6 +6,7 @@ import type { DetourRoute, FloodRoute } from "@/db/default-data";
 import type { StatusColor } from "@/lib/traffic-presentation";
 import { SituationSummary } from "@/components/public/SituationSummary";
 import { PUBLIC_READ_MESSAGES, type PublicReadState } from "./public-read-state";
+import glass from "./CitizenMobileGlass.module.css";
 import { FloodCard } from "@/components/public/FloodCard";
 
 export interface MobileCitizenDrawerProps {
@@ -87,7 +88,7 @@ export function MobileCitizenDrawer({
   return (
     <>
       {showNavigation && (
-        <nav aria-label="เมนูประชาชน" className="citizen-nav fixed inset-x-0 bottom-0 z-[460] grid min-h-14 grid-cols-4 items-center gap-1 border-t border-surface bg-surface-panel px-1 pt-0.5 pb-[max(0.125rem,env(safe-area-inset-bottom))] lg:hidden">
+        <nav aria-label="เมนูประชาชน" className={`citizen-nav ${glass.nav} fixed inset-x-0 bottom-0 z-[460] grid min-h-14 grid-cols-4 items-center gap-1 border-t border-surface px-1 pt-0.5 pb-[max(0.125rem,env(safe-area-inset-bottom))] lg:hidden`}>
           <button type="button" aria-current="page" className={navAction + " bg-surface-card text-sky-200"} onClick={() => setIsMobileDrawerOpen(false)}>
             <Map className="size-[1.125rem]" aria-hidden="true" />แผนที่
           </button>
@@ -114,7 +115,7 @@ export function MobileCitizenDrawer({
             className={`citizen-drawer flex w-full flex-col overflow-y-auto overscroll-contain rounded-t-3xl border-t border-amber-500/60 bg-surface-panel text-slate-100 shadow-2xl transition-[height] duration-200 motion-reduce:transition-none ${mobileDrawerStage === "full" ? "h-[95dvh]" : mobileDrawerStage === "peek" ? "h-[14.6875rem]" : "h-[78dvh]"
               }`}
           >
-            <div className="shrink-0 border-b border-surface bg-surface-panel px-3 pb-3 pt-2">
+            <div className={`${glass.sheetHeading} shrink-0 border-b border-surface bg-surface-panel px-3 pb-3 pt-2`}>
               <button
                 type="button"
                 onClick={() => setMobileDrawerStage((stage) => stage === "peek" ? "list" : stage === "list" ? "full" : "peek")}
@@ -147,6 +148,12 @@ export function MobileCitizenDrawer({
                   </button>
                 </div>
               </div>
+              {hasCounts && mobileDrawerStage !== "peek" && (
+                <section className={`${glass.passability} mt-2 space-y-1.5`} aria-labelledby="citizen-mobile-passability">
+                  <h3 id="citizen-mobile-passability" className="text-xs font-semibold text-slate-300">สถานะการผ่านทางจากรายงานน้ำท่วม</h3>
+                  <SituationSummary counts={situationCounts} activeFilter={selectedStatusFilter} onFilter={handleStatusFilter} />
+                </section>
+              )}
               {(selectedStatusFilter !== "ALL" || mapStatusFilterLabel) && (
                 <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-amber-400/40 bg-amber-950/35 px-2.5 py-1.5 text-xs">
                   <span className="text-amber-100">{mapStatusFilterLabel ? "กำลังกรอง: " + mapStatusFilterLabel : "กำลังกรองตามสถานะที่เลือก"}</span>
@@ -178,7 +185,6 @@ export function MobileCitizenDrawer({
               </div>
               {mobileDrawerStage !== "peek" && (
                 <div className="mt-3 space-y-2">
-                  {hasCounts && <SituationSummary counts={situationCounts} activeFilter={selectedStatusFilter} onFilter={handleStatusFilter} />}
                   <div className="relative">
                     <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input

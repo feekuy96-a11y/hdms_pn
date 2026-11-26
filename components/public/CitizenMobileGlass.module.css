@@ -1,0 +1,77 @@
+/* Mobile civic surfaces. Retain the existing insets, hit targets and stacking. */
+.nav {
+  background-color: var(--surface-panel);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--surface-card) 70%, transparent) 1px, transparent 1px);
+  padding-inline: max(.25rem, env(safe-area-inset-left)) max(.25rem, env(safe-area-inset-right));
+}
+
+@supports (background-color: color-mix(in srgb, white 92%, transparent)) {
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .nav {
+      /* Keep map-toolbar-level opacity even over high-contrast imagery. */
+      background-color: color-mix(in srgb, var(--surface-panel) 92%, transparent);
+      -webkit-backdrop-filter: blur(8px) saturate(125%);
+      backdrop-filter: blur(8px) saturate(125%);
+    }
+  }
+}
+
+/* Stay inside each touch target so the ring is not clipped by viewport insets. */
+.nav:global(.citizen-nav)[aria-label] > button:focus-visible {
+  outline-offset: -2px;
+}
+
+.nav button[aria-current="page"] {
+  --focus-ring: var(--brand-active-text);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .nav {
+    background-color: var(--surface-panel);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .nav {
+    background: Canvas;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  .nav button[aria-current="page"] {
+    border: 1px solid Highlight;
+  }
+}
+
+/* The heading gets the same tinted edge, but text, cards and actions never blur. */
+@media (max-width: 1023px) {
+  .sheetHeading {
+    background-image: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--cit-selected) 76%, var(--surface-panel)),
+      var(--surface-panel) 84%
+    );
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--surface-card) 78%, var(--surface-border));
+  }
+}
+
+/* Make the first, most severe available status easy to scan without
+   changing the existing order, labels or source of its counts. */
+.passability :global(.citizen-status-card-list) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.passability :global(.citizen-status-card-list):has(> li:only-child) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.passability :global(.citizen-status-card-list):has(> li:nth-child(3):last-child) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.passability :global(.citizen-status-card-list):has(> li:nth-child(5):last-child) > li:first-child {
+  grid-column: 1 / -1;
+}

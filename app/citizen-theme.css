@@ -250,8 +250,8 @@
 .citizen-ui .citizen-detour-context { display:flex; gap:.6rem; padding:.65rem .7rem; border-left:1px solid var(--surface-border); color:var(--cit-sub); }
 .citizen-ui .citizen-detour-direction { padding:.7rem; border-radius:12px; background:var(--cit-selected); }
 .citizen-ui .citizen-map-status { position:absolute;top:12px;left:12px;z-index:412;width:max-content;max-width:min(19rem,calc(100% - 24px));border:1px solid var(--surface-border);border-radius:12px;background:var(--surface-panel);color:var(--cit-ink);box-shadow:var(--cit-shadow);padding:3px; }
-.citizen-ui .citizen-map-status button:not(.hdms-map-status-chip) { display:flex;align-items:center;gap:.4rem;min-height:44px;padding:.3rem .55rem;text-align:left;color:var(--cit-action);font-size:.78rem;font-weight:750;border-radius:8px; }
-.citizen-ui .citizen-map-status button:not(.hdms-map-status-chip):hover,.citizen-ui .citizen-map-status button[aria-pressed=true] { background:var(--cit-selected); }
+.citizen-ui .citizen-map-status button:where(:not(.hdms-map-status-chip)) { display:flex;align-items:center;gap:.4rem;min-height:44px;padding:.3rem .55rem;text-align:left;color:var(--cit-action);font-size:.78rem;font-weight:750;border-radius:8px; }
+.citizen-ui .citizen-map-status button:where(:not(.hdms-map-status-chip)):hover,.citizen-ui .citizen-map-status button[aria-pressed=true] { background:var(--cit-selected); }
 .citizen-ui .citizen-map-status-list { min-width:44px;justify-content:center; }
 .citizen-ui .citizen-map-status-note { padding:.45rem .55rem;color:var(--cit-sub);font-size:.78rem; }
 .citizen-ui .citizen-map-status-filters { overflow-y:auto;max-height: min(40dvh,18rem);border-top:1px solid var(--surface-border);padding-top:2px;overscroll-behavior:contain; }
