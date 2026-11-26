@@ -270,8 +270,8 @@ test("detour routing can force a straight heading through a selected intersectio
   await page.getByLabel("พิกัดจุด B").fill("6.8390, 101.1920");
   await page.getByLabel("พิกัดจุด B").blur();
   await page.getByRole("checkbox", { name: /บังคับตรงผ่านสามแยก\/สี่แยก/ }).check();
-  await page.getByRole("button", { name: "แตะจุดกลางเส้นเพื่อเพิ่มจุด" }).click();
-  await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
+  await page.getByRole("button", { name: "เพิ่มจุดกึ่งกลางอัตโนมัติ" }).click();
+  await page.getByRole("button", { name: "คำนวณตามถนน" }).click();
   await expect(page.getByText("คำนวณแนวตรงผ่านแยกตามจุดควบคุมสำเร็จ", { exact: false })).toBeVisible();
   expect(routingRequests.some(({ searchParams }) =>
     searchParams.get("continue_straight") === "true" &&
@@ -756,6 +756,7 @@ test("two-way detour uses configured line style color for both directions and ar
 });
 
 test("two-way detour supports separate B->A pins and freeform endpoint/vertex customization", { tag: "@vertex-edit" }, async ({ page, isMobile }) => {
+  await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
   const savedPayloads: any[] = [];
   const requestedRoutes: string[] = [];
   let releaseForward!: () => void;
@@ -791,7 +792,7 @@ test("two-way detour supports separate B->A pins and freeform endpoint/vertex cu
     if (!isReverse) await forwardGate;
     const coords = isReverse
       ? [[101.31, 6.88], [101.255, 6.845], [101.20, 6.81]]
-      : [[101.21, 6.82], [101.26, 6.85], [101.30, 6.87]];
+      : [[101.2108, 6.8208], [101.26, 6.85], [101.3009, 6.8709]];
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -827,7 +828,7 @@ test("two-way detour supports separate B->A pins and freeform endpoint/vertex cu
   await expect(page.locator(".doh-draft-endpoint")).toHaveCount(2);
   await expect(page.locator(".doh-draft-rev-endpoint")).toHaveCount(2);
 
-  await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
+  await page.getByRole("button", { name: "คำนวณตามถนน" }).click();
   try {
     await expect.poll(() => requestedRoutes.length).toBe(1);
     await expect(page.getByText("กำลังคำนวณทางเลี่ยง A→B…")).toBeVisible();
@@ -840,7 +841,7 @@ test("two-way detour supports separate B->A pins and freeform endpoint/vertex cu
   await expect(page.getByText("กรุณาตรวจแนวเส้น A→B และ B→A ให้ครบทั้งสองทิศก่อนบันทึก")).toBeVisible();
   expect(savedPayloads).toHaveLength(0);
   rejectReverse = false;
-  await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
+  await page.getByRole("button", { name: "คำนวณตามถนน" }).click();
   await expect(page.getByText(/คำนวณทางเลี่ยงตามถนนสำเร็จ: A→B \(3 จุด\) และ B→A \(3 จุด\)/)).toBeVisible();
   expect(requestedRoutes.some((u) => u.includes("101.21,6.82;101.3,6.87"))).toBe(true);
   expect(requestedRoutes.some((u) => u.includes("101.31,6.88;101.2,6.81"))).toBe(true);
@@ -873,6 +874,8 @@ test("two-way detour supports separate B->A pins and freeform endpoint/vertex cu
   await expect.poll(() => savedPayloads.length).toBe(1);
   expect(savedPayloads[0].directionMode).toBe("TWO_WAY");
   expect(savedPayloads[0].coordinates).toHaveLength(3);
+  expect(savedPayloads[0].coordinates[0]).toEqual([101.2108, 6.8208]);
+  expect(savedPayloads[0]).toMatchObject({ latStart: 6.82, lonStart: 101.21, latEnd: 6.87, lonEnd: 101.3 });
   expect(savedPayloads[0].coordinates[1][0]).toBeGreaterThan(101.26);
   expect(savedPayloads[0].reverseCoordinates).toHaveLength(4);
   expect(savedPayloads[0].reverseCoordinates[0][0]).toBeCloseTo(101.31, 3);

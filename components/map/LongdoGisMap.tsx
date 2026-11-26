@@ -31,7 +31,6 @@ import {
   getPublicDetourEndpointLabel,
   labelPublicDetourEndpointMarker,
   parseRouteCoordinates,
-  resolveDetourPointPinCoord,
 } from "./longdo-map-popups";
 import {
   buildDetourPhotoBadgeSpec,
@@ -1288,8 +1287,8 @@ export function LongdoGisMap({
       );
       const startPhoto = detour.detour_meta?.start_point_photo;
       const endPhoto = detour.detour_meta?.end_point_photo;
-      const startPin = resolveDetourPointPinCoord(startPhoto, photoPoints.startLat, photoPoints.startLon);
-      const endPin = resolveDetourPointPinCoord(endPhoto, photoPoints.endLat, photoPoints.endLon);
+      const startPin = photoPoints.start;
+      const endPin = photoPoints.end;
       const endpoints = [
         { point: "START" as const, lat: startPin.lat, lon: startPin.lon, photo: startPhoto },
         { point: "END" as const, lat: endPin.lat, lon: endPin.lon, photo: endPhoto },
@@ -1298,7 +1297,6 @@ export function LongdoGisMap({
       const validEndpoints = endpoints.filter(({ lat, lon }) =>
         Number.isFinite(lat) && Number.isFinite(lon) && !(lat === 0 && lon === 0)
       );
-      const availablePoints = new Set(validEndpoints.map(({ point }) => point));
       const markers = new Map<"START" | "END", ReturnType<typeof L.marker>>();
       validEndpoints.forEach(({ point, lat, lon, photo }) => {
         const hasPhoto = Boolean(typeof photo?.url === "string" && photo.url.trim());
@@ -1315,7 +1313,7 @@ export function LongdoGisMap({
         allPoints.push([lon, lat]);
         marker.bindPopup(
           () => publicMode
-            ? buildPublicDetourEndpointPopup(detour, point, photo, direction, systemData.floodRoutes || [], availablePoints)
+            ? buildPublicDetourEndpointPopup(detour, point, photo, direction, systemData.floodRoutes || [], { lat, lon })
             : buildDetourPointPhotoPopupHtml(detour, point, photo, lat, lon),
           { ...getResponsivePopupOptions(L, 350, 240, "doh-detour-leaflet-popup"), keepInView: true }
         );

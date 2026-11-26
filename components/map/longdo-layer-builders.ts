@@ -9,6 +9,7 @@ import {
   parseRouteCoordinates,
   routeCodeOf,
   routeNameOf,
+  resolveDetourPointPinCoord,
   toLeafletLatLng,
   type ShieldCandidate,
 } from "./longdo-map-popups";
@@ -209,23 +210,15 @@ export function resolveDetourPhotoPointCoords(
   detour: DetourRoute,
   fwdCoords: [number, number][]
 ) {
-  const startLat =
-    Number.isFinite(detour.lat_start) && detour.lat_start !== 0
-      ? detour.lat_start
-      : (fwdCoords[0]?.[1] ?? NaN);
-  const startLon =
-    Number.isFinite(detour.lon_start) && detour.lon_start !== 0
-      ? detour.lon_start
-      : (fwdCoords[0]?.[0] ?? NaN);
-  const endLat =
-    Number.isFinite(detour.lat_end) && detour.lat_end !== 0
-      ? detour.lat_end
-      : (fwdCoords[fwdCoords.length - 1]?.[1] ?? NaN);
-  const endLon =
-    Number.isFinite(detour.lon_end) && detour.lon_end !== 0
-      ? detour.lon_end
-      : (fwdCoords[fwdCoords.length - 1]?.[0] ?? NaN);
-  return { startLat, startLon, endLat, endLon };
+  const resolveEndpoint = (lat: number, lon: number, photo: NonNullable<DetourRoute["detour_meta"]>["start_point_photo"], fallback?: [number, number]) =>
+    Number.isFinite(lat) && Number.isFinite(lon) && lat !== 0 && lon !== 0 &&
+      Math.abs(lat) <= 90 && Math.abs(lon) <= 180
+      ? { lat, lon }
+      : resolveDetourPointPinCoord(photo, fallback?.[1] ?? NaN, fallback?.[0] ?? NaN);
+  return {
+    start: resolveEndpoint(detour.lat_start, detour.lon_start, detour.detour_meta?.start_point_photo, fwdCoords[0]),
+    end: resolveEndpoint(detour.lat_end, detour.lon_end, detour.detour_meta?.end_point_photo, fwdCoords[fwdCoords.length - 1]),
+  };
 }
 
 /** สร้างสเปกไอคอนสัญลักษณ์เส้นทางเลี่ยงกึ่งกลางแนวเส้น */

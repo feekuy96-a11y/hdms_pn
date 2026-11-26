@@ -11,6 +11,7 @@ import {
 import { resetAreaLookup, resolveArea } from "../../lib/area-lookup";
 import { fetchOsrmWithFailover, resetOsrmClient } from "../../lib/osrm-client";
 import { sampleWaypointsForGoogleMaps } from "../../lib/detour-navigation";
+import { resolveDetourPhotoPointCoords } from "../../components/map/longdo-layer-builders";
 import type { SystemDataPayload } from "../../db/default-data";
 
 const baseHighwayNetwork = JSON.parse(
@@ -38,18 +39,18 @@ test.describe("Public detour endpoints on mobile", () => {
       flood_id_ref: null,
       route_name: "ทางเลี่ยงทดสอบ A/B",
       direction_mode: "TWO_WAY",
-      lat_start: 6.78,
-      lon_start: 101.13,
-      lat_end: 6.81,
-      lon_end: 101.17,
+      lat_start: 6.78121,
+      lon_start: 101.13121,
+      lat_end: 6.81132,
+      lon_end: 101.17132,
       coordinates_json: [[101.13, 6.78], [101.145, 6.795], [101.17, 6.81]],
       reverse_coordinates_json: [[101.17, 6.81], [101.15, 6.796], [101.13, 6.78]],
       description: "ขาไป:\n1. จุด A\n2. ผ่านสะพาน\n3. จุด B\nขากลับ:\n1. จุด B\n2. ผ่านสะพาน\n3. จุด A",
       is_active: true,
       updated_at: updatedAt,
       detour_meta: {
-        start_point_photo: { url: photoUrl, caption: "เข้าทางเลี่ยงที่แยกหน้าโรงเรียน ".repeat(8) },
-        end_point_photo: { url: photoUrl, caption: "กลับเข้าสู่ทางหลวงที่แยกตลาด ".repeat(8) },
+        start_point_photo: { url: photoUrl, caption: "เข้าทางเลี่ยงที่แยกหน้าโรงเรียน ".repeat(8), lat: 6.782, lon: 101.132, subdistrict: "บานา", district: "เมืองปัตตานี", province: "ปัตตานี" },
+        end_point_photo: { url: photoUrl + "#B", caption: "กลับเข้าสู่ทางหลวงที่แยกตลาด ".repeat(8), lat: 6.81132, lon: 101.17132, subdistrict: "ตาเซะ", district: "เมืองยะลา", province: "ยะลา" },
       },
     }],
     timelineUpdates: [],
@@ -59,6 +60,16 @@ test.describe("Public detour endpoints on mobile", () => {
     mapStyles: null,
     systemSettings: { name: "HDMS Test", desc: "ระบบเฝ้าระวังน้ำท่วม", org: "แขวงทางหลวงปัตตานี", phone: "1586" },
   };
+
+  test("legacy endpoint pin uses the stored photo pair, then the snapped endpoint, without mixing coordinates", () => {
+    const row = payload.detourRoutes[0];
+    const line: [number, number][] = [[101.13, 6.78], [101.17, 6.81]];
+    const result = resolveDetourPhotoPointCoords({
+      ...row, lat_start: 0, lon_end: 0,
+      detour_meta: { ...row.detour_meta, end_point_photo: {} },
+    }, line);
+    expect(result).toEqual({ start: { lat: 6.782, lon: 101.132 }, end: { lat: 6.81, lon: 101.17 } });
+  });
 
   test("detour overview text, symbols and direction controls contrast in both themes", async ({ page }) => {
     await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
@@ -179,6 +190,10 @@ test.describe("Public detour endpoints on mobile", () => {
         await marker.press("Enter");
         const popup = page.getByRole("region", { name: `${letter} · ${role}`, exact: true });
         await expect(popup.getByRole("heading", { name: `${letter} · ${role}`, exact: true })).toBeVisible();
+        await expect(popup.locator("[data-endpoint-coordinate]")).toHaveText(letter === "A" ? "พิกัด: 6.781210, 101.131210" : "พิกัด: 6.811320, 101.171320");
+        await expect(popup.locator("[data-endpoint-locality]")).toHaveText(letter === "A" ? "ต.บานา อ.เมืองปัตตานี จ.ปัตตานี" : "ต.ตาเซะ อ.เมืองยะลา จ.ยะลา");
+        await expect(popup.locator(".citizen-endpoint-caption")).toContainText(letter === "A" ? "หน้าโรงเรียน" : "แยกตลาด");
+        await expect(popup.locator("[data-endpoint-photo] img")).toHaveAttribute("src", letter === "A" ? photoUrl : photoUrl + "#B");
         const frame = page.locator(".leaflet-popup-content-wrapper").filter({ has: popup });
         await expect.poll(() => frame.evaluate((element) => {
           const box = element.getBoundingClientRect();
@@ -193,6 +208,57 @@ test.describe("Public detour endpoints on mobile", () => {
         await expect(popup).toHaveCount(0);
       }
     });
+  }
+});
+
+test("admin keeps independent manual and looked-up areas when endpoint responses are stale or unavailable", async ({ page }) => {
+  const calls: number[] = [];
+  let releaseOld!: () => void;
+  const oldRequest = new Promise<void>((resolve) => { releaseOld = resolve; });
+  await page.route("**/functions/v1/hdms-api", async (route) => {
+    const { action, args } = route.request().postDataJSON();
+    if (action === "reverseGeocodeGoogleAction") {
+      const lat = Number(args[1]);
+      calls.push(lat);
+      if (lat === 6.78121) await oldRequest;
+      const area = lat === 6.78121 ? ["บานา", "เมืองปัตตานี", "ปัตตานี"]
+        : lat === 6.81132 ? ["ตาเซะ", "เมืองยะลา", "ยะลา"] : null;
+      return route.fulfill({ json: area ? { configured: true, available: true, found: true, subdistrict: area[0], district: area[1], province: area[2] }
+        : { configured: true, available: true, found: false } });
+    }
+    if (action === "proxyReverseGeocodeAction") return route.fulfill({ json: { available: true, found: false } });
+    if (/^get/.test(action)) return route.fulfill({ json: { floodRoutes: [], detourRoutes: [], offices: [], highwayLayers: [], timelineUpdates: [], mitigationProjects: [], systemSettings: {} } });
+    return route.abort();
+  });
+  await page.route("https://api.longdo.com/**", route => route.abort());
+  await page.route("https://nominatim.openstreetmap.org/**", route => route.abort());
+  await page.route("**/data/highway-base-network.json", route => route.fulfill({ json: { subdistricts: [], routes: [], districtsGeojson: { type: "FeatureCollection", features: [] } } }));
+  await page.goto(`${process.env.BASE_PATH || ""}/admin/`);
+  await page.getByRole("button", { name: "ทางเลี่ยง", exact: true }).click();
+  const a = page.getByLabel("พิกัดจุด A", { exact: true });
+  const b = page.getByLabel("พิกัดจุด B", { exact: true });
+  const set = async (input: Locator, value: string) => { await input.fill(value); await input.blur(); };
+  try {
+    await set(b, "6.81132, 101.17132");
+    const tabs = page.getByRole("tablist", { name: "เลือกจุดต้นทางหรือปลายทางของทางเลี่ยง" });
+    await tabs.getByRole("tab", { name: /จุด B/ }).click();
+    await expect(page.getByLabel(/ตำบลภาพ.*B/)).toHaveValue("ตาเซะ");
+    await expect(page.getByLabel(/อำเภอภาพ.*B/)).toHaveValue("เมืองยะลา");
+    await expect(page.getByLabel(/จังหวัดภาพ.*B/)).toHaveValue("ยะลา");
+    await tabs.getByRole("tab", { name: /จุด A/ }).click();
+    await set(a, "6.78121, 101.13121");
+    await expect.poll(() => calls.includes(6.78121)).toBe(true);
+    await page.getByLabel(/ตำบลภาพ.*A/).fill("ตำบลกรอกเอง");
+    await set(a, "6.97590, 101.42340");
+    await expect.poll(() => calls.includes(6.9759)).toBe(true);
+    releaseOld();
+    await expect(page.getByText(/พิกัดหมุด A บนแผนที่: 6.9759, 101.4234/)).toBeVisible();
+    await expect(page.getByLabel(/ตำบลภาพ.*A/)).toHaveValue("ตำบลกรอกเอง");
+    await expect(page.getByLabel(/อำเภอภาพ.*A/)).toHaveValue("");
+    await tabs.getByRole("tab", { name: /จุด B/ }).click();
+    await expect(page.getByLabel(/ตำบลภาพ.*B/)).toHaveValue("ตาเซะ");
+  } finally {
+    releaseOld();
   }
 });
 

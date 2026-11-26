@@ -717,7 +717,7 @@ export function buildPublicDetourEndpointPopup(
   photo: DetourPointPhoto | null | undefined,
   direction: DetourDirection,
   floodRoutes: FloodRoute[],
-  _availablePoints: ReadonlySet<"START" | "END">,
+  pin: { lat: number; lon: number },
 ): string {
   const photoUrl = normalizeMediaUrl(photo?.url);
   const safePhotoUrl = /^(?:https?:\/\/|data:image\/(?:png|jpe?g|webp|gif);base64,)/i.test(photoUrl) ? escapeHtml(photoUrl) : "";
@@ -732,7 +732,7 @@ export function buildPublicDetourEndpointPopup(
   return `
     <section data-detour-endpoint="${point}" class="doh-detour-point-photo-popup font-body" aria-label="${title}" style="width:min(320px,calc(100vw - 26px));max-height:none;overflow:visible">
       <header class="citizen-endpoint-header" style="min-height:54px">
-        <h3 data-endpoint-heading tabindex="-1" class="m-0 text-sm font-bold text-[var(--cit-ink)]">${title}</h3>
+        <h3 data-endpoint-heading tabindex="-1" class="m-0 text-sm font-bold text-[var(--cit-ink)]"><span aria-hidden="true">📍</span> ${title}</h3>
         ${trip ? `<span class="citizen-endpoint-trip-direction">${trip}</span>` : ""}
       </header>
       <div class="grid min-w-0 gap-1.5 p-2.5 text-xs">
@@ -744,6 +744,7 @@ export function buildPublicDetourEndpointPopup(
           </button>
         </div>` : ""}
         ${area ? `<p data-endpoint-locality class="line-clamp-1 !m-0" title="${escapeHtml(area)}">${escapeHtml(area)}</p>` : ""}
+        <p data-endpoint-coordinate class="!m-0 break-words font-mono">พิกัด: ${pin.lat.toFixed(6)}, ${pin.lon.toFixed(6)}</p>
         ${caption ? `<p class="citizen-endpoint-caption line-clamp-2 !m-0" title="${escapeHtml(caption)}">${escapeHtml(caption)}</p>` : ""}
         <div class="citizen-endpoint-actions">
           ${nav.isValid && nav.url ? `<a href="${escapeHtml(nav.url)}" target="_blank" rel="noopener noreferrer">ดูบน Google Maps</a>` : `<p>${escapeHtml(nav.warning || "ยังไม่ยืนยันนำทาง")}</p>`}

@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 for (const firstReply of ["pending", "disconnected"] as const) {
-  test(`linked detour retry preserves saved ID and both endpoint photos (${firstReply})`, async ({ page, baseURL }) => {
+  test(`linked detour retry preserves saved ID and both endpoint photos (${firstReply})`, async ({ page, baseURL, isMobile }) => {
+    await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const origin = new URL(baseURL!).origin;
     const image = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z4YQAAAAASUVORK5CYII=", "base64");
     const updatedAt = "2026-11-25T10:00:00.000Z";
@@ -55,6 +56,21 @@ for (const firstReply of ["pending", "disconnected"] as const) {
     await page.getByRole("button", { name: "ทางเลี่ยง", exact: true }).click();
     await page.getByPlaceholder(/เช่น ทางเลี่ยง ทล.4092/).fill("ทางเลี่ยงจำลอง 409");
     await page.getByLabel("ผูกกับจุดน้ำท่วมอ้างอิง").selectOption("F-1");
+    const calculate = page.getByRole("button", { name: "คำนวณตามถนน", exact: true });
+    await expect(calculate).toHaveCount(1);
+    const afterAandB = await calculate.evaluate((button) => {
+      const labels = ["พิกัดจุด A", "พิกัดจุด B", "โครงสร้างถนนสำหรับสองทิศทาง"];
+      const inputs = labels.slice(0, 2).map((label) => document.querySelector(`[aria-label="${label}"]`));
+      const road = [...document.querySelectorAll("label")].find((el) => el.textContent?.startsWith(labels[2]));
+      const advanced = [...document.querySelectorAll("button")].find((el) => el.textContent?.trim() === "ดัดเส้นอิสระ");
+      return [...inputs, road].every((el) => el != null && Boolean(el.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING)) &&
+        advanced != null && Boolean(button.compareDocumentPosition(advanced) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    expect(afterAandB).toBe(true);
+    await expect(calculate).toBeDisabled();
+    await expect(calculate).toHaveAccessibleDescription("ระบุจุด A และ B · เลือกรูปแบบถนน");
+    await calculate.dispatchEvent("click");
+    expect(routeRequests).toHaveLength(0);
     for (const [name, value] of [["พิกัดจุด A", "6.8200, 101.2100"], ["พิกัดจุด B", "6.8300, 101.2300"]]) {
       const field = page.getByLabel(name, { exact: true });
       await field.fill(value);
@@ -62,12 +78,14 @@ for (const firstReply of ["pending", "disconnected"] as const) {
     }
     const carriageway = page.getByLabel("โครงสร้างถนนสำหรับสองทิศทาง");
     await expect(carriageway).toHaveValue("");
-    await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
-    await expect(page.getByText("กรุณาเลือกโครงสร้างถนนก่อนคำนวณเส้น")).toBeVisible();
+    await expect(calculate).toBeDisabled();
+    await expect(calculate).toHaveAccessibleDescription("เลือกรูปแบบถนน");
+    await calculate.dispatchEvent("click");
     expect(routeRequests).toHaveLength(0);
     await carriageway.selectOption("SHARED");
     await expect(page.getByRole("group", { name: /หมุดเส้นทางขากลับ/ })).toHaveCount(0);
-    await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
+    await expect(calculate).toBeEnabled();
+    await calculate.click();
     await expect(page.getByText(/คำนวณทางเลี่ยงตามถนนสำเร็จ/)).toBeVisible();
     expect(routeRequests).toHaveLength(1);
     expect(routeRequests[0]).toContain("101.21,6.82;101.23,6.83");

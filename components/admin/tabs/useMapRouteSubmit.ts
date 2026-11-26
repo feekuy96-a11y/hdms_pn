@@ -302,7 +302,7 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
           lon: fallbackLon,
           subdistrict: fallbackArea?.subdistrict,
           district: fallbackArea?.district,
-          province: fallbackArea?.province || "ปัตตานี",
+          province: fallbackArea?.province,
           locationSource: "ROUTE_ENDPOINT",
         };
       }
