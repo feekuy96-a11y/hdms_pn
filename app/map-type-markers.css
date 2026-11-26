@@ -1,0 +1,106 @@
+/* Two incident types, independent of traffic severity and stored line styles. */
+:root {
+  --map-flood-pin-top: #a9253b;
+  --map-flood-pin-base: #851b31;
+  --map-flood-pin-edge: #f5bcc5;
+  --map-detour-pin-top: #ffe394;
+  --map-detour-pin-base: #f6bb47;
+}
+
+.doh-map-capsule-pin .doh-type-flood {
+  position: relative;
+  background-color: var(--map-flood-pin-base);
+  background-image: linear-gradient(155deg, var(--map-flood-pin-top), var(--map-flood-pin-base));
+  border-color: var(--map-flood-pin-edge);
+  color: var(--hdms-white);
+}
+
+.doh-type-flood-wave {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.doh-type-flood-wave > span {
+  background: transparent !important;
+  border-color: currentColor;
+  box-shadow: none;
+}
+
+.doh-type-flood-status {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  box-sizing: border-box;
+  width: 15px;
+  height: 15px;
+  --status-sign-color: var(--map-pin-status);
+}
+
+/* Two inks are inside the shape; the negative space around it remains bare. */
+.hdms-status-sign {
+  --status-sign-face: var(--hdms-white);
+  --status-sign-fill: var(--status-sign-color, var(--hdms-slate-200));
+  --status-sign-face: color-mix(in srgb, var(--status-sign-fill) 13%, var(--hdms-white));
+  --status-sign-inset: color-mix(in srgb, var(--status-sign-fill) 55%, var(--hdms-white));
+  --status-sign-ink: var(--hdms-slate-900);
+  display: block;
+  flex: none;
+}
+/* Edge underlay keeps outside strokes visible over imagery and dark cards. */
+.hdms-status-sign-halo { display: none; }
+:is([data-citizen-theme="dark"], [data-admin-theme="dark"], .doh-type-flood-status) .hdms-status-sign-halo {
+  display: block;
+  fill: none;
+  stroke: var(--hdms-white);
+  stroke-width: 3.5;
+}
+.hdms-status-sign-face { fill: var(--status-sign-face); }
+.hdms-status-sign-inset { fill: var(--status-sign-inset, var(--status-sign-fill)); }
+.hdms-status-sign-edge, .hdms-status-sign-route {
+  fill: none;
+  stroke: var(--status-sign-ink);
+  stroke-width: 1.65;
+}
+.hdms-status-sign-route { stroke-width: 2; }
+
+.doh-capsule-zoom-far .doh-type-flood-status {
+  position: absolute;
+  inset-inline-end: -4px;
+  inset-block-end: -3px;
+}
+
+.doh-detour-symbol .doh-type-detour {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--hdms-white);
+  border-radius: 9px;
+  color: var(--hdms-slate-900);
+  background-color: var(--map-detour-pin-fallback);
+  background-image: linear-gradient(155deg, var(--map-detour-pin-top), var(--map-detour-pin-base));
+  box-shadow: 0 2px 6px rgb(15 23 42 / 38%);
+}
+
+@media (forced-colors: active) {
+  .doh-map-capsule-pin .doh-type-flood,
+  .doh-detour-symbol .doh-type-detour {
+    border-color: ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+
+  .doh-type-flood-wave svg { stroke: ButtonText; }
+
+  .hdms-status-sign {
+    --status-sign-face: ButtonFace;
+    --status-sign-inset: Canvas;
+    --status-sign-ink: ButtonText;
+  }
+
+  .hdms-status-sign-halo { stroke: Canvas !important; }
+}
