@@ -153,9 +153,15 @@ export function useMapFreeGeometryEdit({
       const reversed = routeMode === "DETOUR" ? detourDirectionMode === "REVERSE_ONLY" : directionCode === "B_TO_A";
       const pointA = reversed ? next[next.length - 1] : next[0];
       const pointB = reversed ? next[0] : next[next.length - 1];
-      if (pointA && pointB) {
+      const oldA = reversed ? current[current.length - 1] : current[0];
+      const oldB = reversed ? current[0] : current[current.length - 1];
+      const moved = (old: [number, number] | undefined, point: [number, number]) =>
+        old?.[0] !== point[0] || old?.[1] !== point[1];
+      if (pointA && (routeMode !== "DETOUR" || moved(oldA, pointA))) {
         setStartLon(pointA[0]);
         setStartLat(pointA[1]);
+      }
+      if (pointB && (routeMode !== "DETOUR" || moved(oldB, pointB))) {
         setEndLon(pointB[0]);
         setEndLat(pointB[1]);
       }

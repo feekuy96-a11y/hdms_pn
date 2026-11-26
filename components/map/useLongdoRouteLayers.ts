@@ -27,7 +27,6 @@ import {
   labelPublicDetourEndpointMarker,
   parseRouteCoordinates,
   raisePathLayers,
-  resolveDetourPointPinCoord,
   toLeafletLatLng,
   type AnimatedLineEntry,
   type FloodLineEntry,
@@ -415,30 +414,28 @@ export function useLongdoRouteLayers({
       // Draw Start Point A & End Point B markers when photo or point-first metadata exists
       const startPhoto = detour.detour_meta?.start_point_photo;
       const endPhoto = detour.detour_meta?.end_point_photo;
-      const { startLat, startLon, endLat, endLon } = resolveDetourPhotoPointCoords(detour, fwdCoords);
+      const { start, end } = resolveDetourPhotoPointCoords(detour, fwdCoords);
       const endpointEntries = [
         {
           point: "START" as const,
           photo: startPhoto,
-          pin: resolveDetourPointPinCoord(startPhoto, startLat, startLon),
+          pin: start,
           photoTooltip: `📷 ภาพทางเข้าจุดเริ่มต้น A (${detour.route_name})`,
           fallbackTooltip: `📍 จุดเริ่มต้น A (${detour.route_name})`,
         },
         {
           point: "END" as const,
           photo: endPhoto,
-          pin: resolveDetourPointPinCoord(endPhoto, endLat, endLon),
+          pin: end,
           photoTooltip: `📷 ภาพทางเข้าจุดสิ้นสุด B - ฝั่งขากลับ (${detour.route_name})`,
           fallbackTooltip: `📍 จุดสิ้นสุด B - ฝั่งขากลับ (${detour.route_name})`,
         },
       ];
 
-      const anyPointMetadata = hasDetourPointMetadata(startPhoto) || hasDetourPointMetadata(endPhoto);
       const validEntries = endpointEntries.filter(({ pin, photo }) =>
-        (publicMode ? anyPointMetadata : hasDetourPointMetadata(photo)) &&
+        (publicMode || hasDetourPointMetadata(photo)) &&
         Number.isFinite(pin.lat) && Number.isFinite(pin.lon) && !(pin.lat === 0 && pin.lon === 0)
       );
-      const availablePoints = new Set(validEntries.map((entry) => entry.point));
       const markers = new Map<"START" | "END", any>();
       const directionForEndpoint = () => {
         const id = String(detour.id || "").replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -458,7 +455,7 @@ export function useLongdoRouteLayers({
           .bindTooltip(hasPhoto ? photoTooltip : fallbackTooltip, { direction: "top" })
           .bindPopup(
             () => publicMode
-              ? buildPublicDetourEndpointPopup(detour, point, photo, directionForEndpoint(), systemData.floodRoutes || [], availablePoints)
+              ? buildPublicDetourEndpointPopup(detour, point, photo, directionForEndpoint(), systemData.floodRoutes || [], pin)
               : buildDetourPointPhotoPopupHtml(detour, point, photo, pin.lat, pin.lon),
             publicMode
               ? {

@@ -97,7 +97,7 @@ export function useMapCoordinatePicker(params: UseMapCoordinatePickerParams) {
   const handleAutoGeocode = async (
     lon: number,
     lat: number,
-    endpoint: "START" | "END" | "PHOTO_START" | "PHOTO_END"
+    endpoint: "START" | "END"
   ) => {
     setIsGeocoding(true);
     try {
@@ -106,29 +106,11 @@ export function useMapCoordinatePicker(params: UseMapCoordinatePickerParams) {
         const area = { subdistrict: location.subdistrict, district: location.district };
         if (endpoint === "START") setStartArea(area);
         else if (endpoint === "END") setEndArea(area);
-        else if (endpoint === "PHOTO_START") {
-          void resolveDetourPhotoArea?.("START", lat, lon, {
-            manual: true,
-            source: "MAP",
-            areaHint: area,
-          });
-        } else {
-          void resolveDetourPhotoArea?.("END", lat, lon, {
-            manual: true,
-            source: "MAP",
-            areaHint: area,
-          });
-        }
+
         onToast(`ระบุพื้นที่อัตโนมัติ: ต.${location.subdistrict} อ.${location.district}`);
-      } else if (endpoint === "PHOTO_START" || endpoint === "PHOTO_END") {
-        onToast("บันทึกพิกัดจุดภาพแล้ว (หากไม่พบข้อมูลพื้นที่ สามารถกรอก ต./อ./จ. เองได้)");
       }
     } catch {
-      onToast(
-        endpoint === "PHOTO_START" || endpoint === "PHOTO_END"
-          ? "ยังไม่พบข้อมูลพื้นที่อัตโนมัติ สามารถกรอก ต./อ./จ. เอง หรือบันทึกพิกัดได้ทันที"
-          : "ไม่สามารถดึงข้อมูลตำบล/อำเภออัตโนมัติได้"
-      );
+      onToast("ไม่สามารถดึงข้อมูลตำบล/อำเภออัตโนมัติได้");
     } finally {
       setIsGeocoding(false);
     }
@@ -169,7 +151,6 @@ export function useMapCoordinatePicker(params: UseMapCoordinatePickerParams) {
         manual: true,
         source: "MAP",
       });
-      void handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat, "PHOTO_START");
     } else if (pickedCoordinate.mode === "PICK_DETOUR_PHOTO_END") {
       setAdminPickMode(null);
       onToast(`ปักหมุดจุดสิ้นสุด (B): ${pickedCoordinate.lat}, ${pickedCoordinate.lon}`);
@@ -177,7 +158,6 @@ export function useMapCoordinatePicker(params: UseMapCoordinatePickerParams) {
         manual: true,
         source: "MAP",
       });
-      void handleAutoGeocode(pickedCoordinate.lon, pickedCoordinate.lat, "PHOTO_END");
     } else if (pickedCoordinate.mode === "PICK_REV_START") {
       setRevStartLat(pickedCoordinate.lat);
       setRevStartLon(pickedCoordinate.lon);

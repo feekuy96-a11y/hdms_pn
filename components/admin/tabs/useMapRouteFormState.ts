@@ -6,7 +6,7 @@ import type {
   SystemDataPayload,
 } from "@/db/default-data";
 import { clearAdminMapDraft } from "@/components/admin/tabs/map-draft-storage";
-import { compressImageToAdaptiveBase64, localArea } from "@/lib/gis-utils";
+import { compressImageToAdaptiveBase64, reverseGeocodeTambonAmphoe } from "@/lib/gis-utils";
 import type { DetourDirectionModeType } from "@/lib/constants";
 import {
   FloodDirectionCode,
@@ -141,6 +141,8 @@ export function useMapRouteFormState({
   const startPhotoLocManualRef = useRef(false);
   const endPhotoLocManualRef = useRef(false);
   const photoAreaRequestRef = useRef({ START: 0, END: 0 });
+  type AreaField = "subdistrict" | "district" | "province";
+  const manualPhotoAreaFields = useRef({ START: new Set<AreaField>(), END: new Set<AreaField>() });
   const [forceStraightThrough, setForceStraightThrough] = useState(false);
   const [carriagewayChoice, setCarriagewayChoice] = useState<"" | "SHARED" | "DIVIDED">("");
   const [detourDirectionMode, setDetourDirectionMode] = useState<DetourDirectionModeType>("TWO_WAY");
@@ -233,53 +235,51 @@ export function useMapRouteFormState({
     const hintProv = options?.areaHint?.province?.trim() || "";
     const resolvedSource: DetourPointLocationSource =
       options?.source ?? (options?.manual ? "MANUAL" : "ROUTE_ENDPOINT");
+    const reqId = ++photoAreaRequestRef.current[target];
+    const manualFields = manualPhotoAreaFields.current[target];
     const nowIso = new Date().toISOString();
 
     setLoc((prev) => {
-      const sameCoords = prev.lat === formattedLat && prev.lon === formattedLon;
-      const nextSub = hintSub || (sameCoords ? prev.subdistrict : "");
-      const nextDist = hintDist || (sameCoords ? prev.district : "");
-      const nextProv = hintProv || (sameCoords ? prev.province : "") || "ปัตตานี";
+      const sameCoords = Number(prev.lat) === coords.lat && Number(prev.lon) === coords.lon;
+      const preserve = (field: AreaField, hint: string) =>
+        manualFields.has(field) ? prev[field] : hint || (sameCoords ? prev[field] : "");
       return {
         lat: formattedLat,
         lon: formattedLon,
-        subdistrict: nextSub,
-        district: nextDist,
-        province: nextProv,
+        subdistrict: preserve("subdistrict", hintSub),
+        district: preserve("district", hintDist),
+        province: preserve("province", hintProv),
         locationSource: resolvedSource,
         resolvedAt: nowIso,
-        areaStatus: nextSub || nextDist ? "resolved" : "resolving",
+        areaStatus: "resolving",
       };
     });
 
-    if (hintSub && hintDist) return;
-
-    const reqId = ++photoAreaRequestRef.current[target];
+    const isCurrent = (prev: DetourPhotoLocationState) =>
+      photoAreaRequestRef.current[target] === reqId &&
+      Number(prev.lat) === Number(formattedLat) && Number(prev.lon) === Number(formattedLon);
     try {
-      const loc = await localArea(coords.lon, coords.lat);
-      if (photoAreaRequestRef.current[target] !== reqId) return;
-      if (!options?.manual && manualRef.current) return;
+      const lookup = await reverseGeocodeTambonAmphoe(coords.lon, coords.lat);
+      // The nearest-district fallback is only an estimate, not a verified endpoint area.
+      const loc = lookup?.source === "district" ? null : lookup;
       setLoc((prev) => {
-        const nextSub = prev.subdistrict || loc.tambon || "";
-        const nextDist = prev.district || loc.amphoe || "";
+        if (!isCurrent(prev)) return prev;
+        const keepOrLookup = (field: AreaField, value?: string) =>
+          manualFields.has(field) ? prev[field] : prev[field] || value || "";
+        const subdistrict = keepOrLookup("subdistrict", loc?.subdistrict);
+        const district = keepOrLookup("district", loc?.district);
+        const province = keepOrLookup("province", loc?.province);
         return {
           ...prev,
-          lat: prev.lat || formattedLat,
-          lon: prev.lon || formattedLon,
-          subdistrict: nextSub,
-          district: nextDist,
-          province: prev.province || loc.province || "ปัตตานี",
-          locationSource: prev.locationSource ?? resolvedSource,
+          subdistrict, district, province,
           resolvedAt: new Date().toISOString(),
-          areaStatus: nextSub || nextDist ? "resolved" : "not_found",
+          areaStatus: subdistrict || district ? "resolved" : "not_found",
         };
       });
     } catch {
-      if (photoAreaRequestRef.current[target] !== reqId) return;
-      setLoc((prev) => ({
-        ...prev,
-        areaStatus: prev.subdistrict || prev.district ? "resolved" : "not_found",
-      }));
+      setLoc((prev) => isCurrent(prev)
+        ? { ...prev, areaStatus: prev.subdistrict || prev.district ? "resolved" : "not_found" }
+        : prev);
     }
   };
 
@@ -289,7 +289,15 @@ export function useMapRouteFormState({
     manual = true
   ) => {
     const manualRef = target === "START" ? startPhotoLocManualRef : endPhotoLocManualRef;
-    if (manual) manualRef.current = true;
+    if (manual && (patch.lat !== undefined || patch.lon !== undefined)) {
+      manualRef.current = true;
+      photoAreaRequestRef.current[target] += 1;
+    }
+    if (manual) {
+      for (const field of ["subdistrict", "district", "province"] as const) {
+        if (patch[field] !== undefined) manualPhotoAreaFields.current[target].add(field);
+      }
+    }
     const setLoc = target === "START" ? setDetourStartPhotoLocation : setDetourEndPhotoLocation;
     setLoc((prev) => {
       const next = { ...prev, ...patch };
@@ -317,18 +325,16 @@ export function useMapRouteFormState({
     if (!parseValidCoordNumber(startLat, startLon)) return;
     void resolveDetourPhotoArea("START", startLat, startLon, {
       source: "ROUTE_ENDPOINT",
-      areaHint: startArea,
     });
-  }, [routeMode, startLat, startLon, startArea]);
+  }, [routeMode, startLat, startLon]);
 
   useEffect(() => {
     if (routeMode !== "DETOUR" || endPhotoLocManualRef.current) return;
     if (!parseValidCoordNumber(endLat, endLon)) return;
     void resolveDetourPhotoArea("END", endLat, endLon, {
       source: "ROUTE_ENDPOINT",
-      areaHint: endArea,
     });
-  }, [routeMode, endLat, endLon, endArea]);
+  }, [routeMode, endLat, endLon]);
 
   const handleDetourPointPhotoUpload = async (
     target: "START" | "END",
@@ -341,15 +347,9 @@ export function useMapRouteFormState({
       const { dataUrl } = await compressImageToAdaptiveBase64(file, 250 * 1024);
       if (target === "START") {
         setDetourStartPhotoUrl(dataUrl);
-        if (!startPhotoLocManualRef.current) {
-          void resolveDetourPhotoArea("START", startLat, startLon, { areaHint: startArea });
-        }
         onToast("แนบภาพบริเวณทางเข้าจุดเริ่มต้น (A) เรียบร้อย");
       } else {
         setDetourEndPhotoUrl(dataUrl);
-        if (!endPhotoLocManualRef.current) {
-          void resolveDetourPhotoArea("END", endLat, endLon, { areaHint: endArea });
-        }
         onToast("แนบภาพบริเวณทางเข้าจุดสิ้นสุด (B) เรียบร้อย");
       }
     } catch {
@@ -370,6 +370,8 @@ export function useMapRouteFormState({
     durationRevManualRef.current = false;
     startPhotoLocManualRef.current = false;
     endPhotoLocManualRef.current = false;
+    manualPhotoAreaFields.current.START.clear();
+    manualPhotoAreaFields.current.END.clear();
     photoAreaRequestRef.current.START += 1;
     photoAreaRequestRef.current.END += 1;
     editOriginalFloodDirRef.current = "UNKNOWN";
