@@ -268,8 +268,11 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
     await page.getByTestId("gis-focus-dir-reverse").click();
     await expect(page.getByTestId("gis-focus-dir-reverse")).toHaveAttribute("aria-pressed", "true");
 
-    // Exit with Esc on Desktop — must not reopen modal/popup
+    await expect(page.locator("[data-detour-endpoint=END]")).toBeVisible();
+    // Escape closes the endpoint first, then exits focus, without reopening a modal.
     await page.keyboard.press("Escape");
+    await expect(page.locator("[data-detour-endpoint]")).toHaveCount(0);
+    if (await focusBar.isVisible()) await page.keyboard.press("Escape");
     await expect(focusBar).toHaveCount(0);
     await expect(floodDialog).toHaveCount(0);
   });
@@ -300,6 +303,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
     await page.getByRole("button", { name: "ตัวเลือกเส้นทาง" }).click();
     await page.getByTestId("gis-focus-dir-reverse").click();
     await expect(focusBar).toContainText("ขากลับ (B → A)");
+    await expect(page.locator("[data-detour-endpoint=END]")).toBeVisible();
 
     await page.getByTestId("gis-focus-exit-btn").click();
     await expect(focusBar).toHaveCount(0);
@@ -1121,13 +1125,15 @@ test("public focus endpoint markers inspect A and B without changing travel dire
   await pointA.press("Enter");
   const popup = page.locator("[data-detour-endpoint]");
   const leafletPopup = page.locator(".leaflet-popup");
-  await expect(popup.getByRole("heading", { name: "A · จุดเริ่มต้นที่ปัก" })).toBeVisible();
-  await expect(pointA).toHaveAccessibleName("A · จุดเริ่มต้นที่ปัก (ปลายทางของขากลับ B → A)");
+  await expect(popup.getByRole("heading", { name: "A · จุดเริ่มต้น" })).toBeVisible();
+  await expect(pointA).toHaveAccessibleName("A · จุดเริ่มต้น (ปลายทางของขากลับ B → A)");
   await expect(popup.locator(".citizen-endpoint-caption")).toHaveText("ทะเบียนภาพจุด A");
-  await expect(popup).not.toContainText("สะพานขากลับ");
-  await expect(popup.locator("[data-endpoint-scroll]")).toHaveCount(0);
+  const guide = popup.locator("[data-endpoint-guide]");
+  await expect(guide).toContainText("สะพานขากลับ");
+  await expect(guide).not.toContainText("สะพานกลางทาง");
+  await expect(guide.getByRole("listitem")).toHaveCount(3);
   await expect(popup.locator("[data-endpoint-locality]")).toContainText("ต.ตัวอย่าง ก");
-  const endpointPhoto = popup.getByRole("button", { name: "เปิดภาพขนาดเต็ม A · จุดเริ่มต้นที่ปัก" });
+  const endpointPhoto = popup.getByRole("button", { name: "เปิดภาพขนาดเต็ม A · จุดเริ่มต้น" });
   const photoBox = await endpointPhoto.locator("img").boundingBox();
   expect(photoBox!.width / photoBox!.height).toBeCloseTo(16 / 9, 1);
   await endpointPhoto.click();
@@ -1141,10 +1147,10 @@ test("public focus endpoint markers inspect A and B without changing travel dire
   await expect(popup).toHaveCount(0);
   await expect(pointA).toBeFocused();
 
-  await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุดที่ปัก (ต้นทางของขากลับ B → A)");
+  await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุด (ต้นทางของขากลับ B → A)");
   await pointB.press("Enter");
   await expect(leafletPopup).toHaveCount(1);
-  await expect(popup.getByRole("heading", { name: "B · จุดสิ้นสุดที่ปัก" })).toBeVisible();
+  await expect(popup.getByRole("heading", { name: "B · จุดสิ้นสุด" })).toBeVisible();
   await expect(popup.locator("[data-endpoint-locality]")).toContainText("ต.ตัวอย่าง ข");
   await expect(popup.getByRole("img")).toHaveCount(0);
   await expect(focusBar).toContainText("ขากลับ (B → A)");
@@ -1153,7 +1159,7 @@ test("public focus endpoint markers inspect A and B without changing travel dire
   await expect(focusBar).toContainText("ขากลับ (B → A)");
 });
 
-test("focus advice uses readable shared color pairs in light and dark modes", async ({ page, isMobile }) => {
+test("focus retains readable direction controls without the duplicate advice panel", async ({ page, isMobile }) => {
   const payload = createMockPayload();
   payload.detourRoutes[0].description = "ขาไป:\n1. เริ่มต้น\n2. เลี้ยวซ้ายที่แยก\n3. สิ้นสุด\nขากลับ:\n1. เริ่มต้นขากลับ\n2. ใช้สะพาน\n3. สิ้นสุด";
   await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
@@ -1163,10 +1169,11 @@ test("focus advice uses readable shared color pairs in light and dark modes", as
   await page.locator(".doh-detour-symbol").first().press("Enter");
   await page.locator(".doh-detour-popup").getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).click();
   const bar = page.getByTestId("gis-focus-mode-bar");
-  const open = bar.getByRole("button", { name: "อ่านคำแนะนำเส้นทาง" });
-  if (!await open.isVisible()) await bar.getByRole("button", { name: "ตัวเลือกเส้นทาง", exact: true }).click();
-  await open.click();
-  const panel = page.getByTestId("gis-focus-timeline-panel");
+  if (isMobile) await bar.getByRole("button", { name: "ตัวเลือกเส้นทาง", exact: true }).click();
+  const duplicateAdvice = bar.getByRole("button", { name: /(?:อ่าน|ซ่อน)คำแนะนำเส้นทาง/ });
+  const retiredPanel = page.getByTestId("gis-focus-timeline-panel");
+  await expect(duplicateAdvice).toHaveCount(0);
+  await expect(retiredPanel).toHaveCount(0);
   const theme = page.locator(".citizen-ui");
   const reverse = bar.getByTestId("gis-focus-dir-reverse");
   const forward = bar.getByTestId("gis-focus-dir-forward");
@@ -1178,7 +1185,6 @@ test("focus advice uses readable shared color pairs in light and dark modes", as
     await expect(keyboardHint).toHaveCSS("color", "rgb(23, 53, 74)");
     await expect(keyboardHint).toHaveCSS("background-color", "rgb(230, 238, 241)");
   }
-  await expect(panel).toHaveCSS("background-color", "rgb(255, 255, 255)");
   const ratios = () => page.evaluate(() => {
     function luminance(color: string) {
       const rgba = color.match(/[\d.]+/g)?.map(Number) ?? [];
@@ -1190,9 +1196,6 @@ test("focus advice uses readable shared color pairs in light and dark modes", as
       return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
     }
     const selectors = [
-      ".citizen-focus-timeline-head .citizen-focus-ink", ".citizen-focus-accent",
-      ".citizen-focus-timeline-close", ".hdms-guide-number",
-      "#gis-focus-timeline-panel .hdms-guide-card .citizen-focus-ink", "#gis-focus-timeline-panel .hdms-guide-copy",
       ".citizen-focus-directions button",
     ];
     return selectors.flatMap(selector => {
@@ -1210,16 +1213,32 @@ test("focus advice uses readable shared color pairs in light and dark modes", as
   await reverse.click();
   await expect(reverse).toHaveAttribute("aria-pressed", "true");
   await expect(forward).toHaveAttribute("aria-pressed", "false");
-  await expect(panel).toContainText("เริ่มต้นขากลับ");
+  await expect(bar).toContainText("ขากลับ (B → A)");
+  await expect(retiredPanel).toHaveCount(0);
   await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
   await expect(theme).toHaveAttribute("data-citizen-theme", "dark");
   if (!isMobile) {
     await expect(keyboardHint).toHaveCSS("color", "rgb(244, 248, 250)");
     await expect(keyboardHint).toHaveCSS("background-color", "rgb(34, 53, 72)");
   }
-  await expect(panel).toHaveCSS("background-color", "rgb(26, 45, 62)");
   expect(Math.min(...await ratios())).toBeGreaterThanOrEqual(4.5);
   await expect(reverse).toHaveAttribute("aria-pressed", "true");
+  await expect(duplicateAdvice).toHaveCount(0);
+  const popup = page.locator("[data-detour-endpoint]");
+  const guide = popup.locator("[data-endpoint-guide]");
+  await expect(popup).toHaveAttribute("data-detour-endpoint", "END");
+  await expect(guide).toContainText("ใช้สะพาน");
+  await expect(guide).not.toContainText("เลี้ยวซ้ายที่แยก");
+  await expect(retiredPanel).toHaveCount(0);
+  await forward.click();
+  await expect(popup).toHaveCount(1);
+  await expect(popup).toHaveAttribute("data-detour-endpoint", "START");
+  await expect(guide).toContainText("เลี้ยวซ้ายที่แยก");
+  await expect(guide).not.toContainText("ใช้สะพาน");
+  await page.locator(".leaflet-popup-close-button").click();
+  await expect(popup).toHaveCount(0);
+  await forward.click();
+  await expect(popup).toHaveAttribute("data-detour-endpoint", "START");
 });
 
 test("public overview A and B use the same anchored inspector, retaining the chosen reverse itinerary", async ({ page, isMobile }) => {
@@ -1253,17 +1272,17 @@ test("public overview A and B use the same anchored inspector, retaining the cho
     await zoomIn.click();
     await expect.poll(zoomLevel).toBeGreaterThan(previous);
   }
-  await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุดที่ปัก (ปลายทางของขาไป A → B)");
+  await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุด (ปลายทางของขาไป A → B)");
   await symbol.press("Enter");
   await page.locator(".doh-detour-popup").getByRole("button", { name: "ขากลับ B → A" }).click();
   await page.locator(".leaflet-popup-close-button").click();
-  await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุดที่ปัก (ต้นทางของขากลับ B → A)");
+  await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุด (ต้นทางของขากลับ B → A)");
   await zoomIn.click();
-  await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุดที่ปัก (ต้นทางของขากลับ B → A)");
+  await expect(pointB).toHaveAccessibleName("B · จุดสิ้นสุด (ต้นทางของขากลับ B → A)");
   await pointB.press("Enter");
   const popup = page.locator("[data-detour-endpoint]");
-  await expect(popup.getByRole("heading", { name: "B · จุดสิ้นสุดที่ปัก" })).toBeVisible();
-  const photoB = popup.getByRole("button", { name: "เปิดภาพขนาดเต็ม B · จุดสิ้นสุดที่ปัก" });
+  await expect(popup.getByRole("heading", { name: "B · จุดสิ้นสุด" })).toBeVisible();
+  const photoB = popup.getByRole("button", { name: "เปิดภาพขนาดเต็ม B · จุดสิ้นสุด" });
   await photoB.click();
   const viewer = page.getByRole("dialog", { name: "ภาพถ่ายสถานการณ์ขนาดเต็ม" });
   await expect(viewer.getByRole("img")).toBeVisible();
@@ -1273,15 +1292,24 @@ test("public overview A and B use the same anchored inspector, retaining the cho
   await page.keyboard.press("Escape");
   await expect(popup).toHaveCount(0);
 
-  await expect(pointA).toHaveAccessibleName("A · จุดเริ่มต้นที่ปัก (ปลายทางของขากลับ B → A)");
+  await expect(pointA).toHaveAccessibleName("A · จุดเริ่มต้น (ปลายทางของขากลับ B → A)");
   if (isMobile) {
     await page.setViewportSize({ width: 320, height: 568 });
     await page.evaluate(() => { document.documentElement.style.fontSize = "150%"; });
   }
   await pointA.press("Enter");
-  await expect(popup.getByRole("heading", { name: "A · จุดเริ่มต้นที่ปัก" })).toBeVisible();
+  await expect(popup.getByRole("heading", { name: "A · จุดเริ่มต้น" })).toBeVisible();
   await expect(popup).toContainText("ข้อมูลปลาย A ในแผนที่รวม");
-  await expect(popup).not.toContainText("ผ่านแยกกลับ");
+  const advice = popup.locator("[data-endpoint-guide]");
+  await expect(advice).toContainText("ผ่านแยกกลับ");
+  await expect(advice).not.toContainText("ผ่านแยกไป");
+  const body = popup.locator("[data-endpoint-scroll]");
+  await page.waitForTimeout(650);
+  const mapBeforeScroll = await page.locator(".leaflet-map-pane").first().evaluate(el => getComputedStyle(el).transform);
+  await body.press("End");
+  await expect.poll(() => body.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+  await expect(advice.getByText("สภาพเส้นทาง", { exact: true })).toBeInViewport();
+  expect(await page.locator(".leaflet-map-pane").first().evaluate(el => getComputedStyle(el).transform)).toBe(mapBeforeScroll);
   await expect.poll(() => popup.evaluate(el => el.scrollWidth - el.clientWidth)).toBe(0);
   const actions = popup.locator(".citizen-endpoint-actions");
   await expect(actions.locator(":scope > :first-child")).toHaveText("ดูบน Google Maps");

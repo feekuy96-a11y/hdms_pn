@@ -11,6 +11,7 @@ import {
 import { resetAreaLookup, resolveArea } from "../../lib/area-lookup";
 import { fetchOsrmWithFailover, resetOsrmClient } from "../../lib/osrm-client";
 import { sampleWaypointsForGoogleMaps } from "../../lib/detour-navigation";
+import { buildMapDetourEndpointPopup } from "../../components/map/longdo-map-popups";
 import { resolveDetourPhotoPointCoords } from "../../components/map/longdo-layer-builders";
 import type { SystemDataPayload } from "../../db/default-data";
 
@@ -163,6 +164,112 @@ test.describe("Public detour endpoints on mobile", () => {
     await expect(collapse).toBeVisible();
   });
 
+  test("endpoint guide does not borrow missing return instructions or invent a second step", () => {
+    const route = { ...payload.detourRoutes[0], description: "1. เลี้ยวซ้ายผ่านโรงเรียน" };
+    const pin = { lat: route.lat_start, lon: route.lon_start };
+    const render = (direction: "FORWARD" | "REVERSE") => buildMapDetourEndpointPopup(route, "START", null, direction, [], pin, true);
+    expect(render("FORWARD")).toContain("เลี้ยวซ้ายผ่านโรงเรียน");
+    expect(render("FORWARD").match(/doh-detour-step-title/g)).toHaveLength(1);
+    expect(render("REVERSE")).toContain("ยังไม่มีคำแนะนำเลี้ยวทีละขั้นสำหรับทิศทางขากลับ");
+    expect(render("REVERSE")).not.toContain("เลี้ยวซ้ายผ่านโรงเรียน");
+    expect(buildMapDetourEndpointPopup({ ...route, description: "" }, "START", null, "FORWARD", [], pin, true)).not.toContain("doh-detour-step-title");
+  });
+
+  for (const portal of ["public", "admin"] as const) {
+    test(`shared endpoint photo card matches the reference structure in ${portal}`, async ({ page, isMobile, baseURL }, testInfo) => {
+      test.skip(!isMobile, "The screenshots target the mobile layout.");
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const data = structuredClone(payload);
+      data.detourRoutes[0].route_name = "จุดทดสอบทางเลี่ยง ทล.43";
+      const photo = (end: boolean) => ({
+        url: new URL("/demo-endpoint-landmark.svg", baseURL!).href,
+        caption: end ? "กลับเข้าสู่ทางหลวงที่แยกตลาด" : "เข้าทางเบี่ยงบริเวณจุดกลับรถ ทล.43 ที่ กม.75+750 เพื่อมุ่งหน้าไปมะพร้าวต้นเดียว",
+        subdistrict: "ท่ากำชำ", district: "หนองจิก", province: "ปัตตานี",
+      });
+      data.detourRoutes[0].detour_meta = {
+        start_point_photo: photo(false), end_point_photo: photo(true),
+        forward_duration_s: 180, reverse_duration_s: 360, road_condition: "ผิวลาดยาง ระวังทางแคบ",
+      };
+      await page.route("**/demo-endpoint-landmark.svg", route => route.fulfill({
+        contentType: "image/svg+xml",
+        body: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360"><rect width="640" height="360" fill="#b6dcf1"/>
+          <path d="M0 142 120 86 217 133 331 71 433 113 546 91 640 146V360H0Z" fill="#5d9a6f"/>
+          <path d="M0 181q157-72 299-21t341-15v215H0Z" fill="#71994c"/>
+          <path d="M324 154h36l272 206H7Z" fill="#344658"/><path d="M324 154 7 360m353-206 272 206" stroke="#d9e7e5" stroke-width="7"/>
+          <path d="M341 171l-4 19m-3 19l-7 30m-6 25-11 51" stroke="#f7ede1" stroke-width="7"/>
+          <path d="M135 236v-78m370 77v-90" stroke="#415865" stroke-width="5"/><rect x="105" y="154" width="61" height="28" rx="6" fill="#195c56"/><rect x="475" y="145" width="61" height="28" rx="6" fill="#195c56"/>
+          <text x="320" y="338" text-anchor="middle" fill="white" font-family="sans-serif" font-size="18">TEST LANDMARK</text></svg>`,
+      }));
+      const origin = new URL(baseURL!).origin;
+      await page.route("**/*", route => new URL(route.request().url()).origin === origin ? route.fallback() : route.abort());
+      await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: data }));
+      await page.goto(`${process.env.BASE_PATH || ""}/${portal === "admin" ? "admin/" : ""}`);
+      if (portal === "admin") await page.getByRole("button", { name: "แผนที่ GIS", exact: true }).click();
+      await page.locator(".doh-detour-symbol").first().press("Enter");
+      await page.locator(".doh-detour-popup").getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).click();
+      await expect(page.getByTestId(portal === "admin" ? "admin-gis-focus-exit-bar" : "gis-focus-mode-bar")).toBeVisible();
+      // Let focus entry finish moving the map before activating its endpoint.
+      await page.waitForTimeout(650);
+      const point = portal === "admin" ? "end" : "start";
+      await page.locator(`.hdms-focus-endpoint.doh-detour-photo-${point}`).press("Enter");
+      const popup = page.locator(".hdms-endpoint-card");
+      await expect(popup.locator(".hdms-endpoint-detail")).toHaveCount(3);
+      await expect(popup.locator(".hdms-endpoint-header")).toContainText(portal === "admin" ? "B · จุดสิ้นสุด" : "A · จุดเริ่มต้น");
+      const contrast = await popup.locator(".hdms-endpoint-pin svg").evaluate(svg => {
+        const pin = svg.querySelector("path")!;
+        const letter = svg.querySelector("text")!;
+        const luminance = (color: string) => (color.match(/\d+(?:\.\d+)?/g) || []).slice(0, 3)
+          .reduce((sum, c, i) => {
+            const x = Number(c) / 255;
+            return sum + (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4) * [0.2126, 0.7152, 0.0722][i];
+          }, 0);
+        const fg = luminance(getComputedStyle(letter).fill);
+        const bg = luminance(getComputedStyle(pin).fill);
+        return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+      });
+      expect(contrast).toBeGreaterThanOrEqual(4.5);
+      await expect(popup.locator("[data-endpoint-locality]")).toHaveText("ต.ท่ากำชำ อ.หนองจิก จ.ปัตตานี");
+      await expect(popup.locator("[data-endpoint-coordinate]")).toHaveText(/พิกัด: 6\.\d{6}, 101\.\d{6}/);
+      await expect(popup.locator(".citizen-endpoint-caption")).toHaveText(photo(portal === "admin").caption);
+      const photoButton = popup.getByRole("button", { name: /เปิดภาพขนาดเต็ม/ });
+      await expect.poll(() => photoButton.locator("img").evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+      const nav = popup.getByRole("link", { name: "ดูบน Google Maps" });
+      await expect(nav).toHaveAttribute("href", /^https:\/\/www.google.com\/maps\/dir/);
+      const action = popup.getByRole("button", { name: portal === "admin" ? "ดูคำแนะนำทางเลี่ยง" : "ดูตำแหน่งบนแผนที่" });
+      await expect(action).toBeInViewport();
+      const close = page.getByRole("button", { name: "Close popup", exact: true });
+      await expect(close).toBeInViewport();
+      const guide = popup.locator("[data-endpoint-guide]");
+      await expect(guide).toContainText("ขาไป A → B");
+      await expect(guide).toContainText("ผ่านสะพาน");
+      await expect(guide.getByRole("listitem")).toHaveCount(3);
+      const scrollRegion = popup.getByRole("region", { name: "รายละเอียดจุดและคำแนะนำทางเลี่ยง" });
+      await scrollRegion.press("End");
+      await expect.poll(() => scrollRegion.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+      await expect(guide.getByText("สภาพเส้นทาง", { exact: true })).toBeInViewport();
+      await expect(guide.getByText("ระยะทางรวม", { exact: true })).toBeAttached();
+      await expect(guide.getByText("เวลาประมาณ 3 นาที", { exact: true })).toBeAttached();
+      await expect(guide.getByText("ผิวลาดยาง ระวังทางแคบ", { exact: true })).toBeVisible();
+      await expect(action).toBeInViewport();
+      await page.screenshot({ path: testInfo.outputPath(`endpoint-guide-${portal}.png`), animations: "disabled" });
+      await scrollRegion.evaluate(el => { el.scrollTop = 0; });
+      // Capture after the one-time popup reveal, not mid-animation.
+      await page.waitForTimeout(650);
+      await expect.poll(() => popup.evaluate(el => {
+        const rect = el.getBoundingClientRect();
+        const heading = el.querySelector("h3")!.getBoundingClientRect();
+        const hit = document.elementFromPoint(heading.x + Math.min(20, heading.width / 2), heading.y + heading.height / 2);
+        const map = el.closest(".leaflet-container")!.getBoundingClientRect();
+        return rect.left >= 0 && rect.right <= innerWidth && rect.top >= map.top &&
+          rect.bottom <= map.bottom && Boolean(hit && el.contains(hit));
+      })).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`endpoint-${portal}.png`), animations: "disabled" });
+      await photoButton.click();
+      if (portal === "public") await expect(page.getByRole("dialog", { name: "ภาพถ่ายสถานการณ์ขนาดเต็ม" })).toBeVisible();
+      else await expect(page.locator('[data-hdms-popup="photo"]')).toBeVisible();
+    });
+  }
+
   for (const scenario of [
     { trip: "ขาไป A → B", focus: "ขาไป (A → B)", a: "ต้นทาง", b: "ปลายทาง" },
     { trip: "ขากลับ B → A", focus: "ขากลับ (B → A)", a: "ปลายทาง", b: "ต้นทาง" },
@@ -188,7 +295,7 @@ test.describe("Public detour endpoints on mobile", () => {
         await expect.soft(marker, `marker ${letter} should name the point and its travel role`)
           .toHaveAccessibleName(new RegExp(`(?=.*\\b${letter}\\b)(?=.*${role})`), { timeout: 1000 });
         await marker.press("Enter");
-        const savedIdentity = letter === "A" ? "A · จุดเริ่มต้นที่ปัก" : "B · จุดสิ้นสุดที่ปัก";
+        const savedIdentity = letter === "A" ? "A · จุดเริ่มต้น" : "B · จุดสิ้นสุด";
         const popup = page.getByRole("region", { name: savedIdentity, exact: true });
         await expect(popup.getByRole("heading", { name: savedIdentity, exact: true })).toBeVisible();
         await expect(popup.locator(".citizen-endpoint-trip-direction")).toHaveText(`${role}ของ${scenario.trip}`);
