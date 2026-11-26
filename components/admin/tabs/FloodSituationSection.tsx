@@ -5,31 +5,26 @@ import { FormSection } from "@/components/admin/ui";
 import { SAFETY_MEASURES, RoadSideType } from "@/lib/constants";
 import {
   AFFECTED_ROAD_PARTS,
+  floodImpactSummaryLabel,
+  hasFloodImpactPart,
+  mirrorFloodImpactForReverse,
   AffectedRoadPart,
   FloodDirectionCode,
   FloodPhotoItem,
 } from "@/lib/flood-event-schema";
 import {
   TRAFFIC_STATUS_OPTIONS,
-  deriveTrafficStatusFromWaterLevel,
 } from "@/lib/traffic-presentation";
+import { FloodSaveError, type FloodSaveValidation } from "./flood-save-validation";
 import { Camera, Trash2 } from "lucide-react";
 
 type TrafficStatusValue = "WARNING" | "CLOSED" | "PASSABLE" | "LIGHT_VEHICLES_ONLY" | "ONE_LANE";
 
 interface FloodSituationSectionProps {
-  selectedHighwayOption: { lanes?: string } | undefined;
-  selectedHighwayLaneCount: number;
-  isSelectedHighwayDivided: boolean;
   isDividedBothFlood: boolean;
-  directionCode: FloodDirectionCode;
-  setDirectionCode: (code: FloodDirectionCode) => void;
   roadSide: RoadSideType;
-  setRoadSide: (side: RoadSideType) => void;
-  setDraftReverseCoordinates?: (coords: [number, number][]) => void;
-  setDraftReverseWaypoints?: React.Dispatch<React.SetStateAction<[number, number][]>>;
-  setFreeEditTarget: (target: "FORWARD" | "REVERSE") => void;
-  ensureReverseFloodGeometry: () => void;
+  directionCode: FloodDirectionCode;
+  validation?: FloodSaveValidation | null;
   affectedParts: AffectedRoadPart[];
   setAffectedParts: React.Dispatch<React.SetStateAction<AffectedRoadPart[]>>;
   reverseAffectedParts: AffectedRoadPart[];
@@ -74,18 +69,7 @@ interface FloodSituationSectionProps {
 }
 
 export function FloodSituationSection({
-  selectedHighwayOption,
-  selectedHighwayLaneCount,
-  isSelectedHighwayDivided,
-  isDividedBothFlood,
-  directionCode,
-  setDirectionCode,
-  roadSide,
-  setRoadSide,
-  setDraftReverseCoordinates,
-  setDraftReverseWaypoints,
-  setFreeEditTarget,
-  ensureReverseFloodGeometry,
+  isDividedBothFlood, roadSide, directionCode, validation,
   affectedParts,
   setAffectedParts,
   reverseAffectedParts,
@@ -121,179 +105,67 @@ export function FloodSituationSection({
   setFieldImages,
   handleImageUpload,
 }: FloodSituationSectionProps) {
-  const applyAffectedPartsPreset = (
-    nextParts: AffectedRoadPart[],
+  const isSpecific = (part: AffectedRoadPart) => part !== "UNSPECIFIED" && part !== "PENDING_VERIFICATION";
+  const partControls = (
+    list: AffectedRoadPart[],
     setParts: React.Dispatch<React.SetStateAction<AffectedRoadPart[]>>,
-    waterLevelValue: number | string,
-    isKnown: boolean,
-    setStatus: React.Dispatch<React.SetStateAction<TrafficStatusValue>>
+    level: number | string,
+    known: boolean,
+    setStatus: React.Dispatch<React.SetStateAction<TrafficStatusValue>>,
+    sideName: string,
   ) => {
-    setParts(nextParts);
-    if (isKnown && waterLevelValue !== "" && Number.isFinite(Number(waterLevelValue))) {
-      const derived = deriveTrafficStatusFromWaterLevel(Number(waterLevelValue), nextParts);
-      if (derived) setStatus(derived);
-    }
+    const specific = list.filter(isSpecific);
+    const isLane = (part: AffectedRoadPart) => part === "ALL_LANES" || part.endsWith("_LANE");
+    const isShoulder = (part: AffectedRoadPart) => part.endsWith("_SHOULDER");
+    const main = AFFECTED_ROAD_PARTS.filter(({ value }) => isLane(value));
+    const shoulder = AFFECTED_ROAD_PARTS.filter(({ value }) => isShoulder(value));
+    const frontage = AFFECTED_ROAD_PARTS.filter(({ value }) => value.endsWith("_FRONTAGE"));
+    const describe = (values: AffectedRoadPart[]) => values.map(floodImpactSummaryLabel).filter(Boolean).join(" · ");
+    const mainText = describe(specific.filter(isLane));
+    const shoulderText = describe(specific.filter(isShoulder));
+    const frontageText = describe(specific.filter((part) => part.endsWith("_FRONTAGE")));
+    const summary = [mainText, shoulderText, frontageText].filter(Boolean).join(" / ");
+    const buttons = (options: typeof AFFECTED_ROAD_PARTS) => options.map((part) => {
+      const selected = part.value === "UNSPECIFIED" ? specific.length === 0 : hasFloodImpactPart(list, part.value);
+      return <button type="button" key={part.value} aria-pressed={selected} onClick={() => toggleAffectedPartWithAutoStatus(part.value, list, setParts, level, known, setStatus)}
+        title={part.desc} className={`min-h-11 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${selected ? "border-amber-400 bg-amber-500 text-slate-950" : "border-slate-700 bg-slate-950 text-slate-200 hover:border-slate-500"}`}>
+        {part.label}
+      </button>;
+    });
+    return <div className="space-y-2" role="group" aria-label={`ส่วนที่ได้รับผลกระทบ ${sideName}`}>
+      <p className="text-xs font-semibold text-slate-200">ส่วนที่ได้รับผลกระทบ</p>
+      <div className="space-y-1">
+        <p className="text-xs text-slate-300">คันทางหลัก · เลือกช่องจราจร</p>
+        <div className="flex flex-wrap gap-1.5">{buttons(main)}</div>
+      </div>
+      <div className="space-y-1">
+        <p className="text-xs text-slate-300">ไหล่ทาง · เลือกตามตำแหน่งที่พบ</p>
+        <div className="flex flex-wrap gap-1.5">{buttons(shoulder)}</div>
+        <p className="text-xs text-slate-400">การเลือกไหล่ทางไม่เลื่อนเส้นบนแผนที่ หากอยู่ริมทางคู่ขนาน ให้ใช้แนวเส้นที่ตรวจแล้วในขั้นที่ ๒</p>
+      </div>
+      <div className="space-y-1">
+        <p className="text-xs text-slate-300">ทางคู่ขนาน · เลือกฝั่งที่ได้รับผลกระทบ</p>
+        <div className="flex flex-wrap gap-1.5">{buttons(frontage)}</div>
+      </div>
+      <p className="text-xs text-slate-400">เลือกไหล่ทางและทางคู่ขนานฝั่งเดียวกัน เมื่อต้องการระบุไหล่ทางของทางคู่ขนาน</p>
+      <div className="flex flex-wrap gap-1.5">{buttons(AFFECTED_ROAD_PARTS.filter(({ value }) => value === "UNSPECIFIED"))}</div>
+      <p role="status" className="rounded-lg bg-slate-950 px-2.5 py-2 text-xs text-slate-200">
+        <strong>{sideName}:</strong> {summary ? `น้ำท่วมบริเวณ${summary}` : "ยังไม่ระบุส่วนที่ได้รับผลกระทบ"}
+      </p>
+    </div>;
   };
 
+  const sideName = roadSide === "LEFT" ? "ฝั่งซ้ายทาง" : roadSide === "RIGHT" ? "ฝั่งขวาทาง" : roadSide === "BOTH" ? "ทั้งสองฝั่ง" : "ยังไม่ได้เลือกฝั่ง";
+
   return (
-    <FormSection step={3} title="สถานการณ์น้ำและมาตรการ" description="ระบุฝั่งถนน ผลกระทบต่อการเดินทาง และข้อมูลจากหน้างาน">
+    <FormSection step={3} title="สถานการณ์น้ำและมาตรการ" description="ระบุส่วนที่ได้รับผลกระทบ ระดับน้ำ และข้อมูลจากหน้างาน">
       <h4 className="text-sm font-bold text-white">ผลกระทบต่อการเดินทาง</h4>
-      {/* Direction and Highway Carriageway Info */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-3">
-        <div>
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-            <label className="text-xs text-slate-300">ทิศทางการเดินรถของช่วงน้ำท่วมนี้</label>
-            {selectedHighwayOption && (
-              <span className={`text-[11px] font-heading font-semibold px-2 py-0.5 rounded-lg border ${
-                isSelectedHighwayDivided
-                  ? "border-sky-500/40 bg-sky-950/60 text-sky-300"
-                  : "border-slate-700 bg-slate-950 text-slate-300"
-              }`}>
-                🛣️ {selectedHighwayOption.lanes || `${selectedHighwayLaneCount} ช่องจราจร`} · {isSelectedHighwayDivided ? "แยกคันทาง A→B / B→A" : "คันทางเดี่ยว"}
-              </span>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setDirectionCode("A_TO_B");
-                setRoadSide("LEFT");
-                setDraftReverseCoordinates?.([]);
-                setDraftReverseWaypoints?.([]);
-                setFreeEditTarget("FORWARD");
-              }}
-              className={`p-2 rounded-xl border text-left transition ${directionCode === "A_TO_B" && roadSide === "LEFT" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
-            >
-              <span className="text-xs font-heading font-bold block">🚗 ฝั่งซ้ายทาง (ขาไป A → B)</span>
-              <span className="text-[10px] text-slate-400">เดินรถทิศทาง กม. เพิ่มขึ้น</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setDirectionCode("B_TO_A");
-                setRoadSide("RIGHT");
-                setDraftReverseCoordinates?.([]);
-                setDraftReverseWaypoints?.([]);
-                setFreeEditTarget("FORWARD");
-              }}
-              className={`p-2 rounded-xl border text-left transition ${directionCode === "B_TO_A" && roadSide === "RIGHT" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
-            >
-              <span className="text-xs font-heading font-bold block">🚙 ฝั่งขวาทาง (ขากลับ B → A)</span>
-              <span className="text-[10px] text-slate-400">เดินรถทิศทาง กม. ลดลง</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setDirectionCode("BOTH");
-                setRoadSide("BOTH");
-                if (isSelectedHighwayDivided) {
-                  ensureReverseFloodGeometry();
-                } else {
-                  setDraftReverseCoordinates?.([]);
-                  setDraftReverseWaypoints?.([]);
-                  setFreeEditTarget("FORWARD");
-                }
-              }}
-              className={`p-2 rounded-xl border text-left transition ${directionCode === "BOTH" && roadSide === "BOTH" ? "border-amber-400 bg-amber-500/15 text-amber-200" : "border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700"}`}
-            >
-              <span className="text-xs font-heading font-bold block">↔️ ท่วมทั้งสองฝั่งจราจร</span>
-              <span className="text-[10px] text-slate-400">
-                {isSelectedHighwayDivided ? "แยกเส้น A→B / B→A และแยกระดับน้ำ" : "น้ำท่วมเต็มทั้งสองคันทาง"}
-              </span>
-            </button>
-          </div>
-
-          {roadSide === "BOTH" && (
-            <p className={`mt-2 rounded-lg border px-2.5 py-1.5 text-[11px] ${
-              isDividedBothFlood
-                ? "border-sky-500/40 bg-sky-950/40 text-sky-200"
-                : "border-slate-800 bg-slate-950/70 text-slate-400"
-            }`}>
-              {isDividedBothFlood
-                ? `✓ ทางหลวง ${selectedHighwayOption?.lanes || "ตั้งแต่ ๔ ช่องจราจรขึ้นไป"}: สามารถสลับแก้ไขแนวเส้น ขาไป (A → B) / ขากลับ (B → A) ในส่วนที่ ๒ และกรอกระดับน้ำแยกฝั่งด้านล่างได้ทันที`
-                : selectedHighwayOption
-                  ? `ทางหลวง ${selectedHighwayOption.lanes || `${selectedHighwayLaneCount} ช่องจราจร`} (< ๔ ช่องจราจร): ใช้แนวเส้นและข้อมูลระดับน้ำร่วมกันทั้งสองฝั่ง`
-                  : "เลือกหมายเลขทางหลวงจากโครงข่ายทางหลวง (ตั้งแต่ ๔ ช่องจราจรขึ้นไป) เพื่อเปิดการแก้ไขแนวเส้นและระดับน้ำแยกฝั่งขาไป–ขากลับ"}
-            </p>
-          )}
-        </div>
-
-        {!isDividedBothFlood && (
-          <div>
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-              <label className="text-xs text-slate-300 font-heading font-semibold">
-                เส้นทางที่ได้รับผลกระทบ (เลือกได้หลายรายการตามสภาพจริง) *
-              </label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    applyAffectedPartsPreset(
-                      AFFECTED_ROAD_PARTS.map((p) => p.value),
-                      setAffectedParts,
-                      routeWaterLevel,
-                      waterLevelKnown,
-                      setRouteStatus
-                    )
-                  }
-                  className="text-[11px] text-sky-300 hover:text-sky-200 underline underline-offset-2 cursor-pointer"
-                >
-                  เลือกทั้งหมด
-                </button>
-                {affectedParts.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      applyAffectedPartsPreset(
-                        [],
-                        setAffectedParts,
-                        routeWaterLevel,
-                        waterLevelKnown,
-                        setRouteStatus
-                      )
-                    }
-                    className="text-[11px] text-slate-400 hover:text-slate-200 underline underline-offset-2 cursor-pointer"
-                  >
-                    ล้าง
-                  </button>
-                )}
-                <span className="text-[10px] text-amber-300 font-mono">เลือกแล้ว {affectedParts.length} ส่วน</span>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {AFFECTED_ROAD_PARTS.map((part) => {
-                const isSelected = affectedParts.includes(part.value);
-                return (
-                  <button
-                    key={part.value}
-                    type="button"
-                    aria-pressed={isSelected}
-                    onClick={() =>
-                      toggleAffectedPartWithAutoStatus(
-                        part.value,
-                        affectedParts,
-                        setAffectedParts,
-                        routeWaterLevel,
-                        waterLevelKnown,
-                        setRouteStatus
-                      )
-                    }
-                    title={part.desc}
-                    className={`min-h-10 px-3 py-2 rounded-lg text-xs font-heading font-bold border transition ${isSelected
-                        ? "bg-amber-500 text-slate-950 border-amber-400 shadow"
-                        : "bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700"
-                      }`}
-                  >
-                    {part.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+      <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+        <p className="text-xs text-slate-300">ฝั่งถนน: <strong>{sideName}</strong> · เปลี่ยนฝั่งได้ในขั้นที่ ๑</p>
+        {!isDividedBothFlood && partControls(affectedParts, setAffectedParts, routeWaterLevel, waterLevelKnown, setRouteStatus, sideName)}
+        {roadSide === "BOTH" && !isDividedBothFlood && (
+          <p className="text-xs text-slate-300">หากใช้แนวเส้นร่วมกัน ระบบบันทึกผลกระทบและระดับน้ำร่วมกันทั้งสองฝั่ง</p>
         )}
-
         {(directionCode === "A_TO_B" || directionCode === "B_TO_A" || isDividedBothFlood) && (
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80 text-xs">
             <label className="flex items-center gap-2 cursor-pointer text-sky-300">
@@ -332,7 +204,7 @@ export function FloodSituationSection({
               clearWaterLevel: () => setRouteWaterLevel(""),
               status: routeStatus,
               setStatus: setRouteStatus,
-              levelInputId: "flood-water-level-forward",
+              levelInputId: "flood-water-level-forward" as const,
               statusSelectId: "flood-traffic-status-forward",
               levelLabel: "ระดับน้ำขาไป (ซม.) *",
               statusLabel: "สถานะสภาพการจราจรขาไป (๕ สถานะ)",
@@ -355,7 +227,7 @@ export function FloodSituationSection({
               clearWaterLevel: () => setReverseRouteWaterLevel(""),
               status: reverseRouteStatus,
               setStatus: setReverseRouteStatus,
-              levelInputId: "flood-water-level-reverse",
+              levelInputId: "flood-water-level-reverse" as const,
               statusSelectId: "flood-traffic-status-reverse",
               levelLabel: "ระดับน้ำขากลับ (ซม.) *",
               statusLabel: "สถานะสภาพการจราจรขากลับ (๕ สถานะ)",
@@ -374,75 +246,13 @@ export function FloodSituationSection({
                 </span>
                 <span className="text-[10px] text-slate-400">{side.sideHint}</span>
               </div>
-              <div>
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-                  <span className="text-[11px] text-slate-300 font-heading font-semibold">เส้นทางที่ได้รับผลกระทบ ({side.key === "FORWARD" ? "ขาไป" : "ขากลับ"})</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        applyAffectedPartsPreset(
-                          AFFECTED_ROAD_PARTS.map((p) => p.value),
-                          side.setParts,
-                          side.waterLevel,
-                          side.waterKnown,
-                          side.setStatus
-                        )
-                      }
-                      className="text-[10px] text-sky-300 hover:text-sky-200 underline underline-offset-2 cursor-pointer"
-                    >
-                      เลือกทั้งหมด
-                    </button>
-                    {side.parts.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          applyAffectedPartsPreset(
-                            [],
-                            side.setParts,
-                            side.waterLevel,
-                            side.waterKnown,
-                            side.setStatus
-                          )
-                        }
-                        className="text-[10px] text-slate-400 hover:text-slate-200 underline underline-offset-2 cursor-pointer"
-                      >
-                        ล้าง
-                      </button>
-                    )}
-                    <span className="text-[10px] text-amber-300 font-mono">เลือกแล้ว {side.parts.length} ส่วน</span>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {AFFECTED_ROAD_PARTS.map((part) => {
-                    const isSelected = side.parts.includes(part.value);
-                    return (
-                      <button
-                        key={`${side.key}-${part.value}`}
-                        type="button"
-                        aria-pressed={isSelected}
-                        onClick={() =>
-                          toggleAffectedPartWithAutoStatus(
-                            part.value,
-                            side.parts,
-                            side.setParts,
-                            side.waterLevel,
-                            side.waterKnown,
-                            side.setStatus
-                          )
-                        }
-                        title={part.desc}
-                        className={`min-h-10 px-2.5 py-2 rounded-lg text-[11px] font-heading font-bold border transition ${isSelected
-                            ? "bg-amber-500 text-slate-950 border-amber-400 shadow"
-                            : "bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700"
-                          }`}
-                      >
-                        {part.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              {partControls(side.parts, side.setParts, side.waterLevel, side.waterKnown, side.setStatus, side.key === "FORWARD" ? "ฝั่งซ้ายทาง (A → B)" : "ฝั่งขวาทาง (B → A)")}
+              {side.key === "REVERSE" && (
+                <button type="button" className="min-h-11 rounded-lg border border-slate-600 px-3 text-xs text-sky-200 hover:border-sky-400"
+                  onClick={() => setReverseAffectedParts(affectedParts.some(isSpecific) ? mirrorFloodImpactForReverse(affectedParts.filter(isSpecific)) : ["UNSPECIFIED"])}>
+                  ใช้ส่วนที่ได้รับผลกระทบเหมือนขาไป (สลับฝั่งไหล่ทางและทางขนาน)
+                </button>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-1">
@@ -463,6 +273,9 @@ export function FloodSituationSection({
                   </div>
                   <input
                     id={side.levelInputId}
+                    aria-required={side.waterKnown}
+                    aria-invalid={validation?.target === side.levelInputId ? true : undefined}
+                    aria-describedby={validation?.target === side.levelInputId ? "flood-save-validation-message" : undefined}
                     type="number"
                     min={0}
                     disabled={!side.waterKnown}
@@ -471,6 +284,7 @@ export function FloodSituationSection({
                     placeholder={side.waterKnown ? side.placeholder : "ยังไม่ทราบระดับน้ำ"}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono disabled:opacity-50"
                   />
+                  <FloodSaveError validation={validation} target={side.levelInputId} />
                 </div>
                 <div>
                   <label htmlFor={side.statusSelectId} className="text-[11px] text-slate-300 block mb-1">{side.statusLabel}</label>
@@ -515,6 +329,9 @@ export function FloodSituationSection({
             </div>
             <input
               id="flood-water-level-single"
+              aria-required={waterLevelKnown}
+              aria-invalid={validation?.target === "flood-water-level-single" ? true : undefined}
+              aria-describedby={validation?.target === "flood-water-level-single" ? "flood-save-validation-message" : undefined}
               type="number"
               min={0}
               disabled={!waterLevelKnown}
@@ -523,6 +340,7 @@ export function FloodSituationSection({
               placeholder={waterLevelKnown ? "เช่น 35 (ระบุ 0 เมื่อน้ำแห้งแต่คงประวัติ)" : "ยังไม่ทราบระดับน้ำ (รอวัดหน้างาน)"}
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 font-mono disabled:opacity-50"
             />
+            <FloodSaveError validation={validation} target="flood-water-level-single" />
             {waterLevelKnown && Number(routeWaterLevel) === 0 && routeWaterLevel !== "" && (
               <p className="mt-1 text-[11px] text-emerald-300">
                 💡 ระดับน้ำ 0 ซม.: ระบบตั้งค่าสถานะแนะนำเป็น &quot;ผ่านได้ปกติ&quot; และซ่อนเส้นน้ำท่วมจากแผนที่ปัจจุบัน (หากถนนยังชำรุด/ปิดจราจร สามารถแก้ไขสถานะทางขวามือได้ทันที)

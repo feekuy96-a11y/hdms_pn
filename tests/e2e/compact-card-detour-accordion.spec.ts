@@ -423,7 +423,8 @@ test("map flood pin opens summary popup without stacking, per-route detour direc
   const popup = page.locator(".doh-flood-leaflet-popup");
   await expect(popup).toBeVisible();
   await expect(page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ })).toHaveCount(0);
-  await expect(popup).toContainText("ช่องจราจร: ช่องจราจรขวา");
+  await expect(popup.getByText("ส่วนที่ได้รับผลกระทบ", { exact: true })).toBeVisible();
+  await expect(popup.getByText("น้ำท่วมบริเวณช่องจราจรขวา", { exact: true })).toBeVisible();
   await expect(popup).not.toContainText("ช่องจราจรขวาทาง");
   await expect(popup).not.toContainText("อีกฝั่งจราจร");
 
@@ -433,7 +434,8 @@ test("map flood pin opens summary popup without stacking, per-route detour direc
   const dialog = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
   await expect(dialog).toBeVisible();
   await expect(dialog).not.toContainText("อีกฝั่งจราจร");
-  await expect(dialog.getByText("ช่องจราจรขวา", { exact: true })).toBeVisible();
+  await expect(dialog.getByRole("group", { name: "ระดับน้ำและส่วนถนนที่ได้รับผลกระทบ" })
+    .getByText("น้ำท่วมบริเวณช่องจราจรขวา", { exact: true })).toBeVisible();
   await expect(dialog.getByLabel(/แผนที่แสดงตำแหน่งเหตุการณ์ ทล\.42/)).toBeVisible();
 
   // Toggle direction on Route 1 to B -> A; Route 2 must remain A -> B independently

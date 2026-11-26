@@ -17,8 +17,8 @@ import {
 import type { DetourRoute, FloodRoute, SystemDataPayload } from "@/db/default-data";
 import type { extractDirectionalAdvice } from "@/lib/gis-utils";
 import {
-  AFFECTED_ROAD_PART_LABELS,
   resolveFloodWaterReading,
+  resolveRecordedFloodImpact,
   type parseFloodDirectionMeta,
 } from "@/lib/flood-event-schema";
 import { getTrafficPresentation, resolveReportFreshness, type TrafficPresentation } from "@/lib/traffic-presentation";
@@ -143,16 +143,7 @@ export function FloodDossierModal({
   const photoMessage = activePhotoFailed || floodAlbum?.status === "failed"
     ? "โหลดภาพแนบไม่สำเร็จ"
     : floodAlbum?.status === "empty" ? "ยังไม่มีภาพแนบ" : "กำลังโหลดภาพแนบ";
-  const recordedParts = Array.isArray(selectedFloodMeta.affectedParts)
-    ? selectedFloodMeta.affectedParts
-      .filter((p) => p && p !== "UNSPECIFIED" && p !== "PENDING_VERIFICATION")
-      .map((p) => AFFECTED_ROAD_PART_LABELS[p] || String(p))
-      .filter(Boolean)
-    : [];
-  const recordedLanesText =
-    (selectedFlood.affected_lanes && selectedFlood.affected_lanes.trim() !== "-" ? selectedFlood.affected_lanes.trim() : "") ||
-    (recordedParts.length > 0 ? recordedParts.join(", ") : "") ||
-    "ไม่ระบุ";
+  const recordedLanesText = resolveRecordedFloodImpact(selectedFlood, selectedFloodMeta) || "ไม่ระบุ";
 
   return (
     <div

@@ -1,5 +1,6 @@
 "use client";
 
+import { toggleFloodImpactPart } from "@/lib/flood-event-schema";
 import React, { useMemo, useState } from "react";
 import { SystemDataPayload } from "@/db/default-data";
 import {
@@ -156,19 +157,7 @@ export function useMapFloodSituation({
     isKnown: boolean,
     setStatus: React.Dispatch<React.SetStateAction<TrafficStatusValue>>
   ) => {
-    const isSelected = currentParts.includes(part);
-    let nextParts: AffectedRoadPart[];
-    if (part === "ALL_LANES") {
-      nextParts = isSelected ? ["UNSPECIFIED"] : ["ALL_LANES"];
-    } else {
-      const filtered = currentParts.filter((p) => p !== "ALL_LANES" && p !== "UNSPECIFIED");
-      if (isSelected) {
-        const remaining = filtered.filter((p) => p !== part);
-        nextParts = remaining.length ? remaining : ["UNSPECIFIED"];
-      } else {
-        nextParts = [...filtered, part];
-      }
-    }
+    const nextParts = toggleFloodImpactPart(currentParts, part);
     setParts(nextParts);
     if (isKnown && waterLevelValue !== "") {
       const suggested = deriveTrafficStatusFromWaterLevel(waterLevelValue, nextParts);
