@@ -1,0 +1,71 @@
+/* Same status palette and treatments in the map filter and the full list. */
+.citizen-ui {
+  --passable-red-start: #ffd0d6; --passable-red-end: #f0616d; --passable-red-ink: #41111b;
+  --passable-orange-start: #ffd6ac; --passable-orange-end: #f78c42; --passable-orange-ink: #482110;
+  --passable-amber-start: #fff0a7; --passable-amber-end: #efb62f; --passable-amber-ink: #412e0a;
+  --passable-sky-start: #d1f4ff; --passable-sky-end: #61bde8; --passable-sky-ink: #102d43;
+  --passable-emerald-start: #d1f5df; --passable-emerald-end: #57bc92; --passable-emerald-ink: #103628;
+  --passable-slate-start: #eef2f5; --passable-slate-end: #bfcbd7; --passable-slate-ink: #23384a;
+  --passable-card-highlight: var(--hdms-white);
+  --passable-count-tint: var(--hdms-white);
+}
+.citizen-ui[data-citizen-theme="dark"] {
+  --passable-red-start: #8e2640; --passable-red-end: #4a1727; --passable-red-ink: #fff4f6;
+  --passable-orange-start: #8d411e; --passable-orange-end: #49291c; --passable-orange-ink: #fff2e5;
+  --passable-amber-start: #78531b; --passable-amber-end: #3d301e; --passable-amber-ink: #fff7d4;
+  --passable-sky-start: #1b5c7d; --passable-sky-end: #163848; --passable-sky-ink: #effaff;
+  --passable-emerald-start: #196348; --passable-emerald-end: #14382d; --passable-emerald-ink: #e9fff4;
+  --passable-slate-start: #435b71; --passable-slate-end: #233648; --passable-slate-ink: #f4f8fa;
+  --passable-card-highlight: color-mix(in srgb, var(--hdms-white) 28%, transparent);
+  --passable-count-tint: var(--hdms-slate-900);
+}
+
+.citizen-ui :is([data-traffic-card="red"], [data-passability-tone="red"]) { --status-card-start: var(--passable-red-start); --status-card-end: var(--passable-red-end); --status-card-ink: var(--passable-red-ink); }
+.citizen-ui :is([data-traffic-card="orange"], [data-passability-tone="orange"]) { --status-card-start: var(--passable-orange-start); --status-card-end: var(--passable-orange-end); --status-card-ink: var(--passable-orange-ink); }
+.citizen-ui :is([data-traffic-card="amber"], [data-passability-tone="amber"]) { --status-card-start: var(--passable-amber-start); --status-card-end: var(--passable-amber-end); --status-card-ink: var(--passable-amber-ink); }
+.citizen-ui :is([data-traffic-card="sky"], [data-passability-tone="sky"]) { --status-card-start: var(--passable-sky-start); --status-card-end: var(--passable-sky-end); --status-card-ink: var(--passable-sky-ink); }
+.citizen-ui :is([data-traffic-card="emerald"], [data-passability-tone="emerald"]) { --status-card-start: var(--passable-emerald-start); --status-card-end: var(--passable-emerald-end); --status-card-ink: var(--passable-emerald-ink); }
+.citizen-ui :is([data-traffic-card="slate"], [data-passability-tone="slate"]) { --status-card-start: var(--passable-slate-start); --status-card-end: var(--passable-slate-end); --status-card-ink: var(--passable-slate-ink); }
+
+.citizen-ui[data-citizen-theme] :is(.citizen-drawer, .citizen-sidebar, .citizen-map-status-filters) :is([data-traffic-card], [data-passability-tone]) {
+  --status-card-count: color-mix(in srgb, var(--status-card-end) 64%, var(--passable-count-tint));
+  color: var(--status-card-ink);
+  background-color: var(--status-card-end);
+  background-image: linear-gradient(150deg, var(--status-card-start), var(--status-card-end) 92%);
+  border: 1px solid color-mix(in srgb, var(--status-card-ink) 27%, var(--status-card-end));
+  border-radius: .58rem;
+  box-shadow: inset 0 1px var(--passable-card-highlight),
+    0 2px 4px color-mix(in srgb, var(--hdms-slate-900) 21%, transparent);
+}
+
+.citizen-ui[data-citizen-theme] :is(.citizen-drawer, .citizen-sidebar, .citizen-map-status-filters) :is([data-traffic-card], [data-passability-tone]):is([aria-pressed=true], :hover) {
+  border-color: var(--status-card-ink);
+  box-shadow: inset 0 0 0 1px var(--status-card-ink);
+}
+
+.citizen-ui[data-citizen-theme] :is(.citizen-drawer, .citizen-sidebar) [data-traffic-card] :is(.citizen-traffic-card-top, .citizen-traffic-card-label, .citizen-traffic-card-value) { color: var(--status-card-ink); }
+.citizen-ui[data-citizen-theme] :is(.citizen-drawer, .citizen-sidebar) [data-traffic-card] .citizen-traffic-card-value,
+.citizen-ui[data-citizen-theme] .citizen-map-status-filters [data-passability-tone] .citizen-flood-filter-count {
+  background: var(--status-card-count);
+  color: var(--status-card-ink);
+  border-color: transparent;
+}
+.citizen-ui[data-citizen-theme] .citizen-map-status-filters { padding: .25rem; }
+.citizen-ui[data-citizen-theme] .citizen-map-status-filters [data-passability-tone] { min-height: 44px; padding: .25rem .42rem; }
+.citizen-ui[data-citizen-theme] .citizen-map-status-filters [data-passability-tone] + [data-passability-tone] { margin-block-start: .25rem; }
+.citizen-ui[data-citizen-theme] .citizen-map-status-filters [data-passability-tone][aria-pressed=true] {
+  background: var(--brand-active-bg);
+  color: var(--brand-active-text);
+  border-color: currentColor;
+  box-shadow: inset 0 0 0 1px var(--focus-ring);
+}
+.citizen-ui[data-citizen-theme] .citizen-map-status-filters [data-passability-tone][aria-pressed=true] .citizen-flood-filter-count {
+  background: transparent;
+  color: inherit;
+  border-color: currentColor;
+}
+
+@media (forced-colors: active) {
+  .citizen-ui[data-citizen-theme] :is(.citizen-drawer, .citizen-sidebar, .citizen-map-status-filters) :is([data-traffic-card], [data-passability-tone]) { border-color: ButtonText; }
+  .citizen-ui[data-citizen-theme] :is(.citizen-drawer, .citizen-sidebar, .citizen-map-status-filters) :is([data-traffic-card], [data-passability-tone])[aria-pressed=true] { border-color: Highlight; }
+}

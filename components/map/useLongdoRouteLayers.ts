@@ -21,7 +21,6 @@ import {
   hasSeparateDetourLines,
   buildFloodPopupHtml,
   dashArrayFor,
-  escapeHtml,
   getResponsivePopupOptions,
   getPublicDetourEndpointLabel,
   isFloodLineVisibleOnCurrentMap,
@@ -260,8 +259,6 @@ export function useLongdoRouteLayers({
     item: FloodPinPresentation;
     ariaLabel: string;
     color: string;
-    waveIcon: string;
-    waveBadge: string;
   }>>([]);
 
   const endpointPresentation = React.useRef({ currentZoom, selectedDetourPopupId });
@@ -582,8 +579,6 @@ export function useLongdoRouteLayers({
     const renderer = rendererRef.current;
     const floodStyle = mapStyles.flood;
     const fColor = floodStyle?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
-    const floodWaveIcon = `<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M2 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M2 16c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/></svg>`;
-    const waveBadge = (color: string) => `<span style="background:${escapeHtml(color)};color:white" class="inline-flex h-5 w-5 items-center justify-center rounded-md border border-white/70 shadow-sm" aria-hidden="true">${floodWaveIcon}</span>`;
     const segmentAccent = (flood: FloodRoute) =>
       getTrafficPresentation(flood.traffic_status, flood.water_level_cm, flood.direction_meta?.trafficStatusDetail).hex;
     const fBaseWeight = floodStyle?.weight || LAYER_CONFIG.FLOOD_RED_LINE.weight;
@@ -658,8 +653,7 @@ export function useLongdoRouteLayers({
           levelText: level,
         };
         const pinColor = evPresentation.hex;
-        const floodWaveBadge = waveBadge(pinColor);
-        const pinIcon = L.divIcon(buildZoomAdaptiveFloodPinSpec(item, currentZoom, pinColor, floodWaveIcon, floodWaveBadge));
+        const pinIcon = L.divIcon(buildZoomAdaptiveFloodPinSpec(item, currentZoom, pinColor));
 
         const primarySeg = publicMode
           ? ev.segments.find(seg => parseFloodDirectionMeta(seg.direction_meta, seg).trafficStatusDetail === ev.mostSevereStatus) ?? ev.segments[0]
@@ -673,7 +667,7 @@ export function useLongdoRouteLayers({
         }).addTo(group);
         marker.__dohFilterIds = ev.segments.map((segment) => segment.id);
         marker.getElement()?.setAttribute("aria-label", clusterAriaLabel);
-        floodMarkerRefs.current.push({ marker, item, ariaLabel: clusterAriaLabel, color: pinColor, waveIcon: floodWaveIcon, waveBadge: floodWaveBadge });
+        floodMarkerRefs.current.push({ marker, item, ariaLabel: clusterAriaLabel, color: pinColor });
         marker.bindPopup(() => buildFloodPopupHtml(primarySeg, countDetoursForFlood(primarySeg), publicMode), floodPopupOpts);
         bindMapPopupInitialReveal(map, marker);
         marker.on("click", (e: any) => {
@@ -692,9 +686,8 @@ export function useLongdoRouteLayers({
         cluster.forEach((item, idx) => {
           const [renderLat, renderLon] = computeDeoverlappedMarkerCoord(item, idx, count);
           const pinColor = segmentAccent(item.flood);
-          const floodWaveBadge = waveBadge(pinColor);
           const pinIcon = L.divIcon(
-            buildZoomAdaptiveFloodPinSpec(item, currentZoom, pinColor, floodWaveIcon, floodWaveBadge)
+            buildZoomAdaptiveFloodPinSpec(item, currentZoom, pinColor)
           );
 
           const markerAriaLabel = `ทล.${item.flood.route_no}${item.sideBadge} ${item.flood.section_name} กม.${item.flood.km_start} — ${item.statusLabel}`;
@@ -711,8 +704,6 @@ export function useLongdoRouteLayers({
             item,
             ariaLabel: markerAriaLabel,
             color: pinColor,
-            waveIcon: floodWaveIcon,
-            waveBadge: floodWaveBadge,
           });
 
           marker.bindPopup(() => buildFloodPopupHtml(item.flood, countDetoursForFlood(item.flood), publicMode), floodPopupOpts);
@@ -740,9 +731,9 @@ export function useLongdoRouteLayers({
     const L = leafletRef.current;
     if (!mapReady || !L) return;
 
-    floodMarkerRefs.current.forEach(({ marker, item, ariaLabel, color, waveIcon, waveBadge }) => {
+    floodMarkerRefs.current.forEach(({ marker, item, ariaLabel, color }) => {
       marker.setIcon(
-        L.divIcon(buildZoomAdaptiveFloodPinSpec(item, currentZoom, color, waveIcon, waveBadge))
+        L.divIcon(buildZoomAdaptiveFloodPinSpec(item, currentZoom, color))
       );
       marker.getElement()?.setAttribute("aria-label", ariaLabel);
     });

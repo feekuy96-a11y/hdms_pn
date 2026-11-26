@@ -95,7 +95,7 @@ test("public incident details group linked detours and keep standalone detours s
 
   await expect(page.getByRole("button", { name: /เลเยอร์/, exact: true })).toBeVisible();
   await expect(page.locator(".doh-map-capsule-pin").first()).toBeVisible();
-  await expect(page.locator(".doh-map-capsule-pin svg").first()).toHaveAttribute("stroke", "white");
+  await expect(page.locator(".doh-map-capsule-pin .doh-type-flood-wave svg").first()).toHaveCSS("stroke", "rgb(255, 255, 255)");
   await expect(page.locator(".doh-detour-symbol").first()).toBeVisible();
 
   await page.getByRole("button", { name: /ทางเลี่ยง \(/ }).filter({ visible: true }).first().click();

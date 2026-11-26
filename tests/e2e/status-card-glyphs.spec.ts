@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { MAP_STATUS_GLYPHS } from "../../lib/map-status-glyphs";
 
-test("status cards match the five map silhouettes without changing counts or labels", async ({ page, baseURL, isMobile }, testInfo) => {
+test("status cards share five pictograms and active filters invert color without adding a separate map badge", async ({ page, baseURL, isMobile }, testInfo) => {
   const origin = new URL(baseURL!).origin;
   await page.route("**/*", (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   const values = ["CLOSED", "NO_SMALL_VEHICLES", "ONE_LANE", "LIGHT_VEHICLES_ONLY", "PASSABLE"];
@@ -24,12 +24,37 @@ test("status cards match the five map silhouettes without changing counts or lab
   const drawer = page.getByRole("dialog", { name: "รายการสายทางและจุดเฝ้าระวัง" });
   for (const theme of ["light", "dark"] as const) {
     if (theme === "dark") await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
+    const summary = page.getByRole("complementary", { name: "สรุปสถานการณ์บนแผนที่" });
+    await summary.getByRole("button", { name: "น้ำท่วม 5 จุด", exact: true }).click();
+    const filterIcons = await summary.locator("[data-traffic-glyph]").evaluateAll((icons) =>
+      icons.map(svg => [svg.getAttribute("data-traffic-glyph"), svg.querySelector(".hdms-status-sign-face")?.getAttribute("d")]));
+    await expect(summary.locator("[data-passability-tone]")).toHaveCount(5);
+    await summary.locator("[aria-label='กรองตามการผ่านทาง']").screenshot({ path: testInfo.outputPath(`map-summary-${theme}.png`), animations: "disabled" });
+    const selected = summary.locator('[data-passability-tone="red"]');
+    await selected.click();
+    await expect(selected).toHaveAttribute("aria-pressed", "true");
+    await expect(selected).toHaveCSS("background-image", "none");
+    await expect(selected).toHaveCSS("background-color", await selected.evaluate(el => {
+      const node = document.createElement("i");
+      node.style.color = "var(--brand-active-bg)";
+      el.append(node);
+      const color = getComputedStyle(node).color;
+      node.remove();
+      return color;
+    }));
+    await expect(selected).toHaveCSS("color", theme === "light" ? "rgb(255, 255, 255)" : "rgb(20, 35, 49)");
+    await expect(selected.locator(".citizen-flood-filter-count")).toHaveCSS("color", theme === "light" ? "rgb(255, 255, 255)" : "rgb(20, 35, 49)");
+    await selected.click();
+    await expect(selected).toHaveAttribute("aria-pressed", "false");
+    await expect(selected).toHaveCSS("background-image", /linear-gradient/);
+    await summary.getByRole("button", { name: "น้ำท่วม 5 จุด", exact: true }).click();
     if (isMobile) await nav.getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
     for (const key of ["red", "orange", "amber", "sky", "emerald"] as const) {
       const glyph = MAP_STATUS_GLYPHS[key];
       const card = list.locator(`[data-traffic-card="${key}"]`);
       await expect(card.locator("strong")).toHaveText("1");
-      await expect(page.locator(`[data-status-glyph="${glyph.key}"] .hdms-status-sign-face`)).toHaveAttribute("d", glyph.face);
+      expect(filterIcons).toContainEqual([glyph.key, glyph.face]);
+      await expect(page.locator(".doh-type-flood .hdms-status-sign")).toHaveCount(0);
       const badge = card.locator(`[data-traffic-glyph="${glyph.key}"]`);
       for (const layer of ["face", "inset", "route"] as const) {
         await expect(badge.locator(`.hdms-status-sign-${layer}`)).toHaveAttribute("d", glyph[layer]);
