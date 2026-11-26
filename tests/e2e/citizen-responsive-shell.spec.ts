@@ -320,6 +320,60 @@ test("public map starts with four grouped tools and keeps one layer panel and th
   }
 });
 
+test("grouped and split floods use the same wave pin and reveal labels at the same zooms", async ({ page }) => {
+  const first = { ...payload.floodRoutes[0], direction_meta: { eventId: "EV-WAVE-PARITY" } };
+  await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: {
+    ...payload,
+    floodRoutes: [first, { ...first, id: "F43-B", km_start: "97+252", km_end: "97+420", water_level_cm: 45, traffic_status: "CLOSED" }],
+  } }));
+  await page.goto(base + "/");
+  const pins = page.locator(".doh-map-capsule-pin");
+  const overlay = page.locator("[data-public-layer-opacities]");
+  const zoom = () => overlay.evaluate(el => JSON.parse(el.getAttribute("data-public-layer-opacities") || "{}").zoom as number);
+  const layers = page.getByRole("button", { name: "เลเยอร์", exact: true });
+  const chooseMode = async (name: "รวมเหตุการณ์" | "แยกช่วง") => {
+    await layers.click();
+    const details = page.getByText("ตั้งค่าเพิ่มเติม", { exact: true });
+    const option = page.getByRole("button", { name, exact: true });
+    if (!await option.isVisible()) await details.click();
+    await option.click();
+    await expect(option).toHaveAttribute("aria-pressed", "true");
+    await layers.click();
+  };
+  const wave = () => pins.first().locator("svg").evaluate(svg => svg.outerHTML);
+  await chooseMode("แยกช่วง");
+  await expect(pins).toHaveCount(2);
+  await expect(pins.first().locator(".doh-capsule-zoom-far")).toBeVisible();
+  const svg = await wave();
+  await chooseMode("รวมเหตุการณ์");
+  await expect(pins).toHaveCount(1);
+  const far = pins.locator(".doh-capsule-zoom-far");
+  await expect(far).toBeVisible();
+  await expect(far).not.toContainText("ทล.");
+  expect(await wave()).toBe(svg);
+  await expect(pins).toHaveAttribute("aria-label", /ทล\.43 \(2 ช่วง\).*45 ซม\./);
+  await pins.press("Enter");
+  const popup = page.locator(".doh-flood-leaflet-popup");
+  await expect(popup).toBeVisible();
+  const zoomIn = page.getByRole("button", { name: "Zoom in", exact: true });
+  const zoomTo = async (level: number) => {
+    for (let current = await zoom(); current < level; current = await zoom()) {
+      await zoomIn.press("Enter");
+      await expect.poll(zoom).toBeGreaterThan(current);
+    }
+  };
+  await zoomTo(12);
+  const mid = pins.locator(".doh-capsule-zoom-mid");
+  await expect(mid).toHaveText("ทล.43");
+  expect(await wave()).toBe(svg);
+  await expect(popup).toBeVisible();
+  await zoomTo(14);
+  const near = pins.locator(".doh-capsule-zoom-near");
+  await expect(near).toContainText(/ทล\.43[\s\S]*2 ช่วง[\s\S]*45 ซม\./);
+  expect(await wave()).toBe(svg);
+  await expect(popup).toBeVisible();
+});
+
 test("top map filters count logical flood points and avoid changing unrelated detours", async ({ page, isMobile }) => {
   const prototype = payload.floodRoutes[0];
   const statuses = [

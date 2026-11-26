@@ -295,7 +295,7 @@ export function getDetailedTrafficPresentation(
  */
 export function getFloodCompletenessIssues(route: any, meta: FloodSegmentDirectionMeta): string[] {
   const issues: string[] = [];
-  if (meta.waterLevelKnown === false || route?.direction_meta?.water_level_known === false) {
+  if (!resolveFloodWaterReading(route?.direction_meta ?? meta, route?.water_level_cm).known) {
     issues.push("ยังไม่ระบุระดับน้ำ");
   }
   if (
@@ -326,6 +326,20 @@ export function getFloodCompletenessIssues(route: any, meta: FloodSegmentDirecti
     issues.push("ยังไม่ระบุสถานะจราจร");
   }
   return issues;
+}
+
+/** Prefer the per-segment canonical flag; older records only carry the snake-case alias. */
+export function resolveFloodWaterReading(meta: unknown, value: unknown): { known: boolean; confirmedZero: boolean } {
+  let source = meta;
+  if (typeof source === "string") {
+    try { source = JSON.parse(source); } catch { source = null; }
+  }
+  const flags = source && typeof source === "object" ? source as Record<string, unknown> : {};
+  const flag = typeof flags.waterLevelKnown === "boolean" ? flags.waterLevelKnown : flags.water_level_known;
+  const measurable = (typeof value === "number" || (typeof value === "string" && value.trim() !== "")) &&
+    Number.isFinite(Number(value)) && Number(value) >= 0;
+  const known = flag !== false && measurable;
+  return { known, confirmedZero: known && Number(value) === 0 };
 }
 
 /**
@@ -398,7 +412,7 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
     (route?.road_side && route?.road_side !== "UNKNOWN" ? route.road_side : undefined) ||
     (fallbackDirection === "A_TO_B" ? "LEFT" : fallbackDirection === "B_TO_A" ? "RIGHT" : fallbackDirection === "BOTH" ? "BOTH" : "UNKNOWN");
 
-  const knownFlag = parsed.waterLevelKnown ?? parsed.water_level_known;
+  const reading = resolveFloodWaterReading(parsed, route?.water_level_cm);
 
   return {
     ...parsed,
@@ -414,10 +428,10 @@ export function parseFloodDirectionMeta(meta: unknown, route?: any): FloodSegmen
     roadSide: fallbackRoadSide,
     affectedParts,
     trafficStatusDetail: mapTrafficStatusToDetail(route?.traffic_status, parsed.trafficStatusDetail),
-    waterLevelKnown: knownFlag !== undefined ? Boolean(knownFlag) : route?.water_level_cm !== null && route?.water_level_cm !== undefined,
+    waterLevelKnown: reading.known,
     startedAt: parsed.startedAt || route?.updated_at || new Date().toISOString(),
     updatedAt: parsed.updatedAt || route?.updated_at || new Date().toISOString(),
-    zeroConfirmedAt: parsed.zeroConfirmedAt || (route?.water_level_cm === 0 ? route.updated_at : null),
+    zeroConfirmedAt: parsed.zeroConfirmedAt || (reading.confirmedZero ? route?.updated_at || null : null),
     causeAndNote: parsed.causeAndNote || route?.detour_advice || "",
     photos,
     splitFromSegmentId: parsed.splitFromSegmentId || null,
@@ -541,9 +555,10 @@ export function groupFloodRoutesIntoEvents(floodRoutes: any[]): ParentFloodEvent
     for (const seg of segments) {
       const segMeta: FloodSegmentDirectionMeta = seg._meta;
       const wl = Number(seg.water_level_cm) || 0;
-      if (wl > maxWaterLevel) maxWaterLevel = wl;
+      const reading = resolveFloodWaterReading(seg.direction_meta, seg.water_level_cm);
+      if (reading.known && wl > maxWaterLevel) maxWaterLevel = wl;
       if (seg.is_active) hasActive = true;
-      if (wl === 0 || segMeta.zeroConfirmedAt) hasZero = true;
+      if (reading.confirmedZero) hasZero = true;
 
       const score = severityScore[segMeta.trafficStatusDetail] ?? 0;
       if (score > highestScore) {

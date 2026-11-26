@@ -1,5 +1,5 @@
 import type { DetourRoute, FloodRoute, SystemDataPayload } from "@/db/default-data";
-import { groupFloodRoutesIntoEvents, parseFloodDirectionMeta } from "@/lib/flood-event-schema";
+import { groupFloodRoutesIntoEvents, parseFloodDirectionMeta, resolveFloodWaterReading } from "@/lib/flood-event-schema";
 import { getLinkedDetoursForFlood } from "@/lib/event-detour-links";
 import { parseRouteCoordinates } from "@/components/public/public-route-helpers";
 
@@ -189,7 +189,7 @@ export function resolveDetourFocusGeometry(
  */
 export function isFloodSegmentResolved(flood: FloodRoute): boolean {
   if (flood.is_active === false) return true;
-  if (typeof flood.water_level_cm === "number" && flood.water_level_cm <= 0) return true;
+  if (resolveFloodWaterReading(flood.direction_meta, flood.water_level_cm).confirmedZero) return true;
   return false;
 }
 
@@ -199,6 +199,8 @@ export interface ResolvedFloodFocusData {
   activeSegments: FloodRoute[];
   isResolved: boolean;
   maxWaterLevelCm: number;
+  hasKnownWaterLevel: boolean;
+  hasConfirmedZero: boolean;
   sideSummary: string | null;
   linkedDetours: DetourRoute[];
   coordsList: LonLatCoord[][];
@@ -220,6 +222,8 @@ export function resolveFloodFocusData(
       activeSegments: [],
       isResolved: false,
       maxWaterLevelCm: 0,
+      hasKnownWaterLevel: false,
+      hasConfirmedZero: false,
       sideSummary: null,
       linkedDetours: [],
       coordsList: [],
@@ -236,6 +240,8 @@ export function resolveFloodFocusData(
       activeSegments: [],
       isResolved: false,
       maxWaterLevelCm: 0,
+      hasKnownWaterLevel: false,
+      hasConfirmedZero: false,
       sideSummary: null,
       linkedDetours: [],
       coordsList: [],
@@ -263,7 +269,8 @@ export function resolveFloodFocusData(
   const activeSegments = segments.filter((seg) => !isFloodSegmentResolved(seg));
   const isResolved = activeSegments.length === 0;
 
-  const maxWaterLevelCm = segments.reduce(
+  const measuredSegments = activeSegments.filter(seg => resolveFloodWaterReading(seg.direction_meta, seg.water_level_cm).known);
+  const maxWaterLevelCm = measuredSegments.reduce(
     (max, seg) => Math.max(max, Number(seg.water_level_cm) || 0),
     0
   );
@@ -307,6 +314,8 @@ export function resolveFloodFocusData(
     activeSegments,
     isResolved,
     maxWaterLevelCm,
+    hasKnownWaterLevel: measuredSegments.length > 0,
+    hasConfirmedZero: segments.some(seg => resolveFloodWaterReading(seg.direction_meta, seg.water_level_cm).confirmedZero),
     sideSummary,
     linkedDetours,
     coordsList,

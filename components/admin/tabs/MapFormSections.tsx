@@ -152,6 +152,7 @@ export interface MapSubmitActionBarProps {
   saveAsDraft: boolean;
   isSubmitting: boolean;
   linkedDetourPending?: boolean;
+  dualFloodSaveState?: "idle" | "retry-right" | "verify";
   onSubmit: () => void;
   routeEditId: string;
   routeMode: "FLOOD" | "DETOUR";
@@ -162,6 +163,7 @@ export function MapSubmitActionBar({
   saveAsDraft,
   isSubmitting,
   linkedDetourPending,
+  dualFloodSaveState,
   onSubmit,
   routeEditId,
   routeMode,
@@ -179,7 +181,7 @@ export function MapSubmitActionBar({
         )}
         <button
           type="button"
-          disabled={isSubmitting}
+          disabled={isSubmitting || dualFloodSaveState === "verify"}
           onClick={onSubmit}
           className={`min-w-0 flex-1 min-h-11 font-heading font-black tracking-normal py-2 px-2.5 rounded-xl text-xs sm:px-4 sm:text-sm shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 transition cursor-pointer ${
             saveAsDraft
@@ -189,7 +191,9 @@ export function MapSubmitActionBar({
         >
           <Save className="w-4 h-4 shrink-0" />
           <span>
-            {routeMode === "DETOUR" && !routeEditId && linkedDetourPending
+            {dualFloodSaveState === "verify" ? "ตรวจผลบันทึกในทะเบียนเหตุการณ์ก่อน"
+              : dualFloodSaveState === "retry-right" ? "ลองบันทึกฝั่งขวาอีกครั้ง"
+              : routeMode === "DETOUR" && !routeEditId && linkedDetourPending
               ? "ลองผูกเหตุการณ์อีกครั้ง"
               : saveAsDraft
                 ? routeMode === "DETOUR" ? "บันทึกร่างทางเลี่ยง" : "บันทึกร่างเหตุการณ์"
