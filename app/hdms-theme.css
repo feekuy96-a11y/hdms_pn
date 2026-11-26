@@ -177,6 +177,7 @@
 [data-hdms-map] .leaflet-control-zoom a:hover { background: var(--state-hover); }
 [data-hdms-map] .leaflet-control-attribution a { color: var(--status-info-ink); }
 [data-hdms-map] .hdms-map-link { color: var(--status-info-ink); }
+[data-hdms-map] .hdms-map-primary-code { color: var(--status-normal-ink); }
 [data-hdms-map] [data-map-tone=danger] {
   background: var(--status-danger-wash);
   color: var(--status-danger-ink);

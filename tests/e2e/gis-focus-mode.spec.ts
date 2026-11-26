@@ -868,14 +868,22 @@ test.describe("Admin Shared GIS Focus Mode", () => {
   test("admin map legend, zoom and symbols use shared contrast without tinting map imagery", async ({ page, isMobile }) => {
     test.skip(isMobile, "Uses the admin map and theme menu together on a desktop split view.");
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: createMockPayload() }));
+    const payload = createMockPayload();
+    payload.highwayLayers = [{
+      layer_id: "MAIN_HIGHWAY", layer_name: "สายหลัก", is_visible: true, color_hex: "#1b5e20", line_width: 5,
+      geojson_data: { type: "FeatureCollection", features: [{
+        type: "Feature", properties: { route_no: "42", section_name: "ช่วงทดสอบ" },
+        geometry: { type: "LineString", coordinates: [[101.18, 6.85], [101.22, 6.85]] },
+      }] },
+    }];
+    await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
     await page.goto(`${base}/admin/`);
     const map = page.locator("[data-hdms-map]").first();
     const legend = map.locator(".citizen-legend");
     const zoom = map.locator(".leaflet-control-zoom-in");
     for (const theme of [
-      { mode: "ธีมสว่าง", surface: "rgb(255, 255, 255)", ink: "rgb(23, 53, 74)", active: "rgb(20, 89, 104)" },
-      { mode: "ธีมมืด", surface: "rgb(26, 45, 62)", ink: "rgb(244, 248, 250)", active: "rgb(172, 209, 226)" },
+      { mode: "ธีมสว่าง", surface: "rgb(255, 255, 255)", ink: "rgb(23, 53, 74)", active: "rgb(20, 89, 104)", primaryCode: "rgb(25, 95, 67)" },
+      { mode: "ธีมมืด", surface: "rgb(26, 45, 62)", ink: "rgb(244, 248, 250)", active: "rgb(172, 209, 226)", primaryCode: "rgb(162, 228, 204)" },
     ]) {
       await page.getByRole("button", { name: "รูปแบบสีพื้นที่จัดการ" }).click();
       await page.getByRole("button", { name: theme.mode, exact: true }).click();
@@ -903,6 +911,11 @@ test.describe("Admin Shared GIS Focus Mode", () => {
         });
         expect(contrast).toBeGreaterThanOrEqual(3);
       }
+      const routeListToggle = legend.getByRole("button", { name: "ดูรายชื่อทางหลวงสายหลัก", exact: true });
+      await routeListToggle.focus();
+      const routeList = map.getByRole("tooltip", { name: "รายชื่อทางหลวงสายหลัก", exact: true });
+      await expect(routeList).toHaveCSS("background-color", theme.surface);
+      await expect(routeList.getByText("ทล.42", { exact: true })).toHaveCSS("color", theme.primaryCode);
       const choice = legend.getByRole("button", { name: "ถนน OSM", exact: true });
       await choice.click();
       await expect(choice).toHaveCSS("background-color", theme.active);

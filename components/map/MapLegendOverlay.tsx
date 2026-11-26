@@ -120,7 +120,7 @@ export function MapLegendOverlay({
       onChange: setShowMainHwy,
       checkboxAccent: "accent-emerald-500",
       activeBtnClass: "border-emerald-400/70 bg-emerald-950/70 text-emerald-300",
-      codeTextClass: "text-emerald-300",
+      codeTextClass: "hdms-map-primary-code",
     },
     {
       key: "SECOND_HIGHWAY" as const,
