@@ -116,6 +116,7 @@ import { DetourDossierModal } from "@/components/public/DetourDossierModal";
 import { FloodDossierModal } from "@/components/public/FloodDossierModal";
 import { MobileCitizenDrawer } from "@/components/public/MobileCitizenDrawer";
 import { usePublicDashboardData } from "@/components/public/usePublicDashboardData";
+import { clearPublicFloodShareParam, readPublicFloodShareRef, resolvePublicFloodShare } from "@/components/public/public-share";
 
 function isFocusableAfterFocusExit(element: Element | null): element is HTMLElement {
   return element instanceof HTMLElement &&
@@ -164,6 +165,8 @@ export default function HomePage() {
   const scrollToDetourOnOpenRef = useRef<boolean>(false);
   const [selectedFloodId, setSelectedFloodId] = useState<string>("");
   const [showDossier, setShowDossier] = useState<boolean>(false);
+  const publicShareHandled = useRef(false);
+  const publicShareDossier = useRef<{ id: string; shown: boolean } | null>(null);
   const [expandedDetourId, setExpandedDetourId] = useState<string | null>(null);
   const [detourDirectionById, setDetourDirectionById] = useState<Record<string, "FORWARD" | "REVERSE">>({});
   const [eventAdviceDirection, setEventAdviceDirection] = useState<"FORWARD" | "REVERSE">("FORWARD");
@@ -419,7 +422,7 @@ export default function HomePage() {
     showMapList("FLOOD");
   };
 
-  const handleSelectFlood = (flood: FloodRoute, scrollToDetour = false, fromMobileList = false) => {
+  const handleSelectFlood = useCallback((flood: FloodRoute, scrollToDetour = false, fromMobileList = false) => {
     scrollToDetourOnOpenRef.current = scrollToDetour;
     if (gisFocus.status === "idle" && !preModalViewportRef.current) {
       preModalViewportRef.current = mapViewportApiRef.current?.getViewport() ?? null;
@@ -440,7 +443,47 @@ export default function HomePage() {
       setFocusCoordinates([flood.lon_start, flood.lat_start]);
     }
     loadFloodPhotosOnDemand(flood);
-  };
+  }, [gisFocus.status, loadFloodPhotosOnDemand]);
+
+  useEffect(() => {
+    if (publicShareHandled.current) return;
+    const ref = readPublicFloodShareRef(window.location.search);
+    if (ref === null) {
+      publicShareHandled.current = true;
+      return;
+    }
+    // A stale/failed read may recover; never substitute the first visible report.
+    if (ref !== "invalid" && readState !== "ready") return;
+    publicShareHandled.current = true;
+    const flood = ref === "invalid" ? undefined : resolvePublicFloodShare(ref, systemData);
+    if (!flood) {
+      clearPublicFloodShareParam();
+      showToast("ไม่พบเหตุการณ์น้ำท่วมนี้ในรายงานสาธารณะล่าสุด");
+      return;
+    }
+    publicShareDossier.current = { id: flood.id, shown: false };
+    setIsContactOpen(false);
+    handleSelectFlood(flood);
+  }, [handleSelectFlood, readState, showToast, systemData]);
+
+  useEffect(() => {
+    const link = publicShareDossier.current;
+    if (!link) return;
+    if (showDossier && !link.shown) {
+      link.shown = true;
+      return;
+    }
+    if (!link.shown) return;
+    const withdrawn = readState === "ready" && !systemData.floodRoutes.some((flood) => flood.id === link.id && flood.is_active);
+    if (!showDossier || withdrawn) {
+      publicShareDossier.current = null;
+      clearPublicFloodShareParam();
+      if (withdrawn) {
+        setShowDossier(false);
+        showToast("ไม่พบเหตุการณ์น้ำท่วมนี้ในรายงานสาธารณะล่าสุด");
+      }
+    }
+  }, [showDossier, readState, systemData.floodRoutes, showToast]);
 
   const handleOpenFloodDetourSection = (flood: FloodRoute) => {
     handleSelectFlood(flood, true);
@@ -973,7 +1016,7 @@ export default function HomePage() {
           />
 
           {/* FLOOD DOSSIER MODAL */}
-          {selectedFlood && showDossier && !viewingDetourModal && (
+          {selectedFlood && showDossier && !viewingDetourModal && selectedFlood.id === selectedFloodId && (
             <FloodDossierModal
               selectedFlood={selectedFlood}
               selectedFloodMeta={selectedFloodMeta}
