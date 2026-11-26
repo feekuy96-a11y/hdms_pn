@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Layers, Building2, ChevronUp, ChevronDown, LocateFixed, Map as MapIcon, Info, X } from "lucide-react";
+import { Layers, Plus, Minus, Building2, ChevronUp, ChevronDown, LocateFixed, Map as MapIcon, Info, X } from "lucide-react";
 import { SystemDataPayload } from "@/db/default-data";
 import { LAYER_CONFIG } from "@/lib/constants";
 import { isFloodLineVisibleOnCurrentMap } from "./longdo-map-popups";
@@ -38,12 +38,15 @@ interface MapLegendOverlayProps {
   switchBaseMap: (key: "road" | "sat" | "longdo") => void;
   resetCamera: () => void;
   locateUser: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
   isLocating: boolean;
   locationStatus: string | null;
   previewPointPhoto: { url: string; title: string } | null;
   setPreviewPointPhoto: (photo: { url: string; title: string } | null) => void;
   isMapPopupOpen?: boolean;
   publicMode?: boolean;
+  publicStatusSummary?: React.ReactNode;
   isSidebarCollapsed?: boolean;
 }
 
@@ -79,18 +82,33 @@ export function MapLegendOverlay({
   switchBaseMap,
   resetCamera,
   locateUser,
+  onZoomIn,
+  onZoomOut,
   isLocating,
   locationStatus,
   previewPointPhoto,
   setPreviewPointPhoto,
   isMapPopupOpen = false,
   publicMode = true,
+  publicStatusSummary,
   isSidebarCollapsed = false,
 }: MapLegendOverlayProps) {
+  const citizenLayersButton = React.useRef<HTMLButtonElement>(null);
+  const citizenLayersPanel = React.useRef<HTMLDivElement>(null);
   const [pinnedRouteList, setPinnedRouteList] = React.useState<"MAIN_HIGHWAY" | "SECOND_HIGHWAY" | null>(null);
   const mobileOverlayHiddenClass = isMapPopupOpen ? "max-sm:opacity-0 max-sm:pointer-events-none" : "";
   const mobileInteractiveClass = isMapPopupOpen ? "pointer-events-auto max-sm:pointer-events-none" : "pointer-events-auto";
 
+  const closeLayerControl = () => {
+    if (publicMode) {
+      if (citizenLayersPanel.current?.contains(document.activeElement)) citizenLayersButton.current?.focus();
+      citizenLayersPanel.current?.querySelectorAll("details[open]").forEach(details => details.removeAttribute("open"));
+      citizenLayersPanel.current?.querySelector(".citizen-legend")?.scrollTo(0, 0);
+    }
+    setPinnedRouteList(null);
+    setLegendRouteList(null);
+    setIsLayerControlCollapsed(true);
+  };
   const highwayLayerItems = [
     {
       key: "MAIN_HIGHWAY" as const,
@@ -117,12 +135,126 @@ export function MapLegendOverlay({
   ];
   const activeHighwayConfig = highwayLayerItems.find((item) => item.key === legendRouteList) ?? null;
 
+  const highwayListPanel = legendRouteList && activeHighwayConfig && (
+            <div
+              role="tooltip"
+              aria-label={`รายชื่อ${activeHighwayConfig.label}`}
+              className={`${publicMode ? "citizen-layer-route-list" : ""} pointer-events-auto w-full sm:w-64 max-h-40 sm:max-h-[min(20rem,75dvh)] overflow-y-auto rounded-xl border border-slate-700/80 bg-[#0b162c]/95 p-3 text-xs text-white shadow-2xl backdrop-blur-md`}
+            >
+              <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-slate-800 pb-1.5">
+                <span className="font-heading font-bold text-slate-100">
+                  รายชื่อ{activeHighwayConfig.label}
+                </span>
+                {pinnedRouteList && (
+                  <button
+                    type="button"
+                    aria-label="ปิดรายชื่อสายทางหลวง"
+                    onClick={() => {
+                      setPinnedRouteList(null);
+                      setLegendRouteList(null);
+                    }}
+                    className="grid h-7 w-7 place-items-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+              {legendRoutes(legendRouteList).length ? (
+                legendRoutes(legendRouteList).map((route) => (
+                  <div key={`${route.code}-${route.name}`} className="border-b border-slate-800/80 py-1.5 last:border-0 leading-snug">
+                    <strong className={activeHighwayConfig.codeTextClass}>ทล.{route.code}</strong> — {route.name}
+                  </div>
+                ))
+              ) : (
+                <p className="py-1 text-slate-400">ไม่มีสายทางที่แสดง</p>
+              )}
+            </div>
+          );
+
+  const baseMapChooser = (
+            <div className="citizen-basemap-options mt-2.5 pt-2 border-t border-slate-800 grid grid-cols-3 gap-[0.333em] text-[0.75rem]/[1.1rem] font-heading font-bold">
+              <button
+                type="button"
+                onClick={() => switchBaseMap("longdo")}
+                aria-pressed={activeBaseMap === "longdo"}
+                className={`min-h-11 sm:min-h-10 py-[0.333em] rounded-lg transition text-center px-[0.333em] truncate cursor-pointer ${activeBaseMap === "longdo" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
+                  }`}
+              >
+                Longdo
+              </button>
+              <button
+                type="button"
+                onClick={() => switchBaseMap("road")}
+                aria-pressed={activeBaseMap === "road"}
+                className={`min-h-11 sm:min-h-10 py-[0.333em] rounded-lg transition text-center px-[0.333em] truncate cursor-pointer ${activeBaseMap === "road" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
+                  }`}
+              >
+                ถนน OSM
+              </button>
+              <button
+                type="button"
+                onClick={() => switchBaseMap("sat")}
+                aria-pressed={activeBaseMap === "sat"}
+                className={`min-h-11 sm:min-h-10 py-[0.333em] rounded-lg transition text-center px-[0.333em] truncate cursor-pointer ${activeBaseMap === "sat" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
+                  }`}
+              >
+                ดาวเทียม
+              </button>
+            </div>
+
+  );
+
+  const secondaryDisplaySetting = showSecHwy && (
+                <div className="pl-5 pb-1">
+                  <label className="flex min-h-11 sm:min-h-9 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 text-[0.75rem]/[1.1rem] text-slate-300 hover:text-white touch-manipulation">
+                    <span className="truncate">
+                      แสดงสายรองทุกระดับซูม {!showSecondaryAtCurrentZoom ? "(ซูมออกซ่อนอัตโนมัติ)" : ""}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={forceShowAllHighways}
+                      onChange={(e) => setForceShowAllHighways(e.target.checked)}
+                      className="accent-amber-400 rounded h-5 w-5 sm:h-4 sm:w-4 shrink-0 cursor-pointer"
+                    />
+                  </label>
+                </div>
+              );
+  const floodMarkerSetting = effectiveShowFloodLayer && (
+                <div className="pl-6 pb-1 pt-0.5 flex items-center justify-between text-[0.75rem]/[1.1rem] text-slate-300">
+                  <span>รูปแบบหมุด:</span>
+                  <div className="inline-flex rounded-lg bg-slate-900/90 p-[0.167em] border border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setFloodDisplayMode("SEGMENTS")}
+                      aria-pressed={floodDisplayMode === "SEGMENTS"}
+                      className={`min-h-9 sm:min-h-8 px-[0.667em] py-[0.167em] rounded text-[0.75rem]/[1.1rem] font-medium transition cursor-pointer ${floodDisplayMode === "SEGMENTS"
+                        ? "bg-amber-500 text-slate-950 font-bold"
+                        : "text-slate-400 hover:text-white"
+                        }`}
+                    >
+                      แยกช่วง
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFloodDisplayMode("EVENTS")}
+                      aria-pressed={floodDisplayMode === "EVENTS"}
+                      className={`min-h-9 sm:min-h-8 px-[0.667em] py-[0.167em] rounded text-[0.75rem]/[1.1rem] font-medium transition cursor-pointer ${floodDisplayMode === "EVENTS"
+                        ? "bg-amber-500 text-slate-950 font-bold"
+                        : "text-slate-400 hover:text-white"
+                        }`}
+                    >
+                      รวมเหตุการณ์
+                    </button>
+                  </div>
+                </div>
+              );
+
   return (
     <>
-      {/* Top Header Controls Bar (Responsive: status badges on left, legend toggle button on right) */}
-      <div className={`absolute top-3 inset-x-3 z-[400] flex items-start justify-between gap-1.5 sm:gap-2 pointer-events-none transition-opacity duration-150 ${mobileOverlayHiddenClass}`} aria-label="สรุปสถานการณ์และแถบควบคุมบนแผนที่">
+      {publicMode ? (isLayerControlCollapsed && !isMapPopupOpen && publicStatusSummary) : (
+      <div className={`${publicMode ? "citizen-map-summary" : ""} absolute top-3 inset-x-3 z-[400] flex items-start justify-between gap-1.5 sm:gap-2 pointer-events-none transition-opacity duration-150 ${mobileOverlayHiddenClass}`} aria-label="สรุปสถานการณ์และแถบควบคุมบนแผนที่">
         {/* Status Badges on the left */}
-        <div className={`flex flex-1 min-w-0 flex-wrap items-center gap-1 sm:gap-2 pointer-events-none ${
+        <div className={`${publicMode ? "citizen-map-count" : ""} flex flex-1 min-w-0 flex-wrap items-center gap-1 sm:gap-2 pointer-events-none ${
           !publicMode
             ? isSidebarCollapsed
               ? "lg:pl-[9.25rem]"
@@ -142,12 +274,12 @@ export function MapLegendOverlay({
         </div>
 
         {/* Legend Toggle Button on the right (collapsed state) */}
-        {isLayerControlCollapsed && (
+        {isLayerControlCollapsed && !publicMode && (
           <div className={`${mobileInteractiveClass} flex items-center gap-1 sm:gap-1.5 shrink-0`}>
             <button
               type="button"
               onClick={() => switchBaseMap(activeBaseMap === "sat" ? "road" : "sat")}
-              className="min-h-8 sm:min-h-9 bg-[#0b162c]/95 hover:bg-[#0f1d3a] border border-slate-700/80 rounded-lg px-2 sm:px-2.5 py-1 shadow-lg flex items-center gap-1.5 text-[0.7rem]/[1rem] sm:text-xs font-medium text-slate-300 hover:text-white transition backdrop-blur-md cursor-pointer"
+              className="citizen-map-action min-h-8 sm:min-h-9 bg-[#0b162c]/95 hover:bg-[#0f1d3a] border border-slate-700/80 rounded-lg px-2 sm:px-2.5 py-1 shadow-lg flex items-center gap-1.5 text-[0.7rem]/[1rem] sm:text-xs font-medium text-slate-300 hover:text-white transition backdrop-blur-md cursor-pointer"
               title={activeBaseMap === "sat" ? "เปลี่ยนเป็นแผนที่ถนน" : "เปลี่ยนเป็นภาพถ่ายดาวเทียม"}
               aria-label={activeBaseMap === "sat" ? "เปลี่ยนเป็นแผนที่ถนน" : "เปลี่ยนเป็นภาพถ่ายดาวเทียม"}
             >
@@ -157,8 +289,9 @@ export function MapLegendOverlay({
             <button
               type="button"
               onClick={() => setIsLayerControlCollapsed(false)}
-              className="min-h-8 sm:min-h-9 bg-[#0b162c]/95 hover:bg-[#0f1d3a] border border-slate-700/80 rounded-lg px-2.5 sm:px-3 py-1 shadow-lg flex items-center gap-1.5 sm:gap-2 text-[0.7rem]/[1rem] sm:text-xs font-heading font-bold text-amber-300 transition backdrop-blur-md cursor-pointer"
+              className="citizen-map-action min-h-8 sm:min-h-9 bg-[#0b162c]/95 hover:bg-[#0f1d3a] border border-slate-700/80 rounded-lg px-2.5 sm:px-3 py-1 shadow-lg flex items-center gap-1.5 sm:gap-2 text-[0.7rem]/[1rem] sm:text-xs font-heading font-bold text-amber-300 transition backdrop-blur-md cursor-pointer"
               title="เปิดแถบควบคุมเลเยอร์แผนที่"
+              aria-expanded={false}
             >
               <Layers className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span className="hidden xs:inline sm:inline">สัญลักษณ์บนแผนที่</span>
@@ -169,15 +302,38 @@ export function MapLegendOverlay({
         )}
       </div>
 
+      )}
+
+      {publicMode && (
+        <div className={`citizen-map-toolwrap ${mobileOverlayHiddenClass}`}>
+          <div role="group" aria-label="เครื่องมือแผนที่" className={`citizen-map-tools ${mobileInteractiveClass}`}>
+            <button type="button" className="leaflet-control-zoom-in" aria-label="Zoom in" title="ซูมเข้า" onClick={onZoomIn} disabled={!mapReady}>
+              <Plus size={19} aria-hidden="true" />
+            </button>
+            <button type="button" className="leaflet-control-zoom-out" aria-label="Zoom out" title="ซูมออก" onClick={onZoomOut} disabled={!mapReady}>
+              <Minus size={19} aria-hidden="true" />
+            </button>
+            <button type="button" aria-label="ตำแหน่งของฉัน" title="ตำแหน่งของฉัน" aria-busy={isLocating} onClick={locateUser} disabled={isLocating || !mapReady}>
+              <LocateFixed size={19} aria-hidden="true" />
+            </button>
+            <button ref={citizenLayersButton} type="button" aria-label="เลเยอร์" title="เลเยอร์" aria-expanded={!isLayerControlCollapsed} aria-controls="citizen-map-layers"
+              onClick={() => isLayerControlCollapsed ? setIsLayerControlCollapsed(false) : closeLayerControl()}>
+              <Layers size={19} aria-hidden="true" />
+            </button>
+          </div>
+          {locationStatus && <p role="status" aria-live="polite" className="citizen-map-location-status">{locationStatus}</p>}
+        </div>
+      )}
+
       {/* Quick Geolocation Control & Live Status when Legend is collapsed */}
-      {isLayerControlCollapsed && (
+      {isLayerControlCollapsed && !publicMode && (
         <div className={`absolute top-[3.375rem] sm:top-14 right-3 z-[400] flex flex-col items-end gap-[0.5em] pointer-events-none transition-opacity duration-150 ${mobileOverlayHiddenClass}`}>
           <button
             type="button"
             onClick={locateUser}
             disabled={isLocating || !mapReady}
             aria-label="ตำแหน่งของฉัน"
-            className={`${mobileInteractiveClass} inline-flex min-h-11 sm:min-h-9 items-center gap-[0.5em] rounded-lg border border-slate-700/80 bg-[#0b162c]/95 px-[0.833em] py-[0.333em] text-[0.75rem]/[1.1rem] font-semibold text-sky-300 shadow-lg backdrop-blur-md transition hover:bg-[#0f1d3a] hover:text-sky-200 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400`}
+            className={`citizen-map-action ${mobileInteractiveClass} inline-flex min-h-11 sm:min-h-9 items-center gap-[0.5em] rounded-lg border border-slate-700/80 bg-[#0b162c]/95 px-[0.833em] py-[0.333em] text-[0.75rem]/[1.1rem] font-semibold text-sky-300 shadow-lg backdrop-blur-md transition hover:bg-[#0f1d3a] hover:text-sky-200 disabled:cursor-wait disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400`}
           >
             <LocateFixed className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span>{isLocating ? "กำลังหา…" : "ตำแหน่งของฉัน"}</span>
@@ -191,30 +347,38 @@ export function MapLegendOverlay({
       )}
 
       {/* Expanded Legend Panel + Floating Highway List (outside overflow-y-auto so zero clipping & zero layout shift) */}
-      {!isLayerControlCollapsed && (
+      {(publicMode || !isLayerControlCollapsed) && (
         <div
+          ref={publicMode ? citizenLayersPanel : undefined}
+          data-citizen-layers-open={publicMode ? !isLayerControlCollapsed : undefined}
+          inert={publicMode && isLayerControlCollapsed ? true : undefined}
           onKeyDown={(event) => {
-            if (event.key === "Escape" && legendRouteList) {
-              event.stopPropagation();
+            if (event.key !== "Escape" || (!legendRouteList && !publicMode)) return;
+            event.stopPropagation();
+            if (legendRouteList) {
               setPinnedRouteList(null);
               setLegendRouteList(null);
-            }
+            } else closeLayerControl();
           }}
-          className="absolute top-3 right-3 z-[410] flex flex-col sm:flex-row-reverse items-end sm:items-start gap-2 pointer-events-none max-w-[calc(100vw-1.5rem)]"
+          className={`${publicMode ? "citizen-map-layer-wrap" : ""} absolute top-3 right-3 z-[410] flex flex-col sm:flex-row-reverse items-end sm:items-start gap-2 pointer-events-none max-w-[calc(100vw-1.5rem)]`}
         >
           <div
-            className={`pointer-events-auto bg-[#0b162c]/95 backdrop-blur-md border border-slate-700/80 rounded-2xl p-[1em] sm:p-[1.167em] shadow-2xl min-w-[14.5rem] sm:min-w-[15.5rem] max-w-full text-xs animate-fade-in overflow-y-auto ${
+            id={publicMode ? "citizen-map-layers" : undefined}
+            role={publicMode ? "region" : undefined}
+            aria-label={publicMode ? "เลเยอร์และสัญลักษณ์แผนที่" : undefined}
+            className={`citizen-legend pointer-events-auto bg-[#0b162c]/95 backdrop-blur-md border border-slate-700/80 rounded-2xl p-[1em] sm:p-[1.167em] shadow-2xl min-w-[14.5rem] sm:min-w-[15.5rem] max-w-full text-xs ${publicMode ? "" : "animate-fade-in"} overflow-y-auto ${
               legendRouteList ? "max-h-[54dvh] sm:max-h-[85dvh]" : "max-h-[80dvh] sm:max-h-[85dvh]"
             }`}
           >
-            <div className="font-heading font-bold text-amber-400 flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+            <div className="citizen-layer-head font-heading font-bold text-amber-400 flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
               <span className="flex items-center gap-[0.5em] text-xs text-white">
-                <Layers className="w-3.5 h-3.5 text-amber-400" /> สัญลักษณ์บนแผนที่
+                <Layers className="w-3.5 h-3.5 text-amber-400" /> {publicMode ? "เลเยอร์" : "สัญลักษณ์บนแผนที่"}
               </span>
               <div className="flex items-center gap-[0.667em]">
                 <button type="button" onClick={resetCamera} className="min-h-9 sm:min-h-8 px-1.5 text-[0.75rem]/[1.1rem] text-sky-400 hover:text-sky-300 hover:underline cursor-pointer">
                   รีเซ็ต
                 </button>
+                {!publicMode && (
                 <button
                   type="button"
                   onClick={locateUser}
@@ -225,6 +389,7 @@ export function MapLegendOverlay({
                   <LocateFixed className="h-3.5 w-3.5" aria-hidden="true" />
                   {isLocating ? "กำลังหา…" : "ตำแหน่งของฉัน"}
                 </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -241,26 +406,31 @@ export function MapLegendOverlay({
               </div>
             </div>
 
-            {locationStatus && (
+            {!publicMode && locationStatus && (
               <p role="status" aria-live="polite" className="mt-2 rounded-md bg-slate-900/80 px-[0.667em] py-[0.5em] text-[0.75rem]/[1.1rem] leading-snug text-slate-300">
                 {locationStatus}
               </p>
             )}
 
-            <div className="space-y-1">
+            {publicMode && <div className="citizen-basemap">
+              <h3>แผนที่ฐาน</h3>
+              {baseMapChooser}
+            </div>}
+            {publicMode && <h3 className="citizen-layer-label">แสดงบนแผนที่</h3>}
+            <div className="citizen-visibility space-y-1">
               {highwayLayerItems.map((item) => {
                 const isOpen = legendRouteList === item.key;
                 return (
                   <div
                     key={item.key}
-                    className="flex items-center gap-1.5"
+                    className="citizen-layer-road-row flex items-center gap-1.5"
                     onPointerEnter={(event) => {
-                      if (event.pointerType === "mouse" && !pinnedRouteList) {
+                      if (!publicMode && event.pointerType === "mouse" && !pinnedRouteList) {
                         setLegendRouteList(item.key);
                       }
                     }}
                     onPointerLeave={(event) => {
-                      if (event.pointerType === "mouse" && !pinnedRouteList) {
+                      if (!publicMode && event.pointerType === "mouse" && !pinnedRouteList) {
                         setLegendRouteList(null);
                       }
                     }}
@@ -287,7 +457,7 @@ export function MapLegendOverlay({
                         setLegendRouteList(next);
                       }}
                       onFocus={() => {
-                        if (!pinnedRouteList) setLegendRouteList(item.key);
+                        if (!publicMode && !pinnedRouteList) setLegendRouteList(item.key);
                       }}
                       onBlur={(event) => {
                         if (
@@ -297,7 +467,7 @@ export function MapLegendOverlay({
                           setLegendRouteList(null);
                         }
                       }}
-                      className={`grid h-11 w-10 sm:h-8 sm:w-7 shrink-0 place-items-center rounded-lg border transition cursor-pointer touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
+                      className={`citizen-layer-info grid h-11 w-10 sm:h-8 sm:w-7 shrink-0 place-items-center rounded-lg border transition cursor-pointer touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
                         isOpen
                           ? item.activeBtnClass
                           : "border-slate-800 bg-slate-900/70 text-slate-400 hover:text-white hover:border-slate-700"
@@ -310,21 +480,7 @@ export function MapLegendOverlay({
                 );
               })}
 
-              {showSecHwy && (
-                <div className="pl-5 pb-1">
-                  <label className="flex min-h-11 sm:min-h-9 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 text-[0.75rem]/[1.1rem] text-slate-300 hover:text-white touch-manipulation">
-                    <span className="truncate">
-                      แสดงสายรองทุกระดับซูม {!showSecondaryAtCurrentZoom ? "(ซูมออกซ่อนอัตโนมัติ)" : ""}
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={forceShowAllHighways}
-                      onChange={(e) => setForceShowAllHighways(e.target.checked)}
-                      className="accent-amber-400 rounded h-5 w-5 sm:h-4 sm:w-4 shrink-0 cursor-pointer"
-                    />
-                  </label>
-                </div>
-              )}
+              {!publicMode && secondaryDisplaySetting}
 
               <label className="flex min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 text-slate-200 hover:text-white touch-manipulation">
                 <span className="flex items-center gap-[0.667em]">
@@ -339,33 +495,7 @@ export function MapLegendOverlay({
                 />
               </label>
 
-              {effectiveShowFloodLayer && (
-                <div className="pl-6 pb-1 pt-0.5 flex items-center justify-between text-[0.75rem]/[1.1rem] text-slate-300">
-                  <span>รูปแบบหมุด:</span>
-                  <div className="inline-flex rounded-lg bg-slate-900/90 p-[0.167em] border border-slate-700">
-                    <button
-                      type="button"
-                      onClick={() => setFloodDisplayMode("SEGMENTS")}
-                      className={`min-h-9 sm:min-h-8 px-[0.667em] py-[0.167em] rounded text-[0.75rem]/[1.1rem] font-medium transition cursor-pointer ${floodDisplayMode === "SEGMENTS"
-                        ? "bg-amber-500 text-slate-950 font-bold"
-                        : "text-slate-400 hover:text-white"
-                        }`}
-                    >
-                      แยกช่วง
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFloodDisplayMode("EVENTS")}
-                      className={`min-h-9 sm:min-h-8 px-[0.667em] py-[0.167em] rounded text-[0.75rem]/[1.1rem] font-medium transition cursor-pointer ${floodDisplayMode === "EVENTS"
-                        ? "bg-amber-500 text-slate-950 font-bold"
-                        : "text-slate-400 hover:text-white"
-                        }`}
-                    >
-                      รวมเหตุการณ์
-                    </button>
-                  </div>
-                </div>
-              )}
+              {!publicMode && floodMarkerSetting}
 
               <label className="flex min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 text-slate-200 hover:text-white touch-manipulation">
                 <span className="flex items-center gap-[0.667em]">
@@ -401,70 +531,23 @@ export function MapLegendOverlay({
               </label>
             </div>
 
-            {/* Base Map Switcher */}
-            <div className="mt-2.5 pt-2 border-t border-slate-800 grid grid-cols-3 gap-[0.333em] text-[0.75rem]/[1.1rem] font-heading font-bold">
-              <button
-                type="button"
-                onClick={() => switchBaseMap("longdo")}
-                className={`min-h-11 sm:min-h-10 py-[0.333em] rounded-lg transition text-center px-[0.333em] truncate cursor-pointer ${activeBaseMap === "longdo" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
-                  }`}
-              >
-                Longdo
-              </button>
-              <button
-                type="button"
-                onClick={() => switchBaseMap("road")}
-                className={`min-h-11 sm:min-h-10 py-[0.333em] rounded-lg transition text-center px-[0.333em] truncate cursor-pointer ${activeBaseMap === "road" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
-                  }`}
-              >
-                ถนน OSM
-              </button>
-              <button
-                type="button"
-                onClick={() => switchBaseMap("sat")}
-                className={`min-h-11 sm:min-h-10 py-[0.333em] rounded-lg transition text-center px-[0.333em] truncate cursor-pointer ${activeBaseMap === "sat" ? "bg-amber-500 text-slate-950 shadow" : "bg-slate-900 text-slate-400 hover:text-white"
-                  }`}
-              >
-                ดาวเทียม
-              </button>
-            </div>
+            {publicMode && (secondaryDisplaySetting || floodMarkerSetting) && (
+              <details className="citizen-layer-advanced">
+                <summary>ตั้งค่าเพิ่มเติม</summary>
+                {secondaryDisplaySetting}
+                {floodMarkerSetting}
+              </details>
+            )}
+            {publicMode && (
+              <details className="citizen-legend-explainer">
+                <summary>คำอธิบายสัญลักษณ์</summary>
+                <p>หมุดรูปคลื่นระบุจุดน้ำท่วม หมุดลูกศรและเส้นทางเลี่ยงระบุทางเลือก เส้นสีของทางหลวงใช้สีเดียวกับตัวอย่างในรายการด้านบน</p>
+              </details>
+            )}
+            {!publicMode && baseMapChooser}
+            {publicMode && highwayListPanel}
           </div>
-
-          {legendRouteList && activeHighwayConfig && (
-            <div
-              role="tooltip"
-              aria-label={`รายชื่อ${activeHighwayConfig.label}`}
-              className="pointer-events-auto w-full sm:w-64 max-h-40 sm:max-h-[min(20rem,75dvh)] overflow-y-auto rounded-xl border border-slate-700/80 bg-[#0b162c]/95 p-3 text-xs text-white shadow-2xl backdrop-blur-md"
-            >
-              <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-slate-800 pb-1.5">
-                <span className="font-heading font-bold text-slate-100">
-                  รายชื่อ{activeHighwayConfig.label}
-                </span>
-                {pinnedRouteList && (
-                  <button
-                    type="button"
-                    aria-label="ปิดรายชื่อสายทางหลวง"
-                    onClick={() => {
-                      setPinnedRouteList(null);
-                      setLegendRouteList(null);
-                    }}
-                    className="grid h-7 w-7 place-items-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
-                  >
-                    <X className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                )}
-              </div>
-              {legendRoutes(legendRouteList).length ? (
-                legendRoutes(legendRouteList).map((route) => (
-                  <div key={`${route.code}-${route.name}`} className="border-b border-slate-800/80 py-1.5 last:border-0 leading-snug">
-                    <strong className={activeHighwayConfig.codeTextClass}>ทล.{route.code}</strong> — {route.name}
-                  </div>
-                ))
-              ) : (
-                <p className="py-1 text-slate-400">ไม่มีสายทางที่แสดง</p>
-              )}
-            </div>
-          )}
+          {!publicMode && highwayListPanel}
         </div>
       )}
 

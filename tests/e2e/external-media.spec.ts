@@ -2,8 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const base = process.env.BASE_PATH || "";
 
-test("admin can inspect and retry failed background copies", async ({ page }) => {
-  test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop administration workflow");
+test("admin can inspect and retry failed background copies", async ({ page, isMobile }, testInfo) => {
 
   const retried: string[] = [];
   await page.route("**/functions/v1/hdms-api", async (route) => {
@@ -24,9 +23,17 @@ test("admin can inspect and retry failed background copies", async ({ page }) =>
   });
 
   await page.goto(`${base}/admin/`);
-  await page.getByRole("complementary").getByRole("button", { name: /งานเบื้องหลัง/ }).click();
+  if (isMobile) {
+    const mobileNav = page.getByRole("navigation", { name: "เมนูจัดการแอดมินมือถือ" });
+    await mobileNav.locator("summary").tap();
+    await mobileNav.getByRole("button", { name: "งานเบื้องหลัง", exact: true }).tap();
+    await mobileNav.locator("summary").tap();
+  } else {
+    await page.getByRole("complementary").getByRole("button", { name: /งานเบื้องหลัง/ }).click();
+  }
   await expect(page.getByRole("heading", { name: "งานส่งข้อมูลเบื้องหลัง" })).toBeVisible();
   await expect(page.getByText("Apps Script unavailable")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("utilities-jobs.png"), animations: "disabled" });
   await page.getByRole("button", { name: "ลองส่งใหม่" }).click();
   await expect.poll(() => retried).toEqual(["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"]);
   await expect(page.getByText("ส่งงานกลับเข้าคิวแล้ว")).toBeVisible();

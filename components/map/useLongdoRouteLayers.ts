@@ -10,6 +10,8 @@ import { groupFloodRoutesIntoEvents } from "@/lib/flood-event-schema";
 import { getTrafficPresentation } from "@/lib/traffic-presentation";
 import {
   addLineCasing,
+  bindPublicEndpointInspector,
+  buildPublicDetourEndpointPopup,
   buildDetourFallbackPinSpec,
   buildDetourPointPhotoPopupHtml,
   buildDetourPopupHtml,
@@ -65,8 +67,8 @@ export function useLongdoPopupBridge({
   useEffect(() => {
     const activeDirMap: Record<string, "FORWARD" | "REVERSE"> = {};
 
-    (window as any).__getDetourCurrentDir = (id: string) => {
-      return activeDirMap[id] || "FORWARD";
+    (window as any).__getDetourCurrentDir = (id: string, fallback: "FORWARD" | "REVERSE" = "FORWARD") => {
+      return activeDirMap[id] || fallback;
     };
 
     (window as any).__openFloodDossier = (id: string) => {
@@ -187,6 +189,9 @@ export function useLongdoPopupBridge({
 }
 
 export interface UseLongdoRouteLayersParams {
+  publicMode: boolean;
+  leafletMapRef: React.MutableRefObject<any>;
+  onFocusOverviewDetour: (id: string, direction: "FORWARD" | "REVERSE") => void;
   onActivateMapEntity?: (entity: { type: "FLOOD" | "DETOUR"; id: string }) => void;
   mapReady: boolean;
   systemData: SystemDataPayload;
@@ -210,6 +215,9 @@ export interface UseLongdoRouteLayersParams {
  * and Flood routes (polylines + de-overlapped segment/event capsule markers).
  */
 export function useLongdoRouteLayers({
+  publicMode,
+  leafletMapRef,
+  onFocusOverviewDetour,
   mapReady,
   systemData,
   mapStyles,
@@ -227,6 +235,8 @@ export function useLongdoRouteLayers({
   selectedFloodIdRef,
   onActivateMapEntity,
 }: UseLongdoRouteLayersParams) {
+  const overviewFocusRef = React.useRef(onFocusOverviewDetour);
+  overviewFocusRef.current = onFocusOverviewDetour;
   const activationRef = React.useRef(onActivateMapEntity);
   activationRef.current = onActivateMapEntity;
   const detourPhotoMarkerRefs = React.useRef<Array<{ marker: any; point: "START" | "END"; hasPhoto: boolean }>>([]);
@@ -270,9 +280,10 @@ export function useLongdoRouteLayers({
   useEffect(() => {
     const L = leafletRef.current;
     const group = detourGroupRef.current;
+    const map = leafletMapRef.current;
     detourLinesRef.current = [];
     detourPhotoMarkerRefs.current = [];
-    if (!mapReady || !L || !group) return;
+    if (!mapReady || !L || !group || !map) return;
     group.clearLayers();
     if (!effectiveShowDetourLayer) return;
     const renderer = rendererRef.current;
@@ -393,9 +404,19 @@ export function useLongdoRouteLayers({
         },
       ];
 
-      endpointEntries.forEach(({ point, photo, pin, photoTooltip, fallbackTooltip }) => {
-        if (!hasDetourPointMetadata(photo)) return;
-        if (!Number.isFinite(pin.lat) || !Number.isFinite(pin.lon)) return;
+      const anyPointMetadata = hasDetourPointMetadata(startPhoto) || hasDetourPointMetadata(endPhoto);
+      const validEntries = endpointEntries.filter(({ pin, photo }) =>
+        (publicMode ? anyPointMetadata : hasDetourPointMetadata(photo)) &&
+        Number.isFinite(pin.lat) && Number.isFinite(pin.lon) && !(pin.lat === 0 && pin.lon === 0)
+      );
+      const availablePoints = new Set(validEntries.map((entry) => entry.point));
+      const markers = new Map<"START" | "END", any>();
+      const directionForEndpoint = () => {
+        const id = String(detour.id || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const chosen = (window as Window & { __getDetourCurrentDir?: (id: string, fallback: "FORWARD" | "REVERSE") => "FORWARD" | "REVERSE" }).__getDetourCurrentDir?.(id, defaultDir);
+        return chosen && isDetourDirectionAllowed(detour.direction_mode, chosen) ? chosen : defaultDir;
+      };
+      validEntries.forEach(({ point, photo, pin, photoTooltip, fallbackTooltip }) => {
         const hasPhoto = Boolean(typeof photo?.url === "string" && photo.url.trim());
         const markerIcon = L.divIcon(
           hasPhoto ? buildDetourPhotoBadgeSpec(point) : buildDetourFallbackPinSpec(point)
@@ -407,10 +428,15 @@ export function useLongdoRouteLayers({
         })
           .bindTooltip(hasPhoto ? photoTooltip : fallbackTooltip, { direction: "top" })
           .bindPopup(
-            () => buildDetourPointPhotoPopupHtml(detour, point, photo, pin.lat, pin.lon),
-            getResponsivePopupOptions(L, 380, 280, "doh-detour-leaflet-popup")
+            () => publicMode
+              ? buildPublicDetourEndpointPopup(detour, point, photo, directionForEndpoint(), systemData.floodRoutes || [], availablePoints)
+              : buildDetourPointPhotoPopupHtml(detour, point, photo, pin.lat, pin.lon),
+            getResponsivePopupOptions(L, 380, 260, "doh-detour-leaflet-popup")
           )
           .addTo(group);
+        markers.set(point, marker);
+        if (publicMode) bindPublicEndpointInspector(L, map, marker, markers, point,
+          () => overviewFocusRef.current(detour.id, directionForEndpoint()), false);
         detourPhotoMarkerRefs.current.push({ marker, point, hasPhoto });
         syncDetourPhotoMarker(L, marker, point, currentZoom, hasPhoto);
         marker.__dohFilterId = detour.id;
@@ -429,7 +455,7 @@ export function useLongdoRouteLayers({
       detourPhotoMarkerRefs.current = [];
       group.clearLayers();
     };
-  }, [mapReady, systemData.detourRoutes, effectiveShowDetourLayer, mapStyles]);
+  }, [mapReady, systemData.detourRoutes, effectiveShowDetourLayer, mapStyles, publicMode]);
 
   // A/B photo markers reveal progressively without recreating detour layers or
   // their open popups: hidden at the default overview, compact at mid zoom,

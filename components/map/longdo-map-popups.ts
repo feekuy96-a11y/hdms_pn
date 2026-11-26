@@ -1,3 +1,4 @@
+import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
 import {
   SystemDataPayload,
   FloodRoute,
@@ -660,6 +661,108 @@ export function buildDetourPointPhotoPopupHtml(
       </div>
     </div>
   `;
+}
+
+/** Public focus inspector: endpoint selection does not change travel direction. */
+export function buildPublicDetourEndpointPopup(
+  detour: DetourRoute,
+  point: "START" | "END",
+  photo: DetourPointPhoto | null | undefined,
+  direction: DetourDirection,
+  floodRoutes: FloodRoute[],
+  availablePoints: ReadonlySet<"START" | "END">,
+): string {
+  const photoUrl = normalizeMediaUrl(photo?.url);
+  const safePhotoUrl = /^(?:https?:\/\/|data:image\/(?:png|jpe?g|webp|gif);base64,)/i.test(photoUrl) ? escapeHtml(photoUrl) : "";
+  const area = [
+    formatPopupAreaSegment("ต.", photo?.subdistrict),
+    formatPopupAreaSegment("อ.", photo?.district),
+    formatPopupAreaSegment("จ.", photo?.province),
+  ].filter(Boolean).join(" ");
+  const title = point === "START" ? "จุดเริ่มต้น A" : "จุดสิ้นสุด B";
+  const reverse = direction === "REVERSE";
+  const availableDirection = isRecordedDetourDirection(detour.direction_mode) && isDetourDirectionAllowed(detour.direction_mode, direction);
+  const advice = splitDetourAdviceByDirection(detour.description || "", detour.direction_mode ?? "");
+  const description = reverse ? advice.reverseText : advice.forwardText;
+  const timeline = availableDirection && description ? getDetourTimelinePresentation(description) : null;
+  const steps = timeline?.steps ?? [];
+  const timelineHtml = steps.length && !timeline?.directionNotice
+    ? `<ol aria-label="ลำดับจุดทางเลี่ยง" class="space-y-2">${steps.map((step, i) => {
+        const label = i === 0 ? (reverse ? "B" : "A") : i === steps.length - 1 ? (reverse ? "A" : "B") : String(i);
+        return `<li class="flex items-start gap-2 text-slate-200"><span class="inline-grid size-6 shrink-0 place-items-center rounded-full border border-slate-600 font-bold">${label}</span><div class="min-w-0 break-words"><strong>${escapeHtml(step.title)}</strong><p class="text-slate-300">${escapeHtml(step.detail)}</p></div></li>`;
+      }).join("")}</ol>`
+    : `<p class="text-slate-300">${escapeHtml(timeline?.directionNotice || "ยังไม่มีลำดับจุดที่บันทึกไว้สำหรับทิศนี้")}</p>`;
+  const nav = resolveDetourGoogleMapsNavigation(detour, direction, floodRoutes);
+  return `
+    <section data-detour-endpoint="${point}" class="doh-detour-point-photo-popup flex w-[min(20rem,calc(100vw-3rem))] max-h-[min(56dvh,31rem)] max-w-full flex-col overflow-hidden rounded-2xl bg-[#070d1e] font-body text-xs text-white" aria-label="${title}">
+      <div class="flex shrink-0 items-center justify-between gap-1.5 border-b border-slate-700 px-2 py-1.5 pr-12">
+        <strong>${title}</strong>
+        <div role="group" aria-label="เลือกจุดบนเส้นทาง" class="flex gap-1">
+          ${(["START", "END"] as const).map((role) => `<button type="button" data-endpoint-select="${role}" aria-pressed="${role === point}" ${availablePoints.has(role) ? "" : "disabled"} class="size-11 rounded-lg border border-slate-600 font-bold aria-pressed:border-sky-300 aria-pressed:bg-sky-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50">${role === "START" ? "A" : "B"}</button>`).join("")}
+        </div>
+      </div>
+      <div data-endpoint-scroll tabindex="0" aria-label="ภาพ พื้นที่ และข้อมูลทางเลี่ยง" class="min-h-0 space-y-2 overflow-y-auto overscroll-contain p-2.5">
+        ${safePhotoUrl ? `<button type="button" data-endpoint-photo aria-expanded="false" aria-label="ขยายหรือย่อภาพ ${title}" class="block w-full overflow-hidden rounded-lg border border-slate-700"><img src="${safePhotoUrl}" alt="${title}" class="h-[5.5rem] w-full object-contain"></button>` : `<p class="rounded-lg border border-dashed border-slate-700 p-3 text-center text-slate-300">ยังไม่มีภาพถ่ายประกอบจุดนี้</p>`}
+        <h5 class="text-sm font-bold break-words">${escapeHtml(detour.route_name)}</h5>
+        <p data-endpoint-locality class="text-sky-200 break-words">${escapeHtml(area || "ยังไม่พบข้อมูลพื้นที่ ต./อ./จ.")}</p>
+        <p class="text-slate-200 break-words">${escapeHtml(photo?.caption?.trim() || "ยังไม่มีคำอธิบายจุดนี้")}</p>
+        <div class="space-y-2 border-t border-slate-700 pt-2">
+          <h6 class="font-bold">ลำดับจุดทางเลี่ยง · ${reverse ? "ขากลับ B → A" : "ขาไป A → B"}</h6>
+          ${timelineHtml}
+        </div>
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2 border-t border-slate-700 pt-2">
+          ${nav.isValid && nav.url ? `<a href="${escapeHtml(nav.url)}" target="_blank" rel="noopener noreferrer" class="grid min-h-11 place-items-center rounded-lg bg-amber-400 px-2 text-center font-bold text-slate-950">ดูบน Google Maps</a>` : `<span title="${escapeHtml(nav.warning || "")}" class="grid min-h-11 place-items-center rounded-lg border border-slate-700 p-2 text-center text-slate-300">${escapeHtml(nav.warning || "ยังไม่ยืนยันนำทาง")}</span>`}
+          <button type="button" data-endpoint-focus class="min-h-11 rounded-lg border border-slate-600 bg-[#13203c] px-2 font-bold">ดูตำแหน่งบนแผนที่</button>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+/** Both public overview and focused endpoints bind the same one-popup interaction. */
+export function bindPublicEndpointInspector(
+  L: any, map: any, marker: any, markers: Map<"START" | "END", any>, point: "START" | "END",
+  openFocus: () => void, keepFocusBarClear: boolean,
+) {
+  marker.on("popupopen", (event: { popup: { getElement: () => HTMLElement | null; options: { autoPanPaddingTopLeft: unknown; autoPanPaddingBottomRight: unknown }; update: () => void } }) => {
+    if (keepFocusBarClear) {
+      const bounds = map.getContainer().getBoundingClientRect();
+      const bar = map.getContainer().parentElement?.parentElement?.querySelector('[data-testid="gis-focus-mode-bar"]')?.getBoundingClientRect();
+      if (bar) {
+        const wide = window.innerWidth >= 640;
+        event.popup.options.autoPanPaddingTopLeft = L.point(20, wide ? Math.max(64, Math.ceil(bar.bottom - bounds.top + 12)) : 20);
+        if (!wide) event.popup.options.autoPanPaddingBottomRight = L.point(20, Math.max(112, Math.ceil(bounds.bottom - bar.top + 8)));
+        event.popup.update();
+      }
+    }
+    const popup = event.popup.getElement()?.querySelector<HTMLElement>("[data-detour-endpoint]");
+    if (!popup) return;
+    popup.querySelector<HTMLButtonElement>("[data-endpoint-select][aria-pressed=true]")?.focus({ preventScroll: true });
+    popup.onclick = (click) => {
+      const button = click.target instanceof Element ? click.target.closest("button") : null;
+      if (!button) return;
+      const destination = button.getAttribute("data-endpoint-select");
+      if (destination === "START" || destination === "END") {
+        if (destination !== point) markers.get(destination)?.openPopup();
+        return;
+      }
+      if (button.hasAttribute("data-endpoint-focus")) {
+        map.closePopup();
+        openFocus();
+      } else if (button.hasAttribute("data-endpoint-photo")) {
+        const expand = button.getAttribute("aria-expanded") !== "true";
+        button.setAttribute("aria-expanded", String(expand));
+        const image = button.querySelector("img");
+        if (image) image.style.height = expand ? "auto" : "";
+      }
+    };
+    popup.onkeydown = (key) => {
+      if (key.key !== "Escape") return;
+      key.stopPropagation();
+      map.closePopup();
+      marker.getElement()?.focus({ preventScroll: true });
+    };
+  });
 }
 
 export function formatPopupAreaSegment(prefix: string, value?: string | null): string | null {

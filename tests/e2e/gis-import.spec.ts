@@ -2,13 +2,20 @@ import { expect, test } from "@playwright/test";
 
 const base = process.env.BASE_PATH || "";
 
-test("KML import previews a valid route without reloading or crashing", async ({ page }) => {
+test("KML import previews a valid route without reloading or crashing", async ({ page }, testInfo) => {
   await page.goto(`${base}/admin/`);
   const sidebar = page.getByRole("complementary");
-  const routeMenu = await sidebar.count()
+  const desktopLayout = (await sidebar.count()) > 0;
+  if (!desktopLayout) await page.getByText("เครื่องมือและตั้งค่า", { exact: true }).click();
+  const routeMenu = desktopLayout
     ? sidebar.getByRole("button", { name: /โครงข่ายสายทาง/ })
     : page.getByRole("button", { name: "โครงข่ายสายทาง", exact: true });
   await routeMenu.click();
+  const sections = page.getByRole("navigation", { name: "ส่วนงานโครงข่าย" });
+  await sections.getByRole("button", { name: "ดูสายทางในระบบ" }).click();
+  await expect(page.getByRole("region", { name: "สายทางที่บันทึกไว้" })).toBeFocused();
+  await sections.getByRole("button", { name: "นำเข้าและตรวจสอบไฟล์" }).click();
+  await expect(page.getByRole("region", { name: "นำเข้าและตรวจสอบไฟล์ GIS" })).toBeFocused();
 
   const kml = `<?xml version="1.0" encoding="UTF-8"?>
     <kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark>
@@ -25,6 +32,7 @@ test("KML import previews a valid route without reloading or crashing", async ({
 
   await expect(page.getByText("ตรวจสอบโครงข่ายสำเร็จ", { exact: false })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(/พบเส้นทาง 1 เส้นในไฟล์/)).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("utilities-gis.png"), animations: "disabled" });
   await expect(page.locator("body")).not.toContainText("Database operation failed");
   await expect(page.locator("body")).not.toContainText("but-unzip");
 });

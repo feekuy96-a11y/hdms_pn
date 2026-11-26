@@ -299,7 +299,7 @@ export function FloodDossierDetourSection({
                 )}
 
                 {/* Per-Detour Navigation & Focus Actions (Always visible directly on list item) */}
-                <div className="grid grid-cols-2 gap-2 border-t border-slate-700/60 px-3.5 py-2.5">
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2 border-t border-slate-700/60 px-3.5 py-2.5">
                   {detourNav && detourNav.isValid && detourNav.url ? (
                     <a
                       href={detourNav.url}

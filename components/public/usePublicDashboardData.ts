@@ -17,6 +17,22 @@ import {
 import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
 
+export type PublicFloodAlbumPhoto = { dataUrl: string; sizeBytes?: number; id?: string };
+export type PublicFloodAlbum =
+  | { status: "loading" | "empty" | "failed" }
+  | { status: "photos"; photos: PublicFloodAlbumPhoto[] };
+
+function readAlbumPhotos(raw: unknown[]): PublicFloodAlbumPhoto[] {
+  return raw.flatMap((photo) => {
+    if (!photo || typeof photo !== "object" || !("dataUrl" in photo)) return [];
+    const dataUrl = normalizeMediaUrl(photo.dataUrl).trim();
+    if (!/^(?:https?:\/\/[^\s]+|data:image\/[a-z.+-]+[;,]|\/(?!\/))/i.test(dataUrl)) return [];
+    const id = "id" in photo && typeof photo.id === "string" ? photo.id : undefined;
+    const sizeBytes = "sizeBytes" in photo && typeof photo.sizeBytes === "number" ? photo.sizeBytes : undefined;
+    return [{ dataUrl, id, sizeBytes }];
+  });
+}
+
 export interface UsePublicDashboardDataParams {
   selectedFloodId: string;
   sidebarTab: "FLOOD" | "DETOUR";
@@ -24,6 +40,7 @@ export interface UsePublicDashboardDataParams {
   selectedRouteFilter: string;
   setSelectedRouteFilter: (v: string) => void;
   selectedStatusFilter: StatusColor | "ALL";
+  matchFloodPassability?: (route: FloodRoute) => boolean;
   showToast: (msg: string) => void;
 }
 
@@ -34,13 +51,13 @@ export function usePublicDashboardData({
   selectedRouteFilter,
   setSelectedRouteFilter,
   selectedStatusFilter,
+  matchFloodPassability,
   showToast,
 }: UsePublicDashboardDataParams) {
   const isPollingActive = usePollingActivity();
   const previousDataFingerprint = useRef<string>("");
-  const [onDemandPhotos, setOnDemandPhotos] = useState<
-    Record<string, Array<{ dataUrl?: string; sizeBytes?: number; id?: string }>>
-  >({});
+  const [floodAlbums, setFloodAlbums] = useState<Record<string, PublicFloodAlbum>>({});
+  const floodAlbumCache = useRef(new Map<string, PublicFloodAlbum>());
 
   // TanStack Query for Data Fetching & Sync with automatic background refetch (Network-First live data)
   const { data: systemData = INITIAL_SYSTEM_DATA, isPending, isError, refetch } = useQuery<SystemDataPayload>({
@@ -165,9 +182,10 @@ export function usePublicDashboardData({
         searchQuery,
         routeFilter: selectedRouteFilter,
         statusFilter: selectedStatusFilter,
+        matchFloodPassability,
         includeInactive: false,
       }),
-    [systemData, searchQuery, selectedRouteFilter, selectedStatusFilter]
+    [systemData, searchQuery, selectedRouteFilter, selectedStatusFilter, matchFloodPassability]
   );
 
   const situationCounts = useMemo(() => {
@@ -199,30 +217,36 @@ export function usePublicDashboardData({
   // On-demand load of full photo album (photos 1..4) without bloating initial page payload
   const loadFloodPhotosOnDemand = useCallback(
     (flood: FloodRoute) => {
-      if (onDemandPhotos[flood.id]) return;
+      const cached = floodAlbumCache.current.get(flood.id);
+      if (cached && cached.status !== "failed") return;
+      const save = (album: PublicFloodAlbum) => {
+        floodAlbumCache.current.set(flood.id, album);
+        setFloodAlbums((prev) => ({ ...prev, [flood.id]: album }));
+      };
+      save({ status: "loading" });
       void (async () => {
         try {
           const client = createClient();
-          const { data } = await client
+          const { data, error } = await client
             .from("doh_flood_routes")
             .select("direction_meta")
             .eq("id", flood.id)
             .maybeSingle();
-          if (data?.direction_meta?.photos && Array.isArray(data.direction_meta.photos) && data.direction_meta.photos.length > 0) {
-            const normalizedPhotos = data.direction_meta.photos.map(
-              (p: { dataUrl?: string; sizeBytes?: number; id?: string }) => ({
-                ...p,
-                dataUrl: normalizeMediaUrl(p?.dataUrl),
-              })
-            );
-            setOnDemandPhotos((prev) => ({ ...prev, [flood.id]: normalizedPhotos }));
+          const raw = data?.direction_meta?.photos;
+          if (error || (raw != null && !Array.isArray(raw))) {
+            save({ status: "failed" });
+          } else if (!raw?.length) {
+            save({ status: "empty" });
+          } else {
+            const photos = readAlbumPhotos(raw);
+            save(photos.length ? { status: "photos", photos } : { status: "failed" });
           }
         } catch {
-          // Fallback to primary photo already available
+          save({ status: "failed" });
         }
       })();
     },
-    [onDemandPhotos]
+    []
   );
 
   const detourCountByFloodId = useMemo(() => {
@@ -250,7 +274,7 @@ export function usePublicDashboardData({
     isPending,
     isError,
     refetch,
-    onDemandPhotos,
+    floodAlbums,
     loadFloodPhotosOnDemand,
     selectedFlood,
     selectedFloodMeta,

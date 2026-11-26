@@ -3,7 +3,7 @@ import JSZip from "jszip";
 
 const menus = [
   ["จัดการระบบ", "ข้อมูลทั่วไปและเบอร์โทรฉุกเฉิน"],
-  ["จัดการแผนที่", "จัดการแผนที่และรายงานเหตุการณ์"],
+  ["รายงานสถานการณ์น้ำท่วม", "รายงานสถานการณ์น้ำท่วม"],
   ["รายการเหตุการณ์", "ทะเบียนเหตุการณ์น้ำท่วม"],
   ["รายการทางเลี่ยง", "เส้นทางเลี่ยงทั้งหมด"],
   ["โครงข่ายสายทาง", "โครงข่ายสายทาง"],
@@ -12,23 +12,29 @@ const menus = [
 ] as const;
 const base = process.env.BASE_PATH || "";
 const mockHighwayAndOffice = async (page: import("@playwright/test").Page) => {
-  await page.route("**/functions/v1/hdms-api*", (route) => route.fulfill({ json: {
-    updatedAt: "2026-11-25T00:00:00.000Z",
-    floodRoutes: [], detourRoutes: [], timelineUpdates: [], mitigationProjects: [], mapStyles: null,
-    systemSettings: { name: "ระบบทดสอบ", org: "แขวงทางหลวงปัตตานี", phone: "1586" },
-    offices: [{
-      id: "OFFICE-QA-1", name: "สำนักงานทดสอบ", type: "HEADQUARTERS", address: "ปัตตานี",
-      phone: "1586", lat: 6.84, lon: 101.20, is_active: true,
-    }],
-    highwayLayers: [{
-      layer_id: "MAIN_HIGHWAY", layer_name: "ทางหลวงสายหลัก", is_visible: true, metadata: {},
-      geojson_data: { type: "FeatureCollection", features: [{
-        type: "Feature",
-        properties: { route_no: "42", section_name: "ตอนทดสอบแก้แนว", km_start: "0+000", km_end: "1+000", lanes: "4" },
-        geometry: { type: "LineString", coordinates: [[101.20, 6.84], [101.26, 6.88], [101.32, 6.92]] },
-      }] },
-    }],
-  } }));
+  await page.route("**/functions/v1/hdms-api*", (route) => {
+    const request = route.request();
+    if (request.method() === "POST" && request.postDataJSON()?.action === "getExternalJobsAction") {
+      return route.fulfill({ json: { jobs: [], counts: { pending: 0, processing: 0, failed: 0, done: 0 } } });
+    }
+    return route.fulfill({ json: {
+      updatedAt: "2026-11-25T00:00:00.000Z",
+      floodRoutes: [], detourRoutes: [], timelineUpdates: [], mitigationProjects: [], mapStyles: null,
+      systemSettings: { name: "ระบบทดสอบ", org: "แขวงทางหลวงปัตตานี", phone: "1586" },
+      offices: [{
+        id: "OFFICE-QA-1", name: "สำนักงานทดสอบ", type: "HEADQUARTERS", address: "ปัตตานี",
+        phone: "1586", lat: 6.84, lon: 101.20, is_active: true,
+      }],
+      highwayLayers: [{
+        layer_id: "MAIN_HIGHWAY", layer_name: "ทางหลวงสายหลัก", is_visible: true, metadata: {},
+        geojson_data: { type: "FeatureCollection", features: [{
+          type: "Feature",
+          properties: { route_no: "42", section_name: "ตอนทดสอบแก้แนว", km_start: "0+000", km_end: "1+000", lanes: "4" },
+          geometry: { type: "LineString", coordinates: [[101.20, 6.84], [101.26, 6.88], [101.32, 6.92]] },
+        }] },
+      }],
+    } });
+  });
 };
 const openMenu = async (page: import("@playwright/test").Page, menu: string) => {
   await page.getByRole("complementary").getByRole("button", { name: new RegExp(menu) }).click();
@@ -45,6 +51,39 @@ test("admin menus open real workspaces without UI errors", async ({ page }) => {
     await expect(page.locator("body")).not.toContainText("Application error");
     await expect(page.locator("body")).not.toContainText("Unhandled Runtime Error");
   }
+});
+
+test("mobile Admin exposes daily work first and all secondary destinations in Tools", async ({ page, isMobile }, testInfo) => {
+  test.skip(!isMobile, "Mobile navigation is covered by the touch project");
+  await mockHighwayAndOffice(page);
+  await page.goto(`${base}/admin/`);
+  const nav = page.getByRole("navigation", { name: "เมนูจัดการแอดมินมือถือ" });
+  const daily = nav.getByRole("group", { name: "งานภาคสนาม" });
+  await expect(daily.getByRole("button")).toHaveCount(3);
+  await expect(daily.getByRole("button", { name: "รายงานสถานการณ์น้ำท่วม" })).toHaveAttribute("aria-current", "page");
+  const tools = nav.locator("details");
+  await expect(tools).not.toHaveAttribute("open", "");
+  await tools.locator("summary").tap();
+  for (const [menu, landmark] of menus.filter(([menu]) => ["โครงข่ายสายทาง", "สไตล์เส้นทาง", "งานเบื้องหลัง", "จัดการระบบ"].includes(menu))) {
+    await tools.getByRole("button", { name: menu, exact: true }).tap();
+    await expect(tools.getByRole("button", { name: menu, exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".doh-form").getByText(landmark, { exact: false }).first()).toBeVisible();
+    if (menu === "จัดการระบบ" || menu === "สไตล์เส้นทาง") {
+      await tools.locator("summary").tap();
+      await page.screenshot({ path: testInfo.outputPath(menu === "จัดการระบบ" ? "utilities-system.png" : "utilities-style.png"), animations: "disabled" });
+      if (menu === "จัดการระบบ") {
+        const jump = page.getByRole("navigation", { name: "ส่วนงานข้อมูลระบบ" });
+        await jump.getByRole("button", { name: "หมุดสำนักงานและจุดบริการ" }).click();
+        await expect(page.locator("#office-points")).toBeFocused();
+      } else {
+        await expect(page.getByRole("group", { name: "เลือกชั้นข้อมูลที่จะปรับ" })).toBeVisible();
+      }
+      await tools.locator("summary").tap();
+    }
+  }
+  await expect(tools.getByRole("button", { name: /โครงการผู้ว่า/ })).toHaveCount(0);
+  await daily.getByRole("button", { name: "รายงานสถานการณ์น้ำท่วม" }).tap();
+  await expect(page.getByRole("heading", { name: "รายงานสถานการณ์น้ำท่วม" })).toBeVisible();
 });
 
 test("highway specifications use kilometer posts, office data, and calculated distance", async ({ page }) => {
@@ -107,7 +146,7 @@ test("admin workspaces expose their primary controls", async ({ page }) => {
 test("route editor keeps A and B markers visible and permits a map bend point", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Map editing is verified in the desktop workspace");
   await page.goto(`${base}/admin/`);
-  await openMenu(page, "จัดการแผนที่");
+  await openMenu(page, "รายงานสถานการณ์น้ำท่วม");
   const pointA = page.getByLabel("พิกัดจุด A");
   const pointB = page.getByLabel("พิกัดจุด B");
   await pointA.fill("6.8340, 101.1860");
@@ -154,9 +193,9 @@ test("short flood draft allows adding and dragging an interior vertex at default
   } }));
   await page.goto(`${base}/admin/`);
   if (isMobile) {
-    await page.getByRole("navigation", { name: "เมนูจัดการแอดมินมือถือ" }).getByRole("button", { name: /จัดการแผนที่/ }).tap();
+    await page.getByRole("navigation", { name: "เมนูจัดการแอดมินมือถือ" }).getByRole("button", { name: /รายงานสถานการณ์น้ำท่วม/ }).tap();
   } else {
-    await openMenu(page, "จัดการแผนที่");
+    await openMenu(page, "รายงานสถานการณ์น้ำท่วม");
   }
   for (const [label, value] of [["พิกัดจุด A", "6.8340, 101.1860"], ["พิกัดจุด B", "6.8390, 101.1920"]]) {
     await page.getByLabel(label).fill(value);
@@ -177,7 +216,7 @@ test("short flood draft allows adding and dragging an interior vertex at default
 test("route editor lists and removes an individual bend point", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Map editing is verified in the desktop workspace");
   await page.goto(`${base}/admin/`);
-  await openMenu(page, "จัดการแผนที่");
+  await openMenu(page, "รายงานสถานการณ์น้ำท่วม");
   await page.getByLabel("พิกัดจุด A").fill("6.8340, 101.1860");
   await page.getByLabel("พิกัดจุด A").blur();
   await page.getByLabel("พิกัดจุด B").fill("6.8390, 101.1920");
@@ -203,7 +242,7 @@ test("detour routing can force a straight heading through a selected intersectio
     });
   });
   await page.goto(`${base}/admin/`);
-  await openMenu(page, "จัดการแผนที่");
+  await openMenu(page, "รายงานสถานการณ์น้ำท่วม");
   await page.getByRole("button", { name: "ทางเลี่ยง", exact: true }).click();
   await page.getByLabel("พิกัดจุด A").fill("6.8340, 101.1860");
   await page.getByLabel("พิกัดจุด A").blur();
@@ -238,7 +277,7 @@ test("office markers unlock only while their record is being edited", async ({ p
 test("map management exposes all approved traffic choices without color labels", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop sidebar navigation is covered here; mobile smoke is separate");
   await page.goto(`${base}/admin/`);
-  await openMenu(page, "จัดการแผนที่");
+  await openMenu(page, "รายงานสถานการณ์น้ำท่วม");
   for (const label of [
     "ผ่านได้ปกติ",
     "รถทุกชนิดผ่านได้แต่ไม่สะดวก",
@@ -255,7 +294,7 @@ test("map management exposes all approved traffic choices without color labels",
 test("map workflows expose import, safe reset, and multi-format exports", async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop administration workflow");
   await page.goto(`${base}/admin/`);
-  await openMenu(page, "จัดการแผนที่");
+  await openMenu(page, "รายงานสถานการณ์น้ำท่วม");
   await expect(page.getByText("นำเข้าแนวเส้นเพื่อแก้รายละเอียดภายหลัง", { exact: false })).toBeVisible();
   await expect(page.getByText("บันทึกเป็นฉบับร่าง (ยังไม่แสดงบนแผนที่ประชาชน)", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "ล้างข้อมูลทั้งหมด" })).toBeVisible();
@@ -728,9 +767,9 @@ test("two-way detour supports separate B->A pins and freeform endpoint/vertex cu
 
   await page.goto(`${base}/admin/`);
   if (isMobile) {
-    await page.getByRole("navigation", { name: "เมนูจัดการแอดมินมือถือ" }).getByRole("button", { name: /จัดการแผนที่/ }).tap();
+    await page.getByRole("navigation", { name: "เมนูจัดการแอดมินมือถือ" }).getByRole("button", { name: /รายงานสถานการณ์น้ำท่วม/ }).tap();
   } else {
-    await openMenu(page, "จัดการแผนที่");
+    await openMenu(page, "รายงานสถานการณ์น้ำท่วม");
   }
   await page.getByRole("button", { name: "ทางเลี่ยง", exact: true }).click();
   await page.getByPlaceholder("เช่น ทางเลี่ยง ทล.4092 สายหนองจิก - โคกโพธิ์").fill("ทางเลี่ยงทดสอบแยกหมุดสองทิศทาง");

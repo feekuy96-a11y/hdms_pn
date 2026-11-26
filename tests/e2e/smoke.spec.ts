@@ -16,17 +16,33 @@ test("admin route opens directly", async ({ page }) => {
 });
 
 test("public search exposes a recoverable empty state", async ({ page }) => {
+  await page.route(/\/functions\/v1\/hdms-api\/?$/, (route) => route.fulfill({
+    json: {
+      updatedAt: "2026-11-25T07:20:00.000Z",
+      floodRoutes: [{
+        id: "F-SEARCH-43", route_no: "43", section_name: "หนองจิก ทดสอบค้นหา",
+        km_start: "97+100", km_end: "97+200", lat_start: 6.88, lon_start: 101.19,
+        lat_end: 6.89, lon_end: 101.20, coordinates_json: [[101.19, 6.88], [101.20, 6.89]],
+        water_level_cm: 20, traffic_status: "CLOSED", is_active: true, updated_at: "2026-11-25T07:20:00.000Z",
+      }], detourRoutes: [], timelineUpdates: [], mitigationProjects: [],
+      highwayLayers: [], offices: [], mapStyles: null, systemSettings: null,
+    },
+  }));
   await page.goto(`${base}/`);
-  const mobileList = page.getByRole("button", { name: "ดูรายการสายทาง" });
+  const mobileList = page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true });
   if ((page.viewportSize()?.width || 1280) < 1024) {
     await expect(mobileList).toBeVisible();
     await mobileList.click();
   }
   const search = page.locator('input[placeholder*="ค้นหาสายทาง"]:visible').first();
+  const incident = page.locator("article:visible").filter({ hasText: "หนองจิก ทดสอบค้นหา" });
+  await expect(incident).toBeVisible();
   await search.fill("ไม่มีข้อมูลนี้");
-  await expect(page.locator("p:visible, h4:visible").filter({ hasText: /ยังไม่มีรายงานจุดน้ำท่วม|ไม่พบจุดที่ตรงกับตัวกรอง/ }).first()).toBeVisible();
+  await expect(incident).toHaveCount(0);
+  await expect(page.getByText(/ไม่พบจุดที่ตรงกับตัวกรอง/).filter({ visible: true })).toBeVisible();
   await page.getByRole("button", { name: "ล้างตัวกรอง" }).filter({ visible: true }).click();
   await expect(search).toHaveValue("");
+  await expect(incident).toBeVisible();
 });
 
 test("public incident details group linked detours and keep standalone detours searchable", async ({ page }) => {
@@ -74,10 +90,10 @@ test("public incident details group linked detours and keep standalone detours s
 
   await page.goto(`${base}/`);
   if ((page.viewportSize()?.width || 1280) < 1024) {
-    await page.getByRole("button", { name: "ดูรายการสายทาง" }).click();
+    await page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
   }
 
-  await expect(page.getByRole("button", { name: /สัญลักษณ์บนแผนที่|สัญลักษณ์/, exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /เลเยอร์/, exact: true })).toBeVisible();
   await expect(page.locator(".doh-map-capsule-pin").first()).toBeVisible();
   await expect(page.locator(".doh-map-capsule-pin svg").first()).toHaveAttribute("stroke", "white");
   await expect(page.locator(".doh-detour-symbol").first()).toBeVisible();
@@ -92,5 +108,7 @@ test("public incident details group linked detours and keep standalone detours s
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText(/รถเล็กผ่านได้ ๑ ช่องทาง/).first()).toBeVisible();
   await expect(dialog.getByText("ทางเลี่ยงจุดน้ำท่วม ทล.42", { exact: true })).toBeVisible();
-  await expect(dialog.getByText(/อัปเดตล่าสุด:/)).toBeVisible();
+  const recordedUpdate = dialog.getByRole("group", { name: "ช่วงถนน พื้นที่ และเวลาอัปเดต" }).locator("time");
+  await expect(recordedUpdate).toBeVisible();
+  await expect(recordedUpdate).toHaveAttribute("datetime", updatedAt);
 });

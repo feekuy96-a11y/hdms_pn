@@ -1,21 +1,21 @@
 "use client";
 
 import React from "react";
-import { Droplets, Maximize2, Minimize2, Route, Search, X } from "lucide-react";
+import { Waves, Map, Maximize2, Minimize2, Phone, Route, Search, X } from "lucide-react";
 import type { DetourRoute, FloodRoute } from "@/db/default-data";
 import type { StatusColor } from "@/lib/traffic-presentation";
-import { SUMMARY_ITEMS } from "@/components/public/public-route-helpers";
 import { SituationSummary } from "@/components/public/SituationSummary";
 import { FloodCard } from "@/components/public/FloodCard";
 
 export interface MobileCitizenDrawerProps {
+  openContacts: (event: React.MouseEvent<HTMLButtonElement>) => void;
   isMobileDrawerOpen: boolean;
   setIsMobileDrawerOpen: (open: boolean) => void;
   showDossier: boolean;
   viewingDetourModal: DetourRoute | null;
-  activeFloodCount: number;
   situationCounts: Record<StatusColor, number>;
   selectedStatusFilter: StatusColor | "ALL";
+  mapStatusFilterLabel?: string;
   setSelectedStatusFilter: (filter: StatusColor | "ALL") => void;
   handleStatusFilter: (color: StatusColor) => void;
   mobileDrawerStage: "peek" | "list" | "full";
@@ -36,17 +36,19 @@ export interface MobileCitizenDrawerProps {
   handleOpenFloodDetourSection: (flood: FloodRoute) => void;
   detourList: React.ReactNode;
   isError: boolean;
+  isPending: boolean;
   refetch: () => Promise<unknown> | void;
 }
 
 export function MobileCitizenDrawer({
+  openContacts,
   isMobileDrawerOpen,
   setIsMobileDrawerOpen,
   showDossier,
   viewingDetourModal,
-  activeFloodCount,
   situationCounts,
   selectedStatusFilter,
+  mapStatusFilterLabel,
   setSelectedStatusFilter,
   handleStatusFilter,
   mobileDrawerStage,
@@ -67,64 +69,43 @@ export function MobileCitizenDrawer({
   handleOpenFloodDetourSection,
   detourList,
   isError,
+  isPending,
   refetch,
 }: MobileCitizenDrawerProps) {
+  const openSection = (section: "FLOOD" | "DETOUR") => {
+    setSidebarTab(section);
+    setMobileDrawerStage((stage) => stage === "peek" ? "list" : stage);
+    setIsMobileDrawerOpen(true);
+  };
+  const showNavigation = !showDossier && !viewingDetourModal && !isMobileDrawerOpen;
+  const navAction = "flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-center text-[0.75rem] leading-tight font-heading font-semibold text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 touch-manipulation";
   return (
     <>
-      {/* 1. Compact Situation bar on mobile when drawer & dossier are closed */}
-      {!isMobileDrawerOpen && !showDossier && (
-        <div className="lg:hidden fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[450] rounded-2xl border border-amber-500/50 bg-surface-floating px-3 py-2.5 shadow-2xl">
-          <div className="flex items-center justify-between gap-2.5">
-            <div className="min-w-0 flex-1">
-              <p className="font-heading text-sm font-bold leading-snug tracking-normal text-white truncate">
-                จุดเฝ้าระวังน้ำท่วม {activeFloodCount} จุด
-              </p>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.75rem] text-slate-300">
-                {SUMMARY_ITEMS.filter((item) => situationCounts[item.color] > 0).length > 0 ? (
-                  SUMMARY_ITEMS.filter((item) => situationCounts[item.color] > 0).map((item) => (
-                    <button
-                      key={item.color}
-                      type="button"
-                      aria-pressed={selectedStatusFilter === item.color}
-                      aria-label={`${situationCounts[item.color]} ${item.label}`}
-                      title={item.label}
-                      onClick={() => handleStatusFilter(item.color)}
-                      className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2 py-1 whitespace-nowrap transition touch-manipulation cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 ${
-                        selectedStatusFilter === item.color
-                          ? "border-amber-400/80 bg-surface-card text-white"
-                          : "border-surface bg-surface-panel/70 hover:bg-surface-card text-slate-200"
-                      }`}
-                    >
-                      <span aria-hidden="true" className={`h-2 w-2 rounded-full ${item.dot}`} />
-                      <strong className="font-mono text-white">{situationCounts[item.color]}</strong>
-                    </button>
-                  ))
-                ) : (
-                  <span className="truncate">ยังไม่มีจุดเฝ้าระวัง</span>
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsMobileDrawerOpen(true)}
-              className="min-h-11 shrink-0 rounded-xl bg-amber-500 px-3.5 font-heading text-xs sm:text-sm font-black tracking-normal text-slate-950 shadow-lg transition hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white flex items-center gap-1.5 cursor-pointer"
-            >
-              <Search className="h-4 w-4 shrink-0" />
-              <span>ดูรายการสายทาง</span>
-            </button>
-          </div>
-        </div>
+      {showNavigation && (
+        <nav aria-label="เมนูประชาชน" className="citizen-nav fixed inset-x-0 bottom-0 z-[460] grid min-h-14 grid-cols-4 items-center gap-1 border-t border-surface bg-surface-panel px-1 pt-0.5 pb-[max(0.125rem,env(safe-area-inset-bottom))] lg:hidden">
+          <button type="button" aria-current="page" className={navAction + " bg-surface-card text-sky-200"} onClick={() => setIsMobileDrawerOpen(false)}>
+            <Map className="size-[1.125rem]" aria-hidden="true" />แผนที่
+          </button>
+          <button type="button" className={navAction} onClick={() => openSection("FLOOD")}>
+            <Waves className="size-[1.125rem]" aria-hidden="true" /><span><span className="whitespace-nowrap">เหตุการณ์</span><wbr /><span className="whitespace-nowrap">น้ำท่วม</span></span>
+          </button>
+          <button type="button" className={navAction} onClick={() => openSection("DETOUR")}>
+            <Route className="size-[1.125rem]" aria-hidden="true" />ทางเลี่ยง
+          </button>
+          <button type="button" data-citizen-contact onClick={openContacts} className={navAction}>
+            <Phone className="size-[1.125rem]" aria-hidden="true" />ติดต่อ
+          </button>
+        </nav>
       )}
-
       {/* Mobile citizen list: one sheet, three heights; never stack it behind detour details. */}
-      {isMobileDrawerOpen && !viewingDetourModal && (
+      {isMobileDrawerOpen && !showDossier && !viewingDetourModal && (
         <div className="lg:hidden fixed inset-0 z-[650] flex flex-col justify-end bg-slate-950/65" onClick={() => setIsMobileDrawerOpen(false)}>
           <div
             role="dialog"
             aria-modal="true"
             aria-label="รายการสายทางและจุดเฝ้าระวัง"
             onClick={(event) => event.stopPropagation()}
-            className={`flex w-full flex-col overflow-hidden rounded-t-3xl border-t border-amber-500/60 bg-surface-panel text-slate-100 shadow-2xl transition-[height] duration-200 motion-reduce:transition-none ${mobileDrawerStage === "full" ? "h-[95dvh]" : mobileDrawerStage === "peek" ? "h-[14.6875rem]" : "h-[78dvh]"
+            className={`citizen-drawer flex w-full flex-col overflow-y-auto overscroll-contain rounded-t-3xl border-t border-amber-500/60 bg-surface-panel text-slate-100 shadow-2xl transition-[height] duration-200 motion-reduce:transition-none ${mobileDrawerStage === "full" ? "h-[95dvh]" : mobileDrawerStage === "peek" ? "h-[14.6875rem]" : "h-[78dvh]"
               }`}
           >
             <div className="shrink-0 border-b border-surface bg-surface-panel px-3 pb-3 pt-2">
@@ -138,8 +119,8 @@ export function MobileCitizenDrawer({
               </button>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 py-0.5">
-                  <h2 className="font-heading text-lg font-bold leading-snug tracking-normal text-white break-words [overflow-wrap:anywhere]">สถานการณ์ทางหลวง</h2>
-                  <p className="mt-0.5 text-xs text-slate-300">ข้อมูลน้ำท่วมและเส้นทางเลี่ยง</p>
+                  <h2 className="font-heading text-lg font-bold leading-snug tracking-normal text-white break-words [overflow-wrap:anywhere]">{sidebarTab === "FLOOD" ? "เหตุการณ์น้ำท่วม" : "ทางเลี่ยง"}</h2>
+                  <p className="mt-0.5 text-xs text-slate-300">{sidebarTab === "FLOOD" ? "ค้นหาตามสายทาง พื้นที่ หรือสถานะ" : "ดูเส้นทางที่แนะนำและทิศที่ยืนยันแล้ว"}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
@@ -160,9 +141,9 @@ export function MobileCitizenDrawer({
                   </button>
                 </div>
               </div>
-              {selectedStatusFilter !== "ALL" && (
+              {(selectedStatusFilter !== "ALL" || mapStatusFilterLabel) && (
                 <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-amber-400/40 bg-amber-950/35 px-2.5 py-1.5 text-xs">
-                  <span className="text-amber-100">กำลังกรองตามสถานะที่เลือก</span>
+                  <span className="text-amber-100">{mapStatusFilterLabel ? "กำลังกรอง: " + mapStatusFilterLabel : "กำลังกรองตามสถานะที่เลือก"}</span>
                   <button
                     type="button"
                     onClick={() => setSelectedStatusFilter("ALL")}
@@ -172,9 +153,9 @@ export function MobileCitizenDrawer({
                   </button>
                 </div>
               )}
-              <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-surface bg-slate-900/90 p-1 text-xs font-heading font-bold" role="group" aria-label="ประเภทข้อมูล">
+              <div className="citizen-section-tabs mt-3 grid grid-cols-2 gap-1 rounded-xl border border-surface bg-slate-900/90 p-1 text-xs font-heading font-bold" role="group" aria-label="ประเภทข้อมูล">
                 {([
-                  { id: "FLOOD", label: "น้ำท่วม", count: filteredFloods.length, Icon: Droplets },
+                  { id: "FLOOD", label: "น้ำท่วม", count: filteredFloods.length, Icon: Waves },
                   { id: "DETOUR", label: "ทางเลี่ยง", count: filteredDetours.length, Icon: Route },
                 ] as const).map(({ id, label, count, Icon }) => (
                   <button
@@ -221,7 +202,7 @@ export function MobileCitizenDrawer({
               )}
             </div>
             {mobileDrawerStage !== "peek" && (
-              <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+              <div className="space-y-2.5 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
                 <p className="text-xs text-slate-300" role="status">
                   พบ {sidebarTab === "FLOOD" ? filteredFloods.length : filteredDetours.length} รายการ
                 </p>
@@ -242,7 +223,7 @@ export function MobileCitizenDrawer({
                 {sidebarTab === "DETOUR" && detourList}
                 {((sidebarTab === "FLOOD" && filteredFloods.length === 0) || (sidebarTab === "DETOUR" && filteredDetours.length === 0)) && (
                   <div className="rounded-xl border border-slate-700 p-4 text-sm text-slate-300">
-                    <p>{sidebarTab === "DETOUR" ? "ไม่พบเส้นทางเลี่ยงที่ตรงกับคำค้นหา" : totalFloodCount === 0 ? "ยังไม่มีรายงานจุดน้ำท่วม" : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p>
+                    <p>{isError && !totalFloodCount ? "ยังตรวจสอบข้อมูลล่าสุดไม่ได้" : isPending ? "กำลังตรวจสอบข้อมูล…" : sidebarTab === "DETOUR" ? "ไม่พบเส้นทางเลี่ยงที่ตรงกับคำค้นหา" : totalFloodCount === 0 ? "ยังไม่มีรายงานจุดน้ำท่วม" : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p>
                     <button type="button" className="mt-2 min-h-11 font-bold text-amber-300" onClick={() => { setSearchQuery(""); setSelectedRouteFilter("ALL"); }}>ล้างตัวกรอง</button>
                   </div>
                 )}

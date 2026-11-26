@@ -1,4 +1,7 @@
 "use client";
+
+import { focusUtility } from "../utility-navigation";
+import workspace from "../AdminWorkspace.module.css";
 import type { VertexEditEvent } from "@/lib/line-edit";
 
 import React, { useMemo, useState } from "react";
@@ -312,17 +315,25 @@ export function GisDataImportTab({
   }, [systemData.highwayLayers, offices]);
 
   return (
-    <div className="space-y-6 w-full max-w-none min-w-0">
-      <div className="border-b border-slate-800 pb-3">
+    <div className="w-full min-w-0">
+      <section className={`${workspace.registry} space-y-3`} aria-label="งานจัดการโครงข่ายสายทาง">
+      <div className={workspace.registryHeading}>
         <h2 className="font-heading font-black text-lg text-white flex items-center gap-2">
           <FileSpreadsheet className="w-5 h-5 text-amber-400" /> โครงข่ายสายทาง
         </h2>
         <p className="text-xs text-slate-400 mt-0.5">
-          จัดการสายทางและนำเข้าข้อมูล GIS
+          เลือกงานที่ต้องการทำ: ตรวจสายทางที่บันทึกไว้ หรือนำเข้าไฟล์เพื่อตรวจสอบก่อนยืนยัน
         </p>
+        <nav aria-label="ส่วนงานโครงข่าย" className="mt-3 flex flex-wrap gap-2">
+          <button type="button" className={workspace.utilityJump} onClick={() => focusUtility("road-register")}>ดูสายทางในระบบ</button>
+          <button type="button" className={workspace.utilityJump} onClick={() => focusUtility("gis-intake")}>นำเข้าและตรวจสอบไฟล์</button>
+        </nav>
       </div>
 
       {/* Upload Dropzone & Attribute Field Mapping Panel */}
+      <section id="gis-intake" tabIndex={-1} aria-label="นำเข้าและตรวจสอบไฟล์ GIS" className={workspace.utilitySection}>
+        <h3 className="mb-1 text-sm font-bold text-white">นำเข้าและตรวจสอบไฟล์ GIS</h3>
+        <p className="mb-2 text-xs text-slate-400">ตรวจแนวเส้นและจับคู่ข้อมูลในไฟล์ก่อนบันทึกลงโครงข่าย</p>
       <GisUploadMappingPanel
         handleGisUpload={handleGisUpload}
         importedGisFeatures={importedGisFeatures}
@@ -355,7 +366,9 @@ export function GisDataImportTab({
         handleCommitGisLayer={handleCommitGisLayer}
       />
 
+      </section>
       {/* Highway Layers & Specifications Table */}
+      <section id="road-register" tabIndex={-1} aria-label="สายทางที่บันทึกไว้" className={workspace.utilitySection}>
       <GisHighwayTable
         systemData={systemData}
         lineStyles={lineStyles}
@@ -372,6 +385,8 @@ export function GisDataImportTab({
         handleDeleteHighwayFeature={handleDeleteHighwayFeature}
       />
 
+      </section>
+      </section>
       {/* Modal: Highway Specifications Editor (Issue #13) */}
       <HighwaySpecsEditModal
         editingRouteSpecs={editingRouteSpecs}

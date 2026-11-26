@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import workspace from "./AdminWorkspace.module.css";
 import { SystemDataPayload } from "@/db/default-data";
 import { DEFAULT_MAP_STYLES } from "@/lib/constants";
 import {
@@ -17,6 +18,7 @@ import {
   ShieldCheck,
   FileText,
   Activity,
+  SlidersHorizontal,
 } from "lucide-react";
 import { AnimatedStatusModal } from "@/components/ui/AnimatedStatusModal";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
@@ -130,6 +132,7 @@ export function AdminConsole({
     "system" | "map" | "incidents" | "detours" | "routes" | "style" | "projects" | "jobs"
   >("map");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const navDescriptionId = useId();
   // Desktop workspace width: drag the divider without changing the map's flex layout.
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const resizeState = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -158,6 +161,29 @@ export function AdminConsole({
     type: "FLOOD" | "DETOUR";
     id: string;
   } | null>(null);
+  const floodExitGuard = useRef<((leave: () => void) => void) | null>(null);
+  const registerFloodExitGuard = useCallback((guard: ((leave: () => void) => void) | null) => {
+    floodExitGuard.current = guard;
+  }, []);
+  const adminTabBody = useRef<HTMLDivElement>(null);
+  const floodEditReturn = useRef<{ id: string; trigger: HTMLElement | null; paneTop: number; pageTop: number } | null>(null);
+  const resumeIncidentRegistry = useCallback(() => {
+    const source = floodEditReturn.current;
+    floodEditReturn.current = null;
+    setEditingRoute(null);
+    setActiveTab("incidents");
+    if (!source) return;
+    requestAnimationFrame(() => {
+      if (adminTabBody.current) adminTabBody.current.scrollTop = source.paneTop;
+      window.scrollTo({ top: source.pageTop, behavior: "instant" });
+      const trigger = source.trigger?.isConnected && source.trigger.getClientRects().length
+        ? source.trigger
+        : Array.from(document.querySelectorAll<HTMLElement>("[data-admin-flood-edit]"))
+          .find((button) => button.dataset.adminFloodEdit === source.id);
+      trigger?.focus({ preventScroll: true });
+    });
+  }, []);
+
 
   // Stable callback: an inline arrow here changed identity on every render and re-fired the
   // MapManagementTab effect that depends on it. It also skips the state update when nothing changed.
@@ -181,6 +207,8 @@ export function AdminConsole({
     title: string;
     message: string;
     onConfirm?: () => void;
+    confirmLabel?: string;
+    cancelLabel?: string;
   }>({
     isOpen: false,
     type: "success",
@@ -188,10 +216,11 @@ export function AdminConsole({
     message: "",
   });
 
-  const showConfirmModal = (title: string, message: string, onConfirm: () => void) => {
+  const showConfirmModal = (title: string, message: string, onConfirm: () => void, labels?: { confirmLabel: string; cancelLabel: string }) => {
     setModalState({
       isOpen: true,
       type: "confirm",
+      ...labels,
       title,
       message,
       onConfirm: () => {
@@ -219,56 +248,56 @@ export function AdminConsole({
     });
   };
 
-  // Nav Items Configuration matching reference site
+  // One navigation inventory feeds both layouts. Visibility is unchanged.
   const NAV_ITEMS = [
     {
       id: "system" as const,
       label: "จัดการระบบ",
-      subLabel: "ข้อมูลหน่วยงาน & พิกัดหมวด/แขวง",
+      subLabel: "หน่วยงาน ผู้ติดต่อ และตำแหน่งสำนักงาน",
       icon: Settings,
     },
     {
       id: "map" as const,
-      label: "จัดการแผนที่",
-      subLabel: "กำหนดจุดน้ำท่วม & ดัดเส้นเกาะถนน",
+      label: "รายงานสถานการณ์น้ำท่วม",
+      subLabel: "บันทึกเหตุการณ์หรือวาดทางเลี่ยง",
       icon: MapPinned,
     },
     {
       id: "incidents" as const,
       label: "รายการเหตุการณ์",
-      subLabel: `อัปเดตระดับน้ำ (${systemData.floodRoutes?.length || 0} จุด) & ส่งออก CSV`,
+      subLabel: "ติดตามน้ำและอัปเดตสถานะ",
       icon: ClipboardList,
       badge: systemData.floodRoutes?.filter((r) => r.is_active).length || 0,
     },
     {
       id: "detours" as const,
       label: "รายการทางเลี่ยง",
-      subLabel: `ทางเลี่ยง & คำแนะนำ (${systemData.detourRoutes?.length || 0} เส้นทาง)`,
+      subLabel: "จัดอันดับและเชื่อมกับเหตุการณ์",
       icon: Signpost,
       badge: systemData.detourRoutes?.filter((r) => r.is_active).length || 0,
     },
     {
       id: "routes" as const,
       label: "โครงข่ายสายทาง",
-      subLabel: "นำเข้า GIS & ป้ายกำกับสายทาง",
+      subLabel: "นำเข้า GIS และแก้ข้อมูลสายทาง",
       icon: FileSpreadsheet,
     },
     {
       id: "style" as const,
       label: "สไตล์เส้นทาง",
-      subLabel: "สี, แอนิเมชันวิ่ง & ความหนา",
+      subLabel: "รูปแบบเส้นและการเคลื่อนไหว",
       icon: Palette,
     },
     {
       id: "jobs" as const,
       label: "งานเบื้องหลัง",
-      subLabel: "สถานะการส่ง Drive & Sheets",
+      subLabel: "ตรวจสถานะการส่ง Drive และ Sheets",
       icon: Activity,
     },
     {
       id: "projects" as const,
       label: "โครงการผู้ว่าฯ",
-      subLabel: `แผนงบประมาณ 10 จุด (${systemData.mitigationProjects?.length || 0} โครงการ)`,
+      subLabel: "ติดตามแผนงานและงบประมาณ",
       icon: Briefcase,
     },
   ];
@@ -276,15 +305,59 @@ export function AdminConsole({
   // UI visibility flag: hide Governor & Quick Dispatch controls without removing APIs, tables, or permissions
   const HIDE_GOVERNOR_EXECUTIVE_UI = true;
 
-  // Menu grouped by what the officer is doing, in the order of a normal working day.
-  const NAV_GROUPS: Array<{ title: string; ids: Array<(typeof NAV_ITEMS)[number]["id"]> }> = [
-    { title: "สถานการณ์น้ำท่วม", ids: ["incidents", "map", "detours"] },
-    { title: "ข้อมูลโครงข่ายและแผนที่", ids: ["routes", "style"] },
-    {
-      title: "บริหารและรายงาน",
-      ids: HIDE_GOVERNOR_EXECUTIVE_UI ? ["jobs", "system"] : ["projects", "jobs", "system"],
-    },
+  type WorkspaceId = (typeof NAV_ITEMS)[number]["id"];
+  type NavItem = (typeof NAV_ITEMS)[number];
+  const getNavItem = (id: WorkspaceId): NavItem => NAV_ITEMS.find((item) => item.id === id)!;
+  const primaryIds: WorkspaceId[] = ["incidents", "map", "detours"];
+  const toolGroups: Array<{ title: string; ids: WorkspaceId[] }> = [
+    { title: "ข้อมูลแผนที่", ids: ["routes", "style"] },
+    ...(!HIDE_GOVERNOR_EXECUTIVE_UI ? [{ title: "รายงานและโครงการ", ids: ["projects"] as WorkspaceId[] }] : []),
+    { title: "ระบบและการส่งข้อมูล", ids: ["jobs", "system"] },
   ];
+  const navGroups = [{ title: "งานภาคสนาม", ids: primaryIds }, ...toolGroups];
+  const toolIsActive = !primaryIds.includes(activeTab);
+
+  const openWorkspace = (id: WorkspaceId, expandPane: boolean) => {
+    const open = () => {
+      setActiveTab(id);
+      if (id === "routes") onRequestFullGeometry?.();
+      if (id !== "map") {
+        setEditingRoute(null);
+        floodEditReturn.current = null;
+      }
+      if (id !== "system") onOfficeEditModeChange?.(null);
+      if (expandPane && isPaneCollapsed) onTogglePaneCollapse?.();
+    };
+    if (id !== "map" && editingRoute?.type === "FLOOD" && floodExitGuard.current) {
+      floodExitGuard.current(id === "incidents" ? resumeIncidentRegistry : open);
+    } else {
+      open();
+    }
+  };
+
+  const openToolsHint = toolIsActive ? getNavItem(activeTab).label : "ระบบและแผนที่";
+  const describeCount = (item: NavItem) =>
+    `${item.badge} ${item.id === "incidents" ? "ช่วงถนนกำลังแสดง" : "ทางเปิดใช้งาน"}`;
+  const countId = (layout: "mobile" | "desktop", id: WorkspaceId) => `${navDescriptionId}-${layout}-${id}`;
+  const renderMobileItem = (id: WorkspaceId, compact: boolean) => {
+    const item = getNavItem(id);
+    const Icon = item.icon;
+    return (
+      <button key={id} type="button"
+        aria-label={item.label}
+        aria-describedby={item.badge ? countId("mobile", id) : undefined}
+        aria-current={activeTab === id ? "page" : undefined}
+        onClick={() => openWorkspace(id, false)}
+        className={`flex min-h-11 min-w-0 items-center gap-1 rounded-lg border border-transparent text-xs font-semibold leading-snug ${compact ? "justify-center px-1" : "justify-start px-2.5"}`}>
+        <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+        <span className="min-w-0">{id === "map" ? "รายงานสถานการณ์" : item.label}</span>
+        {!!item.badge && <>
+          <span className={workspace.navCount} aria-hidden="true">{item.badge > 99 ? "99+" : item.badge}</span>
+          <span id={countId("mobile", id)} className="sr-only">{describeCount(item)}</span>
+        </>}
+      </button>
+    );
+  };
 
   return (
     <div className="doh-readable flex h-full w-full bg-surface-canvas text-slate-100 font-body overflow-hidden select-none">
@@ -292,7 +365,7 @@ export function AdminConsole({
       {/* 1. LEFT AUTHENTIC SIDEBAR (Matching reference site)                   */}
       {/* ===================================================================== */}
       <aside
-        className={`relative hidden shrink-0 flex-col bg-surface-panel border-r border-surface text-white lg:flex ${isPaneCollapsed || isSidebarCollapsed ? "w-[4.5rem] transition-[width] duration-200" : ""}`}
+        className={`${workspace.chrome} relative hidden shrink-0 flex-col bg-surface-panel border-r border-surface text-white lg:flex ${isPaneCollapsed || isSidebarCollapsed ? "w-[4.5rem] transition-[width] duration-200" : ""}`}
         style={{ width: isPaneCollapsed || isSidebarCollapsed ? "4.5rem" : sidebarWidth }}
       >
         {/* Sidebar Header Brand */}
@@ -311,14 +384,14 @@ export function AdminConsole({
           {!isPaneCollapsed && !isSidebarCollapsed && (
             <div className="min-w-0">
               <p className="truncate text-sm font-bold leading-snug tracking-normal text-white">แขวงทางหลวงปัตตานี</p>
-              <p className="font-mono text-[0.75rem] text-amber-300">Admin Console</p>
+              <p className="font-mono text-[0.75rem] text-amber-300">พื้นที่จัดการเหตุการณ์</p>
             </div>
           )}
         </div>
 
         {/* Sidebar Nav Items */}
         <nav aria-label="เมนูระบบจัดการ" className="flex-1 overflow-y-auto p-3">
-          {NAV_GROUPS.map((group, groupIndex) => (
+          {navGroups.map((group, groupIndex) => (
             <div key={group.title} className={groupIndex === 0 ? "" : "mt-4"}>
               {isPaneCollapsed || isSidebarCollapsed ? (
                 groupIndex > 0 && <div aria-hidden="true" className="mx-3 mb-3 border-t border-surface" />
@@ -326,7 +399,7 @@ export function AdminConsole({
                 <p className="px-2.5 pb-1.5 text-xs font-semibold tracking-normal leading-snug text-slate-400">{group.title}</p>
               )}
               <div className="space-y-1">
-                {group.ids.map((id) => NAV_ITEMS.find((entry) => entry.id === id)).filter((entry): entry is (typeof NAV_ITEMS)[number] => Boolean(entry)).map((item) => {
+                {group.ids.map(getNavItem).map((item) => {
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
                   return (
@@ -336,40 +409,22 @@ export function AdminConsole({
                       title={item.label}
                       aria-label={item.label}
                       aria-current={isActive ? "page" : undefined}
-                      onClick={() => {
-                        setActiveTab(item.id);
-                        if (item.id === "routes") {
-                          onRequestFullGeometry?.();
-                        }
-                        if (item.id !== "map") {
-                          setEditingRoute(null);
-                        }
-                        if (item.id !== "system") onOfficeEditModeChange?.(null);
-                        if (isPaneCollapsed && onTogglePaneCollapse) {
-                          onTogglePaneCollapse();
-                        }
-                      }}
+                      aria-describedby={item.badge ? countId("desktop", item.id) : undefined}
+                      onClick={() => openWorkspace(item.id, true)}
                       className={`flex w-full items-center rounded-xl p-[0.833em] text-left transition cursor-pointer ${isActive
                           ? "bg-amber-500 text-slate-950 font-bold shadow-md"
                           : "text-slate-300 hover:bg-surface-card hover:text-white"
                         }`}
                     >
-                      <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-slate-950" : "text-amber-400"}`} />
+                      <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-slate-950" : "text-amber-400"}`} aria-hidden="true" />
+                      {!!item.badge && <span id={countId("desktop", item.id)} className="sr-only">{describeCount(item)}</span>}
                       {!isPaneCollapsed && !isSidebarCollapsed && (
                         <div className="ml-3 min-w-0 flex-1">
                           <div className="flex items-center justify-between">
                             <p className="truncate text-xs font-heading font-bold tracking-normal leading-snug">{item.label}</p>
                             {item.badge !== undefined && item.badge > 0 && (
-                              <span
-                                className={`ml-[0.333em] rounded-full px-[0.55em] py-[0.067em] font-mono text-[0.75rem] font-bold ${
-                                  isActive
-                                    ? "bg-slate-950 text-amber-300"
-                                    : item.id === "detours"
-                                      ? "bg-amber-400 text-slate-950"
-                                      : "bg-red-600 text-white"
-                                }`}
-                              >
-                                {item.badge}
+                              <span className={workspace.navCount} aria-hidden="true">
+                                {item.badge > 99 ? "99+" : item.badge}
                               </span>
                             )}
                           </div>
@@ -451,36 +506,38 @@ export function AdminConsole({
       {/* 2. MAIN WORKING PANE                                                  */}
       {/* ===================================================================== */}
       <main className={`flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-surface-canvas ${isPaneCollapsed ? "hidden lg:hidden" : ""}`}>
-        {/* Mobile / Tablet Horizontal Navigation Bar */}
-        <nav aria-label="เมนูจัดการแอดมินมือถือ" className="lg:hidden flex items-center overflow-x-auto border-b border-surface p-2 gap-1.5 bg-surface-panel shrink-0">
-          {NAV_ITEMS.filter((item) => !(HIDE_GOVERNOR_EXECUTIVE_UI && item.id === "projects")).map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                aria-current={isActive ? "page" : undefined}
-                onClick={() => {
-                  setActiveTab(item.id);
-                  if (item.id === "routes") onRequestFullGeometry?.();
-                  if (item.id !== "map") setEditingRoute(null);
-                  if (item.id !== "system") onOfficeEditModeChange?.(null);
-                }}
-                className={`min-h-10 px-3.5 py-2 rounded-lg text-xs font-heading font-bold tracking-normal leading-snug shrink-0 flex items-center gap-1.5 transition cursor-pointer ${isActive
-                    ? "bg-amber-500 text-slate-950"
-                    : "text-slate-300 hover:bg-surface-card hover:text-white"
-                  }`}
-              >
-                <Icon className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
+        <nav aria-label="เมนูจัดการแอดมินมือถือ"
+          className={`${workspace.chrome} ${workspace.mobileNav} lg:hidden shrink-0 border-b px-2.5 py-2`}>
+          <div role="group" aria-label="งานภาคสนาม" className="grid grid-cols-3 gap-1">
+            {primaryIds.map((id) => renderMobileItem(id, true))}
+          </div>
+          <details className={workspace.mobileTools}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape" || !event.currentTarget.open) return;
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector("summary")?.focus();
+            }}>
+            <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 px-1.5 text-xs font-semibold">
+              <SlidersHorizontal className="size-3.5 shrink-0" aria-hidden="true" />
+              <span>เครื่องมือและตั้งค่า</span>
+              <span className={`${workspace.toolsHint} ml-auto text-[11px] text-slate-400`}>{openToolsHint}</span>
+              <ChevronRight className={`${workspace.disclosureArrow} size-3 shrink-0`} aria-hidden="true" />
+            </summary>
+            <div className="grid gap-2 pb-0.5 pt-1 sm:grid-cols-2">
+              {toolGroups.map(({ title, ids }) => (
+                <div key={title} role="group" aria-label={title} className="min-w-0">
+                  <p aria-hidden="true" className="px-2.5 text-[11px] font-semibold text-slate-400">{title}</p>
+                  <div className="grid grid-cols-2 gap-0.5 sm:grid-cols-1">
+                    {ids.map((id) => renderMobileItem(id, false))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
         </nav>
 
         {/* Scrollable Tab Workspace (do not use layout/paint containment so fixed modals stay viewport-centered) */}
-        <div className="doh-form flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 lg:p-6">
+        <div ref={adminTabBody} className={`doh-form flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 lg:p-6 ${activeTab !== "projects" ? workspace.canvas : ""}`}>
           {/* TAB 1: System Settings */}
           {activeTab === "system" && (
             <SystemSettingsTab
@@ -505,7 +562,7 @@ export function AdminConsole({
               showConfirmModal={showConfirmModal}
               showSuccessModal={showSuccessModal}
               showErrorModal={showErrorModal}
-              onNavigateToIncidents={() => setActiveTab("incidents")}
+              onNavigateToIncidents={resumeIncidentRegistry}
               adminPickMode={adminPickMode}
               setAdminPickMode={setAdminPickMode}
               pickedCoordinate={pickedCoordinate}
@@ -528,11 +585,15 @@ export function AdminConsole({
               onVertexEditTargetChange={onVertexEditTargetChange}
               editingRoute={editingRoute}
               onClearEditingRoute={() => setEditingRoute(null)}
+              onCancelFloodEdit={resumeIncidentRegistry}
+              onAbandonFloodReturn={() => { floodEditReturn.current = null; }}
+              registerFloodExitGuard={registerFloodExitGuard}
             />
           )}
 
           {/* TAB 3: Incident Registry & CSV */}
-          {activeTab === "incidents" && (
+          {(activeTab === "incidents" || (activeTab === "map" && editingRoute?.type === "FLOOD")) && (
+            <div hidden={activeTab !== "incidents"} inert={activeTab !== "incidents"}>
             <IncidentRegistryTab
               systemData={systemData}
               onDataRefresh={onDataRefresh}
@@ -540,6 +601,12 @@ export function AdminConsole({
               showConfirmModal={showConfirmModal}
               showSuccessModal={showSuccessModal}
               onEditFlood={(floodId) => {
+                floodEditReturn.current = {
+                  id: floodId,
+                  trigger: document.activeElement instanceof HTMLElement ? document.activeElement : null,
+                  paneTop: adminTabBody.current?.scrollTop ?? 0,
+                  pageTop: window.scrollY,
+                };
                 setEditingRoute({ type: "FLOOD", id: floodId });
                 setActiveTab("map");
               }}
@@ -554,6 +621,7 @@ export function AdminConsole({
                 }
               }}
             />
+            </div>
           )}
 
           {/* TAB 4: Detour Routes Management */}
@@ -648,6 +716,8 @@ export function AdminConsole({
         title={modalState.title}
         message={modalState.message}
         onConfirm={modalState.onConfirm}
+        confirmLabel={modalState.confirmLabel}
+        cancelLabel={modalState.cancelLabel}
         onClose={() => setModalState((prev) => ({ ...prev, isOpen: false }))}
       />
     </div>

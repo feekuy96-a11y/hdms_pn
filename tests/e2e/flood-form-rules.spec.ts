@@ -211,7 +211,7 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     });
 
     await page.goto(`${base}/admin/`);
-    await page.getByRole("complementary").getByRole("button", { name: /จัดการแผนที่/ }).click();
+    await page.getByRole("complementary").getByRole("button", { name: /รายงานสถานการณ์น้ำท่วม/ }).click();
 
     // 1. Open Highway Combobox -> verify clean deduplicated options only from highwayLayers
     await page.getByRole("button", { name: "หมายเลขทางหลวง" }).click();
@@ -276,7 +276,7 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     await expect(revSection.getByLabel("สถานะสภาพการจราจรขากลับ (๕ สถานะ)")).toHaveValue("ONE_LANE");
 
     // Submit and inspect both payloads
-    await page.getByRole("button", { name: /บันทึกเหตุการณ์เข้าสู่ระบบสารสนเทศ/ }).click();
+    await page.getByRole("button", { name: "บันทึกเหตุการณ์", exact: true }).click();
     await expect.poll(() => savedCalls.length).toBe(2);
 
     const fwdPayload = savedCalls.find((c) => c.roadSide === "LEFT");
@@ -315,7 +315,7 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
 
     test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop admin form workflow");
     await page.goto(`${base}/admin/`);
-    await page.getByRole("complementary").getByRole("button", { name: /จัดการแผนที่/ }).click();
+    await page.getByRole("complementary").getByRole("button", { name: /รายงานสถานการณ์น้ำท่วม/ }).click();
 
     const quickDirGroup = page.getByRole("group", { name: "เลือกฝั่งถนนเบื้องต้น" });
     await expect(quickDirGroup).toBeVisible();

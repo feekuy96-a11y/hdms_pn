@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ChevronRight, Clock, Droplets, MapPin } from "lucide-react";
+import { ChevronRight, Clock, Waves, MapPin } from "lucide-react";
 import type { FloodRoute } from "@/db/default-data";
 import { parseFloodDirectionMeta, resolveEffectiveRoadSide } from "@/lib/flood-event-schema";
 import {
@@ -54,7 +54,7 @@ export function FloodCard({
 
   return (
     <article
-      className={`relative w-full rounded-2xl border bg-surface-card py-2.5 pl-3.5 pr-3 sm:py-3 sm:pl-4 sm:pr-3.5 text-left transition ${selected ? "border-amber-400 ring-1 ring-amber-400/50" : "border-surface hover:border-amber-400/70"
+      className={`citizen-card relative w-full rounded-2xl border bg-surface-card py-2.5 pl-3.5 pr-3 sm:py-3 sm:pl-4 sm:pr-3.5 text-left transition ${selected ? "border-amber-400 ring-1 ring-amber-400/50" : "border-surface hover:border-amber-400/70"
         }`}
     >
       <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 rounded-l-2xl" style={{ backgroundColor: STATUS_BAR[status.color] }} />
@@ -66,15 +66,14 @@ export function FloodCard({
         onClick={() => onSelect(flood)}
         className="block w-full min-w-0 cursor-pointer rounded-xl text-left touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
       >
-        {/* Group 1: Route & Section + Traffic Status */}
-        <span className="flex min-w-0 flex-wrap items-start justify-between gap-x-2 gap-y-1">
-          <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] font-heading text-sm font-bold leading-snug tracking-normal text-white">
-            {routeLabel} · {sectionLabel}
+        <span className="citizen-flood-row-top">
+          <span className={`citizen-status-chip inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold leading-snug ${STATUS_CHIP[status.color]}`}>
+            <span aria-hidden="true">{status.icon}</span><span>{status.label}</span>
           </span>
-          <span className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold leading-snug tracking-normal ${STATUS_CHIP[status.color]}`}>
-            <span aria-hidden="true">{status.icon}</span>
-            <span>{status.label}</span>
-          </span>
+          <span className="citizen-flood-row-time"><Clock size={13} aria-hidden="true" />{relativeUpdated}</span>
+        </span>
+        <span className="mt-2 block break-words font-heading text-sm font-bold leading-snug text-white">
+          {routeLabel} · {sectionLabel}
         </span>
 
         {/* Group 2: KM Range (before Area) */}
@@ -93,7 +92,7 @@ export function FloodCard({
         {/* Group 4: Water Level & Flooded Side */}
         <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-slate-200">
           <span className="inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-950/50 px-2 py-0.5 text-sky-100">
-            <Droplets aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-sky-300" />
+            <Waves aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-sky-300" />
             <span className="text-sky-200/90">ระดับน้ำ</span>
             <strong className="font-mono text-[0.8125rem] sm:text-sm font-bold text-white">{waterDisplay}</strong>
           </span>
@@ -109,10 +108,6 @@ export function FloodCard({
       {/* Groups 5–6: Compact Timestamp + Action Bar (44px touch targets on mobile) */}
       {detourCount > 0 ? (
         <div className="mt-2 border-t border-surface pt-1.5">
-          <div className="flex min-w-0 items-center gap-1.5 text-xs text-slate-400">
-            <Clock aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{relativeUpdated}</span>
-          </div>
           <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:gap-2">
             <button
               type="button"
@@ -127,10 +122,6 @@ export function FloodCard({
       ) : (
         <div className="mt-2 flex min-w-0 items-center justify-between gap-2 border-t border-surface pt-1.5 text-xs">
           <div className="min-w-0 flex-1 space-y-0.5 text-slate-400">
-            <span className="flex items-center gap-1">
-              <Clock aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{relativeUpdated}</span>
-            </span>
             <span className="block truncate text-[0.75rem] text-slate-400">ไม่มีเส้นทางเลี่ยง</span>
           </div>
           {detailActionButton}

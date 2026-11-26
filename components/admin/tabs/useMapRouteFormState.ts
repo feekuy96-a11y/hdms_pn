@@ -356,7 +356,7 @@ export function useMapRouteFormState({
     }
   };
 
-  const resetBaseFormState = () => {
+  const resetBaseFormState = (preserveSavedDraft = false) => {
     routingRequest.current += 1;
     setDraftCoordinates([]);
     setDraftWaypoints([]);
@@ -396,7 +396,7 @@ export function useMapRouteFormState({
     setStartedAt(new Date().toISOString().slice(0, 16));
     setSaveAsDraft(false);
     setForceStraightThrough(false);
-    clearAdminMapDraft();
+    if (!preserveSavedDraft) clearAdminMapDraft();
     originalRouteCoordinates.current = [];
     onDraftPickMarkersChange?.([]);
   };

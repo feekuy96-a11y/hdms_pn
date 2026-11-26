@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import workspace from "../AdminWorkspace.module.css";
 import { SystemDataPayload } from "@/db/default-data";
 import {
   Signpost, Plus, FileText, Search, CheckCircle2, XCircle,
@@ -115,47 +116,32 @@ export function DetourManagementTab({
   });
 
   return (
-    <div className="space-y-4">
-      {/* 1. Header & Summary Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="bg-surface-card border border-surface p-3 rounded-2xl">
-          <span className="text-xs leading-snug tracking-normal text-slate-400 block font-heading">เส้นทางเลี่ยงทั้งหมด</span>
-          <span className="text-xl sm:text-2xl font-bold font-mono text-amber-400 mt-0.5 block">
-            {totalCount}
-          </span>
-          <span className="text-[11px] text-slate-400">โครงข่ายทางเลี่ยงในระบบ</span>
+    <div>
+      <section className={`${workspace.registry} space-y-3`} aria-label="งานจัดการเส้นทางเลี่ยง">
+        <div className={`${workspace.registryHeading} flex flex-wrap items-start justify-between gap-3`}>
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-black text-white">
+              <Signpost className="size-5 shrink-0 text-sky-300" aria-hidden="true" /> เส้นทางเลี่ยงทั้งหมด
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-400">ตรวจสถานะทางเลี่ยงและลำดับที่เชื่อมกับเหตุการณ์</p>
+            <p className={`${workspace.registryFacts} mt-2 text-xs text-slate-400`}>
+              <span>ทั้งหมด <strong>{totalCount}</strong> เส้น</span>
+              <span>เปิดใช้งาน <strong className="text-emerald-300">{activeCount}</strong></span>
+              <span>ปิดชั่วคราว <strong>{inactiveCount}</strong></span>
+              <span>เชื่อมแล้ว <strong className="text-sky-300">{new Set(Array.from(linkedEventsByDetourId.values()).flatMap((evs) => evs.map((e) => e.eventId))).size}</strong> เหตุการณ์</span>
+            </p>
+          </div>
+          <button type="button" onClick={onAddDetour}
+            className={`${workspace.primary} flex min-h-11 items-center gap-1.5 rounded-xl px-3.5 text-xs font-bold`}>
+            <Plus className="size-4" aria-hidden="true" /> วาดทางเลี่ยงใหม่บนแผนที่
+          </button>
         </div>
-
-        <div className="bg-surface-card border border-surface p-3 rounded-2xl">
-          <span className="text-xs leading-snug tracking-normal text-slate-400 block font-heading">เปิดใช้งาน (Active)</span>
-          <span className="text-xl sm:text-2xl font-bold font-mono text-emerald-400 mt-0.5 block">
-            {activeCount}
-          </span>
-          <span className="text-[11px] text-emerald-500/80">แสดงบนแผนที่ประชาชน</span>
-        </div>
-
-        <div className="bg-surface-card border border-surface p-3 rounded-2xl">
-          <span className="text-xs leading-snug tracking-normal text-slate-400 block font-heading">ปิดชั่วคราว</span>
-          <span className="text-xl sm:text-2xl font-bold font-mono text-slate-400 mt-0.5 block">
-            {inactiveCount}
-          </span>
-          <span className="text-[11px] text-slate-400">ซ่อนจากการแสดงผล</span>
-        </div>
-
-        <div className="bg-surface-card border border-surface p-3 rounded-2xl">
-          <span className="text-xs leading-snug tracking-normal text-slate-400 block font-heading">ผูกกับจุดน้ำท่วม</span>
-          <span className="text-xl sm:text-2xl font-bold font-mono text-sky-400 mt-0.5 block">
-            {new Set(Array.from(linkedEventsByDetourId.values()).flatMap((evs) => evs.map((e) => e.eventId))).size}
-          </span>
-          <span className="text-[11px] text-sky-400/80">เหตุการณ์ที่มีเส้นทางเลี่ยง</span>
-        </div>
-      </div>
 
       {/* 2. Top Action Bar: Search, Filters & Buttons */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-surface-panel p-3.5 rounded-2xl border border-surface">
-        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+      <div className="space-y-2.5 bg-surface-panel p-3.5 rounded-2xl border border-surface">
+        <div className={workspace.registryFilter}>
           {/* Search Input */}
-          <div className="relative min-w-[180px] flex-1 basis-[210px] max-w-xs">
+          <div className="relative min-w-0 sm:min-w-48 sm:flex-1 sm:basis-48 sm:max-w-xs">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
             <input
               type="text"
@@ -228,14 +214,7 @@ export function DetourManagementTab({
               <option value="csv">CSV</option><option value="geojson">GeoJSON</option><option value="kml">KML</option><option value="kmz">KMZ</option><option value="shapefile">Shapefile ZIP</option>
             </select>
           </label>
-          <button
-            type="button"
-            onClick={onAddDetour}
-            className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold tracking-normal text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" aria-hidden="true" />
-            <span>วาดทางเลี่ยงใหม่บนแผนที่</span>
-          </button>
+
         </div>
       </div>
 
@@ -266,6 +245,7 @@ export function DetourManagementTab({
         onAddDetour={onAddDetour}
       />
 
+      </section>
       <DetourViewModal
         viewingDetour={viewingDetour}
         viewingDetourDir={viewingDetourDir}

@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import "./citizen-theme.css";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { getPublicSystemDataAction } from "@/app/actions/doh-actions";
@@ -10,6 +11,8 @@ import { INITIAL_SYSTEM_DATA, SystemDataPayload, FloodRoute, DetourRoute } from 
 import { createClient } from "@/lib/supabase/client";
 import type { GisMapViewportApi } from "@/components/map/LongdoGisMap";
 import { useSharedGisFocus } from "@/components/map/useSharedGisFocus";
+import { CitizenMapStatus, recordedPassability, mapPassabilityLabel, type MapPassability } from "@/components/public/CitizenMapStatus";
+import { CitizenOfficeDirectory } from "@/components/public/CitizenOfficeDirectory";
 import { GisFocusModeBar } from "@/components/public/GisFocusModeBar";
 import type { GisFocusViewportSnapshot } from "@/lib/gis-focus-mode";
 
@@ -35,6 +38,8 @@ const LongdoGisMap = dynamic(
 );
 import {
   AlertTriangle,
+  Sun,
+  Moon,
   Settings,
   RotateCw,
   Search,
@@ -50,6 +55,7 @@ import {
   ArrowRightLeft,
   ArrowLeftRight,
   Droplets,
+  Waves,
   MapPin,
   MapPinned,
   Route,
@@ -115,6 +121,18 @@ export default function HomePage() {
   const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL?.startsWith("https://")
     ? process.env.NEXT_PUBLIC_ADMIN_URL
     : null;
+  const testPreview = process.env.NEXT_PUBLIC_HDMS_TEST_PREVIEW === "1";
+  const [citizenTheme, setCitizenTheme] = useState<"light" | "dark">("light");
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem("hdms.citizen.theme") === "dark") setCitizenTheme("dark");
+    } catch { /* The map remains usable when browser storage is unavailable. */ }
+  }, []);
+  const toggleCitizenTheme = () => {
+    const next = citizenTheme === "light" ? "dark" : "light";
+    setCitizenTheme(next);
+    try { window.localStorage.setItem("hdms.citizen.theme", next); } catch { /* session-only */ }
+  };
   const previousFocus = useRef<HTMLElement | null>(null);
   const closeDetailsRef = useRef<HTMLButtonElement | null>(null);
   const detourDialogRef = useRef<HTMLDivElement | null>(null);
@@ -132,11 +150,20 @@ export default function HomePage() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRouteFilter, setSelectedRouteFilter] = useState("ALL");
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<StatusColor | "ALL">("ALL");
+  const [selectedStatusFilter, setLegacyStatusFilter] = useState<StatusColor | "ALL">("ALL");
+  const [mapPassability, setMapPassability] = useState<MapPassability | "ALL">("ALL");
+  const setSelectedStatusFilter = (value: StatusColor | "ALL" | ((current: StatusColor | "ALL") => StatusColor | "ALL")) => {
+    setLegacyStatusFilter(value);
+    setMapPassability("ALL");
+  };
+  const matchFloodPassability = useMemo(() => mapPassability === "ALL"
+    ? undefined : (route: FloodRoute) => recordedPassability(route) === mapPassability, [mapPassability]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"FLOOD" | "DETOUR">("FLOOD");
   const [viewingDetourModal, setViewingDetourModal] = useState<DetourRoute | null>(null);
   const [modalDetourDirection, setModalDetourDirection] = useState<"FORWARD" | "REVERSE">("FORWARD");
+  const [isContactOpen, setIsContactOpen] = useState(false);
+  const contactOpener = useRef<HTMLButtonElement | null>(null);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
   const [mobileDrawerStage, setMobileDrawerStage] = useState<"peek" | "list" | "full">("list");
   const [returnToDetourList, setReturnToDetourList] = useState(false);
@@ -199,7 +226,7 @@ export default function HomePage() {
     isPending,
     isError,
     refetch,
-    onDemandPhotos,
+    floodAlbums,
     loadFloodPhotosOnDemand,
     selectedFlood,
     selectedFloodMeta,
@@ -210,7 +237,6 @@ export default function HomePage() {
     filteredFloods,
     filteredDetours,
     situationCounts,
-    activeFloodCount,
     dossierStatus,
     detourCountByFloodId,
     highlightFloodIds,
@@ -227,8 +253,33 @@ export default function HomePage() {
     selectedRouteFilter,
     setSelectedRouteFilter,
     selectedStatusFilter,
+    matchFloodPassability,
     showToast,
   });
+
+  const snapshotTime = systemData.updatedAt ? new Date(systemData.updatedAt) : null;
+  const formattedSnapshot = snapshotTime && Number.isFinite(snapshotTime.getTime())
+    ? new Intl.DateTimeFormat("th-TH", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(snapshotTime)
+    : null;
+  const hotlinePhone = systemData.systemSettings?.phone || "1586";
+
+  const openContacts = (event: React.MouseEvent<HTMLButtonElement>) => {
+    contactOpener.current = event.currentTarget;
+    setShowDossier(false);
+    setViewingDetourModal(null);
+    setIsMobileDrawerOpen(false);
+    setIsContactOpen(true);
+  };
+
+  const closeContacts = () => {
+    setIsContactOpen(false);
+    requestAnimationFrame(() => {
+      const opener = contactOpener.current;
+      if (opener?.isConnected && opener.getClientRects().length) opener.focus();
+      else Array.from(document.querySelectorAll<HTMLButtonElement>("[data-citizen-contact], [data-citizen-contact-desktop]"))
+        .find((button) => button.getClientRects().length > 0)?.focus();
+    });
+  };
 
   // Listener for opening Detour Modal from map popups
   useEffect(() => {
@@ -239,6 +290,7 @@ export default function HomePage() {
         setReturnToDetourList(false);
         setIsMobileDrawerOpen(false);
         setModalDetourDirection(found.direction_mode === "REVERSE_ONLY" ? "REVERSE" : "FORWARD");
+        setShowDossier(false);
         setViewingDetourModal(found);
       }
     };
@@ -291,10 +343,22 @@ export default function HomePage() {
     }
   }, [selectedFlood]);
 
+  const showMapList = (tab: "FLOOD" | "DETOUR") => {
+    setSidebarTab(tab);
+    if (window.matchMedia("(min-width: 1024px)").matches) setIsSidebarCollapsed(false);
+    else {
+      setMobileDrawerStage((stage) => stage === "peek" ? "list" : stage);
+      setIsMobileDrawerOpen(true);
+    }
+  };
+  const filterMapPassability = (status: MapPassability | "ALL") => {
+    setLegacyStatusFilter("ALL");
+    setMapPassability(status);
+    setSidebarTab("FLOOD");
+  };
   const handleStatusFilter = (color: StatusColor) => {
     setSelectedStatusFilter((current) => (current === color ? "ALL" : color));
-    setSidebarTab("FLOOD");
-    setIsMobileDrawerOpen(true);
+    showMapList("FLOOD");
   };
 
   const handleSelectFlood = (flood: FloodRoute, scrollToDetour: boolean = false) => {
@@ -310,6 +374,7 @@ export default function HomePage() {
       setEventAdviceDirection("FORWARD");
     }
     setActivePhotoIdx(0);
+    setViewingDetourModal(null);
     setShowDossier(true);
     setIsMobileDrawerOpen(false);
     if (gisFocus.status !== "focused" && flood.lat_start && flood.lon_start) {
@@ -440,11 +505,21 @@ export default function HomePage() {
 
 
   return (
-    <div className="doh-readable min-h-dvh flex flex-col bg-surface-canvas text-slate-100 font-body">
+    <div data-citizen-theme={citizenTheme} className="citizen-ui doh-readable min-h-dvh flex flex-col bg-surface-canvas text-slate-100 font-body"
+      onClickCapture={testPreview ? (event) => {
+        const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+        const href = link?.getAttribute("href") ?? "";
+        if (/^(https?:|tel:)/i.test(href)) {
+          event.preventDefault();
+          showToast("โหมดทดสอบ: ไม่ได้เปิดลิงก์ภายนอกหรือโทรออก");
+        }
+      } : undefined}
+    >
+      {testPreview && <p role="note" className="citizen-test-note h-5 shrink-0 bg-slate-950 px-2 text-center text-[0.6875rem] font-bold leading-5 text-amber-200">เว็บทดสอบ · ข้อมูลจำลอง</p>}
       {/* =================================================================== */}
       {/* 1. TOP NAVBAR (Official DOH Brand + Status + Hotline)               */}
       {/* =================================================================== */}
-      <header className="doh-header border-b-2 border-amber-500 sticky top-0 z-50 h-16 px-3 sm:px-6 flex items-center justify-between gap-2 shadow-xl">
+      <header className="citizen-header doh-header border-b-2 border-amber-500 sticky top-0 z-50 h-16 px-3 sm:px-6 flex items-center justify-between gap-2 shadow-xl">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           {systemData.systemSettings?.logoUrl ? (
             <img
@@ -453,21 +528,16 @@ export default function HomePage() {
               className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-contain shadow-md shrink-0 bg-slate-900 border border-surface p-0.5"
             />
           ) : (
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl gold-gradient flex items-center justify-center shadow-md shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl citizen-logo gold-gradient flex items-center justify-center shadow-md shrink-0">
               <AlertTriangle className="w-5 h-5 text-slate-950 font-bold" />
             </div>
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="truncate font-heading font-black text-amber-400 text-[0.8125rem] sm:text-sm tracking-normal">
+              <span className="citizen-brand-name truncate font-heading font-black text-[0.8125rem] sm:text-sm tracking-normal">
                 {systemData.systemSettings?.name || "ระบบติดตามโครงข่ายทางหลวงและการจัดการอุทกภัย"}
               </span>
-              <span className="hidden md:inline-block shrink-0 bg-amber-400 text-slate-950 text-[0.75rem]/[1.1rem] font-heading font-extrabold tracking-normal px-[0.5em] rounded">
-                ศูนย์ปฏิบัติการฉุกเฉิน 24 ชม.
-              </span>
-              <span className="text-[0.75rem]/[1.1rem] bg-emerald-950/80 text-emerald-400 border border-emerald-800 px-[0.667em] py-[0.167em] rounded font-bold hidden md:inline-flex items-center gap-[0.333em]">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse motion-reduce:animate-none"></span> <span className="tracking-wide">LIVE</span>
-              </span>
+
             </div>
             <h1 className="font-heading text-xs sm:text-sm font-semibold tracking-normal text-slate-300 truncate">
               {systemData.systemSettings?.org || "แขวงทางหลวงปัตตานี กรมทางหลวง"}
@@ -476,11 +546,19 @@ export default function HomePage() {
         </div>
 
         {/* Right Actions: Hotline (Admin and manual refresh buttons removed for citizens) */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
+          {!testPreview && formattedSnapshot && <span className="citizen-traffic-time hidden xl:inline">ข้อมูล ณ {formattedSnapshot} น.</span>}
+          <button type="button" data-citizen-contact-desktop className="citizen-theme-button hidden lg:inline-flex" onClick={openContacts}>
+            <Phone aria-hidden="true" className="size-4" />ติดต่อ
+          </button>
+          <button type="button" className="citizen-theme-button" onClick={toggleCitizenTheme}
+            aria-label={citizenTheme === "light" ? "เปิดธีมมืด" : "เปิดธีมสว่าง"} aria-pressed={citizenTheme === "dark"}>
+            {citizenTheme === "light" ? <Moon aria-hidden="true" className="size-4" /> : <Sun aria-hidden="true" className="size-4" />}
+          </button>
           <a
-            href={`tel:${systemData.systemSettings?.phone || "1586"}`}
+            href={`tel:${hotlinePhone}`}
             aria-label={`โทรสายด่วน ${systemData.systemSettings?.phone || "1586"}`}
-            className="min-h-11 flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white font-heading font-bold text-sm px-3 sm:px-3.5 py-1.5 rounded-xl shadow-lg transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+            className="citizen-hotline min-h-11 flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white font-heading font-bold text-sm px-3 sm:px-3.5 py-1.5 rounded-xl shadow-lg transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
           >
             <Phone className="w-4 h-4" />
             <span className="hidden sm:inline">สายด่วน</span>
@@ -492,22 +570,20 @@ export default function HomePage() {
       {/* =================================================================== */}
       {/* 2. MAIN LAYOUT: GIS MAP + COLLAPSIBLE SIDEBAR + DETAIL DOSSIER     */}
       {/* =================================================================== */}
-      <div className="flex flex-col lg:flex-row relative lg:overflow-hidden" style={{ height: "calc(100dvh - 4rem)", minHeight: "28.125rem" }}>
+      <main className="citizen-workspace flex flex-col lg:flex-row relative h-[calc(100dvh-4rem)] min-h-0 lg:min-h-[28.125rem] lg:overflow-hidden" style={testPreview ? { height: "calc(100dvh - 5.25rem)" } : undefined}>
         {/* ================================================================= */}
         {/* A. LEFT SIDEBAR: ROUTE LIST (DESKTOP COLLAPSIBLE)                 */}
         {/* ================================================================= */}
         <div
           className={`${isSidebarCollapsed ? "hidden" : "hidden lg:flex"
-            } order-2 lg:order-1 w-full lg:w-[min(35%,25.625rem)] xl:w-[min(35%,27.5rem)] bg-surface-panel border-t lg:border-t-0 lg:border-r border-surface flex-col shrink-0 z-20 lg:h-full overflow-hidden transition-all duration-300`}
+            } citizen-sidebar order-2 w-full lg:w-[min(35%,25.625rem)] xl:w-[min(35%,27.5rem)] bg-surface-panel border-t lg:border-t-0 lg:border-l border-surface flex-col shrink-0 z-20 lg:h-full overflow-hidden transition-all duration-300`}
         >
           {/* Sidebar Header & Search */}
-          <div className="p-3.5 bg-surface-panel border-b border-surface space-y-2.5 shrink-0">
+          <div className="citizen-dock-controls p-3.5 bg-surface-panel border-b border-surface space-y-2.5 shrink-0">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse motion-reduce:animate-none" />
-                <h2 className="font-heading font-bold text-xs sm:text-sm tracking-normal text-white">
-                  จุดเฝ้าระวังและน้ำท่วมทางหลวง ({filteredFloods.length} จุด)
-                </h2>
+              <div>
+                <h2 className="text-base font-bold">ตรวจสอบเส้นทาง</h2>
+                <p className="citizen-subcopy">ค้นหา เลือกสายทาง หรือกรองสถานะการเดินทาง</p>
               </div>
               <button
                 type="button"
@@ -516,46 +592,7 @@ export default function HomePage() {
                 className="hidden lg:flex text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition"
                 title="ย่อแถบข้างเพื่อขยายแผนที่เต็มจอ"
               >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-            </div>
-
-            <SituationSummary counts={situationCounts} activeFilter={selectedStatusFilter} onFilter={handleStatusFilter} />
-            {selectedStatusFilter !== "ALL" && (
-              <button
-                type="button"
-                onClick={() => setSelectedStatusFilter("ALL")}
-                className="self-start text-xs font-semibold text-amber-300 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
-              >
-                แสดงทุกสถานะ
-              </button>
-            )}
-
-            {/* View Switcher Sub-tabs: Floods / Detours */}
-            <div className="grid grid-cols-2 gap-1 bg-slate-900/90 p-1 rounded-xl border border-surface text-xs font-heading font-bold">
-              <button
-                type="button"
-                aria-pressed={sidebarTab === "FLOOD"}
-                onClick={() => setSidebarTab("FLOOD")}
-                className={`min-h-10 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${sidebarTab === "FLOOD"
-                  ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                  : "text-slate-300 hover:text-white"
-                  }`}
-              >
-                <Droplets aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                <span>น้ำท่วม ({filteredFloods.length})</span>
-              </button>
-              <button
-                type="button"
-                aria-pressed={sidebarTab === "DETOUR"}
-                onClick={() => setSidebarTab("DETOUR")}
-                className={`min-h-10 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${sidebarTab === "DETOUR"
-                  ? "bg-amber-500 text-slate-950 shadow-md font-black"
-                  : "text-slate-300 hover:text-white"
-                  }`}
-              >
-                <Route aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                <span>ทางเลี่ยง ({filteredDetours.length})</span>
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
 
@@ -585,6 +622,45 @@ export default function HomePage() {
                   ล้างตัวกรอง
                 </button>
               )}
+            </div>
+
+            <SituationSummary counts={situationCounts} activeFilter={selectedStatusFilter} onFilter={handleStatusFilter} />
+            {(selectedStatusFilter !== "ALL" || mapPassability !== "ALL") && (
+              <button
+                type="button"
+                onClick={() => setSelectedStatusFilter("ALL")}
+                className="self-start text-xs font-semibold text-amber-300 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+              >
+                แสดงทุกสถานะ
+              </button>
+            )}
+
+            {/* View Switcher Sub-tabs: Floods / Detours */}
+            <div className="citizen-section-tabs grid grid-cols-2 gap-1 bg-slate-900/90 p-1 rounded-xl border border-surface text-xs font-heading font-bold">
+              <button
+                type="button"
+                aria-pressed={sidebarTab === "FLOOD"}
+                onClick={() => setSidebarTab("FLOOD")}
+                className={`min-h-10 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${sidebarTab === "FLOOD"
+                  ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                  : "text-slate-300 hover:text-white"
+                  }`}
+              >
+                <Waves aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                <span>น้ำท่วม ({filteredFloods.length})</span>
+              </button>
+              <button
+                type="button"
+                aria-pressed={sidebarTab === "DETOUR"}
+                onClick={() => setSidebarTab("DETOUR")}
+                className={`min-h-10 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${sidebarTab === "DETOUR"
+                  ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                  : "text-slate-300 hover:text-white"
+                  }`}
+              >
+                <Route aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                <span>ทางเลี่ยง ({filteredDetours.length})</span>
+              </button>
             </div>
 
             {/* Route Quick Filter Chips (Available for both floods and detours) */}
@@ -668,7 +744,7 @@ export default function HomePage() {
                     ? "ยังไม่มีรายงานในระบบ ข้อมูลนี้ไม่ยืนยันว่าทุกเส้นทางปลอดภัย โปรดตรวจสอบกับสายด่วน 1586 ก่อนเดินทาง"
                     : "กรุณาลองเปลี่ยนคำค้นหา หรือกดปุ่มด้านล่างเพื่อล้างตัวกรอง"}
                 </p>
-                {(searchQuery || selectedRouteFilter !== "ALL" || selectedStatusFilter !== "ALL") && (
+                {(searchQuery || selectedRouteFilter !== "ALL" || selectedStatusFilter !== "ALL" || mapPassability !== "ALL") && (
                   <button
                     type="button"
                     onClick={() => {
@@ -688,7 +764,7 @@ export default function HomePage() {
           {/* Sidebar Bottom Footer: Call Contact */}
           <div className="p-3 bg-surface-panel border-t border-surface text-xs flex items-center justify-between text-slate-400 shrink-0">
             <span className="text-[0.75rem]/[1.1rem] flex items-center gap-1.5">
-              <Phone className="w-3.5 h-3.5 text-amber-400" /> ติดต่อศูนย์ความปลอดภัย: 073-336-000
+              <Phone className="w-3.5 h-3.5 text-amber-400" /> ติดต่อศูนย์ความปลอดภัย: {hotlinePhone}
             </span>
             {adminUrl && <a href={adminUrl} className="text-[0.75rem]/[1.1rem] text-amber-400 underline underline-offset-2">สำหรับเจ้าหน้าที่</a>}
           </div>
@@ -697,7 +773,7 @@ export default function HomePage() {
         {/* ================================================================= */}
         {/* B. MAIN GIS MAP VIEWPORT                                          */}
         {/* ================================================================= */}
-        <div className="order-1 lg:order-2 relative h-[calc(100dvh-4rem)] lg:h-full flex-1 w-full overflow-hidden bg-surface-canvas">
+        <section aria-label="แผนที่และข้อมูลการเดินทาง" className="citizen-map-workspace order-1 relative h-full min-h-0 flex-1 w-full overflow-hidden bg-surface-canvas">
           {isPending && (
             <div role="status" aria-live="polite" className="absolute left-1/2 top-[6.75rem] sm:top-14 z-[600] -translate-x-1/2 max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-17.5rem)] rounded-xl border border-slate-700 bg-slate-950/95 px-4 py-2.5 text-sm text-white shadow-xl">
               กำลังโหลดข้อมูลสถานการณ์ล่าสุด…
@@ -714,9 +790,9 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => setIsSidebarCollapsed(false)}
-              className="hidden lg:flex absolute top-3 left-3 z-[400] min-h-9 bg-slate-950/95 hover:bg-slate-900 text-amber-400 border border-amber-400/50 px-3 py-1.5 rounded-xl shadow-2xl items-center gap-1.5 text-xs font-heading font-bold transition cursor-pointer"
+              className="hidden lg:flex absolute top-3 left-[17.5rem] z-[400] min-h-9 bg-slate-950/95 hover:bg-slate-900 text-amber-400 border border-amber-400/50 px-3 py-1.5 rounded-xl shadow-2xl items-center gap-1.5 text-xs font-heading font-bold transition cursor-pointer"
             >
-              <ChevronRight className="w-4 h-4" /> แสดงรายการสายทาง
+              <ChevronLeft className="w-4 h-4" /> แสดงรายการสายทาง
             </button>
           )}
 
@@ -741,6 +817,12 @@ export default function HomePage() {
                   }
                 : null}
             publicMode
+            publicStatusSummary={!showDossier && !viewingDetourModal && !isContactOpen ? (
+              <div className={isMobileDrawerOpen ? "hidden lg:block" : undefined}>
+                <CitizenMapStatus systemData={systemData} selected={mapPassability}
+                  onFilter={filterMapPassability} onDetours={() => showMapList("DETOUR")} isPending={isPending} isError={isError} />
+              </div>
+            ) : undefined}
             isSidebarCollapsed={isSidebarCollapsed}
             systemData={systemData}
             highlightFloodIds={highlightFloodIds}
@@ -759,6 +841,7 @@ export default function HomePage() {
               }
             }}
             onSelectDetour={(detour) => {
+              setShowDossier(false);
               setViewingDetourModal(detour);
               setModalDetourDirection(defaultDetourDirection(detour.direction_mode) || "FORWARD");
               setIsMobileDrawerOpen(false);
@@ -788,7 +871,7 @@ export default function HomePage() {
           {selectedRouteFilter !== "ALL" && activeRouteChip && (
             <div
               data-testid="public-active-filter-chip"
-              className="pointer-events-auto absolute top-[8.25rem] left-3 sm:top-auto sm:bottom-[5.75rem] lg:bottom-4 z-[405] flex w-fit max-w-[calc(100%-1.5rem)] sm:max-w-[24rem] items-center gap-2 rounded-xl border border-amber-400/60 bg-surface-floating/95 px-3 py-1.5 text-xs font-semibold text-amber-100 shadow-lg backdrop-blur-md"
+              className="citizen-map-active-filter pointer-events-auto absolute top-[8.25rem] left-3 sm:top-auto sm:bottom-[5.75rem] lg:bottom-4 z-[405] flex w-fit max-w-[calc(100%-1.5rem)] sm:max-w-[24rem] items-center gap-2 rounded-xl border border-amber-400/60 bg-surface-floating/95 px-3 py-1.5 text-xs font-semibold text-amber-100 shadow-lg backdrop-blur-md"
             >
               <span className="truncate">กำลังกรอง: {activeRouteChip.label}</span>
               <button type="button" onClick={() => setSelectedRouteFilter("ALL")} className="min-h-8 shrink-0 rounded-lg px-2 py-1 text-amber-300 underline underline-offset-2 hover:bg-amber-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white cursor-pointer">ล้าง</button>
@@ -797,13 +880,14 @@ export default function HomePage() {
 
           {/* C. MOBILE FLOATING ACTION BAR & BOTTOM SHEET DRAWER */}
           <MobileCitizenDrawer
+            openContacts={openContacts}
             isMobileDrawerOpen={isMobileDrawerOpen}
             setIsMobileDrawerOpen={setIsMobileDrawerOpen}
-            showDossier={showDossier}
+            showDossier={showDossier || isContactOpen}
             viewingDetourModal={viewingDetourModal}
-            activeFloodCount={activeFloodCount}
             situationCounts={situationCounts}
             selectedStatusFilter={selectedStatusFilter}
+            mapStatusFilterLabel={mapPassability === "ALL" ? undefined : mapPassabilityLabel(mapPassability)}
             setSelectedStatusFilter={setSelectedStatusFilter}
             handleStatusFilter={handleStatusFilter}
             mobileDrawerStage={mobileDrawerStage}
@@ -824,17 +908,19 @@ export default function HomePage() {
             handleOpenFloodDetourSection={handleOpenFloodDetourSection}
             detourList={detourList}
             isError={isError}
+            isPending={isPending}
             refetch={refetch}
           />
 
           {/* FLOOD DOSSIER MODAL */}
-          {selectedFlood && showDossier && (
+          {selectedFlood && showDossier && !viewingDetourModal && (
             <FloodDossierModal
               selectedFlood={selectedFlood}
               selectedFloodMeta={selectedFloodMeta}
               dossierStatus={dossierStatus}
               systemData={systemData}
-              onDemandPhotos={onDemandPhotos}
+              floodAlbum={floodAlbums[selectedFlood.id]}
+              loadFloodPhotosOnDemand={loadFloodPhotosOnDemand}
               activePhotoIdx={activePhotoIdx}
               setActivePhotoIdx={setActivePhotoIdx}
               isPhotoFullscreen={isPhotoFullscreen}
@@ -877,9 +963,11 @@ export default function HomePage() {
               }}
             />
           )}
-        </div>
-      </div>
+        </section>
+      </main>
 
+
+      {isContactOpen && <CitizenOfficeDirectory offices={systemData.offices} onClose={closeContacts} />}
 
       {/* Toast Notification (z-[640]: above map/floating-bar z-[400..600], below drawer z-[650] and modals z-[700..800]) */}
       {(toastMessage || isError) && (
