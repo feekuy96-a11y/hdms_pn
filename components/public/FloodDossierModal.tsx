@@ -1,5 +1,7 @@
 "use client";
 
+import { PublicShareAction } from "./PublicShareAction";
+import { getFloodShareRef } from "./public-share";
 import React from "react";
 import dynamic from "next/dynamic";
 import {
@@ -111,6 +113,7 @@ export function FloodDossierModal({
 }: FloodDossierModalProps) {
   const routeLabel = /^(?:ทล|ปน)\.?\s*/i.test(selectedFlood.route_no) ? selectedFlood.route_no : `ทล.${selectedFlood.route_no}`;
   const dossierArea = formatFloodAreaLine(selectedFlood);
+  const shareRef = getFloodShareRef(selectedFlood, systemData);
   const recordedUpdate = selectedFlood.updated_at ? new Date(selectedFlood.updated_at) : null;
   const updateTime = recordedUpdate && Number.isFinite(recordedUpdate.getTime()) ? recordedUpdate : null;
   const displayUpdate = updateTime?.toLocaleString("th-TH") ?? "ไม่ระบุ";
@@ -285,6 +288,7 @@ export function FloodDossierModal({
                 <span>อัปเดตล่าสุด {updateTime ? <time dateTime={updateTime.toISOString()}>{displayUpdate}</time> : displayUpdate}</span>
                 <span className="citizen-freshness" data-freshness={freshness}>{freshnessLabel}</span>
               </p>
+              {shareRef && <PublicShareAction key={selectedFlood.id} shareRef={shareRef} />}
             </div>
 
             <div role="group" aria-label="ระดับน้ำและส่วนถนนที่ได้รับผลกระทบ" className="citizen-incident-facts rounded-2xl border border-slate-700/80 bg-[#0d1930] divide-y divide-slate-700/75 shadow-lg">
