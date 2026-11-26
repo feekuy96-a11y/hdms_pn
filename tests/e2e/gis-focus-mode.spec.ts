@@ -958,6 +958,9 @@ test("public focus endpoint selector re-anchors one popup A to B to A without ch
     end_point_photo: { caption: "ทะเบียนจุด B ไม่มีรูป", subdistrict: "ตัวอย่าง ข", district: "ทดสอบ ข", province: "ปัตตานี" },
   };
   detour.description = "ขาไป:\n1. แยกต้นทาง\n2. สะพานกลางทาง\n3. แยกสิ้นสุด\nขากลับ:\n1. แยกสิ้นสุด\n2. สะพานขากลับ\n3. แยกต้นทาง";
+  await page.route("https://images.example.test/start.png", route => route.fulfill({
+    contentType: "image/gif", body: Buffer.from("R0lGODlhAQABAAAAACwAAAAAAQABAAA=", "base64"),
+  }));
   await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: payload }));
   await page.goto(base + "/");
   const detourSymbol = page.locator(".doh-detour-symbol").first();
@@ -986,12 +989,29 @@ test("public focus endpoint selector re-anchors one popup A to B to A without ch
     await expect(popup.locator("[data-endpoint-scroll]")).toBeVisible();
   }
   await expect(a).toHaveAttribute("aria-pressed", "true");
+  await expect(popup.locator(".citizen-detour-photo-card")).toContainText("ทะเบียนภาพจุด A");
+  await expect(timeline.locator(".citizen-detour-timeline-marker").first()).toHaveText("B");
+  await expect(timeline.locator("[aria-current=step] .citizen-detour-timeline-marker")).toHaveText("A");
+  await expect(timeline.locator(".citizen-detour-timeline-distance").first()).toBeVisible();
   await expect(popup.locator("img")).toHaveAttribute("src", /start/);
+  const endpointPhoto = popup.getByRole("button", { name: "เปิดภาพขนาดเต็ม จุดเริ่มต้น A" });
+  const imageBoxendpointPhoto = await endpointPhoto.locator("img").boundingBox();
+  expect(Math.abs(imageBoxendpointPhoto!.width - imageBoxendpointPhoto!.height)).toBeLessThan(1);
+  await endpointPhoto.click();
+  const viewer = page.getByRole("dialog", { name: "ภาพถ่ายสถานการณ์ขนาดเต็ม" });
+  await expect(viewer.getByRole("img")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(viewer).toHaveCount(0);
+  await expect(endpointPhoto).toBeFocused();
+  await expect(a).toHaveAttribute("aria-pressed", "true");
+  await expect(focusBar).toContainText("ขากลับ (B → A)");
   await expect(popup.locator("[data-endpoint-locality]")).toContainText("ต.ตัวอย่าง ก");
   await expect(timeline).toContainText("สะพานขากลับ");
   const before = await leafletPopup.elementHandle();
   await b.click();
   await expect(b).toHaveAttribute("aria-pressed", "true");
+  await expect(timeline.locator(".citizen-detour-timeline-marker").first()).toHaveText("B");
+  await expect(timeline.locator("[aria-current=step] .citizen-detour-timeline-marker")).toHaveText("B");
   await expect(popup.locator("[data-endpoint-locality]")).toContainText("ต.ตัวอย่าง ข");
   await expect(popup).toContainText("ยังไม่มีภาพถ่ายประกอบจุดนี้");
   await expect(timeline).toContainText("สะพานขากลับ");
@@ -1017,10 +1037,11 @@ test("public overview A and B use the same anchored inspector, retaining the cho
   await page.setViewportSize({ width: isMobile ? 390 : 1280, height: isMobile ? 760 : 900 });
   const payload = createMockPayload();
   const route = payload.detourRoutes[0];
-  route.detour_meta = { ...route.detour_meta, start_point_photo: { caption: "ข้อมูลปลาย A ในแผนที่รวม", subdistrict: "ตัวอย่าง ก" } };
+  route.detour_meta = { ...route.detour_meta, start_point_photo: { caption: "ข้อมูลปลาย A ในแผนที่รวม", subdistrict: "ตัวอย่าง ก" }, end_point_photo: { url: "data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=" } };
   route.description = "ขาไป:\n1. จุด A\n2. ผ่านแยกไป\n3. จุด B\nขากลับ:\n1. จุด B\n2. ผ่านแยกกลับ\n3. จุด A";
   await page.route("**/functions/v1/hdms-api", (request) => request.fulfill({ json: payload }));
   await page.goto(base + "/");
+  if (isMobile) await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
   const symbol = page.locator(".doh-detour-symbol").first();
   await symbol.focus();
   await symbol.press("Enter");
@@ -1035,9 +1056,24 @@ test("public overview A and B use the same anchored inspector, retaining the cho
   const a = popup.getByRole("button", { name: "A", exact:true });
   const b = popup.getByRole("button", { name: "B", exact:true });
   await expect(b).toHaveAttribute("aria-pressed","true");
-  await expect(popup).toContainText("ยังไม่มีภาพถ่ายประกอบจุดนี้");
+  await expect(popup.locator(".citizen-endpoint-trip-direction")).toHaveText("ขากลับ B → A");
+  await expect(popup.locator(".citizen-endpoint-header")).toHaveCSS("background-image", /linear-gradient/);
+  const accent = () => popup.evaluate(el => getComputedStyle(el).getPropertyValue("--endpoint-accent").trim());
+  const bAccent = await accent();
+  const photoB = popup.getByRole("button", { name: "เปิดภาพขนาดเต็ม จุดสิ้นสุด B" });
+  const imageBoxphotoB = await photoB.locator("img").boundingBox();
+  expect(Math.abs(imageBoxphotoB!.width - imageBoxphotoB!.height)).toBeLessThan(1);
+  await photoB.click();
+  const viewer = page.getByRole("dialog", { name: "ภาพถ่ายสถานการณ์ขนาดเต็ม" });
+  await expect(viewer.getByRole("img")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(viewer).toHaveCount(0);
+  await expect(photoB).toBeFocused();
+  await expect(b).toHaveAttribute("aria-pressed", "true");
   await a.click();
   await expect(a).toHaveAttribute("aria-pressed","true");
+  expect(await accent()).not.toBe(bAccent);
+  await expect(popup.locator(".citizen-endpoint-trip-direction")).toHaveText("ขากลับ B → A");
   await expect(popup).toContainText("ข้อมูลปลาย A ในแผนที่รวม");
   await expect(popup.getByRole("list")).toContainText("ผ่านแยกกลับ");
   await expect(page.locator(".leaflet-popup")).toHaveCount(1);
@@ -1045,4 +1081,36 @@ test("public overview A and B use the same anchored inspector, retaining the cho
   await popup.getByRole("button", { name:"ดูตำแหน่งบนแผนที่" }).click();
   await expect(page.getByTestId("gis-focus-mode-bar")).toContainText("ขากลับ (B → A)");
   await expect(popup).toHaveCount(0);
+});
+
+test("public recommendation and both endpoint cards use the identical Maps URL for the selected direction", async ({ page, isMobile }) => {
+  const data = createMockPayload();
+  await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: data }));
+  await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+  for (const reverse of [false, true]) {
+    await page.goto(base + "/");
+    const nav = isMobile
+      ? page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "ทางเลี่ยง", exact: true })
+      : page.getByRole("complementary", { name: "สรุปสถานการณ์บนแผนที่" }).getByRole("button", { name: /ทางเลี่ยง \d+ เส้นทาง/ });
+    await nav.click();
+    const list = page.getByRole("region", { name: "รายการทางเลี่ยง" }).filter({ visible: true });
+    await list.getByRole("button", { name: /เส้นทางเลี่ยง ปน\.2043/ }).click();
+    const detail = page.getByRole("dialog", { name: /คำแนะนำเส้นทางเลี่ยง/ });
+    if (reverse) await detail.getByRole("button", { name: "ขากลับ B → A", exact: true }).click();
+    const maps = (container: typeof detail) => container.getByRole("link", { name: /ดูบน Google Maps/ });
+    const url = await maps(detail).getAttribute("href");
+    expect(url).toBeTruthy();
+    const parsed = new URL(url!);
+    expect(parsed.searchParams.get("origin")).toBe(reverse ? "6.81,101.17" : "6.78,101.13");
+    expect(parsed.searchParams.get("destination")).toBe(reverse ? "6.78,101.13" : "6.81,101.17");
+    await detail.getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).click();
+    const focusBar = page.getByTestId("gis-focus-mode-bar");
+    await expect(focusBar).toContainText(reverse ? "ขากลับ (B → A)" : "ขาไป (A → B)");
+    await page.locator(".hdms-focus-endpoint.doh-detour-photo-start").press("Enter");
+    const popup = page.locator("[data-detour-endpoint]");
+    await expect(maps(popup)).toHaveAttribute("href", url!);
+    await popup.getByRole("button", { name: "B", exact: true }).click();
+    await expect(maps(popup)).toHaveAttribute("href", url!);
+    await expect(focusBar).toContainText(reverse ? "ขากลับ (B → A)" : "ขาไป (A → B)");
+  }
 });

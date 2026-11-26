@@ -250,6 +250,21 @@
   font-variant-numeric: tabular-nums;
 }
 .mobileNav { color: var(--workspace-ink); }
+.mobileNavItem {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+  padding-inline: .5rem;
+  text-align: start;
+}
+.mobileNavPrimary {
+  flex-direction: column;
+  justify-content: center;
+  padding: .2rem .125rem;
+  text-align: center;
+}
+.mobileNavGlyph { display: flex; flex: none; align-items: center; gap: .2rem; }
+.mobileNavLabel { min-width: 0; overflow-wrap: anywhere; }
 .mobileNav button:not([aria-current="page"]) { color: var(--workspace-copy); }
 .mobileTools {
   margin-top: .25rem;

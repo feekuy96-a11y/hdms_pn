@@ -211,7 +211,7 @@ export function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color:
   const name = routeNameOf(props);
   const lengthKm = props.length_km || "";
   return `
-    <div class="w-[min(18.5rem,calc(100vw-2.25rem))] max-w-full text-xs p-[0.833em] sm:p-[1em] pr-8 font-body bg-slate-950 text-white rounded-xl" style="border-top: 3px solid ${color}">
+    <div class="doh-highway-popup w-[min(18.5rem,calc(100vw-2.25rem))] max-w-full text-xs p-[0.833em] sm:p-[1em] pr-8 font-body bg-slate-950 text-white rounded-xl" style="border-top: 3px solid ${color}">
       <div class="flex items-center justify-between pb-1.5 border-b border-slate-800 gap-[0.667em]">
         <span class="text-white text-sm sm:text-base font-bold font-heading tracking-wide break-words">
           ${code ? `ทล.${escapeHtml(code)} ` : ""}${escapeHtml(name)}
@@ -687,27 +687,51 @@ export function buildPublicDetourEndpointPopup(
   const timeline = availableDirection && description ? getDetourTimelinePresentation(description) : null;
   const steps = timeline?.steps ?? [];
   const timelineHtml = steps.length && !timeline?.directionNotice
-    ? `<ol aria-label="ลำดับจุดทางเลี่ยง" class="space-y-2">${steps.map((step, i) => {
-        const label = i === 0 ? (reverse ? "B" : "A") : i === steps.length - 1 ? (reverse ? "A" : "B") : String(i);
-        return `<li class="flex items-start gap-2 text-slate-200"><span class="inline-grid size-6 shrink-0 place-items-center rounded-full border border-slate-600 font-bold">${label}</span><div class="min-w-0 break-words"><strong>${escapeHtml(step.title)}</strong><p class="text-slate-300">${escapeHtml(step.detail)}</p></div></li>`;
+    ? `<ol aria-label="ลำดับจุดทางเลี่ยง" class="citizen-detour-timeline">${steps.map((step, i) => {
+        const label = i === 0 ? (reverse ? "B" : "A") : i === steps.length - 1 ? (reverse ? "A" : "B") : String(step.stepNumber);
+        const current = label === (point === "START" ? "A" : "B");
+        return `<li class="citizen-detour-timeline-row"${current ? ' aria-current="step"' : ""}>
+          <span class="citizen-detour-timeline-marker">${label}</span>
+          <div class="citizen-detour-step citizen-detour-timeline-card">
+            <div class="flex flex-wrap items-start justify-between gap-1">
+              <strong class="font-heading font-bold text-amber-300">${escapeHtml(step.title)}</strong>
+              <span class="citizen-detour-timeline-distance">${escapeHtml(step.badge)}</span>
+            </div>
+            ${step.detail ? `<p class="leading-snug">${escapeHtml(step.detail)}</p>` : ""}
+          </div>
+        </li>`;
       }).join("")}</ol>`
     : `<p class="text-slate-300">${escapeHtml(timeline?.directionNotice || "ยังไม่มีลำดับจุดที่บันทึกไว้สำหรับทิศนี้")}</p>`;
   const nav = resolveDetourGoogleMapsNavigation(detour, direction, floodRoutes);
   return `
     <section data-detour-endpoint="${point}" class="doh-detour-point-photo-popup flex w-[min(20rem,calc(100vw-3rem))] max-h-[min(56dvh,31rem)] max-w-full flex-col overflow-hidden rounded-2xl bg-[#070d1e] font-body text-xs text-white" aria-label="${title}">
-      <div class="flex shrink-0 items-center justify-between gap-1.5 border-b border-slate-700 px-2 py-1.5 pr-12">
-        <strong>${title}</strong>
-        <div role="group" aria-label="เลือกจุดบนเส้นทาง" class="flex gap-1">
+      <div class="citizen-endpoint-header flex shrink-0 items-center justify-between gap-1.5 px-2.5 py-1.5 pr-12">
+        <strong class="min-w-0 font-heading">${title}</strong>
+        <div role="group" aria-label="เลือกจุดบนเส้นทาง" class="citizen-endpoint-picker flex shrink-0 gap-1">
           ${(["START", "END"] as const).map((role) => `<button type="button" data-endpoint-select="${role}" aria-pressed="${role === point}" ${availablePoints.has(role) ? "" : "disabled"} class="size-11 rounded-lg border border-slate-600 font-bold aria-pressed:border-sky-300 aria-pressed:bg-sky-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-50">${role === "START" ? "A" : "B"}</button>`).join("")}
         </div>
       </div>
       <div data-endpoint-scroll tabindex="0" aria-label="ภาพ พื้นที่ และข้อมูลทางเลี่ยง" class="min-h-0 space-y-2 overflow-y-auto overscroll-contain p-2.5">
-        ${safePhotoUrl ? `<button type="button" data-endpoint-photo aria-expanded="false" aria-label="ขยายหรือย่อภาพ ${title}" class="block w-full overflow-hidden rounded-lg border border-slate-700"><img src="${safePhotoUrl}" alt="${title}" class="h-[5.5rem] w-full object-contain"></button>` : `<p class="rounded-lg border border-dashed border-slate-700 p-3 text-center text-slate-300">ยังไม่มีภาพถ่ายประกอบจุดนี้</p>`}
-        <h5 class="text-sm font-bold break-words">${escapeHtml(detour.route_name)}</h5>
-        <p data-endpoint-locality class="text-sky-200 break-words">${escapeHtml(area || "ยังไม่พบข้อมูลพื้นที่ ต./อ./จ.")}</p>
-        <p class="text-slate-200 break-words">${escapeHtml(photo?.caption?.trim() || "ยังไม่มีคำอธิบายจุดนี้")}</p>
-        <div class="space-y-2 border-t border-slate-700 pt-2">
-          <h6 class="font-bold">ลำดับจุดทางเลี่ยง · ${reverse ? "ขากลับ B → A" : "ขาไป A → B"}</h6>
+        <div class="citizen-detour-photo-card">
+          <div class="citizen-detour-photo-title">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="3"/></svg>
+            <span>${title} · ภาพทางเลี่ยง</span>
+          </div>
+          ${safePhotoUrl ? `<button type="button" data-endpoint-photo data-public-photo aria-haspopup="dialog" aria-label="เปิดภาพขนาดเต็ม ${title}" class="citizen-endpoint-photo-button block w-full cursor-zoom-in overflow-hidden rounded-lg"><img src="${safePhotoUrl}" alt="${title}" class="citizen-detour-photo-image"><span class="citizen-endpoint-zoom" aria-hidden="true"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4"/></svg></span><span data-photo-error hidden>โหลดภาพตัวอย่างไม่สำเร็จ · แตะเพื่อลองเปิดภาพ</span></button>` : `<p class="rounded-lg border border-dashed border-slate-700 p-2 text-center text-slate-300">ยังไม่มีภาพถ่ายประกอบจุดนี้</p>`}
+          <p class="text-slate-300 break-words">${escapeHtml(photo?.caption?.trim() || "ยังไม่มีคำอธิบายจุดนี้")}</p>
+        </div>
+        <div class="citizen-endpoint-locality-card">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+          <div class="min-w-0">
+            <h5 class="text-sm font-bold break-words">${escapeHtml(detour.route_name)}</h5>
+            <p data-endpoint-locality class="text-sky-200 break-words">${escapeHtml(area || "ยังไม่พบข้อมูลพื้นที่ ต./อ./จ.")}</p>
+          </div>
+        </div>
+        <div class="space-y-2 pt-1">
+          <div class="citizen-endpoint-timeline-heading">
+            <h6 class="font-bold">ลำดับจุดทางเลี่ยง</h6>
+            <span class="citizen-endpoint-trip-direction">${reverse ? "ขากลับ B → A" : "ขาไป A → B"}</span>
+          </div>
           ${timelineHtml}
         </div>
         <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2 border-t border-slate-700 pt-2">
@@ -749,11 +773,6 @@ export function bindPublicEndpointInspector(
       if (button.hasAttribute("data-endpoint-focus")) {
         map.closePopup();
         openFocus();
-      } else if (button.hasAttribute("data-endpoint-photo")) {
-        const expand = button.getAttribute("aria-expanded") !== "true";
-        button.setAttribute("aria-expanded", String(expand));
-        const image = button.querySelector("img");
-        if (image) image.style.height = expand ? "auto" : "";
       }
     };
     popup.onkeydown = (key) => {
@@ -832,7 +851,7 @@ export function resolvePopupTrafficStatus(flood: FloodRoute): { label: string; b
   };
 }
 
-export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0): string {
+export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMode = false): string {
   const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
   const waterKnown = flood.direction_meta?.water_level_known !== false && meta.waterLevelKnown !== false;
   const levelDisplay = waterKnown ? `${flood.water_level_cm} ซม.` : "รอตรวจสอบระดับน้ำ";
@@ -841,8 +860,28 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0):
   const routeBadge = /^(?:ทล|ปน)\.?\s*/i.test(String(flood.route_no || "")) ? String(flood.route_no) : `ทล.${flood.route_no}`;
   const areaLine = formatPopupAreaLine(flood);
   const photoUrl = normalizeMediaUrl(meta.photos?.[0]?.dataUrl || flood.latest_photo_url || "");
+  const safePhoto = /^(?:https?:\/\/|data:image\/(?:png|jpe?g|webp|gif|avif);base64,|\/(?!\/))/i.test(photoUrl) ? escapeHtml(photoUrl) : "";
   const relativeUpdate = formatPopupRelativeUpdate(flood.updated_at || meta.updatedAt);
   const safeId = escapeHtml(flood.id);
+
+  const statusBadge = `<span class="doh-flood-popup-status rounded-lg px-2 py-1 text-xs font-bold ${statusInfo.badgeClass}">${escapeHtml(statusInfo.label)}</span>`;
+  const time = `<p class="text-xs text-slate-400">${escapeHtml(relativeUpdate)}</p>`;
+  const publicPhoto = `<div class="relative mt-2 overflow-hidden rounded-xl border border-slate-700/80 bg-slate-900">
+    ${safePhoto
+      ? `<button type="button" data-public-photo aria-haspopup="dialog" aria-label="ขยายภาพสถานการณ์เต็มจอ" class="block w-full cursor-zoom-in">
+          <img src="${safePhoto}" alt="ภาพสถานการณ์น้ำท่วม ${escapeHtml(flood.section_name)}" class="h-24 w-full object-cover">
+          <span data-photo-error hidden>โหลดภาพตัวอย่างไม่สำเร็จ · แตะเพื่อลองเปิดภาพ</span>
+        </button>`
+      : `<div class="relative grid h-20 place-items-end bg-[#d7e8e9]">
+          <svg viewBox="0 0 320 80" preserveAspectRatio="xMidYMid slice" class="absolute inset-0 h-full w-full" aria-hidden="true">
+            <path fill="#8aada1" d="M0 35 49 15l44 14 69-22 49 17 57-9 52 20v45H0z"/>
+            <path fill="#547176" d="M92 80l59-57h21l59 57z"/>
+            <path fill="#6ba7bf" d="M0 61 Q33 52 64 61T128 61T192 61T256 61T320 61V80H0Z"/>
+          </svg>
+          <span class="relative rounded-tl-md bg-[#17354a] px-2 py-1 text-[.7rem] text-[#fff]">ภาพประกอบ · ยังไม่มีรูปแนบ</span>
+        </div>`}
+    <span class="pointer-events-none absolute right-2 top-2 max-w-[85%]">${statusBadge}</span>
+  </div>`;
 
   return `
     <div style="border-top: 4px solid ${statusInfo.accentColor};" class="w-[min(20.25rem,calc(100vw-2rem))] sm:w-[21.25rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain p-[0.833em] sm:p-[1.167em] font-body text-slate-100 bg-[#081120] rounded-2xl">
@@ -855,21 +894,21 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0):
             ${escapeHtml(flood.section_name)}
           </span>
         </div>
-        <span class="shrink-0 rounded-lg px-[0.667em] py-[0.167em] font-heading text-[0.75rem] font-bold whitespace-nowrap ${statusInfo.badgeClass}">
-          ${escapeHtml(statusInfo.label)}
-        </span>
+        ${publicMode ? "" : statusBadge}
       </div>
+      ${publicMode ? publicPhoto : ""}
 
       <div class="mt-1.5 sm:mt-2 text-xs text-slate-300 font-medium">
         ระหว่าง กม.${escapeHtml(formatKmPost(flood.km_start))} ถึง กม.${escapeHtml(formatKmPost(flood.km_end))}
       </div>
 
       ${areaLine ? `
-        <div class="mt-1.5 sm:mt-2 flex items-center gap-[0.5em] rounded-xl border border-slate-700/75 bg-[#0e1b33] px-[0.833em] py-[0.5em] text-xs text-slate-200">
+        <div class="doh-flood-popup-area mt-1.5 sm:mt-2 flex items-center gap-[0.5em] rounded-xl border border-slate-700/75 bg-[#0e1b33] px-[0.833em] py-[0.5em] text-xs text-slate-200">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
           <span class="min-w-0 break-words">${escapeHtml(areaLine)}</span>
         </div>
       ` : ""}
+      ${publicMode ? time : ""}
 
       <div class="mt-2 sm:mt-2.5 rounded-xl border border-slate-700/80 bg-[#0d1930] px-[0.833em] py-[0.5em] sm:px-[1em] sm:py-[0.667em] space-y-1.5">
         <div class="flex items-center justify-between gap-[0.667em]">
@@ -877,7 +916,7 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0):
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></svg>
             <span>ระดับน้ำล่าสุด</span>
           </span>
-          <strong class="font-mono text-sm sm:text-base font-black text-[#f59e0b]">${escapeHtml(levelDisplay)}</strong>
+          <strong class="doh-flood-popup-water font-mono text-sm sm:text-base font-black text-[#f59e0b]">${escapeHtml(levelDisplay)}</strong>
         </div>
         ${lanesText ? `
           <div class="flex items-start gap-[0.5em] border-t border-slate-800/80 pt-1.5 text-xs text-slate-200">
@@ -887,17 +926,17 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount: number = 0):
         ` : ""}
       </div>
 
-      ${photoUrl ? `
+      ${!publicMode && safePhoto ? `
         <div class="mt-2 sm:mt-2.5 overflow-hidden rounded-xl border border-slate-700/80 bg-slate-900">
-          <img src="${escapeHtml(photoUrl)}" alt="ภาพสถานการณ์น้ำท่วม" class="h-24 sm:h-32 w-full object-cover"/>
+          <img src="${safePhoto}" alt="ภาพสถานการณ์น้ำท่วม" class="h-24 sm:h-32 w-full object-cover"/>
         </div>
       ` : ""}
 
       <div class="mt-2 sm:mt-2.5 flex items-center justify-between gap-[0.667em] text-[0.75rem] text-slate-400">
-        <span class="inline-flex items-center gap-[0.333em] min-w-0 truncate">
+        ${publicMode ? `<span>ทางเลี่ยงแนะนำ</span>` : `<span class="inline-flex items-center gap-[0.333em] min-w-0 truncate">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           <span class="truncate">${escapeHtml(relativeUpdate)}</span>
-        </span>
+        </span>`}
         ${detourCount > 0 ? `
           <button
             type="button"

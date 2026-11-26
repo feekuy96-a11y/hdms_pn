@@ -54,8 +54,7 @@ export interface FloodDossierModalProps {
   loadFloodPhotosOnDemand: (flood: FloodRoute) => void;
   activePhotoIdx: number;
   setActivePhotoIdx: React.Dispatch<React.SetStateAction<number>>;
-  isPhotoFullscreen: boolean;
-  setIsPhotoFullscreen: React.Dispatch<React.SetStateAction<boolean>>;
+  onOpenPhoto: (src: string, alt: string, trigger: HTMLElement) => void;
   siblingSegments: FloodRoute[];
   setSelectedFloodId: (id: string) => void;
   setFocusCoordinates: (coords: [number, number]) => void;
@@ -87,8 +86,7 @@ export function FloodDossierModal({
   loadFloodPhotosOnDemand,
   activePhotoIdx,
   setActivePhotoIdx,
-  isPhotoFullscreen,
-  setIsPhotoFullscreen,
+  onOpenPhoto,
   siblingSegments,
   setSelectedFloodId,
   setFocusCoordinates,
@@ -153,6 +151,17 @@ export function FloodDossierModal({
       <div
         role="dialog"
         aria-modal="true"
+        onKeyDown={(event) => {
+          if (event.key !== "Tab") return;
+          const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+            'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),summary,[tabindex]:not([tabindex="-1"])'
+          )).filter((element) => element.getClientRects().length > 0);
+          const first = items[0], last = items[items.length - 1];
+          if (event.shiftKey ? document.activeElement === first : document.activeElement === last) {
+            event.preventDefault();
+            (event.shiftKey ? last : first)?.focus();
+          }
+        }}
         aria-label={`รายละเอียดจุดน้ำท่วม ${selectedFlood.section_name}`}
         className="citizen-dossier-frame relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[1.75rem] border-x-0 border-t border-b-0 border-slate-700/80 bg-[#081120] text-slate-100 shadow-2xl sm:max-h-[92dvh] sm:max-w-[57.5rem] sm:rounded-[1.75rem] sm:border-0 sm:ring-1 sm:ring-slate-700/80"
       >
@@ -187,30 +196,28 @@ export function FloodDossierModal({
               </span>
               {activePhotoSrc && !activePhotoFailed ? (
                 <>
-                  <img
-                    src={activePhotoSrc}
-                    onError={() => setFailedSources((previous) => new Set(previous).add(activePhotoSrc))}
-                    alt={`ภาพสถานการณ์ ${selectedFlood.section_name}`}
-                    loading="lazy"
-                    decoding="async"
-                    className="h-36 w-full object-cover sm:h-56"
-                  />
-                  <div className="citizen-photo-caption absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-lg bg-slate-950/85 border border-slate-700/80 px-2.5 py-1 text-xs font-heading font-bold text-white backdrop-blur-xs">
+                  <button type="button" className="citizen-photo-open block w-full cursor-zoom-in" aria-haspopup="dialog" aria-label="ขยายภาพสถานการณ์เต็มจอ"
+                    onClick={(event) => onOpenPhoto(activePhotoSrc, `ภาพสถานการณ์ขนาดเต็ม ${selectedFlood.section_name}`, event.currentTarget)}>
+                    <img
+                      src={activePhotoSrc}
+                      onError={() => setFailedSources((previous) => new Set(previous).add(activePhotoSrc))}
+                      alt={`ภาพสถานการณ์ ${selectedFlood.section_name}`}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-36 w-full object-cover sm:h-56"
+                    />
+                  </button>
+                  <div className="citizen-photo-caption pointer-events-none absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-lg bg-slate-950/85 border border-slate-700/80 px-2.5 py-1 text-xs font-heading font-bold text-white backdrop-blur-xs">
                     <Camera aria-hidden="true" className="h-3.5 w-3.5 text-slate-200" />
                     <span>ภาพสถานการณ์</span>
                   </div>
-                  <div className="citizen-photo-controls absolute right-3 bottom-2.5 flex items-center gap-1.5">
+                  <div className="citizen-photo-controls pointer-events-none absolute right-3 bottom-2.5 flex items-center gap-1.5">
                     <span className="rounded-md bg-slate-950/85 border border-slate-700/80 px-2 py-0.5 font-mono text-xs font-bold text-white">
                       {safePhotoIdx + 1}/{dossierPhotos.length}
                     </span>
-                    <button
-                      type="button"
-                      aria-label="ขยายภาพสถานการณ์เต็มจอ"
-                      onClick={() => setIsPhotoFullscreen(true)}
-                      className="grid h-7 w-7 place-items-center rounded-md bg-slate-950/85 border border-slate-700/80 text-white hover:bg-slate-800 transition cursor-pointer"
-                    >
+                    <span aria-hidden="true" className="grid h-7 w-7 place-items-center rounded-md bg-slate-950/85 text-white">
                       <Maximize2 className="h-3.5 w-3.5" />
-                    </button>
+                    </span>
                   </div>
                 </>
               ) : (
@@ -412,31 +419,6 @@ export function FloodDossierModal({
         </div>
       </div>
 
-      {/* Fullscreen Photo Preview Overlay */}
-      {isPhotoFullscreen && activePhotoSrc && !activePhotoFailed && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="ภาพถ่ายสถานการณ์ขนาดเต็ม"
-          className="fixed inset-0 z-[800] flex items-center justify-center bg-slate-950/90 p-4"
-          onClick={() => setIsPhotoFullscreen(false)}
-        >
-          <button
-            type="button"
-            aria-label="ปิดภาพขนาดเต็ม"
-            onClick={() => setIsPhotoFullscreen(false)}
-            className="absolute top-4 right-4 grid h-11 w-11 place-items-center rounded-full bg-slate-800 text-white hover:bg-slate-700"
-          >
-            <X className="h-5 w-5" />
-          </button>
-          <img
-            src={activePhotoSrc}
-            alt={`ภาพสถานการณ์ขนาดเต็ม ${selectedFlood.section_name}`}
-            className="max-h-[90dvh] max-w-[92vw] rounded-2xl object-contain shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
     </div>
   );
 }

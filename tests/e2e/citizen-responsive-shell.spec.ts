@@ -56,13 +56,14 @@ test("citizen shell keeps one map and the selected flood across phone, tablet an
   }
 
   await flood.getByRole("button", { name: "ปิดรายละเอียด", exact: true }).click();
-  await nav.getByRole("button", { name: "เหตุการณ์น้ำท่วม" }).click();
+  await expect(drawer).toBeVisible();
   await expect(drawer.getByRole("button", { name: /หนองจิก ทดสอบ/, pressed: true })).toBeVisible();
   await page.setViewportSize({ width: 568, height: 320 });
   await drawer.getByRole("button", { name: /เส้นทางเลี่ยง 1 สาย/ }).click();
   await expect(flood).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await flood.getByRole("button", { name: "ปิดรายละเอียด", exact: true }).click();
+  await drawer.getByRole("button", { name: "ปิดรายการสายทาง" }).click();
   await nav.getByRole("button", { name: "ทางเลี่ยง", exact: true }).click();
   await drawer.getByRole("button", { name: /ทางเลี่ยงหนองจิก ทดสอบ/ }).click();
   const detour = page.getByRole("dialog", { name: /คำแนะนำเส้นทางเลี่ยง/ });
@@ -104,15 +105,57 @@ test("citizen theme can switch and saves the theme on reload without changing na
   const nav = page.getByRole("navigation", { name: "เมนูประชาชน" });
   await expect(shell).toHaveAttribute("data-citizen-theme", "light");
   await expect(nav).toBeVisible();
+  const basemap = page.locator(".leaflet-container").first();
+  const pane = basemap.locator(".leaflet-tile-pane");
+  await expect(pane).toHaveCSS("filter", "none");
+  const mapLight = await basemap.evaluate(el => getComputedStyle(el).backgroundColor);
   const light = await shell.evaluate(el => getComputedStyle(el).getPropertyValue("--surface-panel").trim());
   await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
   await expect(shell).toHaveAttribute("data-citizen-theme", "dark");
   expect(await shell.evaluate(el => getComputedStyle(el).getPropertyValue("--surface-panel").trim())).not.toBe(light);
+  await expect(pane).toHaveCSS("filter", "none");
+  await expect(basemap).toHaveCSS("background-color", mapLight);
   await page.reload();
   await expect(shell).toHaveAttribute("data-citizen-theme", "dark");
   await expect(nav).toBeVisible();
   await page.getByRole("button", { name: "เปิดธีมสว่าง" }).click();
   await expect(shell).toHaveAttribute("data-citizen-theme", "light");
+});
+
+test("public flood popup keeps area, water level, status and close control readable in both themes", async ({ page }) => {
+  const criticalFlood = { ...payload.floodRoutes[0], traffic_status: "CLOSED", subdistrict: "บ้านนอก", district: "ปะนาเระ", province: "ปัตตานี" };
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: { ...payload, floodRoutes: [criticalFlood] } }));
+  await page.goto(base + "/");
+  const pin = page.locator(".doh-map-capsule-pin").first();
+  const popup = page.locator(".doh-flood-leaflet-popup");
+
+  for (const theme of ["light", "dark"]) {
+    if (theme === "dark") await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
+    await pin.click();
+    await expect(popup.getByText("ต.บ้านนอก อ.ปะนาเระ จ.ปัตตานี")).toBeVisible();
+    await expect(popup.getByText("ผ่านไม่ได้", { exact: true })).toBeVisible();
+    for (const selector of [".doh-flood-popup-area span", ".doh-flood-popup-water", ".doh-flood-popup-status", ".leaflet-popup-close-button"]) {
+      const contrast = await popup.locator(selector).evaluate(element => {
+        const rgb = (color: string) => (color.match(/[\d.]+/g) || []).map(Number);
+        const luma = (color: number[]) => color.slice(0, 3).reduce((sum, byte, channel) => {
+          const n = byte / 255;
+          return sum + (n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4) * [0.2126, 0.7152, 0.0722][channel];
+        }, 0);
+        const foreground = luma(rgb(getComputedStyle(element).color));
+        for (let node: Element | null = element; node; node = node.parentElement) {
+          const bg = rgb(getComputedStyle(node).backgroundColor);
+          if (bg.length === 3 || bg[3] === 1) {
+            const background = luma(bg);
+            return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+          }
+        }
+        return 0;
+      });
+      expect(contrast, theme + " " + selector).toBeGreaterThanOrEqual(4.5);
+    }
+    await popup.locator(".leaflet-popup-close-button").click();
+    await expect(popup).toHaveCount(0);
+  }
 });
 
 test("citizen directory lists six offices in order and enables only verified stored actions", async ({ page, isMobile }) => {
@@ -158,6 +201,14 @@ test("citizen directory lists six offices in order and enables only verified sto
   await expect(directory.locator("article").nth(2).getByRole("button", { name: /นำทาง/ })).toBeDisabled();
   await expect(directory.locator("article").nth(4)).toContainText("ยังยืนยันข้อมูลสำนักงานไม่ได้");
   await expect(directory.locator("article").nth(5)).toContainText("ยังไม่มีข้อมูลสำนักงาน");
+  const closeDirectory = directory.getByRole("button", { name: "ปิดหน้าติดต่อ" });
+  const lastLink = directory.getByRole("link").last();
+  await closeDirectory.focus();
+  await page.keyboard.press("Shift+Tab");
+  await expect(lastLink).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(closeDirectory).toBeFocused();
+
   await directory.locator("article").last().scrollIntoViewIfNeeded();
   expect(await directory.locator(".citizen-office-scroll").evaluate(el => el.scrollHeight >= el.clientHeight)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(isMobile ? 320 : 1280);
@@ -432,5 +483,61 @@ test("summary holds one unabridged horizontal row with three-digit counts at 320
       return el.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2));
     })).toBe(true);
     await flood.click();
+  }
+});
+
+test("traffic cards show all reported buckets and filter accurately with several statuses together", async ({ page, isMobile }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const states = [
+    { color: "red", use: "CLOSED", detail: "CLOSED", label: "ผ่านไม่ได้", count: 2 },
+    { color: "orange", use: "WARNING", detail: "NO_SMALL_VEHICLES", label: "รถเล็กไม่สามารถผ่านได้", count: 1 },
+    { color: "amber", use: "WARNING", detail: "CAUTION", label: "เฝ้าระวัง / ระมัดระวัง", count: 2 },
+    { color: "sky", use: "LIGHT_VEHICLES_ONLY", detail: "LIGHT_VEHICLES_ONLY", label: "รถทุกชนิดผ่านได้แต่ไม่สะดวก", count: 1 },
+    { color: "emerald", use: "PASSABLE", detail: "PASSABLE", label: "ผ่านได้ปกติ", count: 1 },
+    { color: "slate", use: "WARNING", detail: "PENDING_VERIFICATION", label: "รอตรวจสอบ", count: 1 },
+  ];
+  const floods = states.flatMap(item => Array.from({ length: item.count }, (_, index) => ({
+    ...payload.floodRoutes[0], id: item.color + index, section_name: `ช่วงทดสอบ-${item.color}-${index + 1}`,
+    traffic_status: item.use, direction_meta: { trafficStatusDetail: item.detail },
+  })));
+  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: { ...payload, floodRoutes: floods } }));
+  await page.setViewportSize(isMobile ? { width: 320, height: 568 } : { width: 1440, height: 900 });
+  await page.goto(base + "/");
+
+  for (const theme of ["light", "dark"]) {
+    if (theme === "dark") await page.getByRole("button", { name: "เปิดธีมมืด", exact: true }).click();
+    const panel = isMobile
+      ? page.getByRole("dialog", { name: "รายการสายทางและจุดเฝ้าระวัง" })
+      : page.locator(".citizen-sidebar");
+    if (isMobile) {
+      await page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "เหตุการณ์น้ำท่วม" }).click();
+    }
+    const summary = panel.getByRole("list", { name: "สรุปสถานการณ์ทุกจุด" });
+    const stories = panel.locator(".citizen-card");
+    await expect(summary.getByRole("button")).toHaveCount(states.length);
+    await expect(stories).toHaveCount(floods.length);
+    await page.screenshot({ path: testInfo.outputPath(`traffic-cards-${theme}.png`) });
+    for (const state of states) {
+      const card = summary.getByRole("button", { name: `${state.count} ${state.label}`, exact: true });
+      await expect(card).toHaveAttribute("data-traffic-card", state.color);
+      expect(await card.evaluate(el => {
+        const label = el.querySelector(".citizen-traffic-card-label")!;
+        const bounds = el.getBoundingClientRect();
+        const text = document.createRange();
+        text.selectNodeContents(label);
+        return bounds.height >= 43.95 && Array.from(text.getClientRects()).every(rect =>
+          rect.left >= bounds.left && rect.right <= bounds.right && rect.bottom <= bounds.bottom
+        );
+      }), state.label).toBe(true);
+      await card.click();
+      await expect(card).toHaveAttribute("aria-pressed", "true");
+      await expect(stories).toHaveCount(state.count);
+      for (const story of await stories.all()) await expect(story).toContainText(new RegExp(`ช่วงทดสอบ-${state.color}-`));
+      await card.click();
+      await expect(card).toHaveAttribute("aria-pressed", "false");
+      await expect(stories).toHaveCount(floods.length);
+    }
+    if (isMobile) await panel.getByRole("button", { name: "ปิดรายการสายทาง" }).click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
   }
 });

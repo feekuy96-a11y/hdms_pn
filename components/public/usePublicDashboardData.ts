@@ -16,6 +16,7 @@ import {
 } from "@/lib/traffic-presentation";
 import { usePollingActivity } from "@/lib/use-polling-activity";
 import { useSystemFavicon } from "@/lib/use-system-favicon";
+import { inspectPublicReports, resolvePublicReadState } from "./public-read-state";
 
 export type PublicFloodAlbumPhoto = { dataUrl: string; sizeBytes?: number; id?: string };
 export type PublicFloodAlbum =
@@ -60,10 +61,14 @@ export function usePublicDashboardData({
   const floodAlbumCache = useRef(new Map<string, PublicFloodAlbum>());
 
   // TanStack Query for Data Fetching & Sync with automatic background refetch (Network-First live data)
-  const { data: systemData = INITIAL_SYSTEM_DATA, isPending, isError, refetch } = useQuery<SystemDataPayload>({
+  const { data: snapshot, dataUpdatedAt, isError, fetchStatus, refetch } = useQuery<SystemDataPayload>({
     queryKey: ["dohSystemData"],
     queryFn: async () => {
-      return await getPublicSystemDataAction();
+      const payload = await getPublicSystemDataAction();
+      if (!Array.isArray(payload?.floodRoutes) || !Array.isArray(payload?.detourRoutes)) {
+        throw new Error("ข้อมูลสถานการณ์ไม่ครบถ้วน");
+      }
+      return payload;
     },
     staleTime: 0,
     refetchOnMount: "always",
@@ -71,24 +76,23 @@ export function usePublicDashboardData({
     refetchIntervalInBackground: false,
   });
 
+  const systemData = snapshot ?? INITIAL_SYSTEM_DATA;
   useSystemFavicon(
     systemData.systemSettings?.logoUrl,
     systemData.systemSettings?.name,
     systemData.systemSettings?.org
   );
 
-  // Background Auto-Notification when new/updated data arrives
-  useEffect(() => {
-    if (!systemData) return;
-    const currentFingerprint = `${systemData.updatedAt || ""}_${systemData.floodRoutes?.length || 0}_${(systemData.floodRoutes || [])
-      .map((r) => `${r.id}:${r.water_level_cm}:${r.traffic_status}:${r.updated_at}`)
-      .join("|")}`;
+  const readState = resolvePublicReadState(snapshot !== undefined, isError || fetchStatus === "paused");
+  const reports = useMemo(() => snapshot ? inspectPublicReports(snapshot) : null, [snapshot]);
 
-    if (previousDataFingerprint.current && previousDataFingerprint.current !== currentFingerprint) {
+  useEffect(() => {
+    if (readState !== "ready" || !reports) return;
+    if (previousDataFingerprint.current && previousDataFingerprint.current !== reports.fingerprint) {
       showToast("🔔 มีข้อมูลสถานการณ์อัปเดตล่าสุดจากศูนย์ปฏิบัติการ");
     }
-    previousDataFingerprint.current = currentFingerprint;
-  }, [systemData, showToast]);
+    previousDataFingerprint.current = reports.fingerprint;
+  }, [readState, reports, showToast]);
 
   const selectedFlood =
     systemData.floodRoutes.find((r) => r.id === selectedFloodId) || systemData.floodRoutes[0];
@@ -271,8 +275,9 @@ export function usePublicDashboardData({
 
   return {
     systemData,
-    isPending,
-    isError,
+    readState,
+    dataUpdatedAt,
+    latestReportMs: reports?.latestReportMs ?? null,
     refetch,
     floodAlbums,
     loadFloodPhotosOnDemand,

@@ -11,6 +11,8 @@ import { INITIAL_SYSTEM_DATA, SystemDataPayload, FloodRoute, DetourRoute } from 
 import { createClient } from "@/lib/supabase/client";
 import type { GisMapViewportApi } from "@/components/map/LongdoGisMap";
 import { useSharedGisFocus } from "@/components/map/useSharedGisFocus";
+import { PUBLIC_READ_MESSAGES } from "@/components/public/public-read-state";
+import { CitizenPhotoViewer, publicPhotoSource, type CitizenPhoto } from "@/components/public/CitizenPhotoViewer";
 import { CitizenMapStatus, recordedPassability, mapPassabilityLabel, type MapPassability } from "@/components/public/CitizenMapStatus";
 import { CitizenOfficeDirectory } from "@/components/public/CitizenOfficeDirectory";
 import { GisFocusModeBar } from "@/components/public/GisFocusModeBar";
@@ -51,7 +53,6 @@ import {
   Compass,
   Phone,
   Clock,
-  CheckCircle2,
   ArrowRightLeft,
   ArrowLeftRight,
   Droplets,
@@ -128,6 +129,19 @@ export default function HomePage() {
       if (window.localStorage.getItem("hdms.citizen.theme") === "dark") setCitizenTheme("dark");
     } catch { /* The map remains usable when browser storage is unavailable. */ }
   }, []);
+  useEffect(() => {
+    const handleThumbnailError = (event: Event) => {
+      const image = event.target;
+      if (!(image instanceof HTMLImageElement)) return;
+      const button = image.closest("[data-citizen-theme] button[data-public-photo]");
+      if (!button) return;
+      image.hidden = true;
+      const fallback = button.querySelector<HTMLElement>("[data-photo-error]");
+      if (fallback) fallback.hidden = false;
+    };
+    document.addEventListener("error", handleThumbnailError, true);
+    return () => document.removeEventListener("error", handleThumbnailError, true);
+  }, []);
   const toggleCitizenTheme = () => {
     const next = citizenTheme === "light" ? "dark" : "light";
     setCitizenTheme(next);
@@ -146,7 +160,11 @@ export default function HomePage() {
   const [detourDirectionById, setDetourDirectionById] = useState<Record<string, "FORWARD" | "REVERSE">>({});
   const [eventAdviceDirection, setEventAdviceDirection] = useState<"FORWARD" | "REVERSE">("FORWARD");
   const [isHistoryExpanded, setIsHistoryExpanded] = useState<boolean>(false);
-  const [isPhotoFullscreen, setIsPhotoFullscreen] = useState<boolean>(false);
+  const [publicPhoto, setPublicPhoto] = useState<CitizenPhoto | null>(null);
+  const openPublicPhoto = (raw: string, alt: string, trigger: HTMLElement) => {
+    const src = publicPhotoSource(raw);
+    if (src) setPublicPhoto({ src, alt, trigger });
+  };
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRouteFilter, setSelectedRouteFilter] = useState("ALL");
@@ -223,8 +241,9 @@ export default function HomePage() {
 
   const {
     systemData,
-    isPending,
-    isError,
+    readState,
+    dataUpdatedAt,
+    latestReportMs,
     refetch,
     floodAlbums,
     loadFloodPhotosOnDemand,
@@ -257,10 +276,10 @@ export default function HomePage() {
     showToast,
   });
 
-  const snapshotTime = systemData.updatedAt ? new Date(systemData.updatedAt) : null;
-  const formattedSnapshot = snapshotTime && Number.isFinite(snapshotTime.getTime())
-    ? new Intl.DateTimeFormat("th-TH", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(snapshotTime)
-    : null;
+  const timeFormatter = new Intl.DateTimeFormat("th-TH", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Bangkok" });
+  const fetchedAtLabel = dataUpdatedAt > 0 ? timeFormatter.format(dataUpdatedAt) : null;
+  const latestReportLabel = latestReportMs !== null ? timeFormatter.format(latestReportMs) : null;
+  const showCounts = readState === "ready" || (readState === "stale" && (systemData.floodRoutes.length > 0 || systemData.detourRoutes.length > 0));
   const hotlinePhone = systemData.systemSettings?.phone || "1586";
 
   const openContacts = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -318,7 +337,6 @@ export default function HomePage() {
   useEffect(() => {
     setExpandedDetourId(null);
     setIsHistoryExpanded(false);
-    setIsPhotoFullscreen(false);
   }, [selectedFloodId, showDossier]);
 
   // Auto-scroll to #dossier-detour-section when opening via FloodCard detour count button
@@ -361,7 +379,7 @@ export default function HomePage() {
     showMapList("FLOOD");
   };
 
-  const handleSelectFlood = (flood: FloodRoute, scrollToDetour: boolean = false) => {
+  const handleSelectFlood = (flood: FloodRoute, scrollToDetour = false, fromMobileList = false) => {
     scrollToDetourOnOpenRef.current = scrollToDetour;
     if (gisFocus.status === "idle" && !preModalViewportRef.current) {
       preModalViewportRef.current = mapViewportApiRef.current?.getViewport() ?? null;
@@ -376,7 +394,8 @@ export default function HomePage() {
     setActivePhotoIdx(0);
     setViewingDetourModal(null);
     setShowDossier(true);
-    setIsMobileDrawerOpen(false);
+    // The dossier hides the drawer while open; preserve the originating list.
+    if (!fromMobileList) setIsMobileDrawerOpen(false);
     if (gisFocus.status !== "focused" && flood.lat_start && flood.lon_start) {
       setFocusCoordinates([flood.lon_start, flood.lat_start]);
     }
@@ -506,14 +525,21 @@ export default function HomePage() {
 
   return (
     <div data-citizen-theme={citizenTheme} className="citizen-ui doh-readable min-h-dvh flex flex-col bg-surface-canvas text-slate-100 font-body"
-      onClickCapture={testPreview ? (event) => {
+      onClickCapture={(event) => {
+        const photoTrigger = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-public-photo]") : null;
+        if (photoTrigger) {
+          const img = photoTrigger.querySelector("img");
+          if (img) openPublicPhoto(img.getAttribute("src") ?? "", img.alt, photoTrigger);
+          return;
+        }
+        if (!testPreview) return;
         const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
         const href = link?.getAttribute("href") ?? "";
         if (/^(https?:|tel:)/i.test(href)) {
           event.preventDefault();
           showToast("โหมดทดสอบ: ไม่ได้เปิดลิงก์ภายนอกหรือโทรออก");
         }
-      } : undefined}
+      }}
     >
       {testPreview && <p role="note" className="citizen-test-note h-5 shrink-0 bg-slate-950 px-2 text-center text-[0.6875rem] font-bold leading-5 text-amber-200">เว็บทดสอบ · ข้อมูลจำลอง</p>}
       {/* =================================================================== */}
@@ -547,7 +573,7 @@ export default function HomePage() {
 
         {/* Right Actions: Hotline (Admin and manual refresh buttons removed for citizens) */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {!testPreview && formattedSnapshot && <span className="citizen-traffic-time hidden xl:inline">ข้อมูล ณ {formattedSnapshot} น.</span>}
+          {!testPreview && fetchedAtLabel && <span className="citizen-traffic-time hidden xl:inline">ดึงข้อมูลสำเร็จล่าสุด {fetchedAtLabel} น.</span>}
           <button type="button" data-citizen-contact-desktop className="citizen-theme-button hidden lg:inline-flex" onClick={openContacts}>
             <Phone aria-hidden="true" className="size-4" />ติดต่อ
           </button>
@@ -624,7 +650,7 @@ export default function HomePage() {
               )}
             </div>
 
-            <SituationSummary counts={situationCounts} activeFilter={selectedStatusFilter} onFilter={handleStatusFilter} />
+            {showCounts && <SituationSummary counts={situationCounts} activeFilter={selectedStatusFilter} onFilter={handleStatusFilter} />}
             {(selectedStatusFilter !== "ALL" || mapPassability !== "ALL") && (
               <button
                 type="button"
@@ -647,7 +673,7 @@ export default function HomePage() {
                   }`}
               >
                 <Waves aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                <span>น้ำท่วม ({filteredFloods.length})</span>
+                <span>น้ำท่วม{showCounts && ` (${filteredFloods.length})`}</span>
               </button>
               <button
                 type="button"
@@ -659,7 +685,7 @@ export default function HomePage() {
                   }`}
               >
                 <Route aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                <span>ทางเลี่ยง ({filteredDetours.length})</span>
+                <span>ทางเลี่ยง{showCounts && ` (${filteredDetours.length})`}</span>
               </button>
             </div>
 
@@ -692,7 +718,12 @@ export default function HomePage() {
 
           {/* Incident & Detour Cards Scrollable List */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-            {sidebarTab === "DETOUR" && detourList}
+            {readState !== "ready" && <p className="text-xs text-slate-300" role="status">{PUBLIC_READ_MESSAGES[readState]}</p>}
+            {fetchedAtLabel && <p className="text-xs text-slate-300">
+              ดึงข้อมูลสำเร็จล่าสุด {fetchedAtLabel} น.
+              {latestReportLabel && <><br />เวลาอัปเดตรายงานล่าสุด {latestReportLabel} น.</>}
+            </p>}
+            {sidebarTab === "DETOUR" && showCounts && detourList}
             {sidebarTab === "FLOOD" && (
               <>
                 {filteredFloods.map((flood) => (
@@ -707,7 +738,7 @@ export default function HomePage() {
                 ))}
               </>
             )}
-            {sidebarTab === "DETOUR" && filteredDetours.length === 0 && (
+            {readState === "ready" && sidebarTab === "DETOUR" && filteredDetours.length === 0 && (
               <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-6 text-center text-sm space-y-2.5">
                 <h4 className="font-heading font-bold text-white text-xs">ไม่พบเส้นทางเลี่ยงที่ค้นหา</h4>
                 <p className="text-xs text-slate-400 leading-relaxed">
@@ -729,10 +760,10 @@ export default function HomePage() {
                 )}
               </div>
             )}
-            {sidebarTab === "FLOOD" && filteredFloods.length === 0 && (
+            {readState === "ready" && sidebarTab === "FLOOD" && filteredFloods.length === 0 && (
               <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-6 text-center text-sm space-y-2.5">
-                <div className="w-10 h-10 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-                  <CheckCircle2 className="w-5 h-5" />
+                <div className="w-10 h-10 mx-auto rounded-full bg-surface-card flex items-center justify-center text-slate-300">
+                  <Search aria-hidden="true" className="w-5 h-5" />
                 </div>
                 <h4 className="font-heading font-bold text-white text-xs">
                   {systemData.floodRoutes.length === 0
@@ -774,14 +805,14 @@ export default function HomePage() {
         {/* B. MAIN GIS MAP VIEWPORT                                          */}
         {/* ================================================================= */}
         <section aria-label="แผนที่และข้อมูลการเดินทาง" className="citizen-map-workspace order-1 relative h-full min-h-0 flex-1 w-full overflow-hidden bg-surface-canvas">
-          {isPending && (
+          {readState === "loading" && (
             <div role="status" aria-live="polite" className="absolute left-1/2 top-[6.75rem] sm:top-14 z-[600] -translate-x-1/2 max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-17.5rem)] rounded-xl border border-slate-700 bg-slate-950/95 px-4 py-2.5 text-sm text-white shadow-xl">
               กำลังโหลดข้อมูลสถานการณ์ล่าสุด…
             </div>
           )}
-          {isError && systemData.floodRoutes.length === 0 && systemData.detourRoutes.length === 0 && (
+          {(readState === "unavailable" || readState === "stale") && (
             <div role="alert" className="absolute left-1/2 top-[6.75rem] sm:top-14 z-[600] flex max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-17.5rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-red-500/60 bg-slate-950/95 px-4 py-2.5 text-sm text-white shadow-xl">
-              <span>โหลดข้อมูลสถานการณ์ไม่สำเร็จ</span>
+              <span>{PUBLIC_READ_MESSAGES[readState]}</span>
               <button type="button" onClick={() => void refetch()} className="min-h-11 rounded-lg bg-amber-400 px-3 font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">ลองอีกครั้ง</button>
             </div>
           )}
@@ -820,7 +851,7 @@ export default function HomePage() {
             publicStatusSummary={!showDossier && !viewingDetourModal && !isContactOpen ? (
               <div className={isMobileDrawerOpen ? "hidden lg:block" : undefined}>
                 <CitizenMapStatus systemData={systemData} selected={mapPassability}
-                  onFilter={filterMapPassability} onDetours={() => showMapList("DETOUR")} isPending={isPending} isError={isError} />
+                  onFilter={filterMapPassability} onDetours={() => showMapList("DETOUR")} readState={readState} />
               </div>
             ) : undefined}
             isSidebarCollapsed={isSidebarCollapsed}
@@ -904,11 +935,13 @@ export default function HomePage() {
             routeChips={routeChips}
             selectedFloodId={selectedFloodId}
             detourCountByFloodId={detourCountByFloodId}
-            handleSelectFlood={handleSelectFlood}
-            handleOpenFloodDetourSection={handleOpenFloodDetourSection}
+            handleSelectFlood={(flood, scrollToDetour) => handleSelectFlood(flood, scrollToDetour, true)}
+            handleOpenFloodDetourSection={(flood) => handleSelectFlood(flood, true, true)}
             detourList={detourList}
-            isError={isError}
-            isPending={isPending}
+            readState={readState}
+            fetchedAtLabel={fetchedAtLabel}
+            latestReportLabel={latestReportLabel}
+            hasCounts={showCounts}
             refetch={refetch}
           />
 
@@ -923,8 +956,7 @@ export default function HomePage() {
               loadFloodPhotosOnDemand={loadFloodPhotosOnDemand}
               activePhotoIdx={activePhotoIdx}
               setActivePhotoIdx={setActivePhotoIdx}
-              isPhotoFullscreen={isPhotoFullscreen}
-              setIsPhotoFullscreen={setIsPhotoFullscreen}
+              onOpenPhoto={openPublicPhoto}
               siblingSegments={siblingSegments}
               setSelectedFloodId={setSelectedFloodId}
               setFocusCoordinates={setFocusCoordinates}
@@ -967,17 +999,18 @@ export default function HomePage() {
       </main>
 
 
+      {publicPhoto && <CitizenPhotoViewer photo={publicPhoto} onClose={() => setPublicPhoto(null)} />}
       {isContactOpen && <CitizenOfficeDirectory offices={systemData.offices} onClose={closeContacts} />}
 
       {/* Toast Notification (z-[640]: above map/floating-bar z-[400..600], below drawer z-[650] and modals z-[700..800]) */}
-      {(toastMessage || isError) && (
+      {toastMessage && (
         <div
           role="status"
           aria-live="polite"
           className="pointer-events-none fixed bottom-28 left-3 right-3 z-[640] lg:bottom-4 lg:left-auto lg:right-4 bg-slate-950 border-2 border-amber-400 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-heading flex items-center gap-2.5 max-w-sm"
         >
           <span aria-hidden="true" className="w-2 h-2 shrink-0 rounded-full bg-amber-400" />
-          <span>{toastMessage || "ตรวจสอบข้อมูลล่าสุดไม่สำเร็จ โปรดลองอีกครั้ง"}</span>
+          <span>{toastMessage}</span>
         </div>
       )}
     </div>

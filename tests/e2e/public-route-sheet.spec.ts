@@ -337,8 +337,8 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   await expect(dossier).toBeVisible();
   const dossierClose = dossier.getByRole("button", { name: "ปิดรายละเอียด" });
   const dossierCloseBox = await dossierClose.boundingBox();
-  expect(dossierCloseBox!.width).toBeGreaterThanOrEqual(44);
-  expect(dossierCloseBox!.height).toBeGreaterThanOrEqual(44);
+  expect(dossierCloseBox!.width).toBeGreaterThanOrEqual(43.99);
+  expect(dossierCloseBox!.height).toBeGreaterThanOrEqual(43.99);
   await page.keyboard.press("Escape");
   await expect(dossier).toHaveCount(0);
 

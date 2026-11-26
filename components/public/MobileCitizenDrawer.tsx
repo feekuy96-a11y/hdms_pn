@@ -5,6 +5,7 @@ import { Waves, Map, Maximize2, Minimize2, Phone, Route, Search, X } from "lucid
 import type { DetourRoute, FloodRoute } from "@/db/default-data";
 import type { StatusColor } from "@/lib/traffic-presentation";
 import { SituationSummary } from "@/components/public/SituationSummary";
+import { PUBLIC_READ_MESSAGES, type PublicReadState } from "./public-read-state";
 import { FloodCard } from "@/components/public/FloodCard";
 
 export interface MobileCitizenDrawerProps {
@@ -35,8 +36,10 @@ export interface MobileCitizenDrawerProps {
   handleSelectFlood: (flood: FloodRoute, openDossier: boolean) => void;
   handleOpenFloodDetourSection: (flood: FloodRoute) => void;
   detourList: React.ReactNode;
-  isError: boolean;
-  isPending: boolean;
+  readState: PublicReadState;
+  fetchedAtLabel: string | null;
+  latestReportLabel: string | null;
+  hasCounts: boolean;
   refetch: () => Promise<unknown> | void;
 }
 
@@ -68,8 +71,10 @@ export function MobileCitizenDrawer({
   handleSelectFlood,
   handleOpenFloodDetourSection,
   detourList,
-  isError,
-  isPending,
+  readState,
+  fetchedAtLabel,
+  latestReportLabel,
+  hasCounts,
   refetch,
 }: MobileCitizenDrawerProps) {
   const openSection = (section: "FLOOD" | "DETOUR") => {
@@ -166,13 +171,13 @@ export function MobileCitizenDrawer({
                     className={`min-h-11 rounded-lg px-1 py-1.5 transition flex items-center justify-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white ${sidebarTab === id ? "bg-amber-500 text-slate-950" : "text-slate-300 hover:bg-slate-800"}`}
                   >
                     <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                    <span>{label} <span className="tabular-nums">({count})</span></span>
+                    <span>{label}{hasCounts && <> <span className="tabular-nums">({count})</span></>}</span>
                   </button>
                 ))}
               </div>
               {mobileDrawerStage !== "peek" && (
                 <div className="mt-3 space-y-2">
-                  <SituationSummary counts={situationCounts} activeFilter={selectedStatusFilter} onFilter={handleStatusFilter} />
+                  {hasCounts && <SituationSummary counts={situationCounts} activeFilter={selectedStatusFilter} onFilter={handleStatusFilter} />}
                   <div className="relative">
                     <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
@@ -203,9 +208,14 @@ export function MobileCitizenDrawer({
             </div>
             {mobileDrawerStage !== "peek" && (
               <div className="space-y-2.5 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
-                <p className="text-xs text-slate-300" role="status">
+                {readState !== "ready" && <p className="text-xs text-slate-300" role="status">{PUBLIC_READ_MESSAGES[readState]}</p>}
+                {fetchedAtLabel && <p className="text-xs text-slate-300">
+                  ดึงข้อมูลสำเร็จล่าสุด {fetchedAtLabel} น.
+                  {latestReportLabel && <><br />เวลาอัปเดตรายงานล่าสุด {latestReportLabel} น.</>}
+                </p>}
+                {hasCounts && <p className="text-xs text-slate-300" role="status">
                   พบ {sidebarTab === "FLOOD" ? filteredFloods.length : filteredDetours.length} รายการ
-                </p>
+                </p>}
                 {sidebarTab === "FLOOD" && (
                   <section aria-label="รายการน้ำท่วม" className="space-y-2">
                     {filteredFloods.map((flood) => (
@@ -220,14 +230,15 @@ export function MobileCitizenDrawer({
                     ))}
                   </section>
                 )}
-                {sidebarTab === "DETOUR" && detourList}
-                {((sidebarTab === "FLOOD" && filteredFloods.length === 0) || (sidebarTab === "DETOUR" && filteredDetours.length === 0)) && (
+                {sidebarTab === "DETOUR" && hasCounts && detourList}
+                {readState === "ready" && ((sidebarTab === "FLOOD" && filteredFloods.length === 0) || (sidebarTab === "DETOUR" && filteredDetours.length === 0)) && (
                   <div className="rounded-xl border border-slate-700 p-4 text-sm text-slate-300">
-                    <p>{isError && !totalFloodCount ? "ยังตรวจสอบข้อมูลล่าสุดไม่ได้" : isPending ? "กำลังตรวจสอบข้อมูล…" : sidebarTab === "DETOUR" ? "ไม่พบเส้นทางเลี่ยงที่ตรงกับคำค้นหา" : totalFloodCount === 0 ? "ยังไม่มีรายงานจุดน้ำท่วม" : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p>
-                    <button type="button" className="mt-2 min-h-11 font-bold text-amber-300" onClick={() => { setSearchQuery(""); setSelectedRouteFilter("ALL"); }}>ล้างตัวกรอง</button>
+                    <p>{sidebarTab === "DETOUR" ? "ไม่พบเส้นทางเลี่ยงที่ตรงกับคำค้นหา" : totalFloodCount === 0 ? "ยังไม่มีรายงานจุดน้ำท่วม" : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p>
+                    {sidebarTab === "FLOOD" && totalFloodCount === 0 && <p className="mt-1 text-xs">ข้อมูลนี้ไม่ยืนยันว่าทุกเส้นทางปลอดภัย</p>}
+                    {(searchQuery || selectedRouteFilter !== "ALL") && <button type="button" className="mt-2 min-h-11 font-bold text-amber-300" onClick={() => { setSearchQuery(""); setSelectedRouteFilter("ALL"); }}>ล้างตัวกรอง</button>}
                   </div>
                 )}
-                {isError && <button type="button" onClick={() => void refetch()} className="min-h-11 w-full rounded-lg border border-amber-500/50 p-2 text-sm text-amber-300">โหลดข้อมูลล่าสุดไม่สำเร็จ · ลองใหม่</button>}
+                {(readState === "stale" || readState === "unavailable") && <button type="button" onClick={() => void refetch()} className="min-h-11 w-full rounded-lg border border-amber-500/50 p-2 text-sm text-amber-300">โหลดข้อมูลล่าสุดไม่สำเร็จ · ลองใหม่</button>}
               </div>
             )}
           </div>
