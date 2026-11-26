@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
+import { DetourEndpointDetailsCard } from "./DetourEndpointDetailsCard";
 import dynamic from "next/dynamic";
 import {
-  Camera,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -27,7 +27,6 @@ import {
   getDetourTimelinePresentation,
   isDetourDirectionAllowed,
 } from "@/lib/detour-presentation";
-import { normalizeMediaUrl } from "@/lib/flood-event-schema";
 import type { getLinkedDetoursForFlood } from "@/lib/event-detour-links";
 import { parseRouteCoordinates } from "@/components/public/public-route-helpers";
 
@@ -245,34 +244,7 @@ export function FloodDossierDetourSection({
                       />
                     </div>
 
-                    {/* Entrance Photo for Active Direction (Start A or End B) */}
-                    {(() => {
-                      const activePointPhoto =
-                        effectiveDirection === "REVERSE"
-                          ? route.detour_meta?.end_point_photo
-                          : route.detour_meta?.start_point_photo;
-                      if (!activePointPhoto?.url) return null;
-                      const pointLabel =
-                        effectiveDirection === "REVERSE"
-                          ? "จุดสิ้นสุด B — ภาพบริเวณทางเข้าทางเลี่ยง (ฝั่งขากลับ B → A)"
-                          : "จุดเริ่มต้น A — ภาพบริเวณทางเข้าทางเลี่ยง (ฝั่งขาไป A → B)";
-                      return (
-                        <div className="rounded-xl border border-slate-700/80 bg-[#091325] p-2.5 space-y-1.5">
-                          <div className="flex items-center gap-1.5 text-xs font-heading font-bold text-amber-300">
-                            <Camera aria-hidden="true" className="h-3.5 w-3.5" />
-                            <span>{pointLabel}</span>
-                          </div>
-                          <img
-                            src={normalizeMediaUrl(activePointPhoto.url)}
-                            alt={activePointPhoto.caption || pointLabel}
-                            className="w-full h-36 rounded-lg object-cover border border-slate-800"
-                          />
-                          {activePointPhoto.caption && (
-                            <p className="text-xs text-slate-300 leading-snug">{activePointPhoto.caption}</p>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    <DetourEndpointDetailsCard detour={route} direction={effectiveDirection} compact />
 
                     {/* Distance & Duration Metrics Grid (Line Length + Admin Duration) */}
                     <div className="grid grid-cols-2 gap-2.5">

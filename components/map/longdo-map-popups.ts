@@ -568,48 +568,40 @@ export function buildDetourFallbackPinSpec(
   };
 }
 
+/** Presentation of stored point metadata; never infer a point caption from route advice. */
+export function getDetourEndpointTextDetails(photo: DetourPointPhoto | null | undefined, pin: { lat: number; lon: number }) {
+  const areaParts = [
+    formatPopupAreaSegment("ต.", photo?.subdistrict),
+    formatPopupAreaSegment("อ.", photo?.district),
+    formatPopupAreaSegment("จ.", photo?.province),
+  ].filter(Boolean);
+  const valid = Number.isFinite(pin.lat) && Number.isFinite(pin.lon) &&
+    Math.abs(pin.lat) <= 90 && Math.abs(pin.lon) <= 180 && (pin.lat !== 0 || pin.lon !== 0);
+  return {
+    area: areaParts.join(" ") || null,
+    coordinate: valid ? `${pin.lat.toFixed(6)}, ${pin.lon.toFixed(6)}` : null,
+    caption: typeof photo?.caption === "string" ? photo.caption.trim() || null : null,
+  };
+}
+
 export function buildDetourPointPhotoPopupHtml(
   detour: DetourRoute,
   role: "START" | "END",
   photo: DetourPointPhoto | null | undefined,
   lat: number,
-  lon: number
+  lon: number,
+  direction: DetourDirection = "FORWARD",
 ): string {
   const safePhoto = photo ?? {};
-  const isStart = role === "START";
-  const rawUrl = typeof safePhoto.url === "string" ? safePhoto.url.trim() : "";
-  const normalizedUrl = rawUrl ? escapeHtml(normalizeMediaUrl(rawUrl)) : "";
+  const { title: badgeText, trip } = getPublicDetourEndpointLabel(detour, role, direction);
+  const isStart = (role === "START") === (direction === "FORWARD");
+  const rawUrl = normalizeMediaUrl(safePhoto.url);
+  const normalizedUrl = /^(?:https?:\/\/|data:image\/(?:png|jpe?g|webp|gif);base64,)/i.test(rawUrl) ? escapeHtml(rawUrl) : "";
   const hasPhotoUrl = Boolean(normalizedUrl);
   const badgeIcon = hasPhotoUrl ? "📷" : "📍";
-  const badgeText = isStart
-    ? hasPhotoUrl
-      ? "จุดเริ่มต้น A — ทางเข้าทางเลี่ยง (ขาไป A → B)"
-      : "จุดเริ่มต้น A — พิกัดทางเข้าทางเลี่ยง (ขาไป A → B)"
-    : hasPhotoUrl
-      ? "จุดสิ้นสุด B — ทางเข้าทางเลี่ยง (ขากลับ B → A)"
-      : "จุดสิ้นสุด B — พิกัดทางเข้าทางเลี่ยง (ขากลับ B → A)";
-  const defaultCaption = isStart
-    ? "บริเวณทางเข้าเส้นทางเลี่ยง ฝั่งจุดเริ่มต้น A (สำหรับผู้ใช้ทางขาไป A → B)"
-    : "บริเวณทางเข้าเส้นทางเลี่ยง ฝั่งจุดสิ้นสุด B (สำหรับผู้ใช้ทางที่มาจากอีกฝั่ง B → A)";
-  const pinCoord = resolveDetourPointPinCoord(safePhoto, lat, lon);
-  const effectiveLat = pinCoord.lat;
-  const effectiveLon = pinCoord.lon;
-  const hasValidCoord =
-    Number.isFinite(effectiveLat) &&
-    Number.isFinite(effectiveLon) &&
-    (effectiveLat !== 0 || effectiveLon !== 0);
-  const coordText = hasValidCoord
-    ? `${Number(effectiveLat).toFixed(6)}, ${Number(effectiveLon).toFixed(6)}`
-    : null;
-  const areaParts = [
-    formatPopupAreaSegment("ต.", safePhoto.subdistrict),
-    formatPopupAreaSegment("อ.", safePhoto.district),
-    formatPopupAreaSegment("จ.", safePhoto.province),
-  ].filter((part): part is string => Boolean(part));
-  const areaLine = areaParts.length > 0 ? areaParts.join(" ") : null;
-
-  const captionText = escapeHtml(safePhoto.caption?.trim() || defaultCaption);
-  const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${Number(effectiveLat).toFixed(6)},${Number(effectiveLon).toFixed(6)}&travelmode=driving`;
+  const { coordinate: coordText, area: areaLine, caption } = getDetourEndpointTextDetails(photo, { lat, lon });
+  const captionText = escapeHtml(caption ?? "ยังไม่มีคำอธิบายจุดนี้");
+  const navUrl = coordText ? `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lon.toFixed(6)}&travelmode=driving` : "";
 
   return `
     <div class="doh-detour-point-photo-popup text-xs p-[0.833em] sm:p-[1.167em] w-[min(20.25rem,calc(100vw-2rem))] sm:w-[21.25rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl select-text space-y-2 sm:space-y-2.5">
@@ -623,22 +615,13 @@ export function buildDetourPointPhotoPopupHtml(
           <span>${escapeHtml(badgeText)}</span>
         </span>
       </div>
+      <p class="!m-0 text-[0.75rem] text-slate-300">${escapeHtml(trip)}</p>
       <div class="space-y-1">
         <h5 class="font-bold text-white text-sm font-heading leading-snug break-words">${escapeHtml(detour.route_name)}</h5>
-        ${
-          areaLine || coordText
-            ? `<div class="rounded-lg border border-slate-800/90 bg-slate-900/75 px-2.5 py-1.5 space-y-0.5">
-                ${
-                  areaLine
-                    ? `<p class="text-[0.75rem] font-medium text-sky-200 leading-snug break-words">📍 ${escapeHtml(areaLine)}</p>`
-                    : !hasPhotoUrl
-                      ? `<p class="text-[0.75rem] font-medium text-slate-400 leading-snug">📍 ยังไม่พบข้อมูลพื้นที่ ต./อ./จ.</p>`
-                      : ""
-                }
-                ${coordText ? `<p class="font-mono text-[0.6875rem] text-slate-300 leading-tight">พิกัด: ${escapeHtml(coordText)}</p>` : ""}
-              </div>`
-            : ""
-        }
+        <div class="space-y-1">
+          <p class="text-[0.75rem] font-medium text-sky-200 leading-snug break-words">📍 ${escapeHtml(areaLine ?? "ยังไม่มีข้อมูลพื้นที่จุดนี้")}</p>
+          <p class="font-mono text-[0.6875rem] text-slate-300 leading-tight">${coordText ? `พิกัด: ${escapeHtml(coordText)}` : "ยังไม่มีพิกัดจุดนี้"}</p>
+        </div>
         <p class="text-xs text-amber-200/95 leading-relaxed break-words">${captionText}</p>
       </div>
       ${
@@ -660,7 +643,7 @@ export function buildDetourPointPhotoPopupHtml(
       }
       <div class="grid grid-cols-2 gap-[0.5em] sm:gap-[0.667em] pt-1">
         ${
-          hasValidCoord
+          Boolean(navUrl)
             ? `<a
                 href="${escapeHtml(navUrl)}"
                 target="_blank"
@@ -698,8 +681,13 @@ export function getPublicDetourEndpointLabel(
   const confirmed = isRecordedDetourDirection(detour.direction_mode) && isDetourDirectionAllowed(detour.direction_mode, direction);
   const letter = point === "START" ? "A" : "B";
   const begins = (point === "START") !== reverse;
-  const role = !confirmed ? "ยังไม่ยืนยันทิศทาง" : begins ? "จุดเริ่มต้น" : "จุดสิ้นสุด";
-  return { title: `${letter} · ${role}`, trip: confirmed ? (reverse ? "ขากลับ B → A" : "ขาไป A → B") : null };
+  const savedIdentity = point === "START" ? "จุดเริ่มต้นที่ปัก" : "จุดสิ้นสุดที่ปัก";
+  const travelRole = begins ? "ต้นทาง" : "ปลายทาง";
+  const travelDirection = reverse ? "ขากลับ B → A" : "ขาไป A → B";
+  return {
+    title: `${letter} · ${savedIdentity}`,
+    trip: confirmed ? `${travelRole}ของ${travelDirection}` : "ยังไม่ยืนยันทิศทาง",
+  };
 }
 
 export function labelPublicDetourEndpointMarker(
@@ -721,13 +709,8 @@ export function buildPublicDetourEndpointPopup(
 ): string {
   const photoUrl = normalizeMediaUrl(photo?.url);
   const safePhotoUrl = /^(?:https?:\/\/|data:image\/(?:png|jpe?g|webp|gif);base64,)/i.test(photoUrl) ? escapeHtml(photoUrl) : "";
-  const area = [
-    formatPopupAreaSegment("ต.", photo?.subdistrict),
-    formatPopupAreaSegment("อ.", photo?.district),
-    formatPopupAreaSegment("จ.", photo?.province),
-  ].filter(Boolean).join(" ");
+  const { area, caption, coordinate } = getDetourEndpointTextDetails(photo, pin);
   const { title, trip } = getPublicDetourEndpointLabel(detour, point, direction);
-  const caption = photo?.caption?.trim();
   const nav = resolveDetourGoogleMapsNavigation(detour, direction, floodRoutes);
   return `
     <section data-detour-endpoint="${point}" class="doh-detour-point-photo-popup font-body" aria-label="${title}" style="width:min(320px,calc(100vw - 26px));max-height:none;overflow:visible">
@@ -743,9 +726,9 @@ export function buildPublicDetourEndpointPopup(
             <span data-photo-error hidden>โหลดภาพตัวอย่างไม่สำเร็จ · แตะเพื่อลองเปิดภาพ</span>
           </button>
         </div>` : ""}
-        ${area ? `<p data-endpoint-locality class="line-clamp-1 !m-0" title="${escapeHtml(area)}">${escapeHtml(area)}</p>` : ""}
-        <p data-endpoint-coordinate class="!m-0 break-words font-mono">พิกัด: ${pin.lat.toFixed(6)}, ${pin.lon.toFixed(6)}</p>
-        ${caption ? `<p class="citizen-endpoint-caption line-clamp-2 !m-0" title="${escapeHtml(caption)}">${escapeHtml(caption)}</p>` : ""}
+        <p data-endpoint-locality class="line-clamp-1 !m-0" title="${escapeHtml(area ?? "")}">${escapeHtml(area ?? "ยังไม่มีข้อมูลพื้นที่จุดนี้")}</p>
+        <p data-endpoint-coordinate class="!m-0 break-words font-mono">${coordinate ? `พิกัด: ${escapeHtml(coordinate)}` : "ยังไม่มีพิกัดจุดนี้"}</p>
+        <p class="citizen-endpoint-caption line-clamp-2 !m-0" title="${escapeHtml(caption ?? "")}">${escapeHtml(caption ?? "ยังไม่มีคำอธิบายจุดนี้")}</p>
         <div class="citizen-endpoint-actions">
           ${nav.isValid && nav.url ? `<a href="${escapeHtml(nav.url)}" target="_blank" rel="noopener noreferrer">ดูบน Google Maps</a>` : `<p>${escapeHtml(nav.warning || "ยังไม่ยืนยันนำทาง")}</p>`}
           <button type="button" data-endpoint-focus>ดูตำแหน่งบนแผนที่</button>
@@ -753,6 +736,49 @@ export function buildPublicDetourEndpointPopup(
       </div>
     </section>
   `;
+}
+
+/** Correct the initial endpoint reveal at most once, never an operator's pan/zoom. */
+export function bindDetourEndpointReveal(map: any, marker: any) {
+  marker.on("popupopen", ({ popup }: { popup: { getElement: () => HTMLElement | null } }) => {
+    const popupElement = popup.getElement();
+    if (!popupElement) return;
+    const cancelReveal = () => {
+      clearTimeout(revealTimer);
+      map.off("dragstart zoomstart", cancelReveal);
+      marker.off("popupclose", cancelReveal);
+      popupElement.removeEventListener("pointerdown", cancelReveal, true);
+    };
+    const revealTimer = setTimeout(() => {
+      cancelReveal();
+      if (!popupElement.isConnected) return;
+      const frame = popupElement.getBoundingClientRect();
+      const bounds = map.getContainer().getBoundingClientRect();
+      const inset = 12;
+      const left = Math.max(0, bounds.left) + inset;
+      const right = Math.min(document.documentElement.clientWidth, bounds.right) - inset;
+      const visibleTop = Math.max(0, bounds.top);
+      const header = document.querySelector("header.doh-header")?.getBoundingClientRect();
+      const overlapsMapTop = header && header.width > 0 && header.height > 0 &&
+        header.left < right && header.right > left && header.top <= visibleTop && header.bottom > visibleTop;
+      const top = (overlapsMapTop ? Math.max(visibleTop, header.bottom) : visibleTop) + inset;
+      const bottom = Math.min(document.documentElement.clientHeight, bounds.bottom) - inset;
+      if (right <= left || bottom <= top) return;
+      // If a popup cannot all fit, keep the heading and close control in view.
+      const offset = (start: number, end: number, min: number, max: number) => {
+        if (end - start > max - min) return start - min;
+        if (start < min) return start - min;
+        if (end > max) return end - max;
+        return 0;
+      };
+      const x = Math.round(offset(frame.left, frame.right, left, right));
+      const y = Math.round(offset(frame.top, frame.bottom, top, bottom));
+      if (x || y) map.panBy([x, y], { animate: false });
+    }, 450);
+    map.on("dragstart zoomstart", cancelReveal);
+    marker.on("popupclose", cancelReveal);
+    popupElement.addEventListener("pointerdown", cancelReveal, true);
+  });
 }
 
 /** Both public overview and focused endpoints bind the same one-popup interaction. */

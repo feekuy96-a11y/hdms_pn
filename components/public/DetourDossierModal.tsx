@@ -1,13 +1,13 @@
 "use client";
 
 import React from "react";
+import { DetourEndpointDetailsCard } from "./DetourEndpointDetailsCard";
 import {
   ArrowLeftRight,
   ArrowUp,
   ArrowUpLeft,
   ArrowUpRight,
   BookOpen,
-  Camera,
   CheckCircle2,
   Clock,
   CornerUpLeft,
@@ -212,33 +212,7 @@ export function DetourDossierModal({
                 <span>⚠️</span>ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง
               </p>
             )}
-            {(() => {
-              const activePointPhoto =
-                modalDetourDirection === "REVERSE"
-                  ? viewingDetourModal.detour_meta?.end_point_photo
-                  : viewingDetourModal.detour_meta?.start_point_photo;
-              if (!activePointPhoto?.url) return null;
-              const pointLabel =
-                modalDetourDirection === "REVERSE"
-                  ? "จุดสิ้นสุด B — ภาพทางเข้าทางเลี่ยง (ฝั่งขากลับ B → A)"
-                  : "จุดเริ่มต้น A — ภาพทางเข้าทางเลี่ยง (ฝั่งขาไป A → B)";
-              return (
-                <div className="mt-2.5 rounded-xl border border-slate-700/80 bg-[#0d1b36] p-2.5 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-xs font-heading font-bold text-amber-300">
-                    <Camera aria-hidden="true" className="h-3.5 w-3.5" />
-                    <span>{pointLabel}</span>
-                  </div>
-                  <img
-                    src={normalizeMediaUrl(activePointPhoto.url)}
-                    alt={activePointPhoto.caption || pointLabel}
-                    className="h-auto max-h-[min(42dvh,20rem)] w-full rounded-lg border border-slate-800 object-contain bg-slate-950"
-                  />
-                  {activePointPhoto.caption && (
-                    <p className="text-xs text-slate-300 leading-snug">{activePointPhoto.caption}</p>
-                  )}
-                </div>
-              );
-            })()}
+            <DetourEndpointDetailsCard detour={viewingDetourModal} direction={modalDetourDirection} />
           </section>
 
           {/* 4. Timeline (คำแนะนำเส้นทาง) + 5. Metrics + 6. Condition */}
