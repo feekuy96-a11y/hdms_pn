@@ -271,10 +271,11 @@ test("citizen directory lists six offices in order and enables only verified sto
   const opener = isMobile
     ? page.getByRole("navigation", { name: "เมนูประชาชน" }).getByRole("button", { name: "ติดต่อ", exact: true })
     : page.getByRole("button", { name: "ติดต่อ", exact: true });
-  await expect(page.getByRole("link", { name: "โทรสายด่วน 1586", exact: true })).toHaveAttribute("href","tel:1586");
+  if (!isMobile) await expect(page.getByRole("link", { name: "โทรสายด่วน 1586", exact: true })).toHaveAttribute("href","tel:1586");
   await opener.click();
   const directory = page.getByRole("dialog", { name: "ติดต่อหน่วยงาน" });
   await expect(directory).toBeVisible();
+  if (isMobile) await expect(directory.getByRole("link", { name: "โทรสายด่วน 1586", exact: true })).toHaveAttribute("href","tel:1586");
   await expect(page.getByRole("dialog")).toHaveCount(1);
   expect(await directory.locator("article h3").allTextContents()).toEqual(officeNames);
   const hq = directory.locator("article").filter({ hasText: officeNames[0] });
@@ -462,18 +463,26 @@ test("grouped and split floods use the same wave pin and reveal labels at the sa
   await page.getByText("ตั้งค่าเพิ่มเติม", { exact: true }).click();
   await expect(page.getByRole("button", { name: "รวมเหตุการณ์", exact: true })).toHaveAttribute("aria-pressed", "true");
   await layers.click();
-  const wave = () => pins.first().locator("svg").evaluate(svg => svg.outerHTML);
+  const wave = () => pins.first().locator(".doh-type-flood-wave svg").evaluate(svg => svg.outerHTML);
   await chooseMode("แยกช่วง");
   await expect(pins).toHaveCount(2);
-  await expect(pins.filter({ has: page.locator(".doh-capsule-orange") }).locator(".doh-capsule-zoom-far")).toHaveCSS("background-color", "rgb(249, 115, 22)");
-  await expect(pins.filter({ has: page.locator(".doh-capsule-red") }).locator(".doh-capsule-zoom-far")).toHaveCSS("background-color", "rgb(220, 38, 38)");
+  const warning = pins.filter({ has: page.locator(".doh-capsule-orange") });
+  const closed = pins.filter({ has: page.locator(".doh-capsule-red") });
+  for (const pin of [warning, closed]) {
+    await expect(pin.locator(".doh-capsule-zoom-far")).toHaveCSS("background-color", "rgb(133, 27, 49)");
+  }
+  expect(await warning.locator(".doh-type-flood-status").evaluate((el) => getComputedStyle(el).getPropertyValue("--status-sign-color").trim())).toBe("#f97316");
+  await expect(warning.locator(".doh-type-flood-status")).toHaveAttribute("data-status-glyph", "vehicle");
+  expect(await closed.locator(".doh-type-flood-status").evaluate((el) => getComputedStyle(el).getPropertyValue("--status-sign-color").trim())).toBe("#dc2626");
+  await expect(closed.locator(".doh-type-flood-status")).toHaveAttribute("data-status-glyph", "closed");
   await expect(pins.first().locator(".doh-capsule-zoom-far")).toBeVisible();
   const svg = await wave();
   await chooseMode("รวมเหตุการณ์");
   await expect(pins).toHaveCount(1);
   const far = pins.locator(".doh-capsule-zoom-far");
   await expect(far).toBeVisible();
-  await expect(far).toHaveCSS("background-color", "rgb(220, 38, 38)");
+  await expect(far).toHaveCSS("background-color", "rgb(133, 27, 49)");
+  await expect(far.locator(".doh-type-flood-status")).toHaveAttribute("data-status-glyph", "closed");
   await expect(far).not.toContainText("ทล.");
   expect(await wave()).toBe(svg);
   await expect(pins).toHaveAttribute("aria-label", /ทล\.43 \(2 ช่วง\).*45 ซม\./);

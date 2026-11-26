@@ -38,7 +38,7 @@ function OfficeCard({ office }: { office: CitizenOffice }) {
   );
 }
 
-export function CitizenOfficeDirectory({ offices, onClose }: { offices?: DohOfficeLocation[]; onClose: () => void }) {
+export function CitizenOfficeDirectory({ offices, hotlinePhone, onClose }: { offices?: DohOfficeLocation[]; hotlinePhone: string; onClose: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -76,6 +76,10 @@ export function CitizenOfficeDirectory({ offices, onClose }: { offices?: DohOffi
           <button type="button" aria-label="ปิดหน้าติดต่อ" data-hdms-popup-close className="citizen-theme-button" onClick={onClose}><X size={18} aria-hidden="true" /></button>
         </header>
         <div className="citizen-office-scroll">
+          <a href={`tel:${hotlinePhone}`} aria-label={`โทรสายด่วน ${hotlinePhone}`}
+            className="citizen-mobile-hotline mb-3 min-h-11 items-center gap-2 rounded-lg border border-surface px-3 font-bold">
+            <Phone size={16} aria-hidden="true" /> สายด่วน {hotlinePhone}
+          </a>
           <h3 className="mb-2 text-sm font-bold">สำนักงานใหญ่</h3>
           <OfficeCard office={directory[0]} />
           <h3 className="mb-2 mt-4 text-sm font-bold">หมวดทางหลวง</h3>
