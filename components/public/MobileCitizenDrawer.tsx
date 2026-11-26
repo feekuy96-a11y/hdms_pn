@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
+import { useMotionPresence } from "@/components/ui/use-motion-presence";
 import { Waves, Map, Maximize2, Minimize2, Phone, Route, Search, X } from "lucide-react";
 import type { DetourRoute, FloodRoute } from "@/db/default-data";
 import type { StatusColor } from "@/lib/traffic-presentation";
@@ -78,10 +79,54 @@ export function MobileCitizenDrawer({
   hasCounts,
   refetch,
 }: MobileCitizenDrawerProps) {
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const floodNavRef = useRef<HTMLButtonElement>(null);
+  const detourNavRef = useRef<HTMLButtonElement>(null);
+  const restoreFrame = useRef<number | null>(null);
+  const cancelRestore = () => {
+    if (restoreFrame.current !== null) window.cancelAnimationFrame(restoreFrame.current);
+    restoreFrame.current = null;
+  };
+  useEffect(() => () => {
+    if (restoreFrame.current !== null) window.cancelAnimationFrame(restoreFrame.current);
+  }, []);
+  const navSource = useRef<"FLOOD" | "DETOUR" | null>(null);
   const openSection = (section: "FLOOD" | "DETOUR") => {
+    cancelRestore();
+    navSource.current = section;
     setSidebarTab(section);
     setMobileDrawerStage((stage) => stage === "peek" ? "list" : stage);
     setIsMobileDrawerOpen(true);
+  };
+  const drawerOpen = isMobileDrawerOpen && !showDossier && !viewingDetourModal;
+  const drawerPresent = useMotionPresence(drawerOpen, 145);
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      const dialog = drawerRef.current;
+      if (dialog && !dialog.contains(document.activeElement)) {
+        dialog.querySelector<HTMLButtonElement>("[data-hdms-popup-close]")?.focus({ preventScroll: true });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [drawerOpen]);
+
+  const closeDrawer = () => {
+    cancelRestore();
+    const buttonRef = (navSource.current ?? sidebarTab) === "FLOOD" ? floodNavRef : detourNavRef;
+    navSource.current = null;
+    setIsMobileDrawerOpen(false);
+    const previousDialog = drawerRef.current;
+    restoreFrame.current = window.requestAnimationFrame(() => {
+      restoreFrame.current = null;
+      const button = buttonRef.current;
+      if (!button?.getClientRects().length || button.closest("[inert]")) return;
+      const { activeElement, body, documentElement } = button.ownerDocument;
+      // A new direct interaction, modal or browser focus must win over this delayed restoration.
+      if (activeElement && activeElement !== body && activeElement !== documentElement && !previousDialog?.contains(activeElement)) return;
+      if (button.ownerDocument.querySelector("dialog[open]")) return;
+      button.focus({ preventScroll: true });
+    });
   };
   const showNavigation = !showDossier && !viewingDetourModal && !isMobileDrawerOpen;
   const navAction = "flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-center text-[0.75rem] leading-tight font-heading font-semibold text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 touch-manipulation";
@@ -92,10 +137,10 @@ export function MobileCitizenDrawer({
           <button type="button" aria-current="page" className={navAction + " bg-surface-card text-sky-200"} onClick={() => setIsMobileDrawerOpen(false)}>
             <Map className="size-[1.125rem]" aria-hidden="true" />แผนที่
           </button>
-          <button type="button" className={navAction} onClick={() => openSection("FLOOD")}>
+          <button type="button" className={navAction} ref={floodNavRef} onClick={() => openSection("FLOOD")}>
             <Waves className="size-[1.125rem]" aria-hidden="true" /><span><span className="whitespace-nowrap">เหตุการณ์</span><wbr /><span className="whitespace-nowrap">น้ำท่วม</span></span>
           </button>
-          <button type="button" className={navAction} onClick={() => openSection("DETOUR")}>
+          <button type="button" className={navAction} ref={detourNavRef} onClick={() => openSection("DETOUR")}>
             <Route className="size-[1.125rem]" aria-hidden="true" />ทางเลี่ยง
           </button>
           <button type="button" data-citizen-contact onClick={openContacts} className={navAction}>
@@ -104,14 +149,27 @@ export function MobileCitizenDrawer({
         </nav>
       )}
       {/* Mobile citizen list: one sheet, three heights; never stack it behind detour details. */}
-      {isMobileDrawerOpen && !showDossier && !viewingDetourModal && (
-        <div className="lg:hidden fixed inset-0 z-[650] flex flex-col justify-end bg-slate-950/65" onClick={() => setIsMobileDrawerOpen(false)}>
+      {drawerPresent && !showDossier && !viewingDetourModal && (
+        <div
+          data-hdms-drawer-open={drawerOpen}
+          inert={!drawerOpen}
+          aria-hidden={drawerOpen ? undefined : true}
+          className="lg:hidden fixed inset-0 z-[650] flex flex-col justify-end bg-slate-950/65"
+          onClick={closeDrawer}
+        >
           <div
+            ref={drawerRef}
             role="dialog"
             data-hdms-popup="panel"
             aria-modal="true"
             aria-label="รายการสายทางและจุดเฝ้าระวัง"
             onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return;
+              event.preventDefault();
+              event.stopPropagation();
+              closeDrawer();
+            }}
             className={`citizen-drawer flex w-full flex-col overflow-y-auto overscroll-contain rounded-t-3xl border-t border-amber-500/60 bg-surface-panel text-slate-100 shadow-2xl transition-[height] duration-200 motion-reduce:transition-none ${mobileDrawerStage === "full" ? "h-[95dvh]" : mobileDrawerStage === "peek" ? "h-[14.6875rem]" : "h-[78dvh]"
               }`}
           >
@@ -140,7 +198,7 @@ export function MobileCitizenDrawer({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setIsMobileDrawerOpen(false)}
+                    onClick={closeDrawer}
                     aria-label="ปิดรายการสายทาง" data-hdms-popup-close
                     className="grid h-11 w-11 place-items-center rounded-xl bg-slate-800 text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                   >
