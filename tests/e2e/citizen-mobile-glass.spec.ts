@@ -343,7 +343,17 @@ test("citizen glass transmits measurable map pixels and the accessible fallback 
   const map = page.locator(".leaflet-container").first();
   async function sampleMapThroughNav(underlay: string) {
     await map.evaluate((el, tone) => {
-      (el as HTMLElement).style.backgroundImage = `linear-gradient(${tone},${tone})`;
+      // Leaflet may render opaque provider/placeholder panes over its background.
+      // Give this fixture its own flat plane above those panes, but still under
+      // the real navigator and inside the production map's stacking context.
+      let plane = el.querySelector<HTMLElement>("[data-glass-test-underlay]");
+      if (!plane) {
+        plane = document.createElement("div");
+        plane.dataset.glassTestUnderlay = "";
+        plane.style.cssText = "position:absolute;inset:0;z-index:9999;forced-color-adjust:none";
+        el.appendChild(plane);
+      }
+      plane.style.setProperty("background-color", tone, "important");
       // Wait for this fixture change to reach the compositor before capturing.
       return new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     }, underlay);
@@ -354,7 +364,12 @@ test("citizen glass transmits measurable map pixels and the accessible fallback 
       const x = Math.floor((last.right + rail.right) / 2);
       const y = Math.floor(rail.top + rail.height * .35);
       if (document.elementFromPoint(x, y) !== element) throw new Error("Glass probe is covered by a foreground control");
-      return { rail: { x, y }, underlay: { x, y: Math.floor(rail.top - 30) } };
+      const reference = { x, y: Math.floor(rail.top - 30) };
+      const hit = document.elementFromPoint(reference.x, reference.y);
+      if (!hit?.matches("[data-glass-test-underlay]")) {
+        throw new Error(`Map paint reference is covered by ${hit?.outerHTML.slice(0, 180)}`);
+      }
+      return { rail: { x, y }, underlay: reference, viewport: { w: innerWidth, h: innerHeight } };
     });
     // Capture the complete viewport so the backing map remains in the paint
     // viewport even on headless compositors. Read a strip of actual raster pixels.
@@ -369,7 +384,9 @@ test("citizen glass transmits measurable map pixels and the accessible fallback 
       const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
       ctx.drawImage(img, 0, 0);
       const sample = ({ x, y }: { x: number; y: number }) => {
-        const pixels = ctx.getImageData(x, y, 1, 5).data;
+        const scaleX = img.width / points.viewport.w;
+        const scaleY = img.height / points.viewport.h;
+        const pixels = ctx.getImageData(Math.floor(x * scaleX), Math.floor(y * scaleY), 1, 5).data;
         return [0, 1, 2].map((channel) => Array.from({ length: 5 }, (_, row) => pixels[4 * row + channel])
           .reduce((sum, value) => sum + value, 0) / 5);
       };
@@ -386,7 +403,7 @@ test("citizen glass transmits measurable map pixels and the accessible fallback 
       const paper = await sampleMapThroughNav("white");
       const channelDelta = (light: number[], dark: number[]) =>
         Math.min(...light.map((channel, i) => channel - dark[i]));
-      expect(channelDelta(paper.underlay, ink.underlay), `map fixture at ${theme}/${w}`).toBeGreaterThanOrEqual(220);
+      expect(channelDelta(paper.underlay, ink.underlay), `map fixture at ${theme}/${w}, black ${ink.underlay}, white ${paper.underlay}`).toBeGreaterThanOrEqual(220);
       // An opaque strip returns identical RGB; 16% transmission measured ~40.
       expect(channelDelta(paper.rail, ink.rail),
         `glass at ${theme}/${w}, black ${ink.rail}, white ${paper.rail}`).toBeGreaterThanOrEqual(60);
