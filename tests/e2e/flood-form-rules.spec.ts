@@ -98,7 +98,7 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     expect(routes[1].hasDualCarriageway).toBe(false);
   });
 
-  for (const outcome of ["both saved", "right rejected then retried", "right response lost", "left rejected"] as const) {
+  for (const outcome of ["both saved", "right rejected then retried", "right response lost", "right verification rejected", "left rejected"] as const) {
   test(`admin flood form saves split 4-lane records: ${outcome}`, async ({ page }) => {
     test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop admin form workflow");
     const savedCalls: any[] = [];
@@ -108,6 +108,11 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     await page.route("**/functions/v1/hdms-api", async (route) => {
       const body = route.request().postDataJSON() as { action?: string; args?: any[] };
       const action = body?.action || "";
+
+      if (action === "getAdminOperationalDataAction") {
+        await route.fulfill({ status: 400, json: { error: "Unknown operation" } });
+        return;
+      }
 
       if (action === "getSystemDataAction") {
         await route.fulfill({
@@ -202,11 +207,21 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
         }
         const rejected = (outcome === "left rejected" && arg.roadSide === "LEFT") ||
           (outcome === "right rejected then retried" && arg.roadSide === "RIGHT" && savedCalls.length === 2);
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(rejected ? { success: false } : { success: true, savedId: arg.id }),
-        });
+        if (rejected) {
+          await route.fulfill({
+            status: 422,
+            json: { error: "บันทึกไม่สำเร็จ: โปรดตรวจสอบ schema/migration ของช่องจราจรและทิศทาง" },
+          });
+          return;
+        }
+        if (outcome === "right verification rejected" && arg.roadSide === "RIGHT") {
+          await route.fulfill({
+            status: 409,
+            json: { error: "บันทึกแล้วแต่ค่าฝั่งถนน/ช่องจราจร/ทิศทางที่อ่านกลับมาไม่ตรง กรุณาตรวจสอบก่อนเผยแพร่" },
+          });
+          return;
+        }
+        await route.fulfill({ status: 200, json: { success: true, savedId: arg.id } });
         return;
       }
 
@@ -297,7 +312,7 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
       return;
     }
     await expect.poll(() => savedCalls.length).toBe(2);
-    if (outcome === "right response lost") {
+    if (outcome === "right response lost" || outcome === "right verification rejected") {
       await expect(page.getByText("บันทึกฝั่งซ้ายแล้ว แต่ยังยืนยันผลฝั่งขวาไม่ได้", { exact: true })).toBeVisible();
       await page.getByRole("button", { name: "ปิดหน้าต่าง", exact: true }).click();
       await expect(page.getByRole("button", { name: "ตรวจผลบันทึกในทะเบียนเหตุการณ์ก่อน" })).toBeDisabled();

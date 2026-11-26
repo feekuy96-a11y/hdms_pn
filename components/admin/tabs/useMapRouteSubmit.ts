@@ -11,6 +11,7 @@ import {
   buildDetourMetaPayload,
   type DetourPointPhotoLocationInput,
 } from "@/components/admin/tabs/map-management-helpers";
+import { HdmsHttpError } from "@/lib/hdms-api";
 import { calculatePolylineRoadDistanceKm } from "@/lib/detour-presentation";
 import {
   deleteExternalMediaAction,
@@ -46,6 +47,13 @@ import {
   detectOverlappingFloodSegments,
 } from "@/lib/flood-event-schema";
 import { cleanHighwaySectionName } from "@/lib/highway-schema";
+
+// Match the Edge contract for a failed upsert, not its post-write
+// verification errors or a lost transport response.
+const FLOOD_UPSERT_REJECTED = "บันทึกไม่สำเร็จ: โปรดตรวจสอบ schema/migration ของช่องจราจรและทิศทาง";
+function isConfirmedFloodWriteRejection(error: unknown): boolean {
+  return error instanceof HdmsHttpError && error.status === 422 && error.message === FLOOD_UPSERT_REJECTED;
+}
 
 export interface UseMapRouteSubmitParams {
   systemData: SystemDataPayload;
@@ -171,19 +179,23 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
     setDualFloodSaveState("verify");
     showDualSaveError(title, `ระบบยังไม่ทราบว่าฝั่งนี้ถูกบันทึกหรือไม่ โปรดตรวจทะเบียนเหตุการณ์ก่อนเปิดฟอร์มใหม่ (รหัส ${id})`);
   };
+  const showRightRejected = () => {
+    setDualFloodSaveState("retry-right");
+    showDualSaveError("บันทึกได้เพียงฝั่งซ้าย", "ฝั่งขวาไม่สำเร็จ ให้ลองบันทึกฝั่งขวาอีกครั้งด้วยข้อมูลเดิม ระบบจะไม่บันทึกฝั่งซ้ายซ้ำ");
+  };
   const savePendingRight = async () => {
     const pending = dualAttempt.current;
     if (!pending) return;
     let result: RouteSaveResult;
     try {
       result = await upsertRouteAction(pending.right);
-    } catch {
-      requireDualReview("บันทึกฝั่งซ้ายแล้ว แต่ยังยืนยันผลฝั่งขวาไม่ได้", pending.right.id);
+    } catch (error) {
+      if (isConfirmedFloodWriteRejection(error)) showRightRejected();
+      else requireDualReview("บันทึกฝั่งซ้ายแล้ว แต่ยังยืนยันผลฝั่งขวาไม่ได้", pending.right.id);
       return;
     }
     if (result?.success === false) {
-      setDualFloodSaveState("retry-right");
-      showDualSaveError("บันทึกได้เพียงฝั่งซ้าย", "ฝั่งขวาไม่สำเร็จ ให้ลองบันทึกฝั่งขวาอีกครั้งด้วยข้อมูลเดิม ระบบจะไม่บันทึกฝั่งซ้ายซ้ำ");
+      showRightRejected();
       return;
     }
     if (result?.success !== true || result.savedId !== pending.right.id) {
@@ -610,7 +622,8 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
         let forwardRes: RouteSaveResult;
         try {
           forwardRes = await upsertRouteAction(left);
-        } catch {
+        } catch (error) {
+          if (isConfirmedFloodWriteRejection(error)) throw new Error("ฝั่งซ้ายไม่สำเร็จ ระบบยังไม่ได้บันทึกฝั่งขวา");
           // A lost response can follow a commit. Keep staged photos and do
           // not send the other side or transparently create a second event.
           requireDualReview("ยังยืนยันผลการบันทึกฝั่งซ้ายไม่ได้", left.id);
