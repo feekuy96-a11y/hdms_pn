@@ -20,15 +20,6 @@ import {
   type GisFocusDirection,
   type GisFocusState,
 } from "@/lib/gis-focus-mode";
-import { splitDetourAdviceByDirection } from "@/lib/gis-utils";
-import {
-  calculatePolylineRoadDistanceKm,
-  detourDistanceMeters,
-  detourDurationSeconds,
-  getDetourTimelinePresentation,
-} from "@/lib/detour-presentation";
-import { parseRouteCoordinates } from "@/components/public/public-route-helpers";
-
 export interface GisFocusModeBarProps {
   focusState: GisFocusState;
   systemData: SystemDataPayload;
@@ -44,7 +35,6 @@ export function GisFocusModeBar({
   onChangeDirection,
   onToggleLinkedDetour,
 }: GisFocusModeBarProps) {
-  const [isTimelineOpen, setIsTimelineOpen] = React.useState(false);
   const [isCompactControlsOpen, setIsCompactControlsOpen] = React.useState(false);
   if (focusState.status !== "focused" || !focusState.targetType || !focusState.targetId) {
     return null;
@@ -85,30 +75,6 @@ export function GisFocusModeBar({
     : false;
   const showDirectionToggle = Boolean(activeDetourForDir && canSwitchForward && canSwitchReverse);
 
-  const timeline = activeDetourForDir ? (() => {
-    const adviceByDirection = splitDetourAdviceByDirection(
-      activeDetourForDir.description || "",
-      activeDetourForDir.direction_mode
-    );
-    const advice = focusState.direction === "REVERSE"
-      ? adviceByDirection.reverseText
-      : adviceByDirection.forwardText;
-    const coordinates = focusState.direction === "REVERSE"
-      ? parseRouteCoordinates(activeDetourForDir.reverse_coordinates_json).length > 0
-        ? parseRouteCoordinates(activeDetourForDir.reverse_coordinates_json)
-        : parseRouteCoordinates(activeDetourForDir.coordinates_json)
-      : parseRouteCoordinates(activeDetourForDir.coordinates_json);
-    return getDetourTimelinePresentation(
-      advice,
-      detourDistanceMeters(activeDetourForDir.detour_meta, focusState.direction),
-      calculatePolylineRoadDistanceKm(coordinates),
-      "จุดเริ่มต้น",
-      "จุดสิ้นสุด",
-      activeDetourForDir.detour_meta?.road_condition,
-      detourDurationSeconds(activeDetourForDir.detour_meta, focusState.direction)
-    );
-  })() : null;
-
   const hasMissingGeometry = targetMissing
     ? false
     : isDetour
@@ -137,7 +103,6 @@ export function GisFocusModeBar({
       : `ทล.${floodData!.primaryFlood!.route_no} ${floodData!.primaryFlood!.section_name}`;
 
   return (
-    <>
       <div
       role="region"
       aria-label="แถบโหมดโฟกัสแผนที่"
@@ -243,7 +208,7 @@ export function GisFocusModeBar({
         </button>
       </div>
 
-      {!targetMissing && (showDirectionToggle || (!isDetour && linkedDetour) || timeline) && (
+      {!targetMissing && (showDirectionToggle || (!isDetour && linkedDetour)) && (
         <button
           type="button"
           aria-expanded={isCompactControlsOpen}
@@ -313,64 +278,6 @@ export function GisFocusModeBar({
           )}
         </div>
       )}
-      {timeline && (
-        <div className={`mt-2 border-t border-slate-800/90 pt-2 ${isCompactControlsOpen ? "block" : "hidden"} sm:block`}>
-          <button
-            type="button"
-            aria-expanded={isTimelineOpen}
-            aria-controls="gis-focus-timeline-panel"
-            onClick={() => setIsTimelineOpen((open) => !open)}
-            className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-2.5 py-1 font-heading text-xs font-bold text-slate-100 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
-          >
-            <Route aria-hidden="true" className="h-3.5 w-3.5 text-amber-300" />
-            {isTimelineOpen ? "ซ่อนคำแนะนำเส้นทาง" : "อ่านคำแนะนำเส้นทาง"}
-          </button>
-        </div>
-      )}
       </div>
-
-      {timeline && isTimelineOpen && (
-        <aside
-          id="gis-focus-timeline-panel"
-          data-testid="gis-focus-timeline-panel"
-          aria-label="รายละเอียดเส้นทางในโหมดโฟกัส"
-          className="citizen-focus-timeline pointer-events-auto absolute inset-x-2 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+14.25rem)] z-[619] max-h-[min(44dvh,28rem)] overflow-hidden rounded-2xl border sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[22rem] sm:max-h-[calc(100%-8rem)]"
-        >
-          <div className="citizen-focus-timeline-head flex items-center justify-between gap-3 border-b border-slate-800 px-3 py-2.5">
-            <div className="min-w-0">
-              <p className="citizen-focus-ink hdms-guide-title font-heading text-sm font-bold">คำแนะนำเส้นทาง</p>
-              <p className="citizen-focus-accent hdms-guide-accent text-xs">{focusState.direction === "FORWARD" ? "ขาไป A → B" : "ขากลับ B → A"}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsTimelineOpen(false)}
-              className="citizen-focus-timeline-close hdms-map-control grid h-9 w-9 shrink-0 place-items-center rounded-lg border"
-              aria-label="ปิดคำแนะนำเส้นทาง"
-            >
-              <X aria-hidden="true" className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="max-h-[calc(min(44dvh,28rem)-3.5rem)] space-y-2.5 overflow-y-auto overscroll-contain p-3 sm:max-h-[calc(100dvh-12rem)]">
-            {timeline.steps.length > 0 ? timeline.steps.map((step) => (
-              <article key={step.stepNumber} className="hdms-guide-card flex gap-2.5 rounded-xl border p-2.5">
-                <span className="hdms-guide-number grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-black">{step.stepNumber}</span>
-                <div className="min-w-0">
-                  <p className="citizen-focus-ink text-sm font-bold hdms-guide-title">{step.title}</p>
-                  {step.detail && <p className="hdms-guide-copy mt-0.5 text-xs leading-relaxed">{step.detail}</p>}
-                </div>
-              </article>
-            )) : (
-              <p className="hdms-guide-card hdms-guide-warning rounded-xl border p-3 text-xs leading-relaxed">
-                {timeline.directionNotice || "ยังไม่มีขั้นตอนเดินทางสำหรับทิศทางนี้"}
-              </p>
-            )}
-            <div className="grid grid-cols-2 gap-2">
-              <p className="hdms-guide-card hdms-guide-copy rounded-xl border p-2 text-xs">ระยะทาง<br /><strong className="citizen-focus-ink hdms-guide-title text-sm">{timeline.totalDistanceKm > 0 ? `${timeline.totalDistanceFormatted} กม.` : "ไม่ระบุ"}</strong></p>
-              <p className="hdms-guide-card hdms-guide-copy rounded-xl border p-2 text-xs">เวลาโดยประมาณ<br /><strong className="citizen-focus-ink hdms-guide-title text-sm">{timeline.estimatedMinutes !== null ? `${timeline.estimatedMinutes} นาที` : timeline.estimatedDurationText}</strong></p>
-            </div>
-          </div>
-        </aside>
-      )}
-    </>
   );
 }

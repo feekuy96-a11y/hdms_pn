@@ -980,7 +980,7 @@ export default function HomePage() {
             systemData={systemData}
             onExit={handleExitGisFocus}
             onChangeDirection={(direction) =>
-              updateFocusOptions({ direction, refit: true })
+              updateFocusOptions({ direction, refit: true, openDirectionEndpoint: true })
             }
             onToggleLinkedDetour={(show, detourId) =>
               updateFocusOptions({

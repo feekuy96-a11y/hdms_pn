@@ -120,12 +120,12 @@ test("long Thai detour dossier title reflows at enlarged text while real close s
     const routePhotoBox = (await routePhoto.boundingBox())!;
     expect(routePhotoBox.width).toBeGreaterThan(routePhotoBox.height);
     await expect(dialog.locator("[data-endpoint-photo]")).toHaveCount(0);
-    const pointA = dialog.getByRole("region", { name: "ข้อมูลA · จุดเริ่มต้นที่ปัก", exact: true });
+    const pointA = dialog.getByRole("region", { name: "ข้อมูลA · จุดเริ่มต้น", exact: true });
     await expect(pointA).toContainText("พิกัด: 6.890000, 101.183000");
     await expect(pointA).toContainText("ยังไม่มีข้อมูลพื้นที่จุดนี้");
     await expect(pointA).toContainText("ต้นทางของขาไป A → B");
     await dialog.getByRole("button", { name: "ขากลับ B → A", exact: true }).click();
-    const pointB = dialog.getByRole("region", { name: "ข้อมูลB · จุดสิ้นสุดที่ปัก", exact: true });
+    const pointB = dialog.getByRole("region", { name: "ข้อมูลB · จุดสิ้นสุด", exact: true });
     await expect(pointB).toContainText("พิกัด: 6.895000, 101.210000");
     await expect(pointB).toContainText("ต.ตาเซะ อ.เมืองยะลา จ.ยะลา");
     await expect(pointB).toContainText("คำอธิบายจุด B ที่ไม่มีภาพ");

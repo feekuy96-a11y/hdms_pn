@@ -36,6 +36,8 @@ export interface GisFocusState {
   linkedDetourId: string | null;
   /** Incremented whenever an explicit fitBounds should run (enter, target switch, direction/overlay toggle). */
   fitRequestId: number;
+  /** Open the starting endpoint after this explicit direction-button fit only. */
+  openDirectionEndpoint?: boolean;
   originSnapshot: GisFocusOriginSnapshot | null;
 }
 
@@ -87,6 +89,7 @@ export function updateGisFocusOptions(
   prev: GisFocusState,
   patch: Partial<Pick<GisFocusState, "direction" | "showLinkedDetour" | "linkedDetourId">> & {
     refit?: boolean;
+    openDirectionEndpoint?: boolean;
   }
 ): GisFocusState {
   if (prev.status !== "focused") return prev;
@@ -97,6 +100,7 @@ export function updateGisFocusOptions(
     linkedDetourId:
       patch.linkedDetourId !== undefined ? patch.linkedDetourId : prev.linkedDetourId,
     fitRequestId: patch.refit ? prev.fitRequestId + 1 : prev.fitRequestId,
+    openDirectionEndpoint: Boolean(patch.refit && patch.direction && patch.openDirectionEndpoint),
   };
 }
 

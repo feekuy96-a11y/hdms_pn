@@ -193,3 +193,158 @@ div[data-hdms-popup=photo] { background: var(--hdms-scrim); }
     }
   }
 }
+
+/* Shared A/B map popup: the photo is the landmark; readouts never rely on color. */
+.hdms-popup-map { --hdms-endpoint-start-pin: theme('colors.red.700'); }
+.hdms-popup-map:has(.hdms-endpoint-card) .leaflet-popup-close-button,
+.hdms-popup-map:has(.hdms-endpoint-card) .leaflet-popup-close-button:hover {
+  color: var(--hdms-white) !important;
+}
+.hdms-popup-map:has(.hdms-endpoint-card) .leaflet-popup-close-button:focus-visible {
+  outline-color: var(--hdms-white);
+}
+.hdms-popup-map .leaflet-popup-content > .hdms-endpoint-card {
+  display: flex;
+  flex-direction: column;
+  inline-size: min(320px, calc(100vw - 42px));
+  max-block-size: min(53dvh, 29rem);
+  overflow: hidden;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  font-size: .8rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.hdms-endpoint-card .hdms-endpoint-header {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  flex: none;
+  column-gap: .55rem;
+  padding: .5rem 50px .5rem .65rem;
+  color: var(--hdms-white);
+  background: linear-gradient(115deg, var(--hdms-teal-700), var(--hdms-ink-900));
+}
+.hdms-endpoint-card .hdms-endpoint-header h3 { margin: 0; color: inherit; font-size: .94rem; font-weight: 800; }
+.hdms-endpoint-card .hdms-endpoint-pin {
+  color: var(--hdms-endpoint-start-pin);
+  padding-inline-end: .42rem;
+  border-inline-end: 1px solid var(--hdms-ice-200);
+}
+.hdms-endpoint-card[data-detour-endpoint=END] .hdms-endpoint-pin { color: var(--hdms-teal-650); }
+.hdms-popup-map .hdms-endpoint-card .hdms-endpoint-trip {
+  display: inline-block;
+  margin-block-start: .16rem;
+  padding: .16rem .48rem;
+  border-radius: .85rem;
+  color: var(--hdms-ink-900);
+  background: var(--hdms-slate-50);
+  font-size: .71rem;
+  font-weight: 750;
+}
+.hdms-popup-map .hdms-endpoint-card .hdms-endpoint-body {
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 0;
+}
+.hdms-endpoint-card .hdms-endpoint-photo {
+  display: block;
+  inline-size: 100%;
+  padding: 0;
+  border: 0;
+  position: relative;
+  cursor: zoom-in;
+}
+.hdms-popup-map .hdms-endpoint-card .hdms-endpoint-photo img:not([hidden]) {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  object-fit: cover;
+  background: var(--bg-input);
+}
+.hdms-endpoint-card .hdms-endpoint-zoom {
+  position: absolute;
+  inset: .4rem .45rem auto auto;
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  padding: .32rem .45rem;
+  border-radius: .5rem;
+  background: var(--hdms-ink-900);
+  color: var(--hdms-white);
+  font-weight: 700;
+  font-size: .72rem;
+}
+.hdms-endpoint-card .hdms-endpoint-photo:has(img[hidden]) .hdms-endpoint-zoom { display: none; }
+.hdms-endpoint-zoom svg { inline-size: .85rem; block-size: .85rem; }
+.hdms-endpoint-card .hdms-endpoint-details { display: grid; gap: .27rem; padding: .45rem .5rem .55rem; }
+.hdms-popup-map .hdms-endpoint-card .hdms-endpoint-detail {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0,1fr);
+  align-items: start;
+  gap: .42rem;
+  padding: .26rem .42rem;
+  margin: 0;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border-radius: .55rem;
+  white-space: normal;
+}
+.hdms-endpoint-detail svg { color: var(--brand-active-bg); }
+.hdms-endpoint-detail span { white-space: pre-line; }
+.hdms-endpoint-coordinate { font-variant-numeric: tabular-nums; }
+.hdms-endpoint-card .hdms-endpoint-route { margin: 0; font-weight: 700; }
+.hdms-popup-map .hdms-endpoint-card .hdms-endpoint-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .35rem;
+  flex: none;
+  border: 0;
+  padding: .25rem .5rem .55rem;
+}
+.hdms-endpoint-card .hdms-endpoint-actions :is(a,button) {
+  display: grid;
+  place-items: center;
+  min-block-size: 44px;
+  padding: .32rem;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--hdms-control-edge);
+  border-radius: .55rem;
+  font-weight: 750;
+  text-align: center;
+  text-decoration: none;
+}
+.hdms-endpoint-card .hdms-endpoint-actions p { margin: 0; grid-column: 1 / -1; }
+.hdms-endpoint-card :is(a,button):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -3px; }
+
+@media (max-height: 460px) {
+  .hdms-endpoint-card .hdms-endpoint-photo img:not([hidden]) { max-block-size: 28dvh; }
+}
+
+/* Details and steps share one scroll area; header/close and actions stay put. */
+.hdms-endpoint-body:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.hdms-endpoint-card .hdms-endpoint-guide {
+  padding: .55rem .5rem .65rem;
+  border-block-start: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+.hdms-endpoint-guide h4 { margin: 0; font-size: .82rem; font-weight: 800; }
+.hdms-endpoint-guide .hdms-endpoint-guide-direction { margin: .12rem 0 .48rem; color: var(--text-secondary); font-weight: 650; }
+.hdms-endpoint-guide .doh-detour-step-badge { flex-shrink: 1; white-space: normal; overflow-wrap: anywhere; }
+
+.hdms-endpoint-guide-content { display: grid; gap: .5rem; }
+.hdms-endpoint-guide .doh-detour-condition-badge { white-space: normal; overflow-wrap: anywhere; }
+
+@media (max-height: 600px) and (orientation: portrait) {
+  /* Keep enough real reading space when large text makes the pinned actions stack. */
+  .hdms-popup-map .leaflet-popup-content > .hdms-endpoint-card {
+    max-block-size: min(66dvh, 356px);
+  }
+}

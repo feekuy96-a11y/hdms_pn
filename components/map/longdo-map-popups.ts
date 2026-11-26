@@ -7,7 +7,7 @@ import {
   DetourPointPhoto,
 } from "@/db/default-data";
 import { APP_CONFIG } from "@/lib/constants";
-import { splitDetourAdviceByDirection } from "@/lib/gis-utils";
+import { extractDirectionalAdvice, splitDetourAdviceByDirection } from "@/lib/gis-utils";
 import {
   calculatePolylineRoadDistanceKm,
   detourDirectionDetailedBadge,
@@ -16,6 +16,7 @@ import {
   getDetourTimelinePresentation,
   isDetourDirectionAllowed,
   isRecordedDetourDirection,
+  parseDetourAdvice,
   type DetourDirection,
   type DetourTimelinePresentation,
   type DetourTimelineStep,
@@ -180,7 +181,7 @@ export function raisePathLayers(...groups: any[]) {
 
 // ---- Popup HTML builders (called lazily, only when a popup is actually opened) ----
 
-export function getResponsivePopupOptions(
+function getResponsivePopupOptions(
   L: any,
   desktopMaxWidth: number,
   desktopMinWidth: number,
@@ -205,6 +206,60 @@ export function getResponsivePopupOptions(
     autoPanPaddingTopLeft: L?.point ? L.point(isMobile ? 24 : 12, isMobile ? 16 : 56) : [isMobile ? 24 : 12, isMobile ? 16 : 56],
     autoPanPaddingBottomRight: L?.point ? L.point(isMobile ? 24 : 12, isMobile ? 112 : 24) : [isMobile ? 24 : 12, isMobile ? 112 : 24],
   };
+}
+
+// Both portals use this registry. Roles only select the existing controls and
+// layout variant; callers never set Leaflet popup options themselves.
+type MapPopupKind = "highway" | "highway-shield" | "office" | "flood" | "detour" | "endpoint" | "focused-endpoint";
+type Point = [number, number];
+type MapPopupOptions = {
+  className: string;
+  keepInView?: boolean;
+  maxWidth?: number;
+  minWidth?: number;
+  autoPanPaddingTopLeft?: Point | { x: number; y: number };
+  autoPanPaddingBottomRight?: Point | { x: number; y: number };
+};
+
+function resolveMapPopupOptions(L: any, kind: MapPopupKind, publicMode: boolean): MapPopupOptions {
+  switch (kind) {
+    case "highway":
+    case "highway-shield":
+      return { className: "hdms-popup-map", ...(!publicMode ? { autoPanPaddingTopLeft: L.point(8, 112) } : {}) };
+    case "office":
+      return getResponsivePopupOptions(L, 320, 220, "doh-office-leaflet-popup");
+    case "flood":
+      return { ...getResponsivePopupOptions(L, 370, 300, "doh-flood-leaflet-popup"), keepInView: false };
+    case "detour":
+      return { ...getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup"), keepInView: false };
+    case "focused-endpoint":
+      return { ...getResponsivePopupOptions(L, 350, 240, "doh-detour-leaflet-popup"), keepInView: false };
+    case "endpoint":
+      return publicMode
+        ? {
+            ...getResponsivePopupOptions(L, 320, 0, "doh-detour-leaflet-popup"),
+            keepInView: false,
+            autoPanPaddingTopLeft: L.point(12, 16),
+            autoPanPaddingBottomRight: L.point(12, 112),
+          }
+        : { ...getResponsivePopupOptions(L, 380, 260, "doh-detour-leaflet-popup"), keepInView: false };
+  }
+}
+
+export function bindSharedMapPopup(
+  L: any, map: any, layer: any, kind: Exclude<MapPopupKind, "highway">,
+  publicMode: boolean, render: () => string
+) {
+  layer.bindPopup(render, resolveMapPopupOptions(L, kind, publicMode));
+  if (kind !== "office" && kind !== "highway-shield") bindMapPopupInitialReveal(map, layer);
+}
+
+export function openSharedHighwayPopup(L: any, map: any, latLng: unknown, publicMode: boolean, props: unknown, featureIsMain: boolean, color: string) {
+  map.openPopup(buildHighwayPopupHtml(props, featureIsMain, color), latLng, resolveMapPopupOptions(L, "highway", publicMode));
+}
+
+export function buildHighwayShieldPopupHtml(code: string, name: string): string {
+  return `<div class="px-3 py-2 pr-12"><strong>ทล.${escapeHtml(code)}</strong><br/>${escapeHtml(name)}</div>`;
 }
 
 export function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color: string): string {
@@ -262,18 +317,14 @@ function getDetourStepIconSvg(iconType: DetourTimelineStep["iconType"]): string 
   }
 }
 
-export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePresentation): string {
-  if (!presentation.steps.length) {
-    return `<div class="doh-detour-empty hdms-guide-card hdms-guide-warning rounded-xl border p-3 text-xs text-center">${escapeHtml(presentation.directionNotice || "ไม่มีข้อมูลขั้นตอนการเดินทางสำหรับทิศทางนี้")}</div>`;
-  }
-
-  const stepsHtml = presentation.steps
+function buildDetourStepsHtml(steps: DetourTimelineStep[]): string {
+  return steps
     .map((step, idx) => {
-      const isLast = idx === presentation.steps.length - 1;
+      const isLast = idx === steps.length - 1;
       const iconSvg = getDetourStepIconSvg(step.iconType);
 
       return `
-      <div class="relative flex items-start gap-3">
+      <li class="relative flex items-start gap-3">
         ${!isLast ? `<div class="doh-detour-timeline-line absolute left-[0.6875rem] top-6 bottom-[-8px] border-l-2 border-dashed border-amber-500/45" aria-hidden="true"></div>` : ""}
         <div class="doh-detour-step-number hdms-guide-number relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black tabular-nums shadow" aria-hidden="true">
           ${step.stepNumber}
@@ -290,16 +341,18 @@ export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePrese
           </div>
           ${step.detail ? `<p class="doh-detour-step-detail hdms-guide-copy mt-1 text-xs leading-relaxed break-words [overflow-wrap:anywhere]">${escapeHtml(step.detail)}</p>` : ""}
         </div>
-      </div>
+      </li>
     `;
     })
     .join("");
+}
 
+function buildDetourTimelineSummaryHtml(presentation: DetourTimelinePresentation): string {
+  const knownCondition = presentation.roadCondition !== "ไม่ระบุ" && presentation.roadCondition !== "-";
+  const conditionClass = knownCondition
+    ? "border-emerald-500/70 bg-emerald-950/80 text-emerald-200"
+    : "border-[var(--border-subtle)] bg-[var(--bg-input)] text-[var(--text-secondary)]";
   return `
-    <div class="space-y-2">
-      <div class="space-y-2">
-        ${stepsHtml}
-      </div>
       <div class="grid grid-cols-2 gap-2">
         <div class="doh-detour-metric-card hdms-guide-card rounded-xl border p-2 flex flex-col justify-center">
           <div class="doh-detour-metric-label hdms-guide-copy flex items-center gap-1 text-[11px] font-medium leading-none mb-1">
@@ -321,11 +374,25 @@ export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePrese
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
           <span>สภาพเส้นทาง</span>
         </div>
-        <span class="doh-detour-condition-badge rounded-full border border-emerald-500/70 bg-emerald-950/80 px-2.5 py-0.5 text-xs font-semibold text-emerald-200 inline-flex items-center gap-1">
+        <span class="doh-detour-condition-badge rounded-full border ${conditionClass} px-2.5 py-0.5 text-xs font-semibold inline-flex items-center gap-1">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
           <span>${escapeHtml(presentation.roadCondition)}</span>
         </span>
       </div>
+  `;
+}
+
+export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePresentation): string {
+  if (!presentation.steps.length) {
+    return `<div class="doh-detour-empty hdms-guide-card hdms-guide-warning rounded-xl border p-3 text-xs text-center">${escapeHtml(presentation.directionNotice || "ไม่มีข้อมูลขั้นตอนการเดินทางสำหรับทิศทางนี้")}</div>`;
+  }
+
+  return `
+    <div class="space-y-2">
+      <ol class="m-0 list-none space-y-2 p-0" role="list">
+        ${buildDetourStepsHtml(presentation.steps)}
+      </ol>
+      ${buildDetourTimelineSummaryHtml(presentation)}
     </div>
   `;
 }
@@ -584,93 +651,6 @@ export function getDetourEndpointTextDetails(photo: DetourPointPhoto | null | un
   };
 }
 
-export function buildDetourPointPhotoPopupHtml(
-  detour: DetourRoute,
-  role: "START" | "END",
-  photo: DetourPointPhoto | null | undefined,
-  lat: number,
-  lon: number,
-  direction: DetourDirection = "FORWARD",
-): string {
-  const safePhoto = photo ?? {};
-  const { title: badgeText, trip } = getPublicDetourEndpointLabel(detour, role, direction);
-  const isStart = (role === "START") === (direction === "FORWARD");
-  const rawUrl = normalizeMediaUrl(safePhoto.url);
-  const normalizedUrl = /^(?:https?:\/\/|data:image\/(?:png|jpe?g|webp|gif);base64,)/i.test(rawUrl) ? escapeHtml(rawUrl) : "";
-  const hasPhotoUrl = Boolean(normalizedUrl);
-  const badgeIcon = hasPhotoUrl ? "📷" : "📍";
-  const { coordinate: coordText, area: areaLine, caption } = getDetourEndpointTextDetails(photo, { lat, lon });
-  const captionText = escapeHtml(caption ?? "ยังไม่มีคำอธิบายจุดนี้");
-  const navUrl = coordText ? `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lon.toFixed(6)}&travelmode=driving` : "";
-
-  return `
-    <div class="doh-detour-point-photo-popup text-xs p-[0.833em] sm:p-[1.167em] w-[min(20.25rem,calc(100vw-2rem))] sm:w-[21.25rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl select-text space-y-2 sm:space-y-2.5">
-      <div class="hdms-map-popup-heading flex items-center justify-between gap-[0.667em] pb-2 border-b border-slate-800/80">
-        <span class="inline-flex items-center gap-[0.5em] rounded-full px-[0.833em] py-[0.167em] text-[0.75rem] font-heading font-bold ${
-          isStart
-            ? "bg-emerald-950/90 border border-emerald-500/60 text-emerald-300"
-            : "bg-sky-950/90 border border-sky-500/60 text-sky-300"
-        }">
-          <span>${badgeIcon}</span>
-          <span>${escapeHtml(badgeText)}</span>
-        </span>
-      </div>
-      <p class="!m-0 text-[0.75rem] text-slate-300">${escapeHtml(trip)}</p>
-      <div class="space-y-1">
-        <h5 class="font-bold text-white text-sm font-heading leading-snug break-words">${escapeHtml(detour.route_name)}</h5>
-        <div class="space-y-1">
-          <p class="text-[0.75rem] font-medium text-sky-200 leading-snug break-words">📍 ${escapeHtml(areaLine ?? "ยังไม่มีข้อมูลพื้นที่จุดนี้")}</p>
-          <p class="font-mono text-[0.6875rem] text-slate-300 leading-tight">${coordText ? `พิกัด: ${escapeHtml(coordText)}` : "ยังไม่มีพิกัดจุดนี้"}</p>
-        </div>
-        <p class="text-xs text-amber-200/95 leading-relaxed break-words">${captionText}</p>
-      </div>
-      ${
-        hasPhotoUrl
-          ? `<div class="relative flex items-center justify-center overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950">
-              <img
-                src="${normalizedUrl}"
-                alt="${escapeHtml(`${badgeText} ${detour.route_name}`)}"
-                onclick="window.__openDetourPointPhoto && window.__openDetourPointPhoto(this.src, this.alt)"
-                class="w-full h-auto max-h-[min(36dvh,16rem)] object-contain cursor-zoom-in hover:opacity-95 transition"
-              />
-              <span class="pointer-events-none absolute bottom-2 right-2 rounded-lg bg-slate-950/85 border border-slate-700 px-[0.667em] py-[0.167em] text-[0.75rem] text-slate-200">
-                แตะที่ภาพเพื่อขยายเต็มจอ
-              </span>
-            </div>`
-          : `<div class="rounded-xl border border-dashed border-slate-700/90 bg-slate-900/70 px-3 py-3 text-center text-[0.75rem] text-slate-300">
-              ยังไม่มีภาพถ่ายประกอบจุดนี้
-            </div>`
-      }
-      <div class="grid grid-cols-2 gap-[0.5em] sm:gap-[0.667em] pt-1">
-        ${
-          Boolean(navUrl)
-            ? `<a
-                href="${escapeHtml(navUrl)}"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="min-h-[2.75rem] px-[0.667em] sm:px-[0.833em] py-[0.5em] rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-heading font-black text-xs flex items-center justify-center gap-[0.333em] text-center shadow transition"
-              >
-                <span>🧭 ดูบน Google Maps</span>
-              </a>`
-            : `<span
-                aria-disabled="true"
-                class="min-h-[2.75rem] px-[0.667em] sm:px-[0.833em] py-[0.5em] rounded-xl border border-slate-800 bg-slate-900/60 text-slate-400 font-heading font-bold text-xs flex items-center justify-center text-center"
-              >
-                ไม่มีพิกัดนำทาง
-              </span>`
-        }
-        <button
-          type="button"
-          onclick="window.__openDetourModal && window.__openDetourModal('${escapeHtml(detour.id)}')"
-          class="min-h-[2.75rem] px-[0.667em] sm:px-[0.833em] py-[0.5em] rounded-xl border border-slate-700 bg-[#13203c] hover:bg-[#1a2b50] text-white font-heading font-bold text-xs flex items-center justify-center gap-[0.333em] text-center transition cursor-pointer"
-        >
-          <span>ดูคำแนะนำทางเลี่ยง</span>
-        </button>
-      </div>
-    </div>
-  `;
-}
-
 /** Keep the saved A/B identity separate from its role in the current direction. */
 export function getPublicDetourEndpointLabel(
   detour: DetourRoute,
@@ -681,7 +661,7 @@ export function getPublicDetourEndpointLabel(
   const confirmed = isRecordedDetourDirection(detour.direction_mode) && isDetourDirectionAllowed(detour.direction_mode, direction);
   const letter = point === "START" ? "A" : "B";
   const begins = (point === "START") !== reverse;
-  const savedIdentity = point === "START" ? "จุดเริ่มต้นที่ปัก" : "จุดสิ้นสุดที่ปัก";
+  const savedIdentity = point === "START" ? "จุดเริ่มต้น" : "จุดสิ้นสุด";
   const travelRole = begins ? "ต้นทาง" : "ปลายทาง";
   const travelDirection = reverse ? "ขากลับ B → A" : "ขาไป A → B";
   return {
@@ -699,47 +679,119 @@ export function labelPublicDetourEndpointMarker(
   marker.setTooltipContent(name);
 }
 
-export function buildPublicDetourEndpointPopup(
+const ENDPOINT_DETAIL_ICONS = {
+  area: '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',
+  coordinate: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>',
+  note: '<path d="M3 18h3c4 0 3-11 8-11h7m-4-4 4 4-4 4M5 15l-2 3 2 3"/>',
+  expand: '<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>',
+};
+function endpointIcon(kind: keyof typeof ENDPOINT_DETAIL_ICONS): string {
+  return `<svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ENDPOINT_DETAIL_ICONS[kind]}</svg>`;
+}
+
+function buildEndpointDirectionGuide(detour: DetourRoute, direction: DetourDirection): string {
+  const description = detour.description || "";
+  const mode = detour.direction_mode;
+  const tripLabel = direction === "FORWARD" ? "ขาไป A → B" : "ขากลับ B → A";
+  const content = (() => {
+    if (!isRecordedDetourDirection(mode)) return "<p>ยังไม่ได้ยืนยันทิศทางการเดินทาง</p>";
+    if (!isDetourDirectionAllowed(mode, direction)) return "<p>เส้นทางนี้ไม่เปิดให้เดินทางในทิศนี้</p>";
+    const explicit = extractDirectionalAdvice(description);
+    const sources = splitDetourAdviceByDirection(description, mode);
+    const raw = (explicit.hasBoth
+      ? (direction === "FORWARD" ? explicit.forward : explicit.reverse)
+      : (direction === "FORWARD" ? sources.forwardText : sources.reverseText))
+      .replace(/^\s*(?:ทิศทาง)?ขา(?:ไป|กลับ)(?:[^:\n]*)?:[ \t]*(?=\n|$)/gm, "")
+      .trim();
+    const { steps } = parseDetourAdvice(raw);
+    const notice = steps.find(step => /^(?:ยังไม่มีคำแนะนำ|เส้นทางเลี่ยงนี้เปิดใช้งานเฉพาะ)/.test(step));
+    const forwardKm = calculatePolylineRoadDistanceKm(detour.coordinates_json);
+    const distance = direction === "REVERSE" ? calculatePolylineRoadDistanceKm(detour.reverse_coordinates_json) || forwardKm : forwardKm;
+    const condition = detour.detour_meta?.road_condition?.trim() ||
+      (raw.match(/^\s*[-•–]?\s*สภาพเส้นทาง:\s*([^\n]+)/m)?.[1]?.trim()) || "ไม่ระบุ";
+    const timeline = getDetourTimelinePresentation(
+      raw,
+      detourDistanceMeters(detour.detour_meta, direction),
+      distance,
+      "",
+      "",
+      condition,
+      detourDurationSeconds(detour.detour_meta, direction)
+    );
+    // The presentation layer can suggest placeholders; the endpoint only shows saved steps.
+    const savedSteps: DetourTimelineStep[] = steps.length === 1
+      ? [{ stepNumber: 1, iconType: "straight", title: steps[0], detail: "", badge: "1" }]
+      : timeline.steps;
+    const directions = notice || !steps.length
+      ? `<p>${escapeHtml(notice || "ยังไม่มีคำแนะนำที่บันทึกในทิศทางนี้")}</p>`
+      : `<ol class="m-0 list-none space-y-2 p-0" role="list">${buildDetourStepsHtml(savedSteps)}</ol>`;
+    return `<div class="hdms-endpoint-guide-content">${directions}${buildDetourTimelineSummaryHtml(timeline)}</div>`;
+  })();
+  return `<section data-endpoint-guide class="hdms-endpoint-guide" aria-label="คำแนะนำทางเลี่ยงตามทิศการเดินทาง">
+    <h4>คำแนะนำทางเลี่ยงตามทิศการเดินทาง</h4>
+    <p class="hdms-endpoint-guide-direction">${tripLabel}</p>
+    ${content}
+  </section>`;
+}
+
+export function buildMapDetourEndpointPopup(
   detour: DetourRoute,
   point: "START" | "END",
   photo: DetourPointPhoto | null | undefined,
   direction: DetourDirection,
   floodRoutes: FloodRoute[],
   pin: { lat: number; lon: number },
+  publicMode: boolean,
 ): string {
   const photoUrl = normalizeMediaUrl(photo?.url);
   const safePhotoUrl = /^(?:https?:\/\/|data:image\/(?:png|jpe?g|webp|gif);base64,)/i.test(photoUrl) ? escapeHtml(photoUrl) : "";
   const { area, caption, coordinate } = getDetourEndpointTextDetails(photo, pin);
   const { title, trip } = getPublicDetourEndpointLabel(detour, point, direction);
-  const nav = resolveDetourGoogleMapsNavigation(detour, direction, floodRoutes);
+  const letter = point === "START" ? "A" : "B";
+  const nav = publicMode ? resolveDetourGoogleMapsNavigation(detour, direction, floodRoutes) : null;
+  const endpointNav = coordinate ? `https://www.google.com/maps/dir/?api=1&destination=${pin.lat.toFixed(6)},${pin.lon.toFixed(6)}&travelmode=driving` : "";
+  const photoControl = publicMode
+    ? 'data-public-photo'
+    : `onclick="const img=this.querySelector('img'); if(img) window.__openDetourPointPhoto?.(img.src,img.alt)"`;
   return `
-    <section data-detour-endpoint="${point}" class="doh-detour-point-photo-popup font-body" aria-label="${title}" style="width:min(320px,calc(100vw - 26px));max-height:none;overflow:visible">
-      <header class="citizen-endpoint-header" style="min-height:54px">
-        <h3 data-endpoint-heading tabindex="-1" class="m-0 text-sm font-bold text-[var(--cit-ink)]"><span aria-hidden="true">📍</span> ${title}</h3>
-        ${trip ? `<span class="citizen-endpoint-trip-direction">${trip}</span>` : ""}
-      </header>
-      <div class="grid min-w-0 gap-1.5 p-2.5 text-xs">
-        ${safePhotoUrl ? `<div class="mx-auto w-full max-w-[224px] [@media(max-height:460px)]:hidden">
-          <button type="button" data-endpoint-photo data-public-photo aria-haspopup="dialog" aria-label="เปิดภาพขนาดเต็ม ${title}" class="citizen-endpoint-photo-button">
-            <img src="${safePhotoUrl}" alt="ภาพจุด ${title}" class="citizen-detour-photo-image" style="aspect-ratio:16 / 9">
-            <span class="citizen-endpoint-zoom" aria-hidden="true">ขยายภาพ</span>
-            <span data-photo-error hidden>โหลดภาพตัวอย่างไม่สำเร็จ · แตะเพื่อลองเปิดภาพ</span>
-          </button>
-        </div>` : ""}
-        <p data-endpoint-locality class="line-clamp-1 !m-0" title="${escapeHtml(area ?? "")}">${escapeHtml(area ?? "ยังไม่มีข้อมูลพื้นที่จุดนี้")}</p>
-        <p data-endpoint-coordinate class="!m-0 break-words font-mono">${coordinate ? `พิกัด: ${escapeHtml(coordinate)}` : "ยังไม่มีพิกัดจุดนี้"}</p>
-        <p class="citizen-endpoint-caption line-clamp-2 !m-0" title="${escapeHtml(caption ?? "")}">${escapeHtml(caption ?? "ยังไม่มีคำอธิบายจุดนี้")}</p>
-        <div class="citizen-endpoint-actions">
-          ${nav.isValid && nav.url ? `<a href="${escapeHtml(nav.url)}" target="_blank" rel="noopener noreferrer">ดูบน Google Maps</a>` : `<p>${escapeHtml(nav.warning || "ยังไม่ยืนยันนำทาง")}</p>`}
-          <button type="button" data-endpoint-focus>ดูตำแหน่งบนแผนที่</button>
+    <section data-detour-endpoint="${point}" class="doh-detour-point-photo-popup hdms-endpoint-card font-body" aria-label="${escapeHtml(title)}">
+      <header class="hdms-endpoint-header">
+        <span class="hdms-endpoint-pin" aria-hidden="true">
+          <svg viewBox="0 0 36 46" width="34" height="44"><path d="M18 2a15 15 0 0 0-15 15c0 10 15 25 15 25s15-15 15-25A15 15 0 0 0 18 2Z" fill="currentColor" stroke="var(--hdms-white)" stroke-width="2"/><text x="18" y="23" fill="var(--hdms-white)" text-anchor="middle" font-size="16" font-weight="800">${letter}</text></svg>
+        </span>
+        <div>
+          <h3 data-endpoint-heading tabindex="-1">${escapeHtml(title)}</h3>
+          <span class="citizen-endpoint-trip-direction hdms-endpoint-trip">${escapeHtml(trip)}</span>
         </div>
+      </header>
+      <div class="hdms-endpoint-body" data-endpoint-scroll tabindex="0" role="region" aria-label="รายละเอียดจุดและคำแนะนำทางเลี่ยง">
+        ${safePhotoUrl ? `
+          <button type="button" data-endpoint-photo ${photoControl} aria-haspopup="dialog" aria-label="เปิดภาพขนาดเต็ม ${escapeHtml(title)}" class="hdms-endpoint-photo">
+            <img src="${safePhotoUrl}" alt="ภาพจุด ${escapeHtml(title)}" class="citizen-detour-photo-image">
+            <span class="hdms-endpoint-zoom" aria-hidden="true">${endpointIcon("expand")} ขยายภาพ</span>
+            <span data-photo-error hidden>โหลดภาพตัวอย่างไม่สำเร็จ · แตะเพื่อลองเปิดภาพ</span>
+          </button>` : ""}
+        <div class="hdms-endpoint-details">
+          ${!publicMode ? `<p class="hdms-endpoint-route">${escapeHtml(detour.route_name)}</p>` : ""}
+          <p data-endpoint-locality class="hdms-endpoint-detail">${endpointIcon("area")}<span>${escapeHtml(area ?? "ยังไม่มีข้อมูลพื้นที่จุดนี้")}</span></p>
+          <p data-endpoint-coordinate class="hdms-endpoint-detail hdms-endpoint-coordinate">${endpointIcon("coordinate")}<span>${coordinate ? `พิกัด: ${escapeHtml(coordinate)}` : "ยังไม่มีพิกัดจุดนี้"}</span></p>
+          <p class="citizen-endpoint-caption hdms-endpoint-detail">${endpointIcon("note")}<span>${escapeHtml(caption ?? "ยังไม่มีคำอธิบายจุดนี้")}</span></p>
+        </div>
+        ${buildEndpointDirectionGuide(detour, direction)}
       </div>
+      <footer class="citizen-endpoint-actions hdms-endpoint-actions">
+            ${publicMode
+              ? `${nav?.isValid && nav.url ? `<a href="${escapeHtml(nav.url)}" target="_blank" rel="noopener noreferrer">ดูบน Google Maps</a>` : `<p>${escapeHtml(nav?.warning || "ยังไม่ยืนยันนำทาง")}</p>`}
+                <button type="button" data-endpoint-focus>ดูตำแหน่งบนแผนที่</button>`
+              : `${endpointNav ? `<a href="${escapeHtml(endpointNav)}" target="_blank" rel="noopener noreferrer">🧭 ดูบน Google Maps</a>` : '<p aria-disabled="true">ไม่มีพิกัดนำทาง</p>'}
+                <button type="button" data-detour-id="${escapeHtml(detour.id)}" onclick="window.__openDetourModal?.(this.dataset.detourId)">ดูคำแนะนำทางเลี่ยง</button>`}
+      </footer>
     </section>
   `;
 }
 
 /** Correct the initial popup reveal at most once, never an operator's pan/zoom. */
-export function bindMapPopupInitialReveal(map: any, layer: any) {
+function bindMapPopupInitialReveal(map: any, layer: any) {
   layer.on("popupopen", ({ popup }: { popup: { getElement: () => HTMLElement | null } }) => {
     const popupElement = popup.getElement();
     if (!popupElement) return;
@@ -761,7 +813,15 @@ export function bindMapPopupInitialReveal(map: any, layer: any) {
       const header = document.querySelector("header.doh-header")?.getBoundingClientRect();
       const overlapsMapTop = header && header.width > 0 && header.height > 0 &&
         header.left < right && header.right > left && header.top <= visibleTop && header.bottom > visibleTop;
-      const top = (overlapsMapTop ? Math.max(visibleTop, header.bottom) : visibleTop) + inset;
+      const endpoint = popupElement.querySelector(".hdms-endpoint-card");
+      const statusRow = endpoint
+        ? map.getContainer().closest("[data-hdms-map]")?.querySelector(".hdms-map-status-head")?.getBoundingClientRect()
+        : undefined;
+      const mobileStatusBottom = statusRow && window.innerWidth < 640 && statusRow.width > 0 &&
+        statusRow.height > 0 && statusRow.top >= visibleTop - inset && statusRow.top < visibleTop + 70
+        ? statusRow.bottom
+        : visibleTop;
+      const top = Math.max(mobileStatusBottom, overlapsMapTop ? header.bottom : visibleTop) + inset;
       const bottom = Math.min(document.documentElement.clientHeight, bounds.bottom) - inset;
       if (right <= left || bottom <= top) return;
       // If a popup cannot all fit, keep the heading and close control in view.

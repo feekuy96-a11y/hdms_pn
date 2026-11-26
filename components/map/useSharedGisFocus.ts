@@ -99,6 +99,7 @@ export function useSharedGisFocus({
     (
       patch: Partial<Pick<GisFocusState, "direction" | "showLinkedDetour" | "linkedDetourId">> & {
         refit?: boolean;
+        openDirectionEndpoint?: boolean;
       }
     ) => {
       setGisFocus((prev) => updateGisFocusOptions(prev, patch));

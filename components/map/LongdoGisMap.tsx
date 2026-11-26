@@ -22,14 +22,13 @@ import {
   geoJsonFeatures,
   dashArrayFor,
   raisePathLayers,
-  getResponsivePopupOptions,
-  buildHighwayPopupHtml,
+  bindSharedMapPopup,
+  openSharedHighwayPopup,
+  buildHighwayShieldPopupHtml,
+  buildMapDetourEndpointPopup,
   buildOfficePopupHtml,
   buildDetourFallbackPinSpec,
-  buildDetourPointPhotoPopupHtml,
-  buildPublicDetourEndpointPopup,
   bindPublicEndpointInspector,
-  bindMapPopupInitialReveal,
   getPublicDetourEndpointLabel,
   labelPublicDetourEndpointMarker,
   parseRouteCoordinates,
@@ -52,6 +51,7 @@ import { renderVertexEditHandles } from "./longdo-vertex-handles";
 import { renderDraftAndConflictLayer } from "./longdo-draft-layer";
 import { useAdministrativeBoundaries } from "./useAdministrativeBoundaries";
 import { resolveMapDetourDash, useLongdoPopupBridge, useLongdoRouteLayers } from "./useLongdoRouteLayers";
+import { isDetourDirectionAllowed } from "@/lib/detour-presentation";
 import { getTrafficPresentation } from "@/lib/traffic-presentation";
 import {
   collectFocusBoundsPoints,
@@ -783,11 +783,7 @@ export function LongdoGisMap({
                 onCoordinatePickedRef.current?.(Number(event.latlng.lat.toFixed(6)), Number(event.latlng.lng.toFixed(6)), mode);
                 return;
               }
-              map.openPopup(
-                buildHighwayPopupHtml(props, featureIsMain, color),
-                event.latlng,
-                { className: "hdms-popup-map", ...(!publicMode ? { autoPanPaddingTopLeft: L.point(8, 112) } : {}) },
-              );
+              openSharedHighwayPopup(L, map, event.latlng, publicMode, props, featureIsMain, color);
               setActivePopupEntity({ type: "HIGHWAY", id: highwayFeatureKeysRef.current.get(feature)! });
             });
           },
@@ -855,10 +851,7 @@ export function LongdoGisMap({
         });
         const sign = L.marker(item.latlng, { icon: signIcon, interactive: true }).addTo(group);
         sign.bindTooltip(`ทล.${escapeHtml(item.code)} · ${escapeHtml(item.name)}`, { direction: "top", offset: [0, -18] });
-        sign.bindPopup(
-          () => `<div class="px-3 py-2 pr-12"><strong>ทล.${escapeHtml(item.code)}</strong><br/>${escapeHtml(item.name)}</div>`,
-          { className: "hdms-popup-map", ...(!publicMode ? { autoPanPaddingTopLeft: L.point(8, 112) } : {}) },
-        );
+        bindSharedMapPopup(L, map, sign, "highway-shield", publicMode, () => buildHighwayShieldPopupHtml(item.code, item.name));
         sign.on("popupopen", () => {
           let closest: { key: string; distance: number } | null = null;
           const visit = (path: any) => {
@@ -1212,8 +1205,9 @@ export function LongdoGisMap({
   // 4g. DOH offices & highway stations
   useEffect(() => {
     const L = leafletRef.current;
+    const map = leafletMapRef.current;
     const group = officeGroupRef.current;
-    if (!mapReady || !L || !group) return;
+    if (!mapReady || !L || !map || !group) return;
     group.clearLayers();
     if (!effectiveShowOffices) return;
 
@@ -1246,7 +1240,7 @@ export function LongdoGisMap({
           onOfficeDraggedRef.current?.(office.id, { lat: Number(position.lat.toFixed(6)), lon: Number(position.lng.toFixed(6)) });
         });
       }
-      marker.bindPopup(() => buildOfficePopupHtml(office), getResponsivePopupOptions(L, 320, 220, "doh-office-leaflet-popup"));
+      bindSharedMapPopup(L, map, marker, "office", publicMode, () => buildOfficePopupHtml(office));
     });
 
     return () => {
@@ -1270,6 +1264,9 @@ export function LongdoGisMap({
     const renderer = rendererRef.current;
     const allPolylines: [number, number][][] = [];
     const allPoints: ([number, number] | null)[] = [];
+    const requestedEndpoint: { marker?: ReturnType<typeof L.marker> } = {};
+    const shouldOpenDirectionEndpoint = publicMode && gisFocus.openDirectionEndpoint &&
+      gisFocus.fitRequestId !== lastFittedRequestIdRef.current;
 
     const drawDetourFocusOverlay = (
       detour: DetourRoute,
@@ -1352,14 +1349,12 @@ export function LongdoGisMap({
           ),
         }).addTo(group);
         markers.set(point, marker);
+        if (shouldOpenDirectionEndpoint && isDetourDirectionAllowed(detour.direction_mode, direction) &&
+            point === (direction === "FORWARD" ? "START" : "END")) requestedEndpoint.marker = marker;
         allPoints.push([lon, lat]);
-        marker.bindPopup(
-          () => publicMode
-            ? buildPublicDetourEndpointPopup(detour, point, photo, direction, systemData.floodRoutes || [], { lat, lon })
-            : buildDetourPointPhotoPopupHtml(detour, point, photo, lat, lon, direction),
-          { ...getResponsivePopupOptions(L, 350, 240, "doh-detour-leaflet-popup"), keepInView: false }
+        bindSharedMapPopup(L, map, marker, "focused-endpoint", publicMode, () =>
+          buildMapDetourEndpointPopup(detour, point, photo, direction, systemData.floodRoutes || [], { lat, lon }, publicMode)
         );
-        bindMapPopupInitialReveal(map, marker);
         if (publicMode) {
           labelPublicDetourEndpointMarker(marker, getPublicDetourEndpointLabel(detour, point, direction));
           bindPublicEndpointInspector(L, map, marker, markers, point, () => {
@@ -1470,12 +1465,9 @@ export function LongdoGisMap({
       const focusBarRect = document
         .querySelector('[data-testid="gis-focus-mode-bar"]')
         ?.getBoundingClientRect();
-      const focusTimelineRect = document
-        .querySelector('[data-testid="gis-focus-timeline-panel"]')
-        ?.getBoundingClientRect();
 
       const leftPadding = isMobileViewport ? 58 : 24;
-      let rightPadding = isMobileViewport ? 44 : 24;
+      const rightPadding = isMobileViewport ? 44 : 24;
       let topPadding = isMobileViewport ? 108 : 132;
       let bottomPadding = isMobileViewport ? 240 : 40;
       if (mapRect && focusBarRect && mapRect.height > 0) {
@@ -1497,22 +1489,6 @@ export function LongdoGisMap({
           topPadding = Math.min(Math.max(132, neededTop), Math.max(132, mapRect.height - bottomPadding - 120));
         }
       }
-      if (mapRect && focusTimelineRect && mapRect.width > 0 && mapRect.height > 0) {
-        if (isMobileViewport) {
-          const neededBottom = Math.ceil(mapRect.bottom - focusTimelineRect.top) + 16;
-          bottomPadding = Math.min(
-            Math.max(bottomPadding, neededBottom),
-            Math.max(120, mapRect.height - topPadding - 96)
-          );
-        } else {
-          const neededRight = Math.ceil(mapRect.right - focusTimelineRect.left) + 16;
-          rightPadding = Math.min(
-            Math.max(rightPadding, neededRight),
-            Math.max(80, mapRect.width - leftPadding - 160)
-          );
-        }
-      }
-
       if (boundsPoints.length >= 2) {
         isProgrammaticMoveRef.current = true;
         map.stop();
@@ -1520,7 +1496,7 @@ export function LongdoGisMap({
           paddingTopLeft: [leftPadding, topPadding],
           paddingBottomRight: [rightPadding, bottomPadding],
           maxZoom: 15,
-          animate: true,
+          animate: !requestedEndpoint.marker,
         });
         window.setTimeout(() => {
           isProgrammaticMoveRef.current = false;
@@ -1535,11 +1511,13 @@ export function LongdoGisMap({
           offsetY !== 0 && typeof map.project === "function" && typeof map.unproject === "function"
             ? map.unproject(map.project(targetLatLng, targetZoom).add([0, offsetY]), targetZoom)
             : targetLatLng;
-        map.setView(targetCenter, targetZoom, { animate: true });
+        map.setView(targetCenter, targetZoom, { animate: !requestedEndpoint.marker });
         window.setTimeout(() => {
           isProgrammaticMoveRef.current = false;
         }, 400);
       }
+      // This runs once for an explicit direction press, never on a data refresh.
+      requestedEndpoint.marker?.openPopup();
     }
 
     return () => {
