@@ -27,7 +27,13 @@
     --atlas-glass-night: 20, 42, 52;
     --atlas-nav-channels: var(--atlas-glass-paper);
     --atlas-nav: rgb(var(--atlas-nav-channels));
-    --atlas-nav-ink: var(--hdms-ink-900);
+    --atlas-nav-ink: var(--atlas-night);
+    --atlas-nav-opacity: .58;
+    --atlas-sheet-opacity: .82;
+    --atlas-sheet-scrim: color-mix(in srgb, var(--atlas-night) 32%, transparent);
+    --atlas-nav-edge: color-mix(in srgb, var(--atlas-teal-150) 56%, transparent);
+    --atlas-nav-sheen: linear-gradient(to bottom, var(--atlas-nav-rim), var(--atlas-nav-edge) 2px, transparent .45rem);
+    --atlas-nav-shadow: color-mix(in srgb, var(--atlas-shadow-950) 20%, transparent);
     --atlas-nav-rim: color-mix(in srgb, var(--hdms-white) 76%, transparent);
   }
 
@@ -37,6 +43,10 @@
     --atlas-detail: var(--atlas-teal-750);
     --atlas-nav-channels: var(--atlas-glass-night);
     --atlas-nav-ink: var(--hdms-slate-50);
+    --atlas-nav-opacity: .68;
+    --atlas-sheet-opacity: .85;
+    --atlas-nav-sheen: linear-gradient(to bottom, var(--atlas-nav-rim), transparent .45rem);
+    --atlas-nav-shadow: color-mix(in srgb, var(--atlas-shadow-950) 15%, transparent);
     --atlas-nav-rim: color-mix(in srgb, var(--atlas-quiet) 25%, transparent);
   }
 
@@ -121,7 +131,7 @@
     background-image: none;
     background-color: var(--atlas-nav);
     box-shadow: inset 0 1px 0 var(--atlas-nav-rim),
-      0 -3px 12px color-mix(in srgb, var(--atlas-shadow-950) 15%, transparent);
+      0 -3px 12px var(--atlas-nav-shadow);
     gap: 0;
   }
 
@@ -129,8 +139,8 @@
     .citizen-ui .citizen-nav[aria-label] {
       /* Keep actual terrain color perceptible even on evenly toned tiles.
          Classic rgba also works in older backdrop-filter-capable WebKit. */
-      background-color: rgba(var(--atlas-nav-channels), .68);
-      background-image: linear-gradient(to bottom, var(--atlas-nav-rim), transparent .45rem);
+      background-color: rgba(var(--atlas-nav-channels), var(--atlas-nav-opacity));
+      background-image: var(--atlas-nav-sheen);
       -webkit-backdrop-filter: blur(5px) saturate(125%);
       backdrop-filter: blur(5px) saturate(125%);
     }
@@ -203,6 +213,26 @@
   }
 
   .citizen-ui :is(.citizen-office-scroll,.citizen-dossier-frame,.citizen-drawer) { background-color: var(--atlas-paper); }
+  /* One blurred surface per open sheet. Keep the controls, cards and their
+     active/selected states opaque; the visual wash only belongs to the shell. */
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    @media not (prefers-reduced-transparency: reduce) {
+      .citizen-ui :is(.citizen-drawer[aria-modal],.citizen-office-directory[open]) {
+        background-color: rgba(var(--atlas-nav-channels), var(--atlas-sheet-opacity));
+        background-image: var(--atlas-nav-sheen);
+        -webkit-backdrop-filter: blur(6px) saturate(115%);
+        backdrop-filter: blur(6px) saturate(115%);
+      }
+
+      .citizen-ui :is(.citizen-drawer[aria-modal] > div:first-child,.citizen-office-directory[open] .citizen-office-head,.citizen-office-directory[open] .citizen-office-scroll) {
+        background: transparent;
+      }
+
+      .citizen-ui [data-hdms-drawer-open] { background-color: var(--atlas-sheet-scrim); }
+      .citizen-ui .citizen-office-directory[open]::backdrop { background: var(--atlas-sheet-scrim); }
+    }
+  }
+
   .citizen-ui .citizen-office-scroll > h3 { border-bottom: 1px solid var(--atlas-line); padding-block-end: .35rem; }
   .citizen-ui .citizen-office-icon { border-radius: 4px; background: var(--atlas-detail); }
   .citizen-ui .citizen-office-card { border-color: var(--atlas-line); }
@@ -297,6 +327,13 @@
       -webkit-backdrop-filter: none;
       backdrop-filter: none;
     }
+    .citizen-ui :is(.citizen-drawer[aria-modal],.citizen-office-directory[open]) {
+      background: Canvas;
+      box-shadow: none;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+    .citizen-ui :is(.citizen-drawer[aria-modal] > div:first-child,.citizen-office-directory[open] .citizen-office-head,.citizen-office-directory[open] .citizen-office-scroll) { background: Canvas; }
     .citizen-ui .citizen-nav[aria-label] > button[aria-current="page"] { border-block-end-color: Highlight; }
   }
 }

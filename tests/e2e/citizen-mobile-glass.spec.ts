@@ -94,8 +94,7 @@ test("citizen mobile glass keeps readable navigation and all four actions", asyn
         const css = getComputedStyle(element.querySelector("button")!);
         return { alpha: bar[3], labels: Math.min(...buttons), activeFocus: ratio(color(css.outlineColor), color(css.backgroundColor)) };
       });
-      expect(contrast.alpha).toBeGreaterThanOrEqual(0.66);
-      expect(contrast.alpha).toBeLessThanOrEqual(0.70);
+      expect(contrast.alpha).toBeCloseTo(theme === "light" ? 0.58 : 0.68, 2);
       expect(contrast.labels).toBeGreaterThanOrEqual(4.5);
       expect(contrast.activeFocus).toBeGreaterThanOrEqual(3);
     }
@@ -106,7 +105,7 @@ test("citizen mobile glass keeps readable navigation and all four actions", asyn
       const drawer = page.getByRole("dialog", { name: "รายการสายทางและจุดเฝ้าระวัง" });
       await expect(drawer.getByRole("heading", { name: label, exact: true })).toBeVisible();
       await expect(nav).toHaveCount(0);
-      if (!baseline) await expect(drawer).toHaveCSS("backdrop-filter", "none");
+      if (!baseline) await expect(drawer).toHaveCSS("backdrop-filter", "blur(6px) saturate(1.15)");
       await page.screenshot({ animations: "disabled", path: testInfo.outputPath(`${short}-${theme}-390.png`) });
       await drawer.getByRole("button", { name: "ปิดรายการสายทาง" }).click();
       await expect(nav).toBeVisible();
@@ -115,6 +114,7 @@ test("citizen mobile glass keeps readable navigation and all four actions", asyn
     await contacts.click();
     const directory = page.getByRole("dialog", { name: "ติดต่อหน่วยงาน" });
     await expect(directory).toBeVisible();
+    if (!baseline) await expect(directory).toHaveCSS("backdrop-filter", "blur(6px) saturate(1.15)");
     await expect(directory.getByRole("link", { name: /โทรสอบถาม/ }).first()).toHaveAttribute("href", "tel:073123456");
     await page.screenshot({ animations: "disabled", path: testInfo.outputPath(`contacts-${theme}-390.png`) });
     await page.keyboard.press("Escape");
@@ -404,9 +404,9 @@ test("citizen glass transmits measurable map pixels and the accessible fallback 
       const channelDelta = (light: number[], dark: number[]) =>
         Math.min(...light.map((channel, i) => channel - dark[i]));
       expect(channelDelta(paper.underlay, ink.underlay), `map fixture at ${theme}/${w}, black ${ink.underlay}, white ${paper.underlay}`).toBeGreaterThanOrEqual(220);
-      // An opaque strip returns identical RGB; 16% transmission measured ~40.
+      // The light bar must visibly transmit more of the same backing map.
       expect(channelDelta(paper.rail, ink.rail),
-        `glass at ${theme}/${w}, black ${ink.rail}, white ${paper.rail}`).toBeGreaterThanOrEqual(60);
+        `glass at ${theme}/${w}, black ${ink.rail}, white ${paper.rail}`).toBeGreaterThanOrEqual(theme === "light" ? 100 : 60);
     }
   }
   await page.emulateMedia({ forcedColors: "active" });
