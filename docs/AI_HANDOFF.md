@@ -1,19 +1,21 @@
 # AI Handoff — สถานะร่วมของโครงการ HDMS_PN
 
-> อัปเดต: 19 พฤศจิกายน 2026 · แหล่งความจริงของ main คือ `origin/main` @ `ce105ab` (หลัง `UPDATE-137` มี `UPDATE-138`–`141`, ยืนยัน Edge Production และสกัด RPC snapshot ใน `docs/db-schema-snapshot.md`, จึงปิด B-014 แล้ว) พร้อมมาตรฐาน AI Workflow Optimization (`UPDATE-115`), สถานะจราจร 5 ค่าพร้อมคำนวณอัตโนมัติและแยก 2 ฝั่งบนถนน ≥ 4 ช่องจราจร (`UPDATE-114`), และการเชื่อม Event↔Detour ครบทุกหน้ารายละเอียด (`UPDATE-109`–`UPDATE-113`, B-023). ข้อมูลในไฟล์นี้มีไว้ให้ Codex, Gemini, Claude และ AI อื่นเริ่มงานจากฐานเดียวกัน
+> สำหรับ Codex, Gemini, Claude และ AI ที่มารับช่วงงาน ข้อมูลด้านล่างยืนยัน ณ 26 พฤศจิกายน 2026 เวลา 08:37 น. (ไทย) เป็นภาพรวม ณ เวลาตรวจ ไม่ใช่การรับประกันว่า `main` หรือเว็บจริงยังอยู่ที่รุ่นเดิม
+
+## ล่าสุดที่ตรวจยืนยันแล้ว
+
+- **ขึ้นเว็บจริง: [PR #75](https://github.com/feekuy96-a11y/hdms_pn/pull/75)** ปรับ UX/UI มือถือและเดสก์ท็อปทั้งหน้าประชาชนและแอดมิน โดยใช้ข้อมูลและเครื่องมือ GIS เดิม เปิดใช้งานบน [GitHub Pages](https://feekuy96-a11y.github.io/hdms_pn/) จาก commit `4f20c1aa6ca8e78ce60c8083f5dc8f781c9d2699` · [CI หลัง merge](https://github.com/feekuy96-a11y/hdms_pn/actions/runs/45733163296) และ [Pages deploy](https://github.com/feekuy96-a11y/hdms_pn/actions/runs/45733743176) ผ่านแล้ว
+- **ขึ้นเว็บจริง: [PR #76](https://github.com/feekuy96-a11y/hdms_pn/pull/76)** กรณีสร้างทางเลี่ยงสำเร็จแต่ผูกเหตุการณ์ไม่ได้ ให้ลองใหม่ด้วยรหัสทางเลี่ยงและรูป A/B เดิม โดยใช้วิธีอัปโหลดเดิม; Edge `hdms-api` v26 และหน้าเว็บปล่อยแล้ว และ #75 คงแพตช์นี้ไว้
+- **สิ่งที่ตรวจบนเว็บรุ่นนี้:** ทั้งสองหน้าเปิดได้และอ่านข้อมูลประชาชนจริง; เพิ่มจุด ลบเฉพาะเส้นที่เลือก และลองผูกทางเลี่ยงซ้ำผ่านบนหน้าเว็บที่ปล่อยด้วยข้อมูลทดสอบ ไม่ได้เขียนข้อมูล production หรือทดสอบอัปโหลดและสิทธิ์บัญชีเจ้าหน้าที่จริง
+- **เอฟเฟกต์และการนำทาง:** เว็บจริงแสดงแถบน้ำท่วมสว่าง–จางและไฮไลต์วิ่งบนทางเลี่ยง; แบบ C มีให้เลือกแต่ไม่ใช่ค่าที่เว็บจริงเลือกอยู่ ส่วนปุ่ม Google Maps ในคำแนะนำและจุด A/B ให้ลิงก์เดียวกันทั้งสองทิศในเส้นตัวอย่างที่ตรวจ โดยยังไม่ยืนยันผลในแอป Google Maps บนมือถือจริง
+- **ผล QA ที่พบ:** ที่จอ 320×568 เมื่อขยายข้อความ 150% หน้าคำแนะนำทางเลี่ยงมีพื้นที่อ่านแคบ และเมนูแอดมินบางป้ายทับหรือล้น; พบข้อความทางเลี่ยงคอนทราสต์ต่ำในธีมสว่างด้วย ยังไม่มีการเปลี่ยนเว็บจากผลตรวจนี้
 
 ## ก่อนเริ่มงานทุกครั้ง
 
-1. อ่าน `AGENTS.md` แล้วอ่านไฟล์นี้ทั้งหมด
+1. อ่าน `AGENTS.md` และหัวข้อ «ล่าสุดที่ตรวจยืนยันแล้ว» ด้านบน แล้วอ่านส่วนอื่นเฉพาะที่เกี่ยวข้อง
 2. รัน `git fetch origin`; ตรวจ `origin/main`, branch ปัจจุบัน และ `git status --short` ก่อนแก้ไฟล์
 3. ห้ามเขียนทับไฟล์ที่มีการแก้ค้างอยู่ และห้ามแก้จาก SHA เก่าหรือจากรายงานเก่าโดยไม่เทียบกับ `origin/main`
 4. อ่านเอกสารตามงาน: `docs/ARCHITECTURE.md`, `docs/UI_CONTRACT.md`, `docs/PLAYBOOKS.md`, `docs/BACKLOG.md`, `docs/KNOWN_ISSUES.md`, `docs/ADMIN_ROADMAP.md`; ใช้ `docs/archive/history/CHANGELOG.md`, `docs/archive/history/SUPPLEMENTAL_RULES.md` และ `docs/archive/history/DECISION_LOG.md` แบบค้นคำ (`grep`) เท่านั้น
-
-## สถานะเผยแพร่ล่าสุด
-
-- GitHub Pages: `https://feekuy96-a11y.github.io/hdms_pn/` ตอบ HTTP 200 หลัง deploy commit `3beabf5` (`UPDATE-116`)
-- Deploy run `44331865436` (`#154`) และ CI run `44331866679` (`#172`) สำเร็จ: lint, typecheck, production build, static Pages build และ Playwright E2E ผ่านครบ
-- ห้ามอ้างว่า deploy สำเร็จจาก local build เพียงอย่างเดียว; ต้องยืนยัน workflow ของ commit ที่จะเผยแพร่
 
 ## สิ่งที่เพิ่งเปลี่ยนและห้ามทำย้อนกลับโดยไม่ตั้งใจ
 
@@ -35,7 +37,9 @@
 - ไม่เปลี่ยน Edge Function, secret, RLS, workflow CI/CD หรือ production data โดยไม่มีขอบเขตและแผนย้อนกลับที่ชัดเจน
 - ห้ามเปลี่ยน accessible name, role, label หรือ placeholder ที่ E2E อ้างถึงโดยไม่แก้ test ใน commit เดียวกัน
 
-## งานค้างที่มีหลักฐาน
+## บันทึกจากรอบก่อนหน้า
+
+> เป็นข้อมูลย้อนหลัง ไม่ใช่คำสั่งให้เริ่มงานหรือ deploy ใหม่ ให้ตรวจสถานะกับต้นทางก่อนนำไปใช้
 
 - UPDATE-144 (2026-11-20): ปิด Roadmap 3.2 จาก source `origin/main` @ `ce105ab`; 4.2 แยก coverage ที่มีแล้วจาก flake/1280px/draft recovery และ regression ที่ยังรอ โดยยังไม่ได้รัน tests รอบนี้; พักงาน auth/login 4.3 ตามคำสั่งเจ้าของ
 
@@ -51,17 +55,8 @@
 - สร้าง PR; รอ CI ผ่านก่อน merge. หลัง merge ตรวจ Pages workflow และ URL จริง
 - ทุกงานอัปเดต `docs/archive/history/CHANGELOG.md`; อัปเดต `BACKLOG`/`KNOWN_ISSUES` เมื่อสถานะงานค้างหรือข้อจำกัดเปลี่ยน; ปรับไฟล์นี้เมื่อมีการเปลี่ยนกติกากลางหรือสถานะ deploy
 
-## AI Handoff Template (สำหรับส่งต่อข้าม Codex / Gemini / Claude / Antigravity)
+## รูปแบบสรุปเมื่อส่งต่อ
 
-> **ข้อควรระวัง:** AI ที่รับงานต่อ **ต้องตรวจ `git status` และ `git diff` จริงเสมอ** ห้ามเชื่อเฉพาะข้อความส่งต่อ
-
-- **งานที่กำลังทำ / เป้าหมาย:** ซิงก์เอกสารสถานะหลังยืนยัน Production Edge และปิด B-014 ตาม `docs/db-schema-snapshot.md`
-- **Git Branch & Commit SHA:** `main` @ `ce105ab` (ฐานอ้างอิงของเอกสารรอบนี้)
-- **ไฟล์ที่แก้ไขแล้ว (รอบ UPDATE-142):** `docs/{AI_HANDOFF,BACKLOG,KNOWN_ISSUES,ADMIN_ROADMAP,CHANGELOG}.md`
-- **สิ่งที่ทำสำเร็จ:**
-  - ปิด `B-014`: Production `hdms-api` เป็น v24, `verify_jwt: false`, สถานะ ACTIVE และสกัดนิยาม RPC ที่ใช้งานจริงจาก Production แบบ read-only ไว้แล้วใน `docs/db-schema-snapshot.md`
-  - ปรับ migration DB Audit Log และ retention 90 วันให้บันทึก `layer_id`, เก็บ JWT subject แทน `current_user` ของ `SECURITY DEFINER`, เพิ่ม retention preflight และ partial index สำหรับ completed jobs (`UPDATE-143`); ยังไม่ได้ apply Production
-  - Phase 2.1 ลด admin refetch payload จาก 458.2 KB เหลือ 165.2 KB เมื่อใช้ Edge ที่รองรับ (`UPDATE-140`); Phase 2.4 เพิ่ม Draft Auto-Save (`UPDATE-141`)
-- **สิ่งที่ยังไม่สำเร็จ / ติดขัด:** เจ้าของต้องตั้ง Edge secrets สำหรับ B-022/B-008 และอนุมัติการ apply migration ของ B-001/B-024 ก่อนการเปลี่ยน Production
-- **ผลทดสอบล่าสุด:** รอบเอกสารนี้ตรวจ cross-reference กับ `origin/main` @ `ce105ab` และ `docs/db-schema-snapshot.md`; ไม่ได้รัน build หรือ E2E เพราะไม่มีโค้ดหรือ test เปลี่ยน
-- **ขั้นตอนถัดไป:** ตั้ง `APPS_SCRIPT_WEB_APP_URL` และ `GOOGLE_MAPS_API_KEY` ใน Supabase Edge Secrets; หลัง apply migration ให้ตรวจผล `doh_preview_operational_ledger_prune(90, 90, 180)` แล้วให้เจ้าของเปิด cron job ที่สร้างแบบ inactive; จากนั้นทำ Phase 1.5 แยกโมดูล Edge Function พร้อม validation/rate-limit/size guard และ Deno tests
+- สิ่งที่เปลี่ยน: [สรุปหนึ่งบรรทัดต่อเรื่อง พร้อม PR หรือ commit]
+- ตรวจแล้ว: [สิ่งที่ตรวจจริง พร้อมลิงก์ CI/deploy ถ้ามี]
+- ข้อจำกัด: [สิ่งสำคัญที่ยังไม่ยืนยัน]
