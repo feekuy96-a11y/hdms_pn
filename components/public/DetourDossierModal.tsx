@@ -69,6 +69,7 @@ import {
 
 export interface DetourDossierModalProps {
   viewingDetourModal: DetourRoute;
+  savedDisplayLabel?: string | null;
   systemData: SystemDataPayload;
   modalDetourDirection: "FORWARD" | "REVERSE";
   setModalDetourDirection: (dir: "FORWARD" | "REVERSE") => void;
@@ -80,6 +81,7 @@ export interface DetourDossierModalProps {
 
 export function DetourDossierModal({
   viewingDetourModal,
+  savedDisplayLabel,
   systemData,
   modalDetourDirection,
   setModalDetourDirection,
@@ -128,6 +130,7 @@ export function DetourDossierModal({
           </div>
         </div>
 
+        {savedDisplayLabel && <p className="shrink-0 bg-surface-panel px-4 py-2 text-xs font-semibold text-slate-300">{savedDisplayLabel}</p>}
         {/* Body Content */}
         <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain p-4">
           {/* 2. Sub-header Card (Route Info Card) */}

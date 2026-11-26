@@ -270,6 +270,11 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   await expect(page.locator(".doh-map-capsule-pin").first()).toBeVisible({ timeout: 15_000 });
   await expect(page.locator(".doh-detour-symbol").first()).toBeVisible({ timeout: 15_000 });
 
+  const startPhotoMarker = page.locator(".doh-detour-photo-start").first();
+  await expect(startPhotoMarker).toHaveCount(1);
+  await expect.poll(async () => (await readPublicLayerOpacities(page)).zoom).toBeLessThan(14);
+  await expect(startPhotoMarker).toBeHidden();
+
   // 0. Top summary bar at 360x640 must show both badges fully without clipping or colliding with legend toggle
   const floodBadge = page.getByText("น้ำท่วม 1 จุด", { exact: true });
   const detourBadge = page.getByText("ทางเลี่ยง 1 เส้นทาง", { exact: true });
@@ -365,11 +370,21 @@ test("citizen map popups fit 360x640 mobile viewport without overflow or changin
   await detourPopup.locator(".leaflet-popup-close-button").click();
   await expect(detourPopup).toHaveCount(0);
 
-  // 3. Point photo popup at 360x640
-  // A/B photo markers are deliberately hidden in the default overview and
-  // become available only after the user zooms in.
-  await page.getByRole("button", { name: "Zoom in" }).click();
-  const startPhotoMarker = page.locator(".doh-detour-photo-start").first();
+  // 3. Verify the actual zoom boundary; the earlier wheel and dossier camera
+  // restoration may leave different zooms, not necessarily one step below 14.
+  const readZoom = async () => (await readPublicLayerOpacities(page)).zoom;
+  await expect.poll(async () => Number.isInteger(await readZoom())).toBe(true);
+  const startZoom = await readZoom();
+  for (let step = 0; step < Math.abs(13 - startZoom); step++) {
+    const current = await readZoom();
+    const delta = current < 13 ? 1 : -1;
+    await page.getByRole("button", { name: delta > 0 ? "Zoom in" : "Zoom out", exact: true }).click();
+    await expect.poll(readZoom).toBe(current + delta);
+  }
+  await expect.poll(readZoom).toBe(13);
+  await expect(startPhotoMarker).toBeHidden();
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await expect.poll(readZoom).toBe(14);
   await expect(startPhotoMarker).toBeVisible();
   // The marker can be outside the current mobile viewport after a prior map
   // focus; keyboard activation remains available and avoids a coordinate-only

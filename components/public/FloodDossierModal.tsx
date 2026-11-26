@@ -50,6 +50,7 @@ const FloodEventMiniMap = dynamic(
 
 export interface FloodDossierModalProps {
   selectedFlood: FloodRoute;
+  savedDisplayLabel?: string | null;
   selectedFloodMeta: ReturnType<typeof parseFloodDirectionMeta>;
   dossierStatus: TrafficPresentation;
   systemData: SystemDataPayload;
@@ -82,6 +83,7 @@ export interface FloodDossierModalProps {
 
 export function FloodDossierModal({
   selectedFlood,
+  savedDisplayLabel,
   selectedFloodMeta,
   dossierStatus,
   systemData,
@@ -195,6 +197,7 @@ export function FloodDossierModal({
           </div>
         </div>
 
+        {savedDisplayLabel && <p className="shrink-0 bg-surface-panel px-4 py-2 text-xs font-semibold text-slate-300">{savedDisplayLabel}</p>}
         {/* 2-Column Dark Navy Body */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain sm:rounded-b-[1.75rem]">
         <div className="citizen-incident-grid">

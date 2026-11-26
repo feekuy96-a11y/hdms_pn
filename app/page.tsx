@@ -288,6 +288,7 @@ export default function HomePage() {
     systemData,
     readState,
     dataUpdatedAt,
+    showingSavedDisplay,
     latestReportMs,
     refetch,
     floodAlbums,
@@ -324,6 +325,8 @@ export default function HomePage() {
   const timeFormatter = new Intl.DateTimeFormat("th-TH", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Bangkok" });
   const fetchedAtLabel = dataUpdatedAt > 0 ? timeFormatter.format(dataUpdatedAt) : null;
   const latestReportLabel = latestReportMs !== null ? timeFormatter.format(latestReportMs) : null;
+  const savedDisplayLabel = showingSavedDisplay && fetchedAtLabel
+    ? `ข้อมูลที่บันทึกไว้เมื่อ ${fetchedAtLabel} น. ไม่ใช่สถานการณ์ปัจจุบัน โปรดตรวจสอบก่อนเดินทาง` : null;
   const showCounts = readState === "ready" || (readState === "stale" && (systemData.floodRoutes.length > 0 || systemData.detourRoutes.length > 0));
   const hotlinePhone = systemData.systemSettings?.phone || "1586";
 
@@ -894,10 +897,17 @@ export default function HomePage() {
             </div>
           )}
           {(readState === "unavailable" || readState === "stale") && (
-            <div role="alert" className="absolute left-1/2 top-[6.75rem] sm:top-14 z-[600] flex max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-17.5rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-red-500/60 bg-slate-950/95 px-4 py-2.5 text-sm text-white shadow-xl">
-              <span>{PUBLIC_READ_MESSAGES[readState]}</span>
-              <button type="button" onClick={() => void refetch()} className="min-h-11 rounded-lg bg-amber-400 px-3 font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">ลองอีกครั้ง</button>
-            </div>
+            savedDisplayLabel ? (
+              <div role="alert" className="absolute inset-x-3 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-[415] mx-auto flex max-w-[28rem] items-center gap-2 rounded-xl border border-amber-500/60 bg-surface-panel px-3 py-2 text-xs text-slate-200 shadow-lg lg:bottom-4">
+                <span className="min-w-0">{savedDisplayLabel} แผนที่พื้นหลังและภาพอาจไม่พร้อมใช้งาน</span>
+                <button type="button" onClick={() => void refetch()} className="min-h-11 shrink-0 whitespace-nowrap rounded-lg border border-surface px-2 font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">ลองใหม่</button>
+              </div>
+            ) : (
+              <div role="alert" className="absolute left-1/2 top-[6.75rem] sm:top-14 z-[600] flex max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-17.5rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-red-500/60 bg-slate-950/95 px-4 py-2.5 text-sm text-white shadow-xl">
+                <span>{PUBLIC_READ_MESSAGES[readState]}</span>
+                <button type="button" onClick={() => void refetch()} className="min-h-11 rounded-lg bg-amber-400 px-3 font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">ลองอีกครั้ง</button>
+              </div>
+            )
           )}
           <LongdoGisMap
             isFilterActive={isFilterActive}
@@ -1027,6 +1037,7 @@ export default function HomePage() {
           {selectedFlood && showDossier && !viewingDetourModal && selectedFlood.id === selectedFloodId && (
             <FloodDossierModal
               selectedFlood={selectedFlood}
+              savedDisplayLabel={savedDisplayLabel}
               selectedFloodMeta={selectedFloodMeta}
               dossierStatus={dossierStatus}
               systemData={systemData}
@@ -1062,6 +1073,7 @@ export default function HomePage() {
           {viewingDetourModal && (
             <DetourDossierModal
               viewingDetourModal={viewingDetourModal}
+              savedDisplayLabel={savedDisplayLabel}
               systemData={systemData}
               modalDetourDirection={modalDetourDirection}
               setModalDetourDirection={setModalDetourDirection}

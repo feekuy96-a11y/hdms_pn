@@ -41,18 +41,6 @@ export default function RootLayout({
     <html lang="th" className={`${prompt.variable} ${sarabun.variable} dark`}>
       <body className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-amber-500 selection:text-slate-950 font-sans">
         <QueryProvider>{children}</QueryProvider>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  var bp = '${process.env.BASE_PATH || ''}';
-                  navigator.serviceWorker.register(bp + '/sw.js').catch(function() {});
-                });
-              }
-            `,
-          }}
-        />
       </body>
     </html>
   );
