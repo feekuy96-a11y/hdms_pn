@@ -6,6 +6,7 @@ import { SystemDataPayload } from "@/db/default-data";
 import { LAYER_CONFIG } from "@/lib/constants";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import type { AdministrativeBoundaryControls } from "./useAdministrativeBoundaries";
+import { MapStatusRow } from "./MapStatusRow";
 import { isFloodLineVisibleOnCurrentMap } from "./longdo-map-popups";
 
 export interface MapSidePaneControl {
@@ -290,22 +291,16 @@ export function MapLegendOverlay({
             <PaneIcon size={18} aria-hidden="true" />
           </button>
         )}
-      {publicMode ? (isLayerControlCollapsed && !isMapPopupOpen && publicStatusSummary) : isLayerControlCollapsed && (
-      <div className={`flex items-start min-w-0 justify-between gap-1.5 sm:gap-2 pointer-events-none transition-opacity duration-150 ${mobileOverlayHiddenClass}`} aria-label="สรุปสถานการณ์และแถบควบคุมบนแผนที่">
-        {/* Status Badges on the left */}
-        <div className="flex flex-1 min-w-0 flex-wrap items-center gap-1 sm:gap-2 pointer-events-none">
-          <div className={`${mobileInteractiveClass} hdms-map-surface min-h-8 sm:min-h-9 rounded-lg border border-red-500/50 px-2 sm:px-3 py-1 text-[0.7rem]/[1rem] sm:text-xs font-medium shadow-lg shrink-0 whitespace-nowrap flex items-center gap-1.5 sm:gap-2`} data-map-tone="danger">
-            <span className="inline-block h-2 w-2 rounded-full bg-current animate-pulse" />
-            <span>น้ำท่วม <strong className="font-bold">{showFloodLayer ? (systemData.floodRoutes || []).filter((item) => item.is_active).length : 0}</strong> จุด</span>
-          </div>
-          <div className={`${mobileInteractiveClass} hdms-map-surface min-h-8 sm:min-h-9 rounded-lg border border-amber-500/50 px-2 sm:px-3 py-1 text-[0.7rem]/[1rem] sm:text-xs font-medium shadow-lg shrink-0 whitespace-nowrap flex items-center gap-1.5 sm:gap-2`} data-map-tone="warning">
-            <span className="inline-block h-2 w-2 rounded-full bg-current" />
-            <span>ทางเลี่ยง <strong className="font-bold">{showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}</strong> เส้นทาง</span>
-          </div>
+      {isLayerControlCollapsed && (publicMode ? (!isMapPopupOpen && publicStatusSummary) : (
+        <div>
+          <MapStatusRow
+            label="สรุปสถานการณ์และแถบควบคุมบนแผนที่"
+            floods={showFloodLayer ? (systemData.floodRoutes || []).filter((item) => item.is_active).length : 0}
+            detours={showDetourLayer ? (systemData.detourRoutes || []).filter((item) => item.is_active).length : 0}
+          />
         </div>
+      ))}
 
-      </div>
-      )}
       </div>
 
         <div className={`citizen-map-toolwrap ${mobileOverlayHiddenClass}`}>
@@ -535,7 +530,7 @@ export function MapLegendOverlay({
             <details className="citizen-legend-explainer">
                 <summary>คำอธิบายสัญลักษณ์</summary>
                 <p>หมุดรูปคลื่นระบุจุดน้ำท่วม หมุดลูกศรและเส้นทางเลี่ยงระบุทางเลือก เส้นสีของทางหลวงใช้สีเดียวกับตัวอย่างในรายการด้านบน</p>
-                {publicMode && <p>ขีดสีบนเส้นน้ำท่วมบอกสถานะการผ่านทาง ส่วนสีพื้นเส้นใช้สไตล์ที่บันทึกไว้</p>}
+                <p>ขีดสีบนเส้นน้ำท่วมบอกสถานะการผ่านทาง ส่วนสีพื้นเส้นใช้สไตล์ที่บันทึกไว้</p>
             </details>
             {highwayListPanel}
           </div>
