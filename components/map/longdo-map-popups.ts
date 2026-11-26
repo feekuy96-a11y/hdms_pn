@@ -241,30 +241,30 @@ export function buildHighwayPopupHtml(props: any, featureIsMain: boolean, color:
 function getDetourStepIconSvg(iconType: DetourTimelineStep["iconType"]): string {
   switch (iconType) {
     case "start":
-      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" class="hdms-guide-icon shrink-0" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>`;
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" class="hdms-guide-icon doh-detour-step-icon--start shrink-0" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>`;
     case "end":
-      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon shrink-0" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>`;
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon doh-detour-step-icon--end shrink-0" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>`;
     case "turn_right":
-      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon shrink-0" aria-hidden="true"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>`;
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon doh-detour-step-icon--turn shrink-0" aria-hidden="true"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>`;
     case "turn_left":
-      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon shrink-0" aria-hidden="true"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>`;
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon doh-detour-step-icon--turn shrink-0" aria-hidden="true"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>`;
     case "slight_right":
-      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon shrink-0" aria-hidden="true"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>`;
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon doh-detour-step-icon--guide shrink-0" aria-hidden="true"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>`;
     case "slight_left":
-      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon shrink-0" aria-hidden="true"><line x1="17" y1="17" x2="7" y2="7"/><polyline points="17 7 7 7 7 17"/></svg>`;
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon doh-detour-step-icon--guide shrink-0" aria-hidden="true"><line x1="17" y1="17" x2="7" y2="7"/><polyline points="17 7 7 7 7 17"/></svg>`;
     case "uturn":
-      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon shrink-0" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11"/></svg>`;
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon doh-detour-step-icon--uturn shrink-0" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11"/></svg>`;
     case "roundabout":
-      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon shrink-0" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`;
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon doh-detour-step-icon--guide shrink-0" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`;
     case "straight":
     default:
-      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon shrink-0" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon doh-detour-step-icon--turn shrink-0" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
   }
 }
 
 export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePresentation): string {
   if (!presentation.steps.length) {
-    return `<div class="hdms-guide-card hdms-guide-warning rounded-xl border p-[1em] text-xs text-center">${escapeHtml(presentation.directionNotice || "ไม่มีข้อมูลขั้นตอนการเดินทางสำหรับทิศทางนี้")}</div>`;
+    return `<div class="doh-detour-empty hdms-guide-card hdms-guide-warning rounded-xl border p-3 text-xs text-center">${escapeHtml(presentation.directionNotice || "ไม่มีข้อมูลขั้นตอนการเดินทางสำหรับทิศทางนี้")}</div>`;
   }
 
   const stepsHtml = presentation.steps
@@ -273,22 +273,22 @@ export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePrese
       const iconSvg = getDetourStepIconSvg(step.iconType);
 
       return `
-      <div class="relative flex items-start gap-[1em]">
-        ${!isLast ? `<div class="absolute left-[0.6875rem] top-6 bottom-[-8px] w-0.5 hdms-guide-line" aria-hidden="true"></div>` : ""}
-        <div class="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full hdms-guide-number text-xs font-black shadow" aria-hidden="true">
+      <div class="relative flex items-start gap-3">
+        ${!isLast ? `<div class="doh-detour-timeline-line absolute left-[0.6875rem] top-6 bottom-[-8px] border-l-2 border-dashed border-amber-500/45" aria-hidden="true"></div>` : ""}
+        <div class="doh-detour-step-number hdms-guide-number relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black tabular-nums shadow" aria-hidden="true">
           ${step.stepNumber}
         </div>
-        <div class="hdms-guide-card flex-1 min-w-0 rounded-xl border p-[0.833em] shadow-sm">
-          <div class="flex items-start justify-between gap-[0.5em]">
-            <div class="flex items-center gap-[0.5em] min-w-0">
+        <div class="doh-detour-step-card hdms-guide-card flex-1 min-w-0 rounded-xl border p-2.5 shadow-sm">
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-center gap-1.5 min-w-0">
               ${iconSvg}
-              <span class="hdms-guide-title font-bold text-xs font-heading break-words">${escapeHtml(step.title)}</span>
+              <span class="doh-detour-step-title hdms-guide-title font-bold text-xs font-heading break-words">${escapeHtml(step.title)}</span>
             </div>
-            <span class="hdms-guide-badge shrink-0 rounded-full border px-[0.667em] py-[0.167em] text-[0.75rem] font-semibold">
+            <span class="doh-detour-step-badge hdms-guide-badge shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold">
               ${escapeHtml(step.badge)}
             </span>
           </div>
-          ${step.detail ? `<p class="hdms-guide-copy mt-1 text-xs leading-relaxed break-words [overflow-wrap:anywhere]">${escapeHtml(step.detail)}</p>` : ""}
+          ${step.detail ? `<p class="doh-detour-step-detail hdms-guide-copy mt-1 text-xs leading-relaxed break-words [overflow-wrap:anywhere]">${escapeHtml(step.detail)}</p>` : ""}
         </div>
       </div>
     `;
@@ -297,28 +297,32 @@ export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePrese
 
   return `
     <div class="space-y-2">
-      <div class="space-y-2.5">
+      <div class="space-y-2">
         ${stepsHtml}
       </div>
-      <div class="flex flex-wrap items-center justify-between gap-[0.667em] hdms-guide-card rounded-xl border px-[1em] py-[0.667em] text-xs">
-        <div class="flex items-center gap-[0.5em] text-slate-300">
-          <span class="text-sm" aria-hidden="true">🛣</span>
-          <span>ระยะทางรวม</span>
-          <strong class="font-bold text-white text-xs">${presentation.totalDistanceKm > 0 ? `${escapeHtml(presentation.totalDistanceFormatted)} กม.` : "ไม่ระบุ"}</strong>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="doh-detour-metric-card hdms-guide-card rounded-xl border p-2 flex flex-col justify-center">
+          <div class="doh-detour-metric-label hdms-guide-copy flex items-center gap-1 text-[11px] font-medium leading-none mb-1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M4 19h4"/><path d="M10 19h4"/><path d="M16 19h4"/><path d="M5 13 9 5h6l4 8"/></svg>
+            <span>ระยะทางรวม</span>
+          </div>
+          <strong class="doh-detour-metric-value hdms-guide-title font-heading font-bold text-xs sm:text-sm tabular-nums leading-tight">${presentation.totalDistanceKm > 0 ? `${escapeHtml(presentation.totalDistanceFormatted)} กม.` : "ไม่ระบุ"}</strong>
         </div>
-        <span class="text-slate-600 hidden sm:inline" aria-hidden="true">|</span>
-        <div class="flex items-center gap-[0.5em] text-slate-300">
-          <span class="text-sm" aria-hidden="true">⏱</span>
-          <strong class="font-bold text-white text-xs">${escapeHtml(presentation.estimatedDurationText)}</strong>
+        <div class="doh-detour-metric-card hdms-guide-card rounded-xl border p-2 flex flex-col justify-center">
+          <div class="doh-detour-metric-label hdms-guide-copy flex items-center gap-1 text-[11px] font-medium leading-none mb-1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>เวลาเดินทาง</span>
+          </div>
+          <strong class="doh-detour-metric-value hdms-guide-title font-heading font-bold text-xs sm:text-sm tabular-nums leading-tight">${escapeHtml(presentation.estimatedDurationText)}</strong>
         </div>
       </div>
-      <div class="flex flex-wrap items-center justify-between gap-[0.667em] border-t border-slate-800/80 pt-2 text-xs">
-        <div class="flex items-center gap-[0.5em] font-bold text-white text-xs">
-          <span class="text-sm" aria-hidden="true">🛣</span>
+      <div class="doh-detour-condition-row flex flex-wrap items-center justify-between gap-2 border-t border-surface pt-2 text-xs">
+        <div class="doh-detour-condition-label hdms-guide-title flex items-center gap-1.5 font-bold text-xs">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
           <span>สภาพเส้นทาง</span>
         </div>
-        <span class="rounded-full border border-emerald-500/80 bg-emerald-950/80 px-[0.833em] py-[0.167em] text-[0.75rem] font-medium text-emerald-300 flex items-center gap-[0.333em]">
-          <span class="text-xs" aria-hidden="true">✔</span>
+        <span class="doh-detour-condition-badge rounded-full border border-emerald-500/70 bg-emerald-950/80 px-2.5 py-0.5 text-xs font-semibold text-emerald-200 inline-flex items-center gap-1">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
           <span>${escapeHtml(presentation.roadCondition)}</span>
         </span>
       </div>
@@ -379,33 +383,41 @@ export function buildDetourPopupHtml(
         .join(" · ")
     : (detour.flood_id_ref ? "เชื่อมโยงจุดน้ำท่วม" : "ทางเลี่ยงอิสระ (โครงข่ายทางหลวง)");
 
-  const directionBtnClass = "min-h-[2.75rem] py-[0.5em] px-[0.833em] text-xs font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-[0.333em] border disabled:cursor-not-allowed";
+  const directionBtnClass = "min-h-[2.75rem] py-2 px-2.5 text-xs font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 border disabled:cursor-not-allowed";
 
   return `
-    <div class="doh-detour-popup text-xs p-[0.833em] sm:p-[1.167em] w-[min(20.25rem,calc(100vw-2rem))] sm:w-[23.75rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body bg-[#070d1e] text-white rounded-2xl border-t-4 border-amber-400 select-text">
-      <div class="flex items-center justify-between gap-[0.667em] pb-2 sm:pb-2.5 pr-9 border-b border-slate-800/80">
-        <div class="flex items-center gap-[0.667em] min-w-0">
-          <span class="hdms-guide-accent text-base sm:text-lg font-black shrink-0 leading-none" aria-hidden="true">↔</span>
-          <h4 class="font-bold text-white text-sm sm:text-base font-heading leading-tight truncate">เส้นทางเลี่ยง</h4>
+    <div class="doh-detour-popup text-xs p-3 sm:p-3.5 w-[min(20.25rem,calc(100vw-2rem))] sm:w-[23.75rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body rounded-2xl border-t-4 border-amber-500 flex flex-col gap-2.5 select-text">
+      <!-- ส่วนที่ 1: Header (แถวเดียว: ไอคอนทางเลี่ยง + ชื่อ + ป้ายโหมดทิศทาง) -->
+      <div class="doh-detour-header flex items-center justify-between gap-2 pb-2 pr-9 border-b border-surface shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="doh-detour-header-badge inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-amber-500/45 bg-amber-500/15 text-amber-300" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H9a4 4 0 0 0-4 4v1"/><path d="m8 21-4-4 4-4"/><path d="M4 17h11a4 4 0 0 0 4-4v-1"/></svg>
+          </span>
+          <h4 class="doh-detour-heading font-bold text-sm sm:text-base font-heading leading-tight truncate">เส้นทางเลี่ยง</h4>
         </div>
-        <span class="rounded-full bg-amber-500/10 border border-amber-500/40 px-[0.667em] py-[0.167em] text-[0.75rem] font-bold text-amber-300 whitespace-nowrap shrink-0">
+        <span class="doh-detour-mode-badge rounded-full border border-amber-500/45 bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-bold text-amber-300 whitespace-nowrap shrink-0">
           ${escapeHtml(detourDirectionDetailedBadge(dirMode))}
         </span>
       </div>
 
-      <div class="mt-2 sm:mt-2.5 hdms-guide-card rounded-xl sm:rounded-2xl border p-[0.833em] sm:p-[1em] flex items-start gap-[0.667em] sm:gap-[0.833em] shadow-sm">
-        <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl hdms-guide-icon-tile flex items-center justify-center shrink-0" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      <!-- ส่วนที่ 2: การ์ดระบุชื่อทางเลี่ยงและจุดเชื่อมโยง (Rule 2: โทนเหลืองอำพันมีขอบ + สัญลักษณ์เส้นประ) -->
+      <div class="doh-detour-hero-card hdms-guide-card rounded-xl border p-2.5 flex items-start gap-2.5 shadow-sm shrink-0">
+        <div class="doh-detour-hero-icon hdms-guide-icon-tile w-8 h-8 rounded-lg flex items-center justify-center shrink-0 shadow-sm" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3"/><path d="M19 6h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3"/><path d="M8 12h2"/><path d="M14 12h2"/><path d="m14 9 3 3-3 3"/></svg>
         </div>
         <div class="min-w-0 flex-1">
-          <h5 class="font-bold text-white text-xs sm:text-sm font-heading leading-snug break-words [overflow-wrap:anywhere]">${escapeHtml(detour.route_name)}</h5>
-          <p class="hdms-guide-copy text-[0.75rem] mt-0.5 break-words [overflow-wrap:anywhere]">${escapeHtml(scopeText)}</p>
+          <h5 class="doh-detour-route-name hdms-guide-title font-bold text-xs sm:text-sm font-heading leading-snug break-words [overflow-wrap:anywhere]">${escapeHtml(detour.route_name)}</h5>
+          <p class="doh-detour-scope hdms-guide-copy text-xs mt-0.5 break-words [overflow-wrap:anywhere] flex items-start gap-1.5">
+            <span class="doh-detour-dash-sample mt-1.5 inline-block w-3.5 shrink-0 border-t-2 border-dashed border-amber-400" aria-hidden="true"></span>
+            <span class="min-w-0 flex-1">${escapeHtml(scopeText)}</span>
+          </p>
         </div>
       </div>
 
-      <div class="mt-2 sm:mt-2.5">
-        <div class="text-xs font-bold text-slate-200 mb-1.5">เลือกทิศทางการเดินทาง</div>
-        <div role="group" aria-label="เลือกทิศทางการเดินทาง" class="hdms-contrast-switch hdms-guide-card grid grid-cols-2 gap-[0.333em] rounded-xl border p-[0.333em]">
+      <!-- ส่วนที่ 3: สวิตช์เลือกทิศทาง (Rule 4 + Rule 10: ≥ 44px touch target) -->
+      <div class="shrink-0">
+        <div class="doh-detour-section-label hdms-guide-title text-xs font-bold mb-1.5">เลือกทิศทางการเดินทาง</div>
+        <div role="group" aria-label="เลือกทิศทางการเดินทาง" class="doh-detour-dir-group hdms-contrast-switch hdms-guide-card grid grid-cols-2 gap-1 rounded-xl border p-1">
           <button
             type="button"
             id="detour-btn-fwd-${safeId}"
@@ -429,13 +441,14 @@ export function buildDetourPopupHtml(
             <span>ขากลับ (B → A)</span>
           </button>
         </div>
-        ${recorded ? "" : `<p class="mt-1.5 text-[0.75rem] text-amber-300" role="status">⚠️ ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>`}
+        ${recorded ? "" : `<p class="doh-detour-unconfirmed hdms-guide-warning mt-1.5 text-xs rounded-lg border px-2.5 py-1.5" role="status">⚠️ ยังไม่ได้ยืนยันทิศทางเดินรถ กรุณาตรวจสอบกับเจ้าหน้าที่ก่อนเดินทาง</p>`}
       </div>
 
-      <div class="mt-2 sm:mt-3">
-        <div class="flex items-center gap-[0.5em] mb-1.5 sm:mb-2">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="hdms-guide-accent" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19V9a4 4 0 0 1 4-4h9"/><path d="m15 2 3 3-3 3"/><path d="M9 19h10"/><path d="m16 16 3 3-3 3"/></svg>
-          <span class="font-bold text-white text-xs font-heading">คำแนะนำเส้นทาง</span>
+      <!-- ส่วนที่ 4: คำแนะนำเส้นทางและสรุปตัวเลข (tabular-nums) -->
+      <div class="shrink-0">
+        <div class="flex items-center gap-1.5 mb-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="doh-detour-advice-icon hdms-guide-accent shrink-0" aria-hidden="true"><path d="M5 19V9a4 4 0 0 1 4-4h9"/><path d="m15 2 3 3-3 3"/><path d="M9 19h10"/><path d="m16 16 3 3-3 3"/></svg>
+          <span class="doh-detour-section-label hdms-guide-title font-bold text-xs font-heading">คำแนะนำเส้นทาง</span>
         </div>
         <div id="detour-desc-fwd-${safeId}" class="${!isRev ? "block" : "hidden"} sm:max-h-48 sm:overflow-y-auto sm:overscroll-contain sm:pr-0.5">
           ${buildDetourTimelineSectionHtml(forwardPresentation)}
@@ -445,32 +458,33 @@ export function buildDetourPopupHtml(
         </div>
       </div>
 
-      <div class="mt-2.5 sm:mt-3.5 pt-2 sm:pt-2.5 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-stretch gap-[0.5em] sm:gap-[0.667em]">
+      <!-- ส่วนที่ 5: ปุ่มดำเนินการ (CTA อำพันทอง + ปุ่มโฟกัสแผนที่ ≥ 44px) -->
+      <div class="doh-detour-actions pt-2 border-t border-surface flex flex-col sm:grid sm:grid-cols-2 gap-2 shrink-0">
         <button
           type="button"
           id="detour-nav-btn-${safeId}"
           ${recorded ? "" : "disabled aria-disabled=\"true\" title=\"รอเจ้าหน้าที่ตรวจสอบทิศทางเดินรถ\""}
           onclick="window.__openDetourGoogleMaps && window.__openDetourGoogleMaps('${safeId}', window.__getDetourCurrentDir ? window.__getDetourCurrentDir('${safeId}') : '${defaultDir}')"
-          class="doh-detour-nav-btn w-full sm:w-auto sm:flex-[1.35] min-h-[2.75rem] py-[0.667em] px-[1em] bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-xl flex items-center justify-between shadow transition touch-manipulation cursor-pointer border border-emerald-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
+          class="doh-detour-nav-btn w-full min-h-[2.75rem] py-2 px-3 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 rounded-xl flex items-center justify-between gap-2 shadow-md transition touch-manipulation cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          <div class="flex items-center gap-[0.667em] min-w-0">
-            <div class="w-6 h-6 doh-detour-nav-icon rounded-full flex items-center justify-center shrink-0 shadow-sm" aria-hidden="true">
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="doh-detour-nav-pin doh-detour-nav-icon w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm" aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
             </div>
             <div class="text-left min-w-0">
-              <div class="font-bold text-xs leading-tight truncate">ดูบน Google Maps</div>
-              <div id="detour-nav-subtext-${safeId}" class="text-[0.75rem] sm:text-[0.75rem] text-emerald-100 font-medium leading-tight mt-0.5 truncate">
+              <div class="font-black text-xs leading-tight truncate">ดูบน Google Maps</div>
+              <div id="detour-nav-subtext-${safeId}" class="doh-detour-nav-sub text-[11px] font-bold leading-tight mt-0.5 truncate">
                 ${isRev ? "(ขากลับ B ➔ A)" : "(ขาไป A ➔ B)"}
               </div>
             </div>
           </div>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-100 shrink-0 ml-1" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </button>
 
         <button
           type="button"
           onclick="window.__openDetourModal && window.__openDetourModal('${escapeHtml(detour.id)}')"
-          class="doh-detour-detail-btn hdms-map-control w-full sm:w-auto sm:flex-1 min-h-[2.75rem] py-[0.667em] px-[1em] border font-bold text-xs rounded-xl flex items-center justify-center gap-[0.5em] shadow transition touch-manipulation cursor-pointer shrink-0"
+          class="doh-detour-detail-btn hdms-map-control w-full min-h-[2.75rem] py-2 px-3 border font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition touch-manipulation cursor-pointer shrink-0"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
           <span>ดูตำแหน่งบนแผนที่</span>
@@ -824,8 +838,8 @@ export function resolvePopupTrafficStatus(flood: FloodRoute): { label: string; b
 export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMode = false): string {
   const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
   const waterKnown = meta.waterLevelKnown;
-  const levelDisplay = waterKnown ? `${flood.water_level_cm} ซม.` : "รอตรวจสอบระดับน้ำ";
   const lanesText = resolveRecordedLanesText(flood);
+  const lanesDisplay = lanesText || "ทุกช่องจราจร";
   const statusInfo = resolvePopupTrafficStatus(flood);
   const routeBadge = /^(?:ทล|ปน)\.?\s*/i.test(String(flood.route_no || "")) ? String(flood.route_no) : `ทล.${flood.route_no}`;
   const areaLine = formatPopupAreaLine(flood);
@@ -833,105 +847,122 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMo
   const safePhoto = /^(?:https?:\/\/|data:image\/(?:png|jpe?g|webp|gif|avif);base64,|\/(?!\/))/i.test(photoUrl) ? escapeHtml(photoUrl) : "";
   const relativeUpdate = formatPopupRelativeUpdate(flood.updated_at || meta.updatedAt);
   const safeId = escapeHtml(flood.id);
+  const kmText = `กม.${formatKmPost(flood.km_start)} – ${formatKmPost(flood.km_end)}`;
 
-  const statusBadge = `<span class="doh-flood-popup-status rounded-lg px-2 py-1 text-xs font-bold ${statusInfo.badgeClass}">${escapeHtml(statusInfo.label)}</span>`;
-  const time = `<p class="text-xs text-slate-400">${escapeHtml(relativeUpdate)}</p>`;
-  const publicPhoto = `<div class="relative mt-2 overflow-hidden rounded-xl border border-slate-700/80 bg-slate-900">
-    ${safePhoto
-      ? `<button type="button" data-public-photo aria-haspopup="dialog" aria-label="ขยายภาพสถานการณ์เต็มจอ" class="block w-full cursor-zoom-in">
-          <img src="${safePhoto}" alt="ภาพสถานการณ์น้ำท่วม ${escapeHtml(flood.section_name)}" class="h-24 w-full object-cover">
-          <span data-photo-error hidden>โหลดภาพตัวอย่างไม่สำเร็จ · แตะเพื่อลองเปิดภาพ</span>
-        </button>`
-      : `<div class="relative grid h-20 place-items-end bg-[#d7e8e9]">
-          <svg viewBox="0 0 320 80" preserveAspectRatio="xMidYMid slice" class="absolute inset-0 h-full w-full" aria-hidden="true">
-            <path fill="#8aada1" d="M0 35 49 15l44 14 69-22 49 17 57-9 52 20v45H0z"/>
-            <path fill="#547176" d="M92 80l59-57h21l59 57z"/>
-            <path fill="#6ba7bf" d="M0 61 Q33 52 64 61T128 61T192 61T256 61T320 61V80H0Z"/>
-          </svg>
-          <span class="relative rounded-tl-md bg-[#17354a] px-2 py-1 text-[.7rem] text-[#fff]">ภาพประกอบ · ยังไม่มีรูปแนบ</span>
-        </div>`}
-    <span class="pointer-events-none absolute right-2 top-2 max-w-[85%]">${statusBadge}</span>
-  </div>`;
+  const isClosed = flood.traffic_status === "CLOSED";
+  const statusThemeClass = isClosed
+    ? "status-red bg-[#3e161a] text-[#fca5a5] border-[#7f1d1d]"
+    : statusInfo.accentColor === "#38bdf8"
+      ? "status-sky bg-[#0c2b3d] text-[#7dd3fc] border-[#0369a1]"
+      : statusInfo.accentColor === "#10b981"
+        ? "status-green bg-[#0f2e22] text-[#6ee7b7] border-[#047857]"
+        : "status-amber bg-[#362210] text-[#fcd34d] border-[#78350f]";
 
   return `
-    <div style="border-top: 4px solid ${statusInfo.accentColor};" class="w-[min(20.25rem,calc(100vw-2rem))] sm:w-[21.25rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain p-[0.833em] sm:p-[1.167em] font-body text-slate-100 bg-[#081120] rounded-2xl">
-      <div class="flex items-start justify-between gap-[0.667em] pb-2 pr-9 border-b border-slate-800/80">
-        <div class="flex min-w-0 items-center gap-[0.5em] sm:gap-[0.667em] flex-wrap">
-          <span class="shrink-0 rounded-lg bg-[#f59e0b] px-[0.667em] py-[0.167em] font-heading text-xs font-black text-slate-950 shadow">
+    <div class="doh-flood-popup-card w-[min(360px,calc(100vw-24px))] max-w-full max-h-[min(52dvh,21rem)] sm:max-h-[min(85dvh,34rem)] overflow-y-auto overscroll-contain p-3 font-body text-slate-100 bg-[#142638] rounded-2xl shadow-2xl flex flex-col gap-2 border border-[#526D83]/40">
+      <!-- ส่วนที่ 1: Header (แถวเดียว) -->
+      <div class="flex items-center justify-between gap-2 pr-8 shrink-0">
+        <div class="flex items-center gap-2 min-w-0 flex-wrap">
+          <span class="shrink-0 rounded-lg bg-[#F6A52F] px-2 py-0.5 font-heading text-xs font-black text-slate-950 shadow">
             ${escapeHtml(routeBadge)}
           </span>
-          <span class="min-w-0 font-heading text-xs sm:text-sm font-bold leading-snug text-white break-words">
+          <span class="min-w-0 font-heading text-sm sm:text-base font-bold leading-snug text-white break-words">
             ${escapeHtml(flood.section_name)}
           </span>
         </div>
-        ${publicMode ? "" : statusBadge}
-      </div>
-      ${publicMode ? publicPhoto : ""}
-
-      <div class="mt-1.5 sm:mt-2 text-xs text-slate-300 font-medium">
-        ระหว่าง กม.${escapeHtml(formatKmPost(flood.km_start))} ถึง กม.${escapeHtml(formatKmPost(flood.km_end))}
       </div>
 
-      ${areaLine ? `
-        <div class="doh-flood-popup-area mt-1.5 sm:mt-2 flex items-center gap-[0.5em] rounded-xl border border-slate-700/75 bg-[#0e1b33] px-[0.833em] py-[0.5em] text-xs text-slate-200">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-          <span class="min-w-0 break-words">${escapeHtml(areaLine)}</span>
-        </div>
-      ` : ""}
-      ${publicMode ? time : ""}
+      <!-- ส่วนที่ 2: ภาพเหตุการณ์ (ทันทีใต้ Header, aspect 16:7) -->
+      <div class="relative overflow-hidden rounded-xl bg-slate-950 border border-[#526D83]/30 aspect-[16/7] w-full shrink-0">
+        ${safePhoto
+          ? `<button type="button" data-public-photo aria-haspopup="dialog" aria-label="ขยายภาพสถานการณ์เต็มจอ" class="block h-full w-full cursor-zoom-in">
+              <img src="${safePhoto}" alt="ภาพสถานการณ์น้ำท่วม ${escapeHtml(flood.section_name)}" class="h-full w-full object-cover">
+              <span data-photo-error hidden>โหลดภาพตัวอย่างไม่สำเร็จ · แตะเพื่อลองเปิดภาพ</span>
+            </button>`
+          : `<div class="flex h-full w-full flex-col items-center justify-center bg-[#20384A]/60 text-slate-400 p-2">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="mb-1 opacity-60" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+              <span class="text-[11px] font-medium text-slate-400">ยังไม่มีภาพถ่ายเหตุการณ์</span>
+            </div>`}
+      </div>
 
-      <div class="mt-2 sm:mt-2.5 rounded-xl border border-slate-700/80 bg-[#0d1930] px-[0.833em] py-[0.5em] sm:px-[1em] sm:py-[0.667em] space-y-1.5">
-        <div class="flex items-center justify-between gap-[0.667em]">
-          <span class="inline-flex items-center gap-[0.5em] text-xs text-slate-300">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></svg>
-            <span>ระดับน้ำล่าสุด</span>
-          </span>
-          <strong class="doh-flood-popup-water font-mono text-sm sm:text-base font-black text-[#f59e0b]">${escapeHtml(levelDisplay)}</strong>
+      <!-- ส่วนที่ 3: สถานะจราจร (ทันทีใต้ภาพในแถบสีตามสถานะจริง) -->
+      <div class="doh-flood-popup-status-bar flex items-center gap-2 rounded-xl px-2.5 py-2 shrink-0 border ${statusThemeClass}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span class="doh-flood-popup-status font-heading text-xs sm:text-sm font-bold leading-snug break-words">
+          ${escapeHtml(statusInfo.label)}
+        </span>
+      </div>
+
+      <!-- ส่วนที่ 4: ข้อมูลสำคัญ 2 ช่อง (จัด Grid 2 คอลัมน์) -->
+      <div class="grid grid-cols-2 gap-2 shrink-0">
+        <!-- ซ้าย: ระดับน้ำล่าสุด -->
+        <div class="rounded-xl bg-[#20384A] p-2 border border-[#526D83]/40 flex flex-col justify-center">
+          <div class="text-[11px] text-[#B5CBD9] font-medium leading-none mb-1">ระดับน้ำล่าสุด</div>
+          ${waterKnown
+            ? `<div class="flex items-baseline gap-1 mt-0.5">
+                <strong class="doh-flood-popup-water font-heading font-black text-xl sm:text-2xl text-[#F6A52F] tabular-nums leading-none">${escapeHtml(flood.water_level_cm ?? 0)}</strong>
+                <span class="text-xs text-[#F6A52F]/90 font-bold">ซม.</span>
+              </div>`
+            : `<div class="doh-flood-popup-water font-heading font-bold text-xs sm:text-sm text-[#F6A52F] mt-0.5 leading-tight">รอตรวจสอบระดับน้ำ</div>`}
         </div>
-        ${lanesText ? `
-          <div class="flex items-start gap-[0.5em] border-t border-slate-800/80 pt-1.5 text-xs text-slate-200">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mt-0.5 shrink-0" aria-hidden="true"><path d="M4 19L8 5"/><path d="M20 19L16 5"/><path d="M12 19v-2"/><path d="M12 13v-2"/><path d="M12 7V5"/></svg>
-            <span class="min-w-0 break-words">ช่องจราจร: <strong class="font-semibold text-white">${escapeHtml(lanesText)}</strong></span>
+
+        <!-- ขวา: ช่องจราจร -->
+        <div class="rounded-xl bg-[#20384A] p-2 border border-[#526D83]/40 flex flex-col justify-center">
+          <div class="text-[11px] text-[#B5CBD9] font-medium leading-none mb-1">ช่องจราจร:</div>
+          <strong class="font-heading font-bold text-xs sm:text-sm text-white leading-tight block break-words mt-0.5">${escapeHtml(lanesDisplay)}</strong>
+        </div>
+      </div>
+
+      <!-- ส่วนที่ 5: ตำแหน่งและเวลา (3 แถวต่อเนื่องกัน gap-1 = 4px) -->
+      <div class="flex flex-col gap-1 text-xs shrink-0 pt-0.5">
+        <!-- แถว 1: ตำแหน่ง กม. -->
+        <div class="flex items-center gap-1.5 text-slate-200">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F6A52F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span class="font-medium tabular-nums">${escapeHtml(kmText)}</span>
+        </div>
+
+        <!-- แถว 2: พื้นที่ ตำบล/อำเภอ -->
+        ${areaLine ? `
+          <div class="doh-flood-popup-area flex items-center gap-1.5 text-slate-300">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-slate-400" aria-hidden="true"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            <span class="min-w-0 break-words">${escapeHtml(areaLine)}</span>
           </div>
         ` : ""}
-      </div>
 
-      ${!publicMode && safePhoto ? `
-        <div class="mt-2 sm:mt-2.5 overflow-hidden rounded-xl border border-slate-700/80 bg-slate-900">
-          <img src="${safePhoto}" alt="ภาพสถานการณ์น้ำท่วม" class="h-24 sm:h-32 w-full object-cover"/>
+        <!-- แถว 3: เวลา + Badge ทางเลี่ยง -->
+        <div class="flex items-center justify-between gap-2 pt-0.5">
+          <div class="flex items-center gap-1.5 text-slate-400 text-xs min-w-0">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span class="truncate">${escapeHtml(relativeUpdate)}</span>
+          </div>
+          ${detourCount > 0 ? `
+            <button
+              type="button"
+              onclick="window.__openFloodDetourDossier && window.__openFloodDetourDossier('${safeId}')"
+              class="shrink-0 inline-flex items-center rounded-full border border-amber-500/40 bg-[#3a2010] px-2.5 py-0.5 text-[11px] font-bold text-[#F6A52F] hover:bg-[#4a2b16] transition cursor-pointer"
+            >
+              <span>ทางเลี่ยง ${detourCount} สาย</span>
+            </button>
+          ` : `<span class="shrink-0 text-[11px] text-slate-500 font-medium">ไม่มีทางเลี่ยง</span>`}
         </div>
-      ` : ""}
-
-      <div class="mt-2 sm:mt-2.5 flex items-center justify-between gap-[0.667em] text-[0.75rem] text-slate-400">
-        ${publicMode ? `<span>ทางเลี่ยงแนะนำ</span>` : `<span class="inline-flex items-center gap-[0.333em] min-w-0 truncate">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          <span class="truncate">${escapeHtml(relativeUpdate)}</span>
-        </span>`}
-        ${detourCount > 0 ? `
-          <button
-            type="button"
-            onclick="window.__openFloodDetourDossier && window.__openFloodDetourDossier('${safeId}')"
-            class="inline-flex shrink-0 items-center gap-[0.333em] rounded-full border border-amber-400/60 bg-amber-500/15 px-[0.833em] py-[0.333em] text-[0.75rem] font-bold text-amber-300 hover:bg-amber-500/25 transition cursor-pointer"
-          >
-            <span>ทางเลี่ยง ${detourCount} สาย ›</span>
-          </button>
-        ` : `<span class="shrink-0 text-slate-500">ไม่มีทางเลี่ยง</span>`}
       </div>
 
-      <div class="mt-2 sm:mt-2.5 grid grid-cols-2 gap-[0.5em] sm:gap-[0.667em]">
+      <!-- ส่วนที่ 6: ปุ่มดำเนินการ (2 ปุ่มแถวเดียวกัน กว้างเท่ากัน min-h-11 = 44px) -->
+      <div class="grid grid-cols-2 gap-2 pt-1 shrink-0">
         <button
           type="button"
           onclick="window.__openFloodDossier && window.__openFloodDossier('${safeId}')"
-          class="min-h-[2.75rem] rounded-xl bg-[#f59e0b] hover:bg-[#d97706] px-[0.667em] sm:px-[1em] py-[0.667em] font-heading text-xs font-black text-slate-950 shadow transition cursor-pointer flex items-center justify-center gap-[0.333em] text-center leading-tight"
+          class="min-h-11 rounded-xl bg-[#F6A52F] hover:bg-[#e29320] active:bg-[#c97f14] px-3 py-2 font-heading text-xs sm:text-sm font-black text-slate-950 shadow-md transition cursor-pointer flex items-center justify-center text-center leading-tight touch-manipulation"
         >
           <span>ดูรายละเอียด</span>
         </button>
         <button
           type="button"
+          aria-label="ดูตำแหน่งบนแผนที่"
           onclick="window.__focusFloodOnMap && window.__focusFloodOnMap('${safeId}')"
-          class="min-h-[2.75rem] rounded-xl border border-slate-700 bg-[#13203c] hover:bg-[#1a2b50] px-[0.667em] sm:px-[1em] py-[0.667em] font-heading text-xs font-bold text-white shadow transition cursor-pointer flex items-center justify-center gap-[0.333em] text-center leading-tight"
+          class="min-h-11 rounded-xl border border-[#526D83] bg-[#20384A] hover:bg-[#2a485e] active:bg-[#182b3a] px-3 py-2 font-heading text-xs sm:text-sm font-bold text-white shadow-md transition cursor-pointer flex items-center justify-center text-center leading-tight touch-manipulation"
         >
-          <span>ดูตำแหน่งบนแผนที่</span>
+          <span>ดูบนแผนที่</span>
         </button>
       </div>
     </div>

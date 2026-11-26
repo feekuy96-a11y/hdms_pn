@@ -211,8 +211,8 @@ test("public flood map and dossier photos open a single accessible viewer and le
   await expect(popup.getByText("ผ่านไม่ได้", { exact: true })).toBeVisible();
   const contents = await popup.innerText();
   expect(contents.indexOf(section)).toBeLessThan(contents.indexOf("ผ่านไม่ได้"));
-  expect(contents.indexOf("ผ่านไม่ได้")).toBeLessThan(contents.indexOf("ระหว่าง กม."));
-  expect(contents.indexOf("อัปเดต")).toBeLessThan(contents.indexOf("ระดับน้ำล่าสุด"));
+  expect(contents.indexOf("ผ่านไม่ได้")).toBeLessThan(contents.indexOf("ระดับน้ำล่าสุด"));
+  expect(contents.indexOf("ระดับน้ำล่าสุด")).toBeLessThan(contents.indexOf("กม."));
   const viewer = page.getByRole("dialog", { name: "ภาพถ่ายสถานการณ์ขนาดเต็ม" });
   const popupPhoto = popup.getByRole("button", { name: "ขยายภาพสถานการณ์เต็มจอ" });
   await popupPhoto.locator("img").click();

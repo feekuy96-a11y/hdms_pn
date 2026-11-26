@@ -187,20 +187,20 @@
   border-color: #0284c7 !important;
 }
 
-/* Flood Summary Leaflet Popup (Dark Navy + Gold Border per UI Prototype) */
+/* Flood Summary Leaflet Popup (Compact Dark Navy + Slate Border per UI Reference) */
 .doh-flood-leaflet-popup .leaflet-popup-content-wrapper {
-  background: #081120 !important;
+  background: #142638 !important;
   color: #f8fafc !important;
-  border: 1.5px solid #f59e0b !important;
-  border-radius: 1.375rem !important;
+  border: 1px solid #526D83 !important;
+  border-radius: 1rem !important;
   padding: 0 !important;
-  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.88), 0 0 22px rgba(245, 158, 11, 0.18) !important;
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.7) !important;
   overflow: hidden !important;
 }
 
 .doh-flood-leaflet-popup .leaflet-popup-tip {
-  background: #081120 !important;
-  border: 1.5px solid #f59e0b !important;
+  background: #142638 !important;
+  border: 1px solid #526D83 !important;
 }
 
 .doh-flood-leaflet-popup .leaflet-popup-close-button {

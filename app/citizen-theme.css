@@ -100,14 +100,68 @@
 .citizen-ui .citizen-dossier-frame a[class*="bg-[#10b981]"] * { color: inherit; }
 /* Pair foreground and background in the public flood popup (including over map tiles). */
 .citizen-ui .doh-highway-popup { background: var(--surface-panel); color: var(--cit-ink); }
-.citizen-ui .doh-detour-popup .doh-detour-nav-btn { background: var(--cit-action); color: var(--cit-on-action); }
-.citizen-ui .doh-detour-popup .doh-detour-nav-btn [class~="text-emerald-100"] { color: inherit; }
-.citizen-ui .doh-flood-popup-area { background: var(--cit-deep); color: var(--cit-ink); }
+.citizen-ui .doh-highway-popup { background: var(--surface-panel); color: var(--cit-ink); }
+.citizen-ui .doh-detour-popup { border-top-color: var(--cta-primary-bg); }
+.citizen-ui .doh-detour-popup .doh-detour-header,
+.citizen-ui .doh-detour-popup :is(.doh-detour-condition-row,.doh-detour-actions) { border-color: var(--border-subtle); }
+.citizen-ui .doh-detour-popup :is(.doh-detour-header-badge,.doh-detour-mode-badge,.doh-detour-unconfirmed) {
+  background: var(--status-warning-low-wash);
+  border-color: var(--status-warning-low-ink);
+  color: var(--status-warning-low-ink);
+}
+.citizen-ui .doh-detour-popup .doh-detour-hero-card { border-color: var(--status-warning-low-ink); }
+.citizen-ui .doh-detour-popup .doh-detour-hero-icon {
+  background: var(--cta-primary-bg);
+  color: var(--cta-primary-text);
+}
+.citizen-ui .doh-detour-popup :is(.doh-detour-dash-sample,.doh-detour-timeline-line) { border-color: var(--status-warning-low-ink); }
+.citizen-ui .doh-detour-popup .doh-detour-dir-group button { min-height: 2.75rem; }
+.citizen-ui .doh-detour-popup .doh-detour-condition-badge {
+  background: var(--status-normal-wash);
+  border-color: var(--status-normal-ink);
+  color: var(--status-normal-ink);
+}
+.citizen-ui .doh-detour-popup .doh-detour-nav-btn {
+  background: var(--cta-primary-bg);
+  color: var(--cta-primary-text);
+}
+.citizen-ui .doh-detour-popup .doh-detour-nav-btn .doh-detour-nav-sub { color: inherit; }
+.citizen-ui .doh-flood-popup-area { color: var(--cit-ink); }
 .citizen-ui .doh-flood-popup-area svg { stroke: currentColor; }
 .citizen-ui .doh-flood-popup-water { color: var(--cit-water); }
-.citizen-ui .doh-flood-popup-status[class~="bg-red-600"] { background: #a3202e; color: #fff; }
-.citizen-ui .doh-flood-popup-status[class~="bg-emerald-500"] { color: #102a21; }
-.citizen-ui .doh-flood-popup-status[class~="bg-slate-600/80"] { background: #455668; color: #fff; }
+.citizen-ui .doh-flood-popup-status { color: inherit; }
+.citizen-ui .doh-flood-popup-status-bar.status-red {
+  background: var(--status-danger-wash);
+  border-color: var(--status-danger-ink);
+  color: var(--status-danger-ink);
+}
+.citizen-ui .doh-flood-popup-status-bar.status-amber {
+  background: var(--status-warning-low-wash);
+  border-color: var(--status-warning-low-ink);
+  color: var(--status-warning-low-ink);
+}
+.citizen-ui .doh-flood-popup-status-bar.status-sky {
+  background: var(--status-info-wash);
+  border-color: var(--status-info-ink);
+  color: var(--status-info-ink);
+}
+.citizen-ui .doh-flood-popup-status-bar.status-green {
+  background: var(--status-normal-wash);
+  border-color: var(--status-normal-ink);
+  color: var(--status-normal-ink);
+}
+.citizen-ui .doh-flood-popup-card [class*="bg-[#20384A]"] {
+  background: var(--bg-input);
+  border-color: var(--border-subtle);
+}
+.citizen-ui .doh-flood-popup-card [class*="text-[#B5CBD9]"] { color: var(--text-secondary); }
+.citizen-ui .doh-flood-popup-card strong.text-white { color: var(--text-primary); }
+.citizen-ui .doh-flood-popup-card button[class*="bg-[#20384A]"] {
+  background: var(--bg-card);
+  border-color: var(--hdms-control-edge);
+  color: var(--text-primary);
+}
+.citizen-ui .doh-flood-popup-card button[class*="bg-[#20384A]"]:hover { background: var(--state-hover); }
 .citizen-ui :is(.doh-flood-leaflet-popup,.doh-detour-leaflet-popup) .leaflet-popup-close-button {
   background: var(--cit-deep) !important; color: var(--cit-ink) !important; border-color: var(--surface-border) !important;
 }
