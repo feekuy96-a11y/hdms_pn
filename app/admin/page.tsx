@@ -103,18 +103,22 @@ export default function AdminPage() {
   const themeButton = useRef<HTMLButtonElement>(null);
   const adminShell = useRef<HTMLDivElement>(null);
   const adminHeader = useRef<HTMLElement>(null);
+  const adminPaneSwitch = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const shell = adminShell.current;
     const header = adminHeader.current;
     if (!shell || !header) return;
+    const paneSwitch = adminPaneSwitch.current;
     const updateHeaderOffset = () => {
       shell.style.setProperty("--admin-header-height", `${Math.ceil(header.getBoundingClientRect().height)}px`);
+      shell.style.setProperty("--admin-pane-switch-height", `${Math.ceil(paneSwitch?.getBoundingClientRect().height ?? 0)}px`);
     };
     updateHeaderOffset();
     const observer = new ResizeObserver(updateHeaderOffset);
     observer.observe(header);
+    if (paneSwitch) observer.observe(paneSwitch);
     return () => observer.disconnect();
-  }, []);
+  }, [adminViewMode]);
   const themeChoicesPresent = useAdminMotionPresence(themeChoicesOpen);
   useEffect(() => {
     try {
@@ -534,6 +538,7 @@ export default function AdminPage() {
       {/* Mobile / Tablet (< lg) Sticky Segmented Switch: Form vs GIS Map */}
       {adminViewMode === "console" && (
         <div
+          ref={adminPaneSwitch}
           role="group"
           aria-label="สลับมุมมองฟอร์มและแผนที่บนมือถือ"
           className={`${workspace.chrome} ${workspace.paneSwitch} lg:hidden sticky top-[var(--admin-header-height,4rem)] z-40 grid grid-cols-2 gap-[0.5em] border-b border-surface px-3 py-2`}
@@ -657,38 +662,10 @@ export default function AdminPage() {
           <div
             ref={mapContainerRef}
             className={`${
-              mobileActivePane === "form" ? "hidden lg:block" : "block"
-            } h-[calc(100dvh-8.5rem)] min-h-[22.5rem] lg:h-auto lg:min-h-0 lg:flex-1 relative scroll-mt-16 bg-surface-canvas`}
+              mobileActivePane === "form" ? "hidden lg:flex" : "flex"
+            } hdms-admin-map-pane h-[calc(100dvh-8.5rem)] min-h-[22.5rem] lg:h-auto lg:min-h-0 lg:flex-1 relative isolate flex-col bg-surface-canvas`}
           >
-            {/* Mobile Jump Back To Form Button */}
-            <div className="lg:hidden absolute bottom-3 left-3 z-[450]">
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileActivePane("form");
-                  if (savedMobileScrollYRef.current !== null) {
-                    const y = savedMobileScrollYRef.current;
-                    savedMobileScrollYRef.current = null;
-                    window.setTimeout(() => window.scrollTo({ top: y, behavior: "smooth" }), 80);
-                  } else {
-                    window.setTimeout(() => workspacePaneRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
-                  }
-                }}
-                aria-label="กลับไปส่วนกรอกฟอร์ม"
-                className="min-h-[2.5rem] rounded-xl border border-surface bg-surface-floating px-[0.9em] py-[0.5em] text-[0.75rem] font-heading font-bold text-amber-300 shadow-xl hover:bg-surface-card hover:text-white transition"
-              >
-                ↑ กลับไปฟอร์ม
-              </button>
-            </div>
-            <input
-              type="search"
-              aria-label="ค้นหาสายทางบนแผนที่"
-              placeholder="ค้นหาสายทางบนแผนที่"
-              value={mapSearch}
-              disabled={isEditingBlocked}
-              onChange={(event) => setMapSearch(event.target.value)}
-              className="absolute bottom-4 left-4 z-[410] max-w-[calc(100%-2rem)] rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white disabled:hidden"
-            />
+            <div className="relative min-h-0 flex-1">
             <LongdoGisMap
               systemData={systemData}
               isSidebarCollapsed={isSidebarCollapsed}
@@ -832,6 +809,35 @@ export default function AdminPage() {
                 </button>
               </div>
             )}
+            </div>
+            <div className="hdms-admin-map-foot" role="group" aria-label="เครื่องมือค้นหาและกลับไปฟอร์ม">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileActivePane("form");
+                  if (savedMobileScrollYRef.current !== null) {
+                    const y = savedMobileScrollYRef.current;
+                    savedMobileScrollYRef.current = null;
+                    window.setTimeout(() => window.scrollTo({ top: y, behavior: "smooth" }), 80);
+                  } else {
+                    window.setTimeout(() => workspacePaneRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+                  }
+                }}
+                aria-label="กลับไปส่วนกรอกฟอร์ม"
+                className="lg:hidden min-h-11 rounded-xl border border-surface bg-surface-floating px-[0.9em] py-[0.5em] text-[0.75rem] font-heading font-bold text-amber-300 shadow-xl hover:bg-surface-card hover:text-white transition"
+              >
+                ↑ กลับไปฟอร์ม
+              </button>
+              <input
+              type="search"
+              aria-label="ค้นหาสายทางบนแผนที่"
+              placeholder="ค้นหาสายทางบนแผนที่"
+              value={mapSearch}
+              disabled={isEditingBlocked}
+              onChange={(event) => setMapSearch(event.target.value)}
+              className="min-h-11 min-w-0 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white disabled:hidden"
+            />
+            </div>
           </div>
         </div>
       )}

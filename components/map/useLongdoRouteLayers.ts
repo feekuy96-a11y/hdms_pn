@@ -22,7 +22,6 @@ import {
   escapeHtml,
   getResponsivePopupOptions,
   getPublicDetourEndpointLabel,
-  hasDetourPointMetadata,
   isFloodLineVisibleOnCurrentMap,
   labelPublicDetourEndpointMarker,
   parseRouteCoordinates,
@@ -43,6 +42,11 @@ import {
   resolveDetourDefaultDirection,
   resolveDetourPhotoPointCoords,
 } from "./longdo-layer-builders";
+
+export function resolveMapDetourDash(style: Parameters<typeof dashArrayFor>[0]): string | undefined {
+  if (style?.pattern === "solid") return undefined;
+  return dashArrayFor(style) ?? "8 6";
+}
 
 const DETOUR_DIRECTION_CHANGED = "hdms:detourdirectionchange";
 
@@ -295,8 +299,8 @@ export function useLongdoRouteLayers({
     const renderer = rendererRef.current;
     const detourStyle = mapStyles.detour;
     const dColor = detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
-    const detourPinColor = publicMode ? TRAFFIC_ACCENT.amber : dColor;
-    const dDash = dashArrayFor(detourStyle) || (publicMode ? "8 6" : undefined);
+    const detourPinColor = TRAFFIC_ACCENT.amber;
+    const dDash = resolveMapDetourDash(detourStyle);
 
     (systemData.detourRoutes || []).forEach((detour) => {
       if (!detour.is_active) return;
@@ -413,7 +417,7 @@ export function useLongdoRouteLayers({
         }
       }
 
-      // Draw Start Point A & End Point B markers when photo or point-first metadata exists
+      // The same valid A/B geometry may be shown at close zoom, even without photos.
       const startPhoto = detour.detour_meta?.start_point_photo;
       const endPhoto = detour.detour_meta?.end_point_photo;
       const { start, end } = resolveDetourPhotoPointCoords(detour, fwdCoords);
@@ -434,8 +438,7 @@ export function useLongdoRouteLayers({
         },
       ];
 
-      const validEntries = endpointEntries.filter(({ pin, photo }) =>
-        (publicMode || hasDetourPointMetadata(photo)) &&
+      const validEntries = endpointEntries.filter(({ pin }) =>
         Number.isFinite(pin.lat) && Number.isFinite(pin.lon) && !(pin.lat === 0 && pin.lon === 0)
       );
       const markers = new Map<"START" | "END", any>();
@@ -532,12 +535,11 @@ export function useLongdoRouteLayers({
     const fColor = floodStyle?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
     const floodWaveIcon = `<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M2 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M2 16c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/></svg>`;
     const waveBadge = (color: string) => `<span style="background:${escapeHtml(color)};color:white" class="inline-flex h-5 w-5 items-center justify-center rounded-md border border-white/70 shadow-sm" aria-hidden="true">${floodWaveIcon}</span>`;
-    const segmentAccent = (flood: FloodRoute) => publicMode
-      ? getTrafficPresentation(flood.traffic_status, flood.water_level_cm, flood.direction_meta?.trafficStatusDetail).hex
-      : fColor;
+    const segmentAccent = (flood: FloodRoute) =>
+      getTrafficPresentation(flood.traffic_status, flood.water_level_cm, flood.direction_meta?.trafficStatusDetail).hex;
     const fBaseWeight = floodStyle?.weight || LAYER_CONFIG.FLOOD_RED_LINE.weight;
     const fOpacity = floodStyle?.opacity ?? LAYER_CONFIG.FLOOD_RED_LINE.opacity;
-    const fDash = publicMode ? undefined : dashArrayFor(floodStyle);
+    const fDash = dashArrayFor(floodStyle);
 
     const countDetoursForFlood = (flood: FloodRoute) => getLinkedDetoursForFlood(flood, systemData).length;
     const floodPopupOpts = getResponsivePopupOptions(L, 370, 300, "doh-flood-leaflet-popup");
@@ -564,14 +566,12 @@ export function useLongdoRouteLayers({
         }).addTo(group);
         polyline.__dohFilterId = flood.id;
         polyline.__dohBaseOpacity = fOpacity;
-        if (publicMode) {
-          const accent = drawFloodStatusAccent(L, group, latLngs, renderer, flood, selectedWeight, fOpacity) as ReturnType<typeof drawFloodStatusAccent> & {
-            __dohFilterId: string;
-            __dohBaseOpacity: number;
-          };
-          accent.__dohFilterId = flood.id;
-          accent.__dohBaseOpacity = fOpacity;
-        }
+        const accent = drawFloodStatusAccent(L, group, latLngs, renderer, flood, selectedWeight, fOpacity) as ReturnType<typeof drawFloodStatusAccent> & {
+          __dohFilterId: string;
+          __dohBaseOpacity: number;
+        };
+        accent.__dohFilterId = flood.id;
+        accent.__dohBaseOpacity = fOpacity;
         floodLinesRef.current[flood.id] = {
           line: polyline,
           baseWeight: fBaseWeight,
@@ -607,7 +607,7 @@ export function useLongdoRouteLayers({
           segmentCount: ev.segments.length,
           levelText: level,
         };
-        const pinColor = publicMode ? evPresentation.hex : fColor;
+        const pinColor = evPresentation.hex;
         const floodWaveBadge = waveBadge(pinColor);
         const pinIcon = L.divIcon(buildZoomAdaptiveFloodPinSpec(item, currentZoom, pinColor, floodWaveIcon, floodWaveBadge));
 

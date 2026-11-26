@@ -1,9 +1,10 @@
 "use client";
 import { useMemo, useState, type CSSProperties } from "react";
-import { Car, ChevronDown, CircleCheck, CircleHelp, CircleX, Route, TrafficCone, TriangleAlert, Waves } from "lucide-react";
+import { Car, CircleCheck, CircleHelp, CircleX, TrafficCone, TriangleAlert } from "lucide-react";
 import type { FloodRoute, SystemDataPayload } from "@/db/default-data";
 import { DETAILED_TRAFFIC_STATUS_CONFIG, mapTrafficStatusToDetail, type DetailedTrafficStatus } from "@/lib/flood-event-schema";
 import { PUBLIC_READ_MESSAGES, type PublicReadState } from "./public-read-state";
+import { MapStatusRow } from "@/components/map/MapStatusRow";
 import { getEventIdForFloodRoute } from "@/lib/event-detour-links";
 
 export type MapPassability = Exclude<DetailedTrafficStatus, "CAUTION">;
@@ -58,12 +59,8 @@ export function CitizenMapStatus({ systemData, selected, onFilter, onDetours, re
         <p className="citizen-map-status-note">{PUBLIC_READ_MESSAGES[readState]}</p>
       ) : (
         <>
-          <div className="citizen-map-status-head">
-          <button type="button" className="citizen-map-status-flood" aria-expanded={expanded} aria-controls="citizen-map-status-filters" onClick={() => setExpanded(open => !open)}>
-            <Waves size={13} aria-hidden="true" /><span>{`น้ำท่วม ${count} จุด`}</span><ChevronDown size={11} aria-hidden="true" />
-          </button>
-          <button type="button" className="citizen-map-status-detours" onClick={onDetours}><Route size={13} aria-hidden="true" /><span>ทางเลี่ยง {detours} เส้นทาง</span></button>
-          </div>
+          <MapStatusRow floods={count} detours={detours} onFloods={() => setExpanded(open => !open)} onDetours={onDetours}
+            floodExpanded={expanded} floodControlsId="citizen-map-status-filters" />
           {readState === "stale" && <p className="citizen-map-status-note">{PUBLIC_READ_MESSAGES.stale}</p>}
         </>
       )}

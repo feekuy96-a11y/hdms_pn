@@ -50,7 +50,7 @@ import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import { renderVertexEditHandles } from "./longdo-vertex-handles";
 import { renderDraftAndConflictLayer } from "./longdo-draft-layer";
 import { useAdministrativeBoundaries } from "./useAdministrativeBoundaries";
-import { useLongdoPopupBridge, useLongdoRouteLayers } from "./useLongdoRouteLayers";
+import { resolveMapDetourDash, useLongdoPopupBridge, useLongdoRouteLayers } from "./useLongdoRouteLayers";
 import { getTrafficPresentation } from "@/lib/traffic-presentation";
 import {
   collectFocusBoundsPoints,
@@ -1217,9 +1217,10 @@ export function LongdoGisMap({
 
     (systemData.offices || []).forEach((office) => {
       if (!office.is_active) return;
+      // The circular badge is already centered on its coordinate by Leaflet’s iconAnchor.
       const officeIcon = L.divIcon({
         html: `
-              <div class="relative cursor-pointer" style="transform: translate(-50%, -50%);">
+              <div class="relative cursor-pointer">
                 <div class="w-7 h-7 rounded-full bg-slate-100 border border-slate-500 flex items-center justify-center shadow-md text-slate-600">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>
@@ -1294,7 +1295,7 @@ export function LongdoGisMap({
           color,
           weight,
           opacity: style?.opacity ?? 0.95,
-          dashArray: isPrimary ? dashArrayFor(style) || (publicMode ? "8 6" : undefined) : "10, 6",
+          dashArray: isPrimary ? resolveMapDetourDash(style) : "10, 6",
         }).addTo(group);
         raisePathLayers(line);
         allPolylines.push(geom.coords);
@@ -1416,9 +1417,10 @@ export function LongdoGisMap({
               color,
               weight,
               opacity: style?.opacity ?? 0.95,
+              dashArray: dashArrayFor(style),
             }).addTo(group);
             raisePathLayers(line);
-            if (publicMode) drawFloodStatusAccent(L, group, latLngs, renderer, seg, weight, style?.opacity ?? 0.95);
+            drawFloodStatusAccent(L, group, latLngs, renderer, seg, weight, style?.opacity ?? 0.95);
             allPolylines.push(segCoords);
           } else if (Number.isFinite(seg.lon_start) && Number.isFinite(seg.lat_start)) {
             allPoints.push([seg.lon_start, seg.lat_start]);
@@ -1427,9 +1429,7 @@ export function LongdoGisMap({
               radius: 10,
               color: borderColor,
               weight: borderWidth,
-              fillColor: publicMode
-                ? getTrafficPresentation(seg.traffic_status, seg.water_level_cm, seg.direction_meta?.trafficStatusDetail).hex
-                : color,
+              fillColor: getTrafficPresentation(seg.traffic_status, seg.water_level_cm, seg.direction_meta?.trafficStatusDetail).hex,
               fillOpacity: style?.opacity ?? 0.95,
             }).addTo(group);
           }
@@ -1545,11 +1545,11 @@ export function LongdoGisMap({
   }, [mapReady, gisFocus, systemData, mapStyles]);
 
   return (
-    <div data-hdms-map data-active-base-map={activeBaseMap} data-public-filter-counts={`flood:${highlightFloodIds.length};detour:${highlightDetourIds.length}`} className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full`} style={{ minHeight: publicMode ? 0 : 450 }}>
+    <div data-hdms-map data-active-base-map={activeBaseMap} data-public-filter-counts={`flood:${highlightFloodIds.length};detour:${highlightDetourIds.length}`} className={`relative ${className} ${isMapPopupOpen ? "doh-map-popup-open" : ""} overflow-hidden w-full h-full`}>
       <div
         ref={mapContainerRef}
         className="hdms-map-canvas w-full h-full relative z-0"
-        style={{ position: "absolute", inset: 0, minHeight: publicMode ? 0 : 450 }}
+        style={{ position: "absolute", inset: 0 }}
       />
 
       <MapLegendOverlay
