@@ -154,7 +154,9 @@ test("citizen theme inverts active filters without dimming the basemap or overla
   await nav.getByRole("button", { name: "ติดต่อ", exact: true }).click();
   const contacts = page.getByRole("dialog", { name: "ติดต่อหน่วยงาน" });
   await expect(contacts).toHaveAttribute("data-hdms-popup", "panel");
-  await expect(contacts).toHaveCSS("background-color", "rgb(26, 45, 62)");
+  await expect(contacts).toHaveCSS("background-color", "rgba(20, 42, 52, 0.85)");
+  await expect(contacts).toHaveCSS("backdrop-filter", "blur(6px) saturate(1.15)");
+  await expect(contacts.locator(".citizen-office-card").first()).toHaveCSS("background-color", "rgb(34, 53, 72)");
   await page.keyboard.press("Escape");
   await page.reload();
   await expect(shell).toHaveAttribute("data-citizen-theme", "dark");
@@ -163,7 +165,9 @@ test("citizen theme inverts active filters without dimming the basemap or overla
   await expect(shell).toHaveAttribute("data-citizen-theme", "light");
   await expect(pane).toHaveCSS("filter", "none");
   await nav.getByRole("button", { name: "ติดต่อ", exact: true }).click();
-  await expect(contacts).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(contacts).toHaveCSS("background-color", "rgba(247, 250, 249, 0.82)");
+  await expect(contacts).toHaveCSS("backdrop-filter", "blur(6px) saturate(1.15)");
+  await expect(contacts.locator(".citizen-office-card").first()).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
 
 for (const [status, label] of [
