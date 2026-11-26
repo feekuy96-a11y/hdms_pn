@@ -8,6 +8,7 @@ import { defaultDetourDirection, isDetourDirectionAllowed } from "@/lib/detour-p
 import { getLinkedDetoursForFlood } from "@/lib/event-detour-links";
 import { groupFloodRoutesIntoEvents, parseFloodDirectionMeta, resolveFloodWaterReading } from "@/lib/flood-event-schema";
 import { getTrafficPresentation, TRAFFIC_ACCENT } from "@/lib/traffic-presentation";
+import { drawFloodStatusAccent } from "./longdo-flood-status-accent";
 import {
   addLineCasing,
   bindPublicEndpointInspector,
@@ -535,6 +536,14 @@ export function useLongdoRouteLayers({
           renderer,
         }).addTo(group);
         polyline.__dohFilterId = flood.id;
+        if (publicMode) {
+          const accent = drawFloodStatusAccent(L, group, latLngs, renderer, flood, selectedWeight, fOpacity) as ReturnType<typeof drawFloodStatusAccent> & {
+            __dohFilterId: string;
+            __dohBaseOpacity: number;
+          };
+          accent.__dohFilterId = flood.id;
+          accent.__dohBaseOpacity = fOpacity;
+        }
         floodLinesRef.current[flood.id] = {
           line: polyline,
           baseWeight: fBaseWeight,

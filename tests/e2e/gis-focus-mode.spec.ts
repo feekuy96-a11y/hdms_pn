@@ -8,6 +8,7 @@ import {
   updateGisFocusOptions,
 } from "../../lib/gis-focus-mode";
 import type { SystemDataPayload } from "../../db/default-data";
+import { getTrafficPresentation } from "../../lib/traffic-presentation";
 import { DEFAULT_MAP_STYLES } from "../../lib/constants";
 
 const base = process.env.BASE_PATH || "";
@@ -869,6 +870,11 @@ for (const admin of [false, true]) {
   test(`${admin ? "admin" : "public"} draws saved road, flood and detour colors in the map and focus views`, async ({ page, isMobile }) => {
     const colors = { flood: "#8b214f", detour: "#2875a3", primary: "#39632b", secondary: "#6451ad" };
     const payload = createMockPayload();
+    payload.floodRoutes[0].traffic_status = "CLOSED";
+    payload.floodRoutes[1].traffic_status = "PASSABLE";
+    const statusColors = payload.floodRoutes.slice(0, 2).map(flood =>
+      getTrafficPresentation(flood.traffic_status, flood.water_level_cm).hex.toLowerCase());
+    expect(new Set(statusColors).size).toBe(2);
     payload.mapStyles = structuredClone(DEFAULT_MAP_STYLES);
     for (const key of ["flood", "detour", "primary", "secondary"] as const) {
       payload.mapStyles[key].color = colors[key];
@@ -905,6 +911,9 @@ for (const admin of [false, true]) {
     await legend.getByRole("checkbox", { name: /แสดงสายรองทุกระดับซูม/ }).check();
     await tools.getByRole("button", { name: "เลเยอร์", exact: true }).click();
     for (const color of Object.values(colors)) await expect.poll(() => count(color)).toBeGreaterThan(0);
+    if (!admin) {
+      for (const color of statusColors) await expect.poll(() => count(color)).toBeGreaterThan(0);
+    }
 
     for (const [pin, popup, color] of [
       [".doh-map-capsule-pin", ".doh-flood-leaflet-popup", colors.flood],
@@ -914,8 +923,13 @@ for (const admin of [false, true]) {
       await page.locator(popup).getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).click();
       await expect(page.getByTestId(admin ? "admin-gis-focus-exit-bar" : "gis-focus-mode-bar")).toBeVisible();
       const beforeRedraw = await count(color);
+      const beforeStatus = await Promise.all(statusColors.map(count));
       await tools.getByRole("button", { name: "Zoom out", exact: true }).click();
       await expect.poll(() => count(color)).toBeGreaterThan(beforeRedraw);
+      if (!admin && color === colors.flood) {
+        await expect.poll(async () => (await Promise.all(statusColors.map(count)))
+          .some((value, i) => value > beforeStatus[i])).toBe(true);
+      }
       await page.getByTestId("gis-focus-exit-btn").click();
     }
   });

@@ -43,6 +43,7 @@ import {
   resolveDetourPhotoPointCoords,
 } from "./longdo-layer-builders";
 import { placeArrowsOnLine, renderDirectionalArrows } from "./longdo-arrow-layer";
+import { drawFloodStatusAccent } from "./longdo-flood-status-accent";
 import { installRouteMotion } from "./longdo-route-motion";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import { renderVertexEditHandles } from "./longdo-vertex-handles";
@@ -1365,6 +1366,7 @@ export function LongdoGisMap({
               opacity: style?.opacity ?? 0.95,
             }).addTo(group);
             raisePathLayers(line);
+            if (publicMode) drawFloodStatusAccent(L, group, latLngs, renderer, seg, weight, style?.opacity ?? 0.95);
             allPolylines.push(segCoords);
           } else if (Number.isFinite(seg.lon_start) && Number.isFinite(seg.lat_start)) {
             allPoints.push([seg.lon_start, seg.lat_start]);

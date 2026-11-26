@@ -454,6 +454,7 @@ export function MapLegendOverlay({
             <details className="citizen-legend-explainer">
                 <summary>คำอธิบายสัญลักษณ์</summary>
                 <p>หมุดรูปคลื่นระบุจุดน้ำท่วม หมุดลูกศรและเส้นทางเลี่ยงระบุทางเลือก เส้นสีของทางหลวงใช้สีเดียวกับตัวอย่างในรายการด้านบน</p>
+                {publicMode && <p>ขีดสีบนเส้นน้ำท่วมบอกสถานะการผ่านทาง ส่วนสีพื้นเส้นใช้สไตล์ที่บันทึกไว้</p>}
             </details>
             {highwayListPanel}
           </div>
