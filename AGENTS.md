@@ -2,6 +2,8 @@
 
 ## Scope and evidence
 
+- When starting or resuming HDMS work, read `docs/AI_HANDOFF.md` for the latest verified release and recent changes; verify against `origin/main` and the deployment workflow before relying on it.
+
 - Read `docs/CODEBASE_MAP.md` first to jump directly to target files and commands instead of scanning or grepping the whole repo.
 - Inspect only files needed for the assigned task. Preserve unrelated working-tree changes.
 - During incremental edits, run `npm run check:fast` and `npx eslint <changed-files> --max-warnings=0`; run full `npm run check:deploy` once before commit/PR.
