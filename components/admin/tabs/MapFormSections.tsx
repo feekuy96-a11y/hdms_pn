@@ -6,6 +6,7 @@ import { ClipboardList, FileText, FileUp, MapPinned, Navigation, Save } from "lu
 import { HighwayIdentificationSection } from "@/components/admin/tabs/HighwayIdentificationSection";
 import { RouteGeometryEditorSection } from "@/components/admin/tabs/RouteGeometryEditorSection";
 import { DetourAdviceSection } from "@/components/admin/tabs/DetourAdviceSection";
+import { FloodSaveError, type FloodSaveValidation } from "./flood-save-validation";
 import { FloodSituationSection } from "@/components/admin/tabs/FloodSituationSection";
 
 // ============================================================================
@@ -222,6 +223,7 @@ export function MapSubmitActionBar({
 // ============================================================================
 export interface MapFormSectionsProps {
   routeMode: "FLOOD" | "DETOUR";
+  floodValidation?: FloodSaveValidation | null;
   highwayProps: Omit<React.ComponentProps<typeof HighwayIdentificationSection>, "routeMode">;
   geometryProps: Omit<React.ComponentProps<typeof RouteGeometryEditorSection>, "routeMode">;
   detourProps: React.ComponentProps<typeof DetourAdviceSection>;
@@ -232,7 +234,7 @@ export interface MapFormSectionsProps {
 }
 
 export function MapFormSections({
-  routeMode,
+  routeMode, floodValidation,
   highwayProps,
   geometryProps,
   detourProps,
@@ -273,12 +275,18 @@ export function MapFormSections({
       </nav>
       <section id={getId("route")} tabIndex={-1} aria-label={sections[0].label}
         className="min-w-0 scroll-mt-32 rounded-xl lg:scroll-mt-3 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">
-        <HighwayIdentificationSection routeMode={routeMode} {...highwayProps} />
+        <HighwayIdentificationSection routeMode={routeMode} {...highwayProps} validation={floodValidation} />
       </section>
 
       <section id={getId("geometry")} tabIndex={-1} aria-label={sections[1].label}
         className="min-w-0 scroll-mt-32 rounded-xl lg:scroll-mt-3 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">
         <div className="space-y-2">
+          {routeMode === "FLOOD" && (
+            <div id="flood-geometry-validation-target" tabIndex={-1} role="group" aria-label="ตรวจแนวเส้นน้ำท่วม"
+              aria-describedby={floodValidation?.target === "flood-geometry-validation-target" ? "flood-save-validation-message" : undefined}>
+              <FloodSaveError validation={floodValidation} target="flood-geometry-validation-target" />
+            </div>
+          )}
           <RouteGeometryEditorSection routeMode={routeMode} {...geometryProps} />
           <RouteImportControl onImportFile={onImportFile} />
         </div>
@@ -286,7 +294,7 @@ export function MapFormSections({
 
       <section id={getId("details")} tabIndex={-1} aria-label={sections[2].label}
         className="min-w-0 scroll-mt-32 rounded-xl lg:scroll-mt-3 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">
-        {routeMode === "DETOUR" ? <DetourAdviceSection {...detourProps} /> : <FloodSituationSection {...floodProps} />}
+        {routeMode === "DETOUR" ? <DetourAdviceSection {...detourProps} /> : <FloodSituationSection {...floodProps} validation={floodValidation} />}
       </section>
 
       <section id={getId("publish")} tabIndex={-1} aria-label={sections[3].label}

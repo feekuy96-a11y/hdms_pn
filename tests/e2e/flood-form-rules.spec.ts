@@ -4,12 +4,33 @@ import {
   TRAFFIC_STATUS_OPTIONS,
   getTrafficPresentation,
 } from "../../lib/traffic-presentation";
+import { decodeFloodImpactParts, encodeFloodImpactParts, formatFloodImpactParts, mirrorFloodImpactForReverse, parseFloodDirectionMeta, toggleFloodImpactPart } from "../../lib/flood-event-schema";
 import { getAvailableHighwayRoutes } from "../../lib/highway-schema";
 import { detectClosedRoadConflicts, detectPassabilityFloodWarnings } from "../../lib/gis-utils";
 
 const base = process.env.BASE_PATH || "";
 
 test.describe("Flood traffic status rules and highway selector deduplication", () => {
+  test("legacy pairs stay independent while explicit left/right frontage-shoulder combinations round-trip", () => {
+    for (const [side, thai] of [["LEFT", "ซ้าย"], ["RIGHT", "ขวา"]] as const) {
+      const shoulder = `${side}_SHOULDER` as const;
+      const frontage = `${side}_FRONTAGE` as const;
+      expect(formatFloodImpactParts({ affectedParts: [shoulder] })).toBe(`ไหล่ทาง${thai}ทาง`);
+      expect(formatFloodImpactParts({ affectedParts: [frontage] })).toBe(`ทางขนาน${thai}ทาง`);
+      const legacy = parseFloodDirectionMeta({ affectedParts: [shoulder, frontage] });
+      expect(formatFloodImpactParts(legacy)).toBe(`ไหล่ทาง${thai}ทาง, ทางขนาน${thai}ทาง`);
+      expect(toggleFloodImpactPart(decodeFloodImpactParts(legacy), "ALL_LANES")).toEqual([shoulder, frontage, "ALL_LANES"]);
+      const picked = toggleFloodImpactPart([shoulder, "ALL_LANES"], frontage);
+      const wire = JSON.parse(JSON.stringify(encodeFloodImpactParts(picked)));
+      expect(wire).toEqual({ affectedParts: ["ALL_LANES", frontage], frontageShoulderSides: [side] });
+      expect(formatFloodImpactParts(parseFloodDirectionMeta(wire))).toBe(`ทุกช่องจราจร, ไหล่ทางของทางขนาน${thai}ทาง`);
+      expect(toggleFloodImpactPart(picked, "UNSPECIFIED")).toEqual(["UNSPECIFIED"]);
+      expect(toggleFloodImpactPart(picked, frontage)).toEqual(["ALL_LANES", shoulder]);
+      const mirrored = mirrorFloodImpactForReverse(picked);
+      expect(encodeFloodImpactParts(mirrored).frontageShoulderSides).toEqual([side === "LEFT" ? "RIGHT" : "LEFT"]);
+    }
+  });
+
   test("TRAFFIC_STATUS_OPTIONS and deriveTrafficStatusFromWaterLevel follow exact water-depth rules", () => {
     expect(TRAFFIC_STATUS_OPTIONS.map((o) => o.label)).toEqual([
       "ผ่านได้ปกติ",
@@ -99,10 +120,12 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
   });
 
   for (const outcome of ["shared carriageway", "both saved", "right rejected then retried", "right response lost", "right verification rejected", "left rejected"] as const) {
-  test(`admin flood form saves split 4-lane records: ${outcome}`, async ({ page }) => {
-    test.skip((page.viewportSize()?.width ?? 1280) < 800, "Desktop admin form workflow");
+  test(`admin flood form saves split 4-lane records: ${outcome}`, async ({ page, isMobile }) => {
+    test.skip(isMobile && !["shared carriageway", "both saved", "right rejected then retried"].includes(outcome), "Remaining transport variants are covered on desktop.");
+    await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const savedCalls: any[] = [];
     const reportCalls: string[] = [];
+    let publishedRows: unknown[] = [];
     const updated_at = new Date().toISOString();
     let releaseFloodForward!: () => void;
     const floodForwardGate = new Promise<void>(resolve => { releaseFloodForward = resolve; });
@@ -117,6 +140,13 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     await page.route("**/functions/v1/hdms-api", async (route) => {
       const body = route.request().postDataJSON() as { action?: string; args?: any[] };
       const action = body?.action || "";
+
+      if (publishedRows.length && ["getSystemDataAction", "getPublicSystemDataAction", "getAdminOperationalDataAction"].includes(action)) {
+        const system = { updatedAt: updated_at, floodRoutes: publishedRows, detourRoutes: [], highwayLayers: [], offices: [], timelineUpdates: [], mitigationProjects: [],
+          mapStyles: null, systemSettings: { name: "ระบบทดสอบ", org: "แขวงทางหลวงปัตตานี", phone: "1586" } };
+        if (action === "getAdminOperationalDataAction") return route.fulfill({ status: 400, json: { error: "Unknown operation" } });
+        return route.fulfill({ json: system });
+      }
 
       if (action === "getAdminOperationalDataAction") {
         await route.fulfill({ status: 400, json: { error: "Unknown operation" } });
@@ -254,7 +284,20 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     });
 
     await page.goto(`${base}/admin/`);
-    await page.getByRole("complementary").getByRole("button", { name: /รายงานสถานการณ์น้ำท่วม/ }).click();
+    const menu = isMobile ? page.getByRole("navigation", { name: "เมนูจัดการแอดมินมือถือ" }) : page.getByRole("complementary");
+    await menu.getByRole("button", { name: /รายงานสถานการณ์น้ำท่วม/ }).click();
+    const sidePicker = page.getByRole("group", { name: "เลือกฝั่งถนน" });
+    await expect(sidePicker).toHaveCount(1);
+    if (outcome === "shared carriageway") {
+      const submit = page.getByRole("button", { name: "บันทึกเหตุการณ์", exact: true });
+      await submit.click();
+      const error = page.getByRole("alert").filter({ hasText: "กรุณาเลือกฝั่งถนนที่น้ำท่วม" });
+      await expect(error).toBeVisible();
+      await expect(sidePicker).toBeFocused();
+      await page.waitForTimeout(4200);
+      await expect(error).toBeVisible();
+      expect(savedCalls).toHaveLength(0);
+    }
 
     // 1. Open Highway Combobox -> verify clean deduplicated options only from highwayLayers
     await page.getByRole("button", { name: "หมายเลขทางหลวง" }).click();
@@ -288,23 +331,42 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     await statusSelectSingle.selectOption("WARNING");
     await expect(statusSelectSingle).toHaveValue("WARNING");
 
-    await page.getByRole("button", { name: /ท่วมทั้งสองฝั่งจราจร/ }).click();
+    await page.getByRole("button", { name: /ทั้งสองฝั่ง A⇄B/ }).click();
     await expect(page.getByLabel("ระดับน้ำขาไป (ซม.) *")).toHaveCount(0);
     await expect(page.getByLabel("เลือกทิศทางสำหรับดัดเส้น")).toHaveCount(0);
 
     if (outcome === "shared carriageway") {
+      const primary = page.getByRole("group", { name: "ส่วนที่ได้รับผลกระทบ ทั้งสองฝั่ง" });
+      const unspecified = primary.getByRole("button", { name: "ไม่ระบุ", exact: true });
+      await unspecified.click();
+      await expect(unspecified).toHaveAttribute("aria-pressed", "true");
+      const mainShoulder = primary.getByRole("button", { name: "ไหล่ทางซ้าย", exact: true });
+      const frontage = primary.getByRole("button", { name: "ทางขนานซ้าย", exact: true });
+      await frontage.click();
+      await expect(primary.getByRole("status")).toContainText("น้ำท่วมบริเวณทางขนานซ้ายทาง");
+      await mainShoulder.click();
+      await expect(unspecified).toHaveAttribute("aria-pressed", "false");
+      await expect(primary.getByRole("status")).toContainText("น้ำท่วมบริเวณไหล่ทางของทางขนานซ้ายทาง");
+      await waterInputSingle.fill("");
+      await page.getByRole("button", { name: "บันทึกเหตุการณ์", exact: true }).click();
+      await expect(waterInputSingle).toBeFocused();
+      await expect(waterInputSingle).toHaveAttribute("aria-invalid", "true");
+      await expect(waterInputSingle).toHaveAccessibleDescription(/ระดับน้ำตั้งแต่ 0/);
+      expect(savedCalls).toHaveLength(0);
+      await waterInputSingle.fill("0");
+      await expect(waterInputSingle).not.toHaveAttribute("aria-invalid", "true");
       const carriageway = page.getByLabel("โครงสร้างถนนสำหรับสองทิศทาง");
       await expect(carriageway).toHaveValue("");
       await carriageway.selectOption("SHARED");
-      await page.getByRole("button", { name: /คำนวณแนวเส้นจากช่วง กม\. อัตโนมัติ/ }).click();
+      await page.getByRole("button", { name: "หาแนวเส้นจากช่วง กม." }).click();
       await page.getByRole("button", { name: "คำนวณเส้นเกาะถนน" }).click();
       await expect(page.getByText(/คำนวณเส้นทางเกาะโครงข่ายถนนสำเร็จ/)).toBeVisible();
       expect(requestedDirections).toEqual(["A→B"]);
       await page.getByRole("button", { name: "บันทึกเหตุการณ์", exact: true }).click();
       await expect.poll(() => savedCalls.length).toBe(1);
       expect(savedCalls[0]).toMatchObject({
-        roadSide: "BOTH",
-        directionMeta: { directionCode: "BOTH", arrow_direction: "TWO_WAY", carriageway_type: "SINGLE_CENTERLINE" },
+        roadSide: "BOTH", waterLevelCm: 0,
+        directionMeta: { affectedParts: ["LEFT_FRONTAGE"], frontageShoulderSides: ["LEFT"], waterLevelKnown: true, directionCode: "BOTH", arrow_direction: "TWO_WAY", carriageway_type: "SINGLE_CENTERLINE" },
       });
       return;
     }
@@ -313,7 +375,7 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     await page.getByRole("button", { name: "หมายเลขทางหลวง" }).click();
     await page.getByRole("listbox", { name: "รายการทางหลวง" }).getByText("ทล.42 - ดอนยาง - บ้านดี").click();
 
-    await page.getByRole("button", { name: /คำนวณแนวเส้นจากช่วง กม\. อัตโนมัติ/ }).click();
+    await page.getByRole("button", { name: "หาแนวเส้นจากช่วง กม." }).click();
     await expect(page.getByLabel("เลือกทิศทางสำหรับดัดเส้น")).toBeVisible();
     await expect(page.getByLabel("ระดับน้ำขาไป (ซม.) *")).toBeVisible();
     await expect(page.getByLabel("ระดับน้ำขากลับ (ซม.) *")).toBeVisible();
@@ -327,15 +389,30 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     // Enter separate water levels & affected lanes per direction
     const fwdSection = page.getByRole("group", { name: "ข้อมูลฝั่งขาไป A → B" });
     await fwdSection.getByRole("button", { name: "ทุกช่องจราจร", exact: true }).click();
+    if (outcome === "both saved") {
+      await fwdSection.getByRole("button", { name: "ไหล่ทางซ้าย", exact: true }).click();
+      await expect(fwdSection.getByRole("status")).toContainText("ไหล่ทางซ้ายทาง");
+      await fwdSection.getByRole("button", { name: "ทางขนานซ้าย", exact: true }).click();
+      await expect(fwdSection.getByRole("status")).toContainText("ทุกช่องจราจร / ไหล่ทางของทางขนานซ้ายทาง");
+    }
     await fwdSection.getByLabel("ระดับน้ำขาไป (ซม.) *").fill("42");
     await expect(fwdSection.getByLabel("สถานะสภาพการจราจรขาไป (๕ สถานะ)")).toHaveValue("CLOSED");
 
     const revSection = page.getByRole("group", { name: "ข้อมูลฝั่งขากลับ B → A" });
     await revSection.getByRole("button", { name: "ช่องจราจรขวา", exact: true }).click();
+    if (outcome === "both saved") {
+      await revSection.getByRole("button", { name: "ไหล่ทางขวา", exact: true }).click();
+      await expect(revSection.getByRole("status")).toContainText("ไหล่ทางขวาทาง");
+      await revSection.getByRole("button", { name: "ทางขนานขวา", exact: true }).click();
+      await expect(revSection.getByRole("status")).toContainText("ไหล่ทางของทางขนานขวาทาง");
+    }
     await revSection.getByLabel("ระดับน้ำขากลับ (ซม.) *").fill("30");
     await expect(revSection.getByLabel("สถานะสภาพการจราจรขากลับ (๕ สถานะ)")).toHaveValue("ONE_LANE");
 
     if (outcome === "right rejected then retried") {
+      await revSection.getByRole("button", { name: /ใช้ส่วนที่ได้รับผลกระทบเหมือนขาไป/ }).click();
+      await expect(revSection.getByRole("button", { name: "ทุกช่องจราจร", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(revSection.getByRole("button", { name: "ช่องจราจรขวา", exact: true })).toHaveAttribute("aria-pressed", "false");
       await revSection.getByText("ไม่ทราบค่า", { exact: true }).click();
     }
 
@@ -405,6 +482,11 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     expect(revPayload.directionMeta.water_level_known).toBe(outcome === "both saved");
     expect(revPayload.directionMeta.eventId).toBe(fwdPayload.directionMeta.eventId);
     expect(revPayload.directionMeta.directionCode).toBe("B_TO_A");
+    expect(fwdPayload.directionMeta.affectedParts).toEqual(outcome === "both saved" ? ["ALL_LANES", "LEFT_FRONTAGE"] : ["ALL_LANES"]);
+    expect(fwdPayload.directionMeta.frontageShoulderSides).toEqual(outcome === "both saved" ? ["LEFT"] : undefined);
+    expect(fwdPayload.affectedShoulder).toBe("NONE");
+    expect(revPayload.directionMeta.affectedParts).toEqual(outcome === "both saved" ? ["RIGHT_LANE", "RIGHT_FRONTAGE"] : ["ALL_LANES"]);
+    expect(revPayload.directionMeta.frontageShoulderSides).toEqual(outcome === "both saved" ? ["RIGHT"] : undefined);
     // Forward starts near [101.18, 6.83], Reverse runs along reverse B->A carriageway starting near [101.1906, 6.8396]
     expect(fwdPayload.coordinates[0][0]).toBeCloseTo(101.18, 3);
     expect(revPayload.coordinates[0][0]).toBeCloseTo(101.1906, 3);
@@ -412,6 +494,44 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
       expect(revPayload.coordinates[0]).toEqual([101.1906, 6.8396]);
       expect(revPayload.coordinates.at(-1)).toEqual([101.1806, 6.8297]);
       expect(revPayload.coordinates).not.toEqual([...fwdPayload.coordinates].reverse());
+      // Round-trip the existing Edge persistence shape; no real database is written.
+      const persisted = (payload: typeof fwdPayload) => JSON.parse(JSON.stringify({
+        id: payload.id, route_no: payload.routeNo, section_name: payload.sectionName,
+        km_start: payload.kmStart, km_end: payload.kmEnd,
+        lat_start: payload.latStart, lon_start: payload.lonStart, lat_end: payload.latEnd, lon_end: payload.lonEnd,
+        coordinates_json: payload.coordinates, water_level_cm: payload.waterLevelCm,
+        road_side: payload.roadSide, traffic_status: payload.trafficStatus,
+        affected_lanes: payload.affectedLanes, affected_shoulder: payload.affectedShoulder,
+        direction_meta: payload.directionMeta, is_active: true, updated_at,
+      }));
+      publishedRows = [persisted(fwdPayload)];
+      await page.goto(`${base}/admin/`);
+      await page.getByRole("button", { name: "รายการเหตุการณ์", exact: true }).filter({ visible: true }).first().click();
+      await page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ }).first().click();
+      await page.locator(".doh-incident-segment").getByRole("button", { name: "แก้ไข", exact: true }).click();
+      const reopened = page.getByRole("group", { name: "ส่วนที่ได้รับผลกระทบ ฝั่งซ้ายทาง", exact: true });
+      await expect(reopened.getByRole("status")).toContainText("ไหล่ทางของทางขนานซ้ายทาง");
+      await expect(reopened.getByRole("button", { name: "ทุกช่องจราจร", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await page.goto(`${base}/`);
+      await page.locator(".doh-map-capsule-pin").first().press("Enter");
+      const popup = page.locator(".doh-flood-leaflet-popup");
+      await expect(popup).toContainText("น้ำท่วมบริเวณทุกช่องจราจร, ไหล่ทางของทางขนานซ้ายทาง");
+      publishedRows = [persisted(revPayload)];
+      await page.reload();
+      await page.locator(".doh-map-capsule-pin").first().press("Enter");
+      await expect(popup).toContainText("น้ำท่วมบริเวณช่องจราจรขวา, ไหล่ทางของทางขนานขวาทาง");
+
+      const legacy = persisted(fwdPayload);
+      delete legacy.direction_meta.frontageShoulderSides;
+      legacy.direction_meta.affectedParts = ["LEFT_SHOULDER", "LEFT_FRONTAGE"];
+      legacy.affected_lanes = "ไหล่ทางซ้าย, ทางขนานซ้าย";
+      publishedRows = [legacy];
+      await page.reload();
+      await page.locator(".doh-map-capsule-pin").first().press("Enter");
+      await expect(popup).toContainText("น้ำท่วมบริเวณไหล่ทางซ้ายทาง, ทางขนานซ้ายทาง");
+      await expect(popup).not.toContainText("ไหล่ทางของทางขนานซ้ายทาง");
+
+
     }
   });
   }
@@ -439,9 +559,9 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     await page.goto(`${base}/admin/`);
     await page.getByRole("complementary").getByRole("button", { name: /รายงานสถานการณ์น้ำท่วม/ }).click();
 
-    const quickDirGroup = page.getByRole("group", { name: "เลือกฝั่งถนนเบื้องต้น" });
+    const quickDirGroup = page.getByRole("group", { name: "เลือกฝั่งถนน" });
     await expect(quickDirGroup).toBeVisible();
-    await quickDirGroup.getByRole("button", { name: "ขาไป A→B" }).click();
+    await quickDirGroup.getByRole("button", { name: "ซ้ายทาง · ขาไป A→B" }).click();
 
     await page.getByLabel("กม. เริ่มต้น").fill("0+000");
     await page.getByLabel("กม. สิ้นสุด").fill("25+000");

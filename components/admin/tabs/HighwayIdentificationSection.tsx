@@ -19,7 +19,10 @@ import { getAvailableHighwayRoutes, parseKmPostMeters } from "@/lib/highway-sche
 export type FloodParentEvent = ReturnType<typeof groupFloodRoutesIntoEvents>[number];
 export type HighwayOption = ReturnType<typeof getAvailableHighwayRoutes>[number];
 
+import { FloodSaveError, type FloodSaveValidation } from "./flood-save-validation";
+
 export interface HighwayIdentificationSectionProps {
+  validation?: FloodSaveValidation | null;
   routeMode: "FLOOD" | "DETOUR";
   parentEventMode: "NEW" | "EXISTING";
   setParentEventMode: (mode: "NEW" | "EXISTING") => void;
@@ -78,6 +81,7 @@ export interface HighwayIdentificationSectionProps {
 }
 
 export function HighwayIdentificationSection({
+  validation,
   routeMode,
   parentEventMode,
   setParentEventMode,
@@ -396,10 +400,11 @@ export function HighwayIdentificationSection({
             );
           })()}
 
-          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2" role="group" aria-label="เลือกฝั่งถนนเบื้องต้น">
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2" id="flood-road-side" tabIndex={-1} role="group" aria-label="เลือกฝั่งถนน" aria-describedby={validation?.target === "flood-road-side" ? "flood-save-validation-message" : undefined}>
             <span className="text-[11px] font-heading font-semibold text-slate-300">ฝั่งถนน/ทิศทาง:</span>
             <button
               type="button"
+              aria-pressed={directionCode === "A_TO_B" && roadSide === "LEFT"}
               onClick={() => {
                 setDirectionCode("A_TO_B");
                 setRoadSide("LEFT");
@@ -409,10 +414,11 @@ export function HighwayIdentificationSection({
               }}
               className={`min-h-10 rounded-lg px-3 py-2 text-[11px] font-heading font-bold border transition cursor-pointer ${directionCode === "A_TO_B" && roadSide === "LEFT" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600"}`}
             >
-              ขาไป A→B
+              ซ้ายทาง · ขาไป A→B
             </button>
             <button
               type="button"
+              aria-pressed={directionCode === "B_TO_A" && roadSide === "RIGHT"}
               onClick={() => {
                 setDirectionCode("B_TO_A");
                 setRoadSide("RIGHT");
@@ -422,10 +428,11 @@ export function HighwayIdentificationSection({
               }}
               className={`min-h-10 rounded-lg px-3 py-2 text-[11px] font-heading font-bold border transition cursor-pointer ${directionCode === "B_TO_A" && roadSide === "RIGHT" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600"}`}
             >
-              ขากลับ B→A
+              ขวาทาง · ขากลับ B→A
             </button>
             <button
               type="button"
+              aria-pressed={directionCode === "BOTH" && roadSide === "BOTH"}
               onClick={() => {
                 setDirectionCode("BOTH");
                 setRoadSide("BOTH");
@@ -433,10 +440,11 @@ export function HighwayIdentificationSection({
               }}
               className={`min-h-10 rounded-lg px-3 py-2 text-[11px] font-heading font-bold border transition cursor-pointer ${directionCode === "BOTH" && roadSide === "BOTH" ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600"}`}
             >
-              ทั้ง ๒ ฝั่ง A⇄B
+              ทั้งสองฝั่ง A⇄B
             </button>
           </div>
 
+          <FloodSaveError validation={validation} target="flood-road-side" />
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <button
               type="button"
@@ -444,7 +452,7 @@ export function HighwayIdentificationSection({
               className="min-h-10 text-[11px] bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-700 px-3 py-2 rounded-xl font-heading font-semibold flex items-center gap-1.5 transition"
               title="คำนวณแนวเส้นและพิกัดเริ่มต้น-สิ้นสุดจากข้อมูล GIS ทางหลวงอัตโนมัติ"
             >
-              <Wand2 className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" /> คำนวณแนวเส้นจากช่วง กม. อัตโนมัติ (Linear Referencing)
+              <Wand2 className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" /> หาแนวเส้นจากช่วง กม.
             </button>
             <span className="text-[10px] text-slate-400">ระบบจะตัดเฉพาะช่วงเส้นทางหลวงตาม กม. เริ่มต้น–สิ้นสุด</span>
           </div>
@@ -520,12 +528,16 @@ export function HighwayIdentificationSection({
           <label htmlFor="flood-section-name-input" className="text-xs font-medium text-slate-200 block mb-1">ชื่อตอนสายทางหลวง (ตามบัญชีทางหลวง) *</label>
           <input
             id="flood-section-name-input"
+            aria-required="true"
+            aria-invalid={validation?.target === "flood-section-name-input" ? true : undefined}
+            aria-describedby={validation?.target === "flood-section-name-input" ? "flood-save-validation-message" : undefined}
             type="text"
             value={sectionName}
             onChange={(e) => { sectionNameManuallyEditedRef.current = true; setSectionName(e.target.value); }}
             placeholder="เช่น ตอน ดอนยาง - บ้านดี (ระบบเติมให้อัตโนมัติเมื่อเลือกสายทาง)"
             className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
           />
+          <FloodSaveError validation={validation} target="flood-section-name-input" />
         </div>
       )}
     </FormSection>

@@ -21,7 +21,7 @@ import {
   type DetourTimelineStep,
 } from "@/lib/detour-presentation";
 import {
-  AFFECTED_ROAD_PART_LABELS,
+  resolveRecordedFloodImpact,
   parseFloodDirectionMeta,
   resolveFloodWaterReading,
   normalizeMediaUrl,
@@ -821,19 +821,6 @@ export function formatPopupRelativeUpdate(iso?: string | null): string {
   return `อัปเดต ${new Date(ts).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}`;
 }
 
-export function resolveRecordedLanesText(flood: FloodRoute): string | null {
-  const direct = String(flood.affected_lanes ?? "").trim();
-  if (direct && direct !== "-") return direct;
-  const parts = flood.direction_meta?.affectedParts;
-  if (Array.isArray(parts) && parts.length > 0) {
-    const valid = parts
-      .filter((p) => p && p !== "UNSPECIFIED" && p !== "PENDING_VERIFICATION")
-      .map((p) => AFFECTED_ROAD_PART_LABELS[p as keyof typeof AFFECTED_ROAD_PART_LABELS] || String(p))
-      .filter(Boolean);
-    if (valid.length > 0) return valid.join(", ");
-  }
-  return null;
-}
 
 export function resolvePopupTrafficStatus(flood: FloodRoute): { label: string; badgeClass: string; accentColor: string } {
   const presentation = getTrafficPresentation(
@@ -851,8 +838,8 @@ export function resolvePopupTrafficStatus(flood: FloodRoute): { label: string; b
 export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMode = false): string {
   const meta = parseFloodDirectionMeta(flood.direction_meta, flood);
   const waterKnown = meta.waterLevelKnown;
-  const lanesText = resolveRecordedLanesText(flood);
-  const lanesDisplay = lanesText || "ทุกช่องจราจร";
+  const lanesText = resolveRecordedFloodImpact(flood, meta);
+  const lanesDisplay = lanesText || "ไม่ระบุ";
   const statusInfo = resolvePopupTrafficStatus(flood);
   const routeBadge = /^(?:ทล|ปน)\.?\s*/i.test(String(flood.route_no || "")) ? String(flood.route_no) : `ทล.${flood.route_no}`;
   const areaLine = formatPopupAreaLine(flood);

@@ -166,7 +166,7 @@ export function MapManagementTab({
     reverseRouteStatus, setReverseRouteStatus,
     reverseWaterLevelKnown, setReverseWaterLevelKnown,
     reverseAffectedParts, setReverseAffectedParts,
-    availableHighways, selectedHighwayOption, selectedHighwayLaneCount,
+    availableHighways, selectedHighwayOption,
     isSelectedHighwayDivided, isDividedBothFlood, floodCarriageway, availableOfficeNames,
     handleWaterLevelInputChange, handleReverseWaterLevelInputChange,
     toggleAffectedPartWithAutoStatus, ensureReverseFloodGeometry,
@@ -576,7 +576,7 @@ export function MapManagementTab({
   };
 
   // Submit Flood or Detour Route
-  const { handleSubmitRoute, linkedDetourPending, dualFloodSaveState } = useMapRouteSubmit({
+  const { handleSubmitRoute, linkedDetourPending, dualFloodSaveState, floodValidation } = useMapRouteSubmit({
     systemData, onDataRefresh, onToast, showSuccessModal, showErrorModal,
     onNavigateToIncidents, onClearEditingRoute, editingRoute,
     routeMode, routeEditId, setRouteEditId, saveAsDraft, setIsSubmitting,
@@ -654,6 +654,7 @@ export function MapManagementTab({
       {/* Main Map Form Container */}
       <MapFormSections
         routeMode={routeMode}
+        floodValidation={floodValidation}
         highwayProps={{
           parentEventMode, setParentEventMode,
           selectedParentEventId, setSelectedParentEventId,
@@ -727,11 +728,7 @@ export function MapManagementTab({
           onGenerateAdvice: handleGenerateDetourAdviceClick,
         }}
         floodProps={{
-          selectedHighwayOption, selectedHighwayLaneCount,
-          isSelectedHighwayDivided, isDividedBothFlood,
-          directionCode, setDirectionCode, roadSide, setRoadSide,
-          setDraftReverseCoordinates, setDraftReverseWaypoints,
-          setFreeEditTarget, ensureReverseFloodGeometry,
+          isDividedBothFlood, directionCode, roadSide,
           affectedParts, setAffectedParts, reverseAffectedParts, setReverseAffectedParts,
           routeWaterLevel, setRouteWaterLevel, reverseRouteWaterLevel, setReverseRouteWaterLevel,
           waterLevelKnown, setWaterLevelKnown, reverseWaterLevelKnown, setReverseWaterLevelKnown,
