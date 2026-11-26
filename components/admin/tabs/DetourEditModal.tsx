@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { AdminOfflineFormNotice, isAdminFormOffline, useAdminOfflineForm } from "./AdminOfflineFormNotice";
 import {
   Camera,
   Clock,
@@ -329,6 +330,10 @@ export function DetourEditModal({
   onEditOnMap,
   onSave,
 }: DetourEditModalProps) {
+  const offlineForm = useAdminOfflineForm(editingDetour?.id ?? "closed");
+  React.useEffect(() => {
+    if (!editingDetour) offlineForm.clear();
+  }, [editingDetour, offlineForm.clear]);
   const [localStartLoc, setLocalStartLoc] = React.useState<DetourPhotoLocationState>(
     EMPTY_DETOUR_PHOTO_LOCATION
   );
@@ -921,6 +926,7 @@ export function DetourEditModal({
         </div>
 
         {/* Modal Footer */}
+        <AdminOfflineFormNotice offline={offlineForm.offline} held={offlineForm.held} />
         <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
           <button
             type="button"
@@ -932,11 +938,11 @@ export function DetourEditModal({
           <button
             type="button"
             disabled={isSubmitting}
-            onClick={() => onSave({ start: effectiveStartLoc, end: effectiveEndLoc })}
+            onClick={() => isAdminFormOffline() ? offlineForm.keepOpen() : onSave({ start: effectiveStartLoc, end: effectiveEndLoc })}
             className="min-h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-heading font-bold px-5 py-2 rounded-xl text-xs shadow-lg transition flex items-center gap-1.5 disabled:opacity-50"
           >
             <Save className="w-4 h-4" aria-hidden="true" />
-            <span>{isSubmitting ? "กำลังบันทึก..." : "บันทึกข้อมูล"}</span>
+            <span>{isSubmitting ? "กำลังบันทึก..." : offlineForm.offline ? "เก็บไว้ในฟอร์มนี้ (ยังไม่ส่ง)" : "บันทึกข้อมูล"}</span>
           </button>
         </div>
       </div>

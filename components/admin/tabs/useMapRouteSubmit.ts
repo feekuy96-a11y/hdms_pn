@@ -9,6 +9,7 @@ import {
   buildDetourMetaPayload,
   type DetourPointPhotoLocationInput,
 } from "@/components/admin/tabs/map-management-helpers";
+import { isAdminFormOffline } from "./AdminOfflineFormNotice";
 import type { FloodSaveTarget, FloodSaveValidation } from "./flood-save-validation";
 import { HdmsHttpError } from "@/lib/hdms-api";
 import { calculatePolylineRoadDistanceKm } from "@/lib/detour-presentation";
@@ -276,6 +277,7 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
   }, [activeFloodValidation, floodValidation]);
 
   const handleSubmitRoute = async () => {
+    if (isAdminFormOffline()) return;
     if (linkedRequestInFlight.current || dualNeedsReview.current) return;
     if (dualAttempt.current) {
       if (routeMode !== "FLOOD") {
