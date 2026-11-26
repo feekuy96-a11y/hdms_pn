@@ -48,7 +48,7 @@ import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import { renderVertexEditHandles } from "./longdo-vertex-handles";
 import { renderDraftAndConflictLayer } from "./longdo-draft-layer";
 import { useLongdoPopupBridge, useLongdoRouteLayers } from "./useLongdoRouteLayers";
-import { getTrafficPresentation } from "@/lib/traffic-presentation";
+import { getTrafficPresentation, TRAFFIC_ACCENT } from "@/lib/traffic-presentation";
 import {
   collectFocusBoundsPoints,
   resolveDetourFocusGeometry,
@@ -763,7 +763,7 @@ export function LongdoGisMap({
               map.openPopup(
                 buildHighwayPopupHtml(props, featureIsMain, color),
                 event.latlng,
-                publicMode ? undefined : { autoPanPaddingTopLeft: L.point(8, 112) },
+                { className: "hdms-popup-map", ...(!publicMode ? { autoPanPaddingTopLeft: L.point(8, 112) } : {}) },
               );
               setActivePopupEntity({ type: "HIGHWAY", id: highwayFeatureKeysRef.current.get(feature)! });
             });
@@ -832,8 +832,8 @@ export function LongdoGisMap({
         const sign = L.marker(item.latlng, { icon: signIcon, interactive: true }).addTo(group);
         sign.bindTooltip(`ทล.${escapeHtml(item.code)} · ${escapeHtml(item.name)}`, { direction: "top", offset: [0, -18] });
         sign.bindPopup(
-          () => `<div style="padding-top:5px"><strong>ทล.${escapeHtml(item.code)}</strong><br/>${escapeHtml(item.name)}</div>`,
-          publicMode ? undefined : { autoPanPaddingTopLeft: L.point(8, 112) },
+          () => `<div class="px-3 py-2 pr-12"><strong>ทล.${escapeHtml(item.code)}</strong><br/>${escapeHtml(item.name)}</div>`,
+          { className: "hdms-popup-map", ...(!publicMode ? { autoPanPaddingTopLeft: L.point(8, 112) } : {}) },
         );
         sign.on("popupopen", () => {
           let closest: { key: string; distance: number } | null = null;
@@ -1219,7 +1219,7 @@ export function LongdoGisMap({
     ) => {
       const geom = resolveDetourFocusGeometry(detour, direction);
       const style = mapStyles.detour;
-      const color = style?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
+      const color = publicMode ? TRAFFIC_ACCENT.amber : style?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
       const weight = (style?.weight || LAYER_CONFIG.DETOUR_YELLOW_LINE.weight) + (isPrimary ? 1.5 : 0);
       const borderColor = style?.borderActive ? style.borderColor || "#ffffff" : "#091326";
       const borderWidth = style?.borderActive ? Math.max(1, Number(style.borderWidth) || 1) : 2;
@@ -1238,7 +1238,7 @@ export function LongdoGisMap({
           color,
           weight,
           opacity: style?.opacity ?? 0.95,
-          dashArray: isPrimary ? dashArrayFor(style) : "10, 6",
+          dashArray: isPrimary ? dashArrayFor(style) || (publicMode ? "8 6" : undefined) : "10, 6",
         }).addTo(group);
         raisePathLayers(line);
         allPolylines.push(geom.coords);
@@ -1342,11 +1342,13 @@ export function LongdoGisMap({
       if (floodData.primaryFlood && !floodData.isResolved) {
         // Draw all active segments (including LT/RT siblings) exempt from zoom-dependent hiding
         const style = mapStyles.flood;
-        const color = style?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
         const borderColor = style?.borderActive ? style.borderColor || "#ffffff" : "#091326";
         const borderWidth = style?.borderActive ? Math.max(1, Number(style.borderWidth) || 1) : 2;
         const weight = (style?.weight || LAYER_CONFIG.FLOOD_RED_LINE.weight) + 0.5;
         floodData.activeSegments.forEach((seg) => {
+          const color = publicMode
+            ? getTrafficPresentation(seg.traffic_status, seg.water_level_cm, seg.direction_meta?.trafficStatusDetail).hex
+            : style?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
           const segCoords = (floodData.coordsList.find((_, idx) => floodData.activeSegments[idx]?.id === seg.id)) || [];
           if (segCoords.length >= 2) {
             const latLngs = segCoords.map(toLeafletLatLng);

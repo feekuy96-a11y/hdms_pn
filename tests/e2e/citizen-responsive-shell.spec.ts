@@ -97,7 +97,7 @@ test("mobile shortcuts fit with 44px hit regions and desktop keeps the existing 
   await expect(page.getByRole("link", { name: "โทรสายด่วน 1586", exact: true })).toBeVisible();
 });
 
-test("citizen theme can switch and saves the theme on reload without changing nav", async ({ page }) => {
+test("citizen theme inverts active filters without dimming the basemap or overlays", async ({ page }) => {
   await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: payload }));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(base + "/");
@@ -109,54 +109,95 @@ test("citizen theme can switch and saves the theme on reload without changing na
   const pane = basemap.locator(".leaflet-tile-pane");
   await expect(pane).toHaveCSS("filter", "none");
   const mapLight = await basemap.evaluate(el => getComputedStyle(el).backgroundColor);
+  const summary = page.getByRole("complementary", { name: "สรุปสถานการณ์บนแผนที่" });
+  const filter = summary.locator("[data-map-flood-status]").first();
+  const activeColors = () => filter.evaluate(el => {
+    const css = getComputedStyle(el);
+    return { bg: css.backgroundColor, text: css.color };
+  });
+  const contrast = (pair: Awaited<ReturnType<typeof activeColors>>) => {
+    const luminance = (color: string) => (color.match(/\d+/g) || []).slice(0, 3)
+      .map(Number).map(v => v / 255).map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+      .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+    const [a, b] = [luminance(pair.bg), luminance(pair.text)];
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  };
+  await summary.getByRole("button", { name: /น้ำท่วม \d+ จุด/ }).click();
+  await filter.click();
+  await expect(filter).toHaveAttribute("aria-pressed", "true");
+  await expect(filter.locator("svg.citizen-flood-filter-icon")).toBeVisible();
+  const lightPair = await activeColors();
+  expect(contrast(lightPair)).toBeGreaterThanOrEqual(4.5);
   const light = await shell.evaluate(el => getComputedStyle(el).getPropertyValue("--surface-panel").trim());
   await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
   await expect(shell).toHaveAttribute("data-citizen-theme", "dark");
   expect(await shell.evaluate(el => getComputedStyle(el).getPropertyValue("--surface-panel").trim())).not.toBe(light);
+  await expect(filter).toHaveAttribute("aria-pressed", "true");
+  const darkPair = await activeColors();
+  expect(darkPair).not.toEqual(lightPair);
+  expect(contrast(darkPair)).toBeGreaterThanOrEqual(4.5);
   await expect(pane).toHaveCSS("filter", "none");
+  await expect(basemap).toHaveCSS("filter", "none");
+  await expect(basemap.locator(".leaflet-overlay-pane")).toHaveCSS("filter", "none");
+  await expect(basemap.locator(".leaflet-marker-pane")).toHaveCSS("filter", "none");
   await expect(basemap).toHaveCSS("background-color", mapLight);
+  await nav.getByRole("button", { name: "ติดต่อ", exact: true }).click();
+  const contacts = page.getByRole("dialog", { name: "ติดต่อหน่วยงาน" });
+  await expect(contacts).toHaveAttribute("data-hdms-popup", "panel");
+  await expect(contacts).toHaveCSS("background-color", "rgb(26, 45, 62)");
+  await page.keyboard.press("Escape");
   await page.reload();
   await expect(shell).toHaveAttribute("data-citizen-theme", "dark");
   await expect(nav).toBeVisible();
   await page.getByRole("button", { name: "เปิดธีมสว่าง" }).click();
   await expect(shell).toHaveAttribute("data-citizen-theme", "light");
+  await expect(pane).toHaveCSS("filter", "none");
+  await nav.getByRole("button", { name: "ติดต่อ", exact: true }).click();
+  await expect(contacts).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
 
-test("public flood popup keeps area, water level, status and close control readable in both themes", async ({ page }) => {
-  const criticalFlood = { ...payload.floodRoutes[0], traffic_status: "CLOSED", subdistrict: "บ้านนอก", district: "ปะนาเระ", province: "ปัตตานี" };
-  await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: { ...payload, floodRoutes: [criticalFlood] } }));
-  await page.goto(base + "/");
-  const pin = page.locator(".doh-map-capsule-pin").first();
-  const popup = page.locator(".doh-flood-leaflet-popup");
+for (const [status, label] of [
+  ["CLOSED", "ผ่านไม่ได้"],
+  ["PENDING_VERIFICATION", "รอตรวจสอบสถานะ"],
+] as const) {
+  test(`public flood popup keeps ${status} and the incident details readable in both themes`, async ({ page }) => {
+    const criticalFlood = { ...payload.floodRoutes[0], traffic_status: status, direction_meta: { trafficStatusDetail: status }, subdistrict: "บ้านนอก", district: "ปะนาเระ", province: "ปัตตานี" };
+    await page.route("**/functions/v1/hdms-api", (route) => route.fulfill({ json: { ...payload, floodRoutes: [criticalFlood] } }));
+    await page.goto(base + "/");
+    const pin = page.locator(".doh-map-capsule-pin").first();
+    const popup = page.locator(".doh-flood-leaflet-popup");
 
-  for (const theme of ["light", "dark"]) {
-    if (theme === "dark") await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
-    await pin.click();
-    await expect(popup.getByText("ต.บ้านนอก อ.ปะนาเระ จ.ปัตตานี")).toBeVisible();
-    await expect(popup.getByText("ผ่านไม่ได้", { exact: true })).toBeVisible();
-    for (const selector of [".doh-flood-popup-area span", ".doh-flood-popup-water", ".doh-flood-popup-status", ".leaflet-popup-close-button"]) {
-      const contrast = await popup.locator(selector).evaluate(element => {
-        const rgb = (color: string) => (color.match(/[\d.]+/g) || []).map(Number);
-        const luma = (color: number[]) => color.slice(0, 3).reduce((sum, byte, channel) => {
-          const n = byte / 255;
-          return sum + (n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4) * [0.2126, 0.7152, 0.0722][channel];
-        }, 0);
-        const foreground = luma(rgb(getComputedStyle(element).color));
-        for (let node: Element | null = element; node; node = node.parentElement) {
-          const bg = rgb(getComputedStyle(node).backgroundColor);
-          if (bg.length === 3 || bg[3] === 1) {
-            const background = luma(bg);
-            return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+    for (const theme of ["light", "dark"]) {
+      if (theme === "dark") await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
+      await pin.click();
+      await expect(popup).toHaveClass(/hdms-popup-map/);
+      await expect(popup.locator(".leaflet-popup-content-wrapper")).toHaveCSS("background-color", theme === "light" ? "rgb(255, 255, 255)" : "rgb(26, 45, 62)");
+      await expect(popup.getByText("ต.บ้านนอก อ.ปะนาเระ จ.ปัตตานี")).toBeVisible();
+      await expect(popup.getByText(label, { exact: true })).toBeVisible();
+      for (const selector of [".doh-flood-popup-area span", ".doh-flood-popup-water", ".doh-flood-popup-status", ".leaflet-popup-close-button"]) {
+        const contrast = await popup.locator(selector).evaluate(element => {
+          const rgb = (color: string) => (color.match(/[\d.]+/g) || []).map(Number);
+          const luma = (color: number[]) => color.slice(0, 3).reduce((sum, byte, channel) => {
+            const n = byte / 255;
+            return sum + (n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4) * [0.2126, 0.7152, 0.0722][channel];
+          }, 0);
+          const foreground = luma(rgb(getComputedStyle(element).color));
+          for (let node: Element | null = element; node; node = node.parentElement) {
+            const bg = rgb(getComputedStyle(node).backgroundColor);
+            if (bg.length === 3 || bg[3] === 1) {
+              const background = luma(bg);
+              return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+            }
           }
-        }
-        return 0;
-      });
-      expect(contrast, theme + " " + selector).toBeGreaterThanOrEqual(4.5);
+          return 0;
+        });
+        expect(contrast, theme + " " + selector).toBeGreaterThanOrEqual(4.5);
+      }
+      await popup.locator(".leaflet-popup-close-button").click();
+      await expect(popup).toHaveCount(0);
     }
-    await popup.locator(".leaflet-popup-close-button").click();
-    await expect(popup).toHaveCount(0);
-  }
-});
+  });
+}
 
 test("citizen directory lists six offices in order and enables only verified stored actions", async ({ page, isMobile }) => {
   const officeNames = ["แขวงทางหลวงปัตตานี", "หมวดทางหลวงโคกโพธิ์", "หมวดทางหลวงหนองจิก", "หมวดทางหลวงปะนาเระ", "หมวดทางหลวงสายบุรี", "หมวดทางหลวงยะรัง"];
@@ -343,18 +384,22 @@ test("grouped and split floods use the same wave pin and reveal labels at the sa
   const wave = () => pins.first().locator("svg").evaluate(svg => svg.outerHTML);
   await chooseMode("แยกช่วง");
   await expect(pins).toHaveCount(2);
+  await expect(pins.filter({ has: page.locator(".doh-capsule-orange") }).locator(".doh-capsule-zoom-far")).toHaveCSS("background-color", "rgb(249, 115, 22)");
+  await expect(pins.filter({ has: page.locator(".doh-capsule-red") }).locator(".doh-capsule-zoom-far")).toHaveCSS("background-color", "rgb(220, 38, 38)");
   await expect(pins.first().locator(".doh-capsule-zoom-far")).toBeVisible();
   const svg = await wave();
   await chooseMode("รวมเหตุการณ์");
   await expect(pins).toHaveCount(1);
   const far = pins.locator(".doh-capsule-zoom-far");
   await expect(far).toBeVisible();
+  await expect(far).toHaveCSS("background-color", "rgb(220, 38, 38)");
   await expect(far).not.toContainText("ทล.");
   expect(await wave()).toBe(svg);
   await expect(pins).toHaveAttribute("aria-label", /ทล\.43 \(2 ช่วง\).*45 ซม\./);
   await pins.press("Enter");
   const popup = page.locator(".doh-flood-leaflet-popup");
   await expect(popup).toBeVisible();
+  await expect(popup.locator(".doh-flood-popup-status")).toHaveText("ผ่านไม่ได้");
   const zoomIn = page.getByRole("button", { name: "Zoom in", exact: true });
   const zoomTo = async (level: number) => {
     for (let current = await zoom(); current < level; current = await zoom()) {
@@ -545,7 +590,7 @@ test("traffic cards show all reported buckets and filter accurately with several
   const states = [
     { color: "red", use: "CLOSED", detail: "CLOSED", label: "ผ่านไม่ได้", count: 2 },
     { color: "orange", use: "WARNING", detail: "NO_SMALL_VEHICLES", label: "รถเล็กไม่สามารถผ่านได้", count: 1 },
-    { color: "amber", use: "WARNING", detail: "CAUTION", label: "เฝ้าระวัง / ระมัดระวัง", count: 2 },
+    { color: "amber", use: "ONE_LANE", detail: "ONE_LANE", label: "รถเล็กผ่านได้ ๑ ช่องทาง", count: 2 },
     { color: "sky", use: "LIGHT_VEHICLES_ONLY", detail: "LIGHT_VEHICLES_ONLY", label: "รถทุกชนิดผ่านได้แต่ไม่สะดวก", count: 1 },
     { color: "emerald", use: "PASSABLE", detail: "PASSABLE", label: "ผ่านได้ปกติ", count: 1 },
     { color: "slate", use: "WARNING", detail: "PENDING_VERIFICATION", label: "รอตรวจสอบ", count: 1 },

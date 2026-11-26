@@ -48,6 +48,7 @@ export function IncidentDetailModal({
       <div
         ref={dialog.dialogRef}
         role="dialog"
+        data-hdms-popup="panel"
         aria-modal="true"
         aria-label="รายละเอียดเหตุการณ์"
         tabIndex={-1}
@@ -64,7 +65,7 @@ export function IncidentDetailModal({
             type="button"
             onClick={onClose}
             className="min-h-10 min-w-10 flex items-center justify-center rounded-lg p-2 text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer"
-            aria-label="ปิดรายละเอียด"
+            aria-label="ปิดรายละเอียด" data-hdms-popup-close
           >
             ×
           </button>

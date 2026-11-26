@@ -148,6 +148,7 @@ export function EventDetourLinkModal({
       <div
         ref={dialog.dialogRef}
         role="dialog"
+        data-hdms-popup="panel"
         aria-modal="true"
         aria-label="จัดการความสัมพันธ์เหตุการณ์และทางเลี่ยง"
         tabIndex={-1}
@@ -168,7 +169,7 @@ export function EventDetourLinkModal({
           </div>
           <button
             type="button"
-            aria-label="ปิดหน้าต่างจัดการความสัมพันธ์"
+            aria-label="ปิดหน้าต่างจัดการความสัมพันธ์" data-hdms-popup-close
             onClick={onClose}
             className="min-h-11 min-w-11 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 shrink-0"
           >

@@ -98,6 +98,7 @@ export function DetourDossierModal({
       <div
         ref={detourDialogRef}
         role="dialog"
+        data-hdms-popup="panel"
         aria-modal="true"
         aria-label={`คำแนะนำเส้นทางเลี่ยง ${viewingDetourModal.route_name}`}
         className="citizen-dossier-frame relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[1.75rem] border-x-0 border-t border-b-0 border-sky-950 bg-[#081120] text-slate-100 shadow-2xl sm:max-h-[88dvh] sm:max-w-[30.625rem] sm:rounded-[1.75rem] sm:border-0 sm:ring-1 sm:ring-sky-950"
@@ -406,7 +407,7 @@ export function DetourDossierModal({
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] items-stretch gap-2.5">
                   {nav.isValid && nav.url ? (
                     <a
-                      href={nav.url}
+                      href={nav.url} data-hdms-primary
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full min-w-0 min-h-[2.75rem] flex items-center justify-between rounded-2xl bg-[#10b981] hover:bg-[#059669] px-3.5 py-2.5 text-white shadow-lg shadow-emerald-950/40 transition-all touch-manipulation cursor-pointer group"

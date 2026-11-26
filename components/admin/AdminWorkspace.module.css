@@ -1,18 +1,18 @@
 /* Scope tokens to this Admin surface. Public views and legacy tab interiors inherit no overrides. */
 .theme {
-  --workspace-canvas: #eef1f4;
-  --workspace-panel: #fbfaf7;
-  --workspace-card: #e9eef3;
-  --workspace-input: #fff;
-  --workspace-edge: #cbd4dd;
+  --workspace-canvas: var(--bg-app);
+  --workspace-panel: var(--bg-card);
+  --workspace-card: var(--bg-input);
+  --workspace-input: var(--bg-input);
+  --workspace-edge: var(--border-subtle);
   --workspace-field-edge: #8799ac;
-  --workspace-ink: #162a44;
-  --workspace-copy: #334d67;
-  --workspace-muted: #4e6277;
-  --workspace-primary: #17466b;
+  --workspace-ink: var(--text-primary);
+  --workspace-copy: var(--text-primary);
+  --workspace-muted: var(--text-secondary);
+  --workspace-primary: var(--brand-active-bg);
   --workspace-primary-hover: #0f3555;
-  --workspace-on-primary: #fff;
-  --workspace-active: #dce9f5;
+  --workspace-on-primary: var(--brand-active-text);
+  --workspace-active: var(--state-selected);
   --workspace-sky: #125477;
   --workspace-sky-wash: #e2eef7;
   --workspace-amber: #744805;
@@ -29,19 +29,19 @@
 }
 
 .theme[data-admin-theme="dark"] {
-  --workspace-canvas: #141f2d;
-  --workspace-panel: #202d3e;
-  --workspace-card: #2a3a50;
-  --workspace-input: #172435;
-  --workspace-edge: #405369;
+  --workspace-canvas: var(--bg-app);
+  --workspace-panel: var(--bg-card);
+  --workspace-card: var(--bg-input);
+  --workspace-input: var(--bg-input);
+  --workspace-edge: var(--border-subtle);
   --workspace-field-edge: #688098;
-  --workspace-ink: #f1f5fa;
-  --workspace-copy: #d3dfed;
-  --workspace-muted: #aabccf;
-  --workspace-primary: #a7cbe9;
+  --workspace-ink: var(--text-primary);
+  --workspace-copy: var(--text-primary);
+  --workspace-muted: var(--text-secondary);
+  --workspace-primary: var(--brand-active-bg);
   --workspace-primary-hover: #c5def3;
-  --workspace-on-primary: #122b43;
-  --workspace-active: #314e69;
+  --workspace-on-primary: var(--brand-active-text);
+  --workspace-active: var(--state-selected);
   --workspace-sky: #afd7f2;
   --workspace-sky-wash: #233e55;
   --workspace-amber: #f4ce85;
@@ -57,19 +57,19 @@
 
 @media (prefers-color-scheme: dark) {
   .theme[data-admin-theme="system"] {
-    --workspace-canvas: #141f2d;
-    --workspace-panel: #202d3e;
-    --workspace-card: #2a3a50;
-    --workspace-input: #172435;
-    --workspace-edge: #405369;
+    --workspace-canvas: var(--bg-app);
+    --workspace-panel: var(--bg-card);
+    --workspace-card: var(--bg-input);
+    --workspace-input: var(--bg-input);
+    --workspace-edge: var(--border-subtle);
     --workspace-field-edge: #688098;
-    --workspace-ink: #f1f5fa;
-    --workspace-copy: #d3dfed;
-    --workspace-muted: #aabccf;
-    --workspace-primary: #a7cbe9;
+    --workspace-ink: var(--text-primary);
+    --workspace-copy: var(--text-primary);
+    --workspace-muted: var(--text-secondary);
+    --workspace-primary: var(--brand-active-bg);
     --workspace-primary-hover: #c5def3;
-    --workspace-on-primary: #122b43;
-    --workspace-active: #314e69;
+    --workspace-on-primary: var(--brand-active-text);
+    --workspace-active: var(--state-selected);
     --workspace-sky: #afd7f2;
     --workspace-sky-wash: #233e55;
     --workspace-amber: #f4ce85;
@@ -176,7 +176,8 @@
 .actionBar { box-shadow: 0 -4px 18px var(--workspace-shadow); backdrop-filter: none; }
 .backdrop { background: var(--workspace-cover); }
 .ranked {
-  background: var(--workspace-canvas);
+  background: var(--bg-card);
+  color: var(--text-primary);
   border-color: var(--workspace-field-edge);
   box-shadow: 0 20px 52px rgb(1 8 17 / 28%);
 }

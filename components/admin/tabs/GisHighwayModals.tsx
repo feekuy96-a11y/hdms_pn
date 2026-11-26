@@ -70,6 +70,7 @@ export function HighwaySpecsEditModal({
       <div
         ref={specsDialog.dialogRef}
         role="dialog"
+        data-hdms-popup="panel"
         aria-modal="true"
         aria-label="ตั้งค่าคุณสมบัติทางวิศวกรรม"
         tabIndex={-1}
@@ -89,7 +90,7 @@ export function HighwaySpecsEditModal({
           <button
             type="button"
             onClick={() => setEditingRouteSpecs(null)}
-            aria-label="ปิดหน้าต่างแก้ไขคุณสมบัติ"
+            aria-label="ปิดหน้าต่างแก้ไขคุณสมบัติ" data-hdms-popup-close
             className="min-h-10 min-w-10 flex items-center justify-center p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800"
           >
             <X className="w-5 h-5" aria-hidden="true" />

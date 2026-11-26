@@ -632,16 +632,16 @@ test("responsive Admin flood editor and ranked detour dialog retain reachable ac
     await expect(themeChooser).toHaveAttribute("aria-expanded", "false");
     await expect(workspace).toHaveAttribute("data-admin-theme", "system");
     const editorHeading = page.getByRole("heading", { name: "รายงานสถานการณ์น้ำท่วม" });
-    await expect(editorHeading).toHaveCSS("color", "rgb(22, 42, 68)");
+    await expect(editorHeading).toHaveCSS("color", "rgb(23, 53, 74)");
     await page.emulateMedia({ colorScheme: "dark" });
-    await expect(editorHeading).toHaveCSS("color", "rgb(241, 245, 250)");
+    await expect(editorHeading).toHaveCSS("color", "rgb(244, 248, 250)");
     await page.emulateMedia({ colorScheme: "light" });
     await chooseTheme("dark");
     await page.reload();
     await expect(workspace).toHaveAttribute("data-admin-theme", "dark");
-    await expect(editorHeading).toHaveCSS("color", "rgb(241, 245, 250)");
+    await expect(editorHeading).toHaveCSS("color", "rgb(244, 248, 250)");
     await chooseTheme("light");
-    await expect(editorHeading).toHaveCSS("color", "rgb(22, 42, 68)");
+    await expect(editorHeading).toHaveCSS("color", "rgb(23, 53, 74)");
     await page.screenshot({ path: testInfo.outputPath(`admin-initial-${view.name}.png`), animations: "disabled" });
     const incidents = page.getByRole("button", { name: "รายการเหตุการณ์", exact: true }).filter({ visible: true }).first();
     if (view.width < 1024) {
@@ -683,10 +683,10 @@ test("responsive Admin flood editor and ranked detour dialog retain reachable ac
     expect(saveBox!.y).toBeGreaterThanOrEqual(bodyBox!.y + bodyBox!.height - 1);
     expect(saveBox!.y + saveBox!.height).toBeLessThanOrEqual(view.height);
     await dialog.getByText("อันดับ 1", { exact: true }).scrollIntoViewIfNeeded();
-    await expect(dialog).toHaveCSS("background-color", "rgb(238, 241, 244)");
+    await expect(dialog).toHaveCSS("background-color", "rgb(255, 255, 255)");
     const remove = dialog.getByTitle("นำออกจากเหตุการณ์").first();
-    await expect(remove).toHaveCSS("background-color", "rgb(251, 233, 236)");
-    await expect(remove).toHaveCSS("color", "rgb(147, 39, 60)");
+    await expect(remove).toHaveCSS("background-color", "rgb(249, 229, 230)");
+    await expect(remove).toHaveCSS("color", "rgb(150, 43, 53)");
     await page.screenshot({ path: testInfo.outputPath(`admin-rank-${view.name}.png`), animations: "disabled" });
 
     await save.click();
@@ -700,7 +700,7 @@ test("responsive Admin flood editor and ranked detour dialog retain reachable ac
     if (view.name === "portrait") {
       await chooseTheme("dark");
       await launch.click();
-      await expect(dialog).toHaveCSS("background-color", "rgb(20, 31, 45)");
+      await expect(dialog).toHaveCSS("background-color", "rgb(26, 45, 62)");
       await dialog.getByText("อันดับ 1", { exact: true }).scrollIntoViewIfNeeded();
       await page.screenshot({ path: testInfo.outputPath("admin-rank-dark-portrait.png"), animations: "disabled" });
       await page.keyboard.press("Escape");
@@ -751,7 +751,7 @@ test("responsive Admin flood editor and ranked detour dialog retain reachable ac
 
     // Change the same browser-local presentation preference without navigating out of this edit.
     await chooseTheme("dark");
-    await expect(editorHeading).toHaveCSS("color", "rgb(241, 245, 250)");
+    await expect(editorHeading).toHaveCSS("color", "rgb(244, 248, 250)");
     await expect(exitEdit).toBeVisible();
     await formNav.scrollIntoViewIfNeeded();
     await page.screenshot({ path: testInfo.outputPath(`admin-flood-dark-${view.name}.png`), animations: "disabled" });

@@ -67,7 +67,7 @@ export function FloodCard({
         className="block w-full min-w-0 cursor-pointer rounded-xl text-left touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
       >
         <span className="citizen-flood-row-top">
-          <span className={`citizen-status-chip inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold leading-snug ${STATUS_CHIP[status.color]}`}>
+          <span style={{ borderInlineStartColor: status.hex, borderInlineStartWidth: 3 }} className={`citizen-status-chip inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold leading-snug ${STATUS_CHIP[status.color]}`}>
             <span aria-hidden="true">{status.icon}</span><span>{status.label}</span>
           </span>
           <span className="citizen-flood-row-time"><Clock size={13} aria-hidden="true" />{relativeUpdated}</span>

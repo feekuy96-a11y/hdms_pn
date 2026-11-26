@@ -143,6 +143,7 @@ export function DetourViewModal({
       <div
         ref={dialog.dialogRef}
         role="dialog"
+        data-hdms-popup="panel"
         aria-modal="true"
         aria-label="รายละเอียดเส้นทางเลี่ยง"
         tabIndex={-1}
@@ -168,7 +169,7 @@ export function DetourViewModal({
           </div>
           <button
             type="button"
-            aria-label="ปิดรายละเอียด"
+            aria-label="ปิดรายละเอียด" data-hdms-popup-close
             onClick={onClose}
             className="min-h-10 min-w-10 inline-flex items-center justify-center rounded-xl p-2 hover:bg-slate-800 text-slate-400 hover:text-white"
           >

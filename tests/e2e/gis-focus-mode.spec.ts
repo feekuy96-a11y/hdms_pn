@@ -380,7 +380,9 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
     await page.mouse.down();
     await page.mouse.move(mapBox!.x + mapBox!.width / 2 + 90, mapBox!.y + mapBox!.height / 2 + 50, { steps: 6 });
     await page.mouse.up();
-    await page.waitForTimeout(350);
+    // The drag may schedule one frame before applying Leaflet's inertia class.
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(page.locator(".leaflet-map-pane")).not.toHaveClass(/leaflet-(pan|zoom)-anim/);
 
     const userViewportSnapshot = await page.evaluate(() => ({
       proxyTransform: document.querySelector<HTMLElement>(".leaflet-proxy")?.style.transform || "",
@@ -988,6 +990,7 @@ test("public focus endpoint markers inspect A and B without changing travel dire
   expect(photoBox!.width / photoBox!.height).toBeCloseTo(16 / 9, 1);
   await endpointPhoto.click();
   const viewer = page.getByRole("dialog", { name: "ภาพถ่ายสถานการณ์ขนาดเต็ม" });
+  await expect(viewer).toHaveAttribute("data-hdms-popup", "photo");
   await expect(viewer.getByRole("img")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(viewer).toHaveCount(0);

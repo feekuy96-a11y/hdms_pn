@@ -21,7 +21,7 @@ import {
   resolveFloodWaterReading,
   type parseFloodDirectionMeta,
 } from "@/lib/flood-event-schema";
-import { getTrafficPresentation, type TrafficPresentation } from "@/lib/traffic-presentation";
+import { getTrafficPresentation, resolveReportFreshness, type TrafficPresentation } from "@/lib/traffic-presentation";
 import {
   formatFloodAreaLine,
   formatKmText,
@@ -114,6 +114,18 @@ export function FloodDossierModal({
   const recordedUpdate = selectedFlood.updated_at ? new Date(selectedFlood.updated_at) : null;
   const updateTime = recordedUpdate && Number.isFinite(recordedUpdate.getTime()) ? recordedUpdate : null;
   const displayUpdate = updateTime?.toLocaleString("th-TH") ?? "ไม่ระบุ";
+  const [reportClock, setReportClock] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const timer = window.setInterval(() => setReportClock(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const freshness = resolveReportFreshness(updateTime?.toISOString(), reportClock);
+  const freshnessLabel = {
+    fresh: "อัปเดตใน 2 ชม. ล่าสุด",
+    aging: "อัปเดต 2–6 ชม. ที่แล้ว",
+    stale: "เกิน 6 ชม. · โปรดตรวจสอบซ้ำ",
+    unknown: "ยังไม่ยืนยันเวลาอัปเดต",
+  }[freshness];
   const waterKnown = selectedFloodMeta.waterLevelKnown;
   const embeddedPhotos = (selectedFloodMeta.photos || []).filter((p) => Boolean(p?.dataUrl));
   const knownPhotos = embeddedPhotos.length
@@ -151,6 +163,7 @@ export function FloodDossierModal({
     >
       <div
         role="dialog"
+        data-hdms-popup="panel"
         aria-modal="true"
         onKeyDown={(event) => {
           if (event.key !== "Tab") return;
@@ -179,7 +192,7 @@ export function FloodDossierModal({
               ref={closeDetailsRef}
               type="button"
               onClick={() => setShowDossier(false)}
-              aria-label="ปิดรายละเอียด"
+              aria-label="ปิดรายละเอียด" data-hdms-popup-close
               className="citizen-incident-close citizen-theme-button"
               title="ปิดหน้าต่างรายละเอียด"
             >
@@ -279,6 +292,7 @@ export function FloodDossierModal({
               <p className="citizen-incident-update">
                 <Clock aria-hidden="true" size={14} />
                 <span>อัปเดตล่าสุด {updateTime ? <time dateTime={updateTime.toISOString()}>{displayUpdate}</time> : displayUpdate}</span>
+                <span className="citizen-freshness" data-freshness={freshness}>{freshnessLabel}</span>
               </p>
             </div>
 

@@ -199,7 +199,7 @@ export function getResponsivePopupOptions(
     maxWidth,
     minWidth,
     keepInView: isMobile,
-    ...(className ? { className } : {}),
+    className: `hdms-popup-map ${className}`.trim(),
     // Leaflet positions overlays in map pixels. Reserve the popup frame and its
     // mobile close target so a near-edge detour marker can pan fully into view.
     autoPanPaddingTopLeft: L?.point ? L.point(isMobile ? 24 : 12, isMobile ? 16 : 56) : [isMobile ? 24 : 12, isMobile ? 16 : 56],
@@ -810,14 +810,6 @@ export function resolveRecordedLanesText(flood: FloodRoute): string | null {
   return null;
 }
 
-const POPUP_ACCENT_COLOR_MAP: Record<string, string> = {
-  red: "#ef4444",
-  orange: "#f97316",
-  amber: "#f59e0b",
-  sky: "#38bdf8",
-  green: "#10b981",
-};
-
 export function resolvePopupTrafficStatus(flood: FloodRoute): { label: string; badgeClass: string; accentColor: string } {
   const presentation = getTrafficPresentation(
     flood.traffic_status,
@@ -827,7 +819,7 @@ export function resolvePopupTrafficStatus(flood: FloodRoute): { label: string; b
   return {
     label: presentation.label,
     badgeClass: presentation.popupBadgeClass,
-    accentColor: POPUP_ACCENT_COLOR_MAP[presentation.color] ?? "#f59e0b",
+    accentColor: presentation.hex,
   };
 }
 

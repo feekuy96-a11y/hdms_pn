@@ -107,6 +107,7 @@ export function MobileCitizenDrawer({
         <div className="lg:hidden fixed inset-0 z-[650] flex flex-col justify-end bg-slate-950/65" onClick={() => setIsMobileDrawerOpen(false)}>
           <div
             role="dialog"
+            data-hdms-popup="panel"
             aria-modal="true"
             aria-label="รายการสายทางและจุดเฝ้าระวัง"
             onClick={(event) => event.stopPropagation()}
@@ -139,7 +140,7 @@ export function MobileCitizenDrawer({
                   <button
                     type="button"
                     onClick={() => setIsMobileDrawerOpen(false)}
-                    aria-label="ปิดรายการสายทาง"
+                    aria-label="ปิดรายการสายทาง" data-hdms-popup-close
                     className="grid h-11 w-11 place-items-center rounded-xl bg-slate-800 text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                   >
                     <X className="h-5 w-5" />

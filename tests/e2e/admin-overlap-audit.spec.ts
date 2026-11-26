@@ -128,6 +128,9 @@ for (const v of views) test(`admin overlap audit ${v.name}`, async ({ page, isMo
   await page.screenshot({ path: testInfo.outputPath(`registry-${v.name}.png`) });
   await launch.click({ timeout: 2500 });
   const dialog = page.getByRole("dialog", { name: "จัดการความสัมพันธ์เหตุการณ์และทางเลี่ยง" });
+  await expect(dialog).toHaveAttribute("data-hdms-popup", "panel");
+  await expect(dialog).toHaveCSS("background-color", "rgb(26, 45, 62)");
+  await expect(dialog).toHaveCSS("color", "rgb(244, 248, 250)");
   const body = dialog.getByRole("region", { name: "รายละเอียดการเชื่อมโยง" });
   const save = dialog.getByRole("button", { name: "บันทึกความสัมพันธ์", exact: true });
   const close = dialog.getByRole("button", { name: "ปิดหน้าต่างจัดการความสัมพันธ์" });

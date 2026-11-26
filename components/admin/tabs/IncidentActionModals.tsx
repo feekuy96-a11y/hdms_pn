@@ -87,6 +87,7 @@ export function IncidentActionModals({
           <div
             ref={updateDialog.dialogRef}
             role="dialog"
+            data-hdms-popup="panel"
             aria-modal="true"
             aria-label="อัปเดตระดับน้ำ"
             tabIndex={-1}
@@ -187,6 +188,7 @@ export function IncidentActionModals({
           <div
             ref={splitDialog.dialogRef}
             role="dialog"
+            data-hdms-popup="panel"
             aria-modal="true"
             aria-label="แบ่งช่วงกิโลเมตรน้ำท่วม"
             tabIndex={-1}
@@ -289,6 +291,7 @@ export function IncidentActionModals({
           <div
             ref={mergeDialog.dialogRef}
             role="dialog"
+            data-hdms-popup="panel"
             aria-modal="true"
             aria-label="รวมช่วงกิโลเมตรน้ำท่วม"
             tabIndex={-1}

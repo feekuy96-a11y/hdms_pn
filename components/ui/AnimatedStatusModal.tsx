@@ -43,6 +43,7 @@ export function AnimatedStatusModal({
       <div
         ref={dialogRef}
         role="dialog"
+        data-hdms-popup="panel"
         aria-modal="true"
         aria-labelledby="status-modal-title"
         tabIndex={-1}
@@ -65,7 +66,7 @@ export function AnimatedStatusModal({
         <button
           type="button"
           onClick={onClose}
-          aria-label="ปิดหน้าต่าง"
+          aria-label="ปิดหน้าต่าง" data-hdms-popup-close
           className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg transition"
         >
           <X className="w-5 h-5" />

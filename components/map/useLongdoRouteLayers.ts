@@ -6,8 +6,8 @@ import { LAYER_CONFIG } from "@/lib/constants";
 import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
 import { defaultDetourDirection, isDetourDirectionAllowed } from "@/lib/detour-presentation";
 import { getLinkedDetoursForFlood } from "@/lib/event-detour-links";
-import { groupFloodRoutesIntoEvents, resolveFloodWaterReading } from "@/lib/flood-event-schema";
-import { getTrafficPresentation } from "@/lib/traffic-presentation";
+import { groupFloodRoutesIntoEvents, parseFloodDirectionMeta, resolveFloodWaterReading } from "@/lib/flood-event-schema";
+import { getTrafficPresentation, TRAFFIC_ACCENT } from "@/lib/traffic-presentation";
 import {
   addLineCasing,
   bindPublicEndpointInspector,
@@ -300,8 +300,8 @@ export function useLongdoRouteLayers({
     if (!effectiveShowDetourLayer) return;
     const renderer = rendererRef.current;
     const detourStyle = mapStyles.detour;
-    const dColor = detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
-    const dDash = dashArrayFor(detourStyle);
+    const dColor = publicMode ? TRAFFIC_ACCENT.amber : detourStyle?.color || LAYER_CONFIG.DETOUR_YELLOW_LINE.color;
+    const dDash = dashArrayFor(detourStyle) || (publicMode ? "8 6" : undefined);
 
     (systemData.detourRoutes || []).forEach((detour) => {
       if (!detour.is_active) return;
@@ -511,10 +511,13 @@ export function useLongdoRouteLayers({
     const floodStyle = mapStyles.flood;
     const fColor = floodStyle?.color || LAYER_CONFIG.FLOOD_RED_LINE.color;
     const floodWaveIcon = `<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M2 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M2 16c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/></svg>`;
-    const floodWaveBadge = `<span style="background:${escapeHtml(fColor)};color:white" class="inline-flex h-5 w-5 items-center justify-center rounded-md border border-white/70 shadow-sm" aria-hidden="true">${floodWaveIcon}</span>`;
+    const waveBadge = (color: string) => `<span style="background:${escapeHtml(color)};color:white" class="inline-flex h-5 w-5 items-center justify-center rounded-md border border-white/70 shadow-sm" aria-hidden="true">${floodWaveIcon}</span>`;
+    const segmentAccent = (flood: FloodRoute) => publicMode
+      ? getTrafficPresentation(flood.traffic_status, flood.water_level_cm, flood.direction_meta?.trafficStatusDetail).hex
+      : fColor;
     const fBaseWeight = floodStyle?.weight || LAYER_CONFIG.FLOOD_RED_LINE.weight;
     const fOpacity = floodStyle?.opacity ?? LAYER_CONFIG.FLOOD_RED_LINE.opacity;
-    const fDash = dashArrayFor(floodStyle);
+    const fDash = publicMode ? undefined : dashArrayFor(floodStyle);
 
     const countDetoursForFlood = (flood: FloodRoute) => getLinkedDetoursForFlood(flood, systemData).length;
     const floodPopupOpts = getResponsivePopupOptions(L, 370, 300, "doh-flood-leaflet-popup");
@@ -533,7 +536,7 @@ export function useLongdoRouteLayers({
           casing.__dohBaseOpacity = fOpacity;
         }
         const polyline = L.polyline(coords.map(toLeafletLatLng) as any, {
-          color: fColor,
+          color: segmentAccent(flood),
           weight: selectedWeight,
           opacity: fOpacity,
           dashArray: fDash,
@@ -575,9 +578,13 @@ export function useLongdoRouteLayers({
           segmentCount: ev.segments.length,
           levelText: level,
         };
-        const pinIcon = L.divIcon(buildZoomAdaptiveFloodPinSpec(item, currentZoom, fColor, floodWaveIcon, floodWaveBadge));
+        const pinColor = publicMode ? evPresentation.hex : fColor;
+        const floodWaveBadge = waveBadge(pinColor);
+        const pinIcon = L.divIcon(buildZoomAdaptiveFloodPinSpec(item, currentZoom, pinColor, floodWaveIcon, floodWaveBadge));
 
-        const primarySeg = ev.segments[0];
+        const primarySeg = publicMode
+          ? ev.segments.find(seg => parseFloodDirectionMeta(seg.direction_meta, seg).trafficStatusDetail === ev.mostSevereStatus) ?? ev.segments[0]
+          : ev.segments[0];
         const clusterAriaLabel = `ทล.${ev.routeNo} (${ev.segments.length} ช่วง) ${hasReading ? "ระดับน้ำสูงสุด " : ""}${level} — ${evPresentation.label}`;
         const marker = L.marker([centerLat, centerLon], {
           icon: pinIcon,
@@ -587,7 +594,7 @@ export function useLongdoRouteLayers({
         }).addTo(group);
         marker.__dohFilterIds = ev.segments.map((segment) => segment.id);
         marker.getElement()?.setAttribute("aria-label", clusterAriaLabel);
-        floodMarkerRefs.current.push({ marker, item, ariaLabel: clusterAriaLabel, color: fColor, waveIcon: floodWaveIcon, waveBadge: floodWaveBadge });
+        floodMarkerRefs.current.push({ marker, item, ariaLabel: clusterAriaLabel, color: pinColor, waveIcon: floodWaveIcon, waveBadge: floodWaveBadge });
         marker.bindPopup(() => buildFloodPopupHtml(primarySeg, countDetoursForFlood(primarySeg), publicMode), floodPopupOpts);
         marker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
@@ -604,8 +611,10 @@ export function useLongdoRouteLayers({
         const count = cluster.length;
         cluster.forEach((item, idx) => {
           const [renderLat, renderLon] = computeDeoverlappedMarkerCoord(item, idx, count);
+          const pinColor = segmentAccent(item.flood);
+          const floodWaveBadge = waveBadge(pinColor);
           const pinIcon = L.divIcon(
-            buildZoomAdaptiveFloodPinSpec(item, currentZoom, fColor, floodWaveIcon, floodWaveBadge)
+            buildZoomAdaptiveFloodPinSpec(item, currentZoom, pinColor, floodWaveIcon, floodWaveBadge)
           );
 
           const markerAriaLabel = `ทล.${item.flood.route_no}${item.sideBadge} ${item.flood.section_name} กม.${item.flood.km_start} — ${item.statusLabel}`;
@@ -621,7 +630,7 @@ export function useLongdoRouteLayers({
             marker,
             item,
             ariaLabel: markerAriaLabel,
-            color: fColor,
+            color: pinColor,
             waveIcon: floodWaveIcon,
             waveBadge: floodWaveBadge,
           });
@@ -642,7 +651,7 @@ export function useLongdoRouteLayers({
       floodLinesRef.current = {};
       floodMarkerRefs.current = [];
     };
-  }, [mapReady, systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, floodDisplayMode, mapStyles]);
+  }, [mapReady, systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, floodDisplayMode, mapStyles, publicMode]);
 
   // Zoom must never recreate flood layers: an open popup belongs to the marker,
   // so update only its responsive icon in-place.

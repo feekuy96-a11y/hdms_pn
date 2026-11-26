@@ -1,0 +1,112 @@
+/* Shell adapter for React dialogs, native dialogs, and Leaflet-owned DOM.
+   No filters on tiles or map wrappers; each surface keeps its own focus and scrolling. */
+:is([data-citizen-theme], [data-admin-theme]) [data-hdms-popup=panel], [data-hdms-popup=panel][role=dialog], [data-hdms-popup=print] {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+  box-shadow: var(--hdms-shadow);
+  color-scheme: inherit;
+}
+[data-hdms-popup=panel] :is([class~="bg-slate-950"], [class~="bg-slate-900"], [class*="bg-slate-950/"], [class*="bg-slate-900/"], [class*="bg-[#0c"], [class*="bg-[#0d"]) {
+  background-color: var(--bg-card);
+  border-color: var(--border-subtle);
+}
+[data-hdms-popup=panel] :is([class~="bg-slate-700"], [class~="bg-slate-800"], [class*="bg-slate-800/"]) {
+  background-color: var(--bg-input);
+}
+[data-hdms-popup=panel] :is(h1,h2,h3,[class~="text-white"],[class~="text-slate-100"],[class~="text-slate-200"]):not(:where([class*="bg-red-"],[class*="bg-rose-"],[class*="bg-sky-"],[class*="bg-green-"],[class*="bg-emerald-"],[class*="bg-indigo-"])) {
+  color: var(--text-primary);
+}
+[data-hdms-popup=panel] :is([class~="text-slate-300"], [class~="text-slate-400"], [class~="text-slate-500"]) {
+  color: var(--text-secondary);
+}
+[data-hdms-popup=panel] :is(input:not([type=checkbox],[type=radio],[type=range],[type=file],[type=color]), select, textarea) {
+  color: var(--text-primary);
+  background-color: var(--bg-input);
+  border-color: var(--border-subtle);
+}
+[data-hdms-popup=panel] :is(input,textarea)::placeholder { color: var(--text-secondary); }
+[data-hdms-popup-header] {
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border-color: var(--border-subtle);
+}
+[data-hdms-popup=panel]::backdrop, [data-hdms-popup=photo]::backdrop { background: var(--hdms-scrim); }
+div[data-hdms-popup=photo] { background: var(--hdms-scrim); }
+[data-hdms-popup=photo] [data-hdms-photo-status] { background: var(--bg-card); color: var(--text-primary); }
+
+:is([data-hdms-popup] [data-hdms-popup-close], .leaflet-popup.hdms-popup-map .leaflet-popup-close-button) {
+  box-sizing: border-box;
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  color: var(--text-primary) !important;
+  background: var(--bg-input) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: .625rem;
+}
+:is([data-hdms-popup] [data-hdms-popup-close], .leaflet-popup.hdms-popup-map .leaflet-popup-close-button):hover {
+  background: var(--state-hover) !important;
+}
+[data-hdms-popup] :is(button,a,input,select,textarea,summary,[tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring) !important;
+  outline-offset: -2px;
+}
+:is([data-hdms-popup],.hdms-popup-map) :is([data-hdms-primary],.doh-detour-nav-btn,.citizen-endpoint-actions > a) {
+  color: var(--cta-primary-text) !important;
+  background: var(--cta-primary-bg) !important;
+}
+
+/* Layer adapter: preserve domain content and sizing; unify neutral chrome. */
+.leaflet-popup.hdms-popup-map :is(.leaflet-popup-content-wrapper,.leaflet-popup-tip) {
+  background: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-subtle) !important;
+  box-shadow: var(--hdms-shadow) !important;
+}
+.leaflet-popup.hdms-popup-map .leaflet-popup-tip { box-shadow: none !important; }
+.leaflet-popup.hdms-popup-map .leaflet-popup-content > :first-child {
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+/* Status badges own their paired foreground/background, including unverified traffic. */
+.leaflet-popup.hdms-popup-map .leaflet-popup-content :is([class~="text-white"],[class~="text-slate-100"],[class~="text-slate-200"]):not(:where(.doh-flood-popup-status,[class*="bg-red-"],[class*="bg-sky-"],[class*="bg-emerald-"])) {
+  color: var(--text-primary);
+}
+.leaflet-popup.hdms-popup-map .leaflet-popup-content :is([class~="text-slate-300"],[class~="text-slate-400"],[class~="text-slate-500"]) { color: var(--text-secondary); }
+.leaflet-popup.hdms-popup-map .leaflet-popup-content :is([class*="bg-[#0d"],[class*="bg-[#0e"],[class*="bg-[#0f"]) { background-color: var(--bg-input); border-color: var(--border-subtle); }
+
+/* Keep status tone readable on a light popup as well as a dark popup. */
+:is([data-hdms-popup=panel], .leaflet-popup.hdms-popup-map) :is([class~="text-red-200"], [class*="text-red-200/"], [class~="text-red-300"], [class*="text-red-300/"], [class~="text-red-400"], [class*="text-red-400/"], [class~="text-rose-200"], [class*="text-rose-200/"], [class~="text-rose-300"], [class*="text-rose-300/"], [class~="text-rose-400"], [class*="text-rose-400/"]) {
+  color: var(--status-danger-ink);
+}
+:is([data-hdms-popup=panel], .leaflet-popup.hdms-popup-map) :is([class~="bg-red-950"], [class*="bg-red-950/"], [class~="bg-rose-950"], [class*="bg-rose-950/"]) {
+  background-color: var(--status-danger-wash);
+}
+:is([data-hdms-popup=panel], .leaflet-popup.hdms-popup-map) :is([class~="text-orange-200"], [class*="text-orange-200/"], [class~="text-orange-300"], [class*="text-orange-300/"], [class~="text-orange-400"], [class*="text-orange-400/"]) {
+  color: var(--status-warning-high-ink);
+}
+:is([data-hdms-popup=panel], .leaflet-popup.hdms-popup-map) :is([class~="bg-orange-950"], [class*="bg-orange-950/"]) {
+  background-color: var(--status-warning-high-wash);
+}
+:is([data-hdms-popup=panel], .leaflet-popup.hdms-popup-map) :is([class~="text-amber-200"], [class*="text-amber-200/"], [class~="text-amber-300"], [class*="text-amber-300/"], [class~="text-amber-400"], [class*="text-amber-400/"], [class~="text-yellow-200"], [class*="text-yellow-200/"], [class~="text-yellow-300"], [class*="text-yellow-300/"], [class~="text-yellow-400"], [class*="text-yellow-400/"]) {
+  color: var(--status-warning-low-ink);
+}
+:is([data-hdms-popup=panel], .leaflet-popup.hdms-popup-map) :is([class~="bg-amber-950"], [class*="bg-amber-950/"], [class~="bg-yellow-950"], [class*="bg-yellow-950/"]) {
+  background-color: var(--status-warning-low-wash);
+}
+:is([data-hdms-popup=panel], .leaflet-popup.hdms-popup-map) :is([class~="text-sky-200"], [class*="text-sky-200/"], [class~="text-sky-300"], [class*="text-sky-300/"], [class~="text-sky-400"], [class*="text-sky-400/"], [class~="text-cyan-200"], [class*="text-cyan-200/"], [class~="text-cyan-300"], [class*="text-cyan-300/"], [class~="text-cyan-400"], [class*="text-cyan-400/"], [class~="text-blue-200"], [class*="text-blue-200/"], [class~="text-blue-300"], [class*="text-blue-300/"], [class~="text-blue-400"], [class*="text-blue-400/"], [class~="text-indigo-200"], [class*="text-indigo-200/"], [class~="text-indigo-300"], [class*="text-indigo-300/"], [class~="text-indigo-400"], [class*="text-indigo-400/"]) {
+  color: var(--status-info-ink);
+}
+:is([data-hdms-popup=panel], .leaflet-popup.hdms-popup-map) :is([class~="bg-sky-950"], [class*="bg-sky-950/"], [class~="bg-cyan-950"], [class*="bg-cyan-950/"], [class~="bg-blue-950"], [class*="bg-blue-950/"], [class~="bg-indigo-950"], [class*="bg-indigo-950/"]) {
+  background-color: var(--status-info-wash);
+}
+:is([data-hdms-popup=panel], .leaflet-popup.hdms-popup-map) :is([class~="text-green-200"], [class*="text-green-200/"], [class~="text-green-300"], [class*="text-green-300/"], [class~="text-green-400"], [class*="text-green-400/"], [class~="text-emerald-200"], [class*="text-emerald-200/"], [class~="text-emerald-300"], [class*="text-emerald-300/"], [class~="text-emerald-400"], [class*="text-emerald-400/"]) {
+  color: var(--status-normal-ink);
+}
+:is([data-hdms-popup=panel], .leaflet-popup.hdms-popup-map) :is([class~="bg-green-950"], [class*="bg-green-950/"], [class~="bg-emerald-950"], [class*="bg-emerald-950/"]) {
+  background-color: var(--status-normal-wash);
+}
+
+@media print {
+  [data-hdms-popup=print] { background: white; color: black; border: 0; box-shadow: none; }
+}

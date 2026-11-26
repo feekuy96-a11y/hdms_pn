@@ -8,6 +8,16 @@ export type TrafficStatus =
 
 export type StatusColor = "red" | "orange" | "amber" | "sky" | "emerald" | "slate";
 
+/** Concrete colors shared by CSS accents and the Leaflet canvas renderer. */
+export const TRAFFIC_ACCENT: Readonly<Record<StatusColor, string>> = {
+  red: "#dc2626",
+  orange: "#f97316",
+  amber: "#f59e0b",
+  sky: "#0ea5e9",
+  emerald: "#10b981",
+  slate: "#64748b",
+};
+
 export interface TrafficPresentation {
   label: string;
   detail: string;
@@ -72,7 +82,7 @@ export function getTrafficPresentation(
       detail: "อยู่ระหว่างตรวจสอบสถานการณ์หน้างาน",
       icon: "⏳",
       color: "slate",
-      hex: "#64748b",
+      hex: TRAFFIC_ACCENT.slate,
       badgeClass: "bg-slate-900/80 text-slate-300 border border-slate-600/50",
       popupBadgeClass: "bg-slate-600/80 text-white border border-slate-400/50",
       capsuleClass: "doh-capsule-tag doh-capsule-slate",
@@ -86,7 +96,7 @@ export function getTrafficPresentation(
       detail: `ระดับน้ำ ${waterLevelCm} ซม. รถเล็กผ่านไม่ได้`,
       icon: "🚗",
       color: "orange",
-      hex: "#f97316",
+      hex: TRAFFIC_ACCENT.orange,
       badgeClass: "bg-orange-950/80 text-orange-200 border border-orange-500/50",
       popupBadgeClass: "bg-orange-500 text-slate-950 font-black",
       capsuleClass: "doh-capsule-tag doh-capsule-orange",
@@ -101,7 +111,7 @@ export function getTrafficPresentation(
         detail: "รถทุกชนิดผ่านไม่ได้",
         icon: "⛔",
         color: "red",
-        hex: "#dc2626",
+        hex: TRAFFIC_ACCENT.red,
         badgeClass: "bg-red-950/80 text-red-300 border border-red-500/50",
         popupBadgeClass: "bg-red-600 text-white font-black",
         capsuleClass: "doh-capsule-tag doh-capsule-red",
@@ -113,7 +123,7 @@ export function getTrafficPresentation(
         detail: "รถทุกชนิดผ่านได้แต่ไม่สะดวก โปรดสัญจรด้วยความระมัดระวัง",
         icon: "🚗",
         color: "sky",
-        hex: "#0ea5e9",
+        hex: TRAFFIC_ACCENT.sky,
         badgeClass: "bg-sky-950/80 text-sky-300 border border-sky-500/50",
         popupBadgeClass: "bg-sky-500 text-slate-950 font-black",
         capsuleClass: "doh-capsule-tag doh-capsule-sky",
@@ -125,7 +135,7 @@ export function getTrafficPresentation(
         detail: "เปิดการจราจรหนึ่งช่องทาง",
         icon: "↔️",
         color: "amber",
-        hex: "#f59e0b",
+        hex: TRAFFIC_ACCENT.amber,
         badgeClass: "bg-amber-950/80 text-amber-200 border border-amber-500/50",
         popupBadgeClass: "bg-amber-400 text-slate-950 font-black",
         capsuleClass: "doh-capsule-tag doh-capsule-amber",
@@ -137,12 +147,12 @@ export function getTrafficPresentation(
         label: "รถเล็กผ่านไม่ได้",
         detail: `ระดับน้ำ ${waterLevelCm} ซม.`,
         icon: "⚠️",
-        color: "amber",
-        hex: "#f59e0b",
-        badgeClass: "bg-amber-950/80 text-amber-200 border border-amber-500/50",
-        popupBadgeClass: "bg-amber-400 text-slate-950 font-black",
-        capsuleClass: "doh-capsule-tag doh-capsule-amber",
-        dotClass: "bg-amber-500",
+        color: "orange",
+        hex: TRAFFIC_ACCENT.orange,
+        badgeClass: "bg-orange-950/80 text-orange-200 border border-orange-500/50",
+        popupBadgeClass: "bg-orange-500 text-slate-950 font-black",
+        capsuleClass: "doh-capsule-tag doh-capsule-orange",
+        dotClass: "bg-orange-500",
       };
     case "PASSABLE":
       return {
@@ -150,7 +160,7 @@ export function getTrafficPresentation(
         detail: "การจราจรผ่านได้ตามปกติ",
         icon: "✅",
         color: "emerald",
-        hex: "#10b981",
+        hex: TRAFFIC_ACCENT.emerald,
         badgeClass: "bg-emerald-950/80 text-emerald-300 border border-emerald-500/50",
         popupBadgeClass: "bg-emerald-500 text-white font-black",
         capsuleClass: "doh-capsule-tag doh-capsule-green",
@@ -162,12 +172,12 @@ export function getTrafficPresentation(
           label: "รถเล็กผ่านไม่ได้",
           detail: `ระดับน้ำ ${waterLevelCm} ซม.`,
           icon: "⚠️",
-          color: "amber",
-          hex: "#f59e0b",
-          badgeClass: "bg-amber-950/80 text-amber-200 border border-amber-500/50",
-          popupBadgeClass: "bg-amber-400 text-slate-950 font-black",
-          capsuleClass: "doh-capsule-tag doh-capsule-amber",
-          dotClass: "bg-amber-500",
+          color: "orange",
+          hex: TRAFFIC_ACCENT.orange,
+          badgeClass: "bg-orange-950/80 text-orange-200 border border-orange-500/50",
+          popupBadgeClass: "bg-orange-500 text-slate-950 font-black",
+          capsuleClass: "doh-capsule-tag doh-capsule-orange",
+          dotClass: "bg-orange-500",
         };
       }
       // External imports and older records can contain an unsupported value.
@@ -177,13 +187,21 @@ export function getTrafficPresentation(
         detail: "ไม่พบสถานะการจราจรที่ยืนยันได้",
         icon: "⏳",
         color: "slate",
-        hex: "#64748b",
+        hex: TRAFFIC_ACCENT.slate,
         badgeClass: "bg-slate-900/80 text-slate-300 border border-slate-600/50",
         popupBadgeClass: "bg-slate-600/80 text-white border border-slate-400/50",
         capsuleClass: "doh-capsule-tag doh-capsule-slate",
         dotClass: "bg-slate-400",
       };
   }
+}
+
+export function resolveReportFreshness(iso?: string | null, now: number = Date.now()): "fresh" | "aging" | "stale" | "unknown" {
+  const timestamp = iso ? Date.parse(iso) : NaN;
+  const age = now - timestamp;
+  if (!Number.isFinite(age) || age < 0) return "unknown";
+  if (age <= 2 * 60 * 60_000) return "fresh";
+  return age <= 6 * 60 * 60_000 ? "aging" : "stale";
 }
 
 export function formatRelativeUpdateTime(iso?: string | null): string {

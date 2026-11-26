@@ -1,0 +1,113 @@
+/* HDMS shared design contract. Feature adapters provide layout, not palette. */
+:root {
+  --hdms-slate-50: #f4f8fa;
+  --hdms-slate-100: #e6eef1;
+  --hdms-slate-200: #cbd9df;
+  --hdms-slate-500: #506677;
+  --hdms-slate-700: #3c5466;
+  --hdms-slate-800: #223548;
+  --hdms-slate-850: #1a2d3e;
+  --hdms-slate-900: #142331;
+  --hdms-teal-700: #145968;
+  --hdms-teal-650: #1f7190;
+  --hdms-ice-200: #acd1e2;
+  --hdms-ink-900: #17354a;
+  --hdms-ochre-750: #794706;
+  --hdms-amber-300: #ffd48b;
+  --hdms-amber-500: #f59e0b;
+  --hdms-white: #fff;
+  --hdms-shadow: 0 16px 48px rgb(15 35 51 / 22%);
+  --hdms-scrim: rgb(9 22 35 / 82%);
+  --cta-primary-bg: var(--hdms-amber-500);
+  --cta-primary-text: var(--hdms-slate-900);
+  --bg-app: var(--hdms-slate-50);
+  --bg-card: var(--hdms-white);
+  --bg-input: var(--hdms-slate-100);
+  --border-subtle: var(--hdms-slate-200);
+  --text-primary: var(--hdms-ink-900);
+  --text-secondary: var(--hdms-slate-500);
+  --text-location: var(--hdms-ochre-750);
+  --brand-active-bg: var(--hdms-teal-700);
+  --brand-active-text: var(--hdms-white);
+  --state-hover: var(--hdms-slate-100);
+  --state-selected: var(--hdms-slate-100);
+  --focus-ring: var(--hdms-teal-650);
+  --freshness-live: var(--hdms-teal-700);
+  --freshness-stale: var(--hdms-ochre-750);
+}
+
+:is([data-admin-theme=dark], [data-citizen-theme=dark]) {
+  --bg-app: var(--hdms-slate-900);
+  --bg-card: var(--hdms-slate-850);
+  --bg-input: var(--hdms-slate-800);
+  --border-subtle: var(--hdms-slate-700);
+  --text-primary: var(--hdms-slate-50);
+  --text-secondary: var(--hdms-slate-200);
+  --text-location: var(--hdms-amber-300);
+  --brand-active-bg: var(--hdms-ice-200);
+  --brand-active-text: var(--hdms-slate-900);
+  --state-hover: var(--hdms-slate-800);
+  --state-selected: var(--hdms-slate-700);
+  --focus-ring: var(--hdms-ice-200);
+  --freshness-live: var(--hdms-ice-200);
+  --freshness-stale: var(--hdms-amber-300);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-admin-theme=system] {
+    --bg-app: var(--hdms-slate-900);
+    --bg-card: var(--hdms-slate-850);
+    --bg-input: var(--hdms-slate-800);
+    --border-subtle: var(--hdms-slate-700);
+    --text-primary: var(--hdms-slate-50);
+    --text-secondary: var(--hdms-slate-200);
+    --text-location: var(--hdms-amber-300);
+    --brand-active-bg: var(--hdms-ice-200);
+    --brand-active-text: var(--hdms-slate-900);
+    --state-hover: var(--hdms-slate-800);
+    --state-selected: var(--hdms-slate-700);
+    --focus-ring: var(--hdms-ice-200);
+    --freshness-live: var(--hdms-ice-200);
+    --freshness-stale: var(--hdms-amber-300);
+  }
+}
+
+/* Tone pairs remain legible when a legacy feature supplies a semantic accent class. */
+:root {
+  --status-danger-ink: #962b35;
+  --status-danger-wash: #f9e5e6;
+  --status-warning-high-ink: #873d10;
+  --status-warning-high-wash: #faeadf;
+  --status-warning-low-ink: var(--hdms-ochre-750);
+  --status-warning-low-wash: #f8e9d5;
+  --status-info-ink: #145974;
+  --status-info-wash: #e2eef4;
+  --status-normal-ink: #195f43;
+  --status-normal-wash: #e1f1e8;
+}
+:is([data-admin-theme=dark], [data-citizen-theme=dark]) {
+  --status-danger-ink: #ffb8c1;
+  --status-danger-wash: #472c39;
+  --status-warning-high-ink: #ffbe8f;
+  --status-warning-high-wash: #493324;
+  --status-warning-low-ink: var(--hdms-amber-300);
+  --status-warning-low-wash: #443723;
+  --status-info-ink: #afd7f2;
+  --status-info-wash: #233e55;
+  --status-normal-ink: #a2e4cc;
+  --status-normal-wash: #244339;
+}
+@media (prefers-color-scheme: dark) {
+  [data-admin-theme=system] {
+    --status-danger-ink: #ffb8c1;
+    --status-danger-wash: #472c39;
+    --status-warning-high-ink: #ffbe8f;
+    --status-warning-high-wash: #493324;
+    --status-warning-low-ink: var(--hdms-amber-300);
+    --status-warning-low-wash: #443723;
+    --status-info-ink: #afd7f2;
+    --status-info-wash: #233e55;
+    --status-normal-ink: #a2e4cc;
+    --status-normal-wash: #244339;
+  }
+}
