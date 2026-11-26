@@ -12,7 +12,7 @@ import { drawFloodStatusAccent } from "./longdo-flood-status-accent";
 import {
   addLineCasing,
   bindPublicEndpointInspector,
-  bindDetourEndpointReveal,
+  bindMapPopupInitialReveal,
   buildPublicDetourEndpointPopup,
   buildDetourFallbackPinSpec,
   buildDetourPointPhotoPopupHtml,
@@ -313,7 +313,7 @@ export function useLongdoRouteLayers({
       const paired = dirMode === "TWO_WAY" && hasSeparateDetourLines(detour, fwdCoords, revCoords);
       const grouped = paired && detourDisplayMode === "GROUPED";
       const forwardPopupDir = paired && !grouped ? "FORWARD" : defaultDir;
-      const popupOptions = getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup");
+      const popupOptions = { ...getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup"), keepInView: false };
       const safeDetourId = String(detour.id).replace(/[^a-zA-Z0-9_-]/g, "_");
       const popupFor = (direction: "FORWARD" | "REVERSE", split: boolean) => {
         const remembered = split ? direction : (window as any).__getDetourCurrentDir?.(safeDetourId, direction) || direction;
@@ -334,6 +334,7 @@ export function useLongdoRouteLayers({
         const marker = L.marker(center, { icon: L.divIcon(buildDetourSymbolIconSpec(detourPinColor)), interactive: true })
           .bindPopup(() => popupFor(direction, split), popupOptions)
           .addTo(group);
+        bindMapPopupInitialReveal(map, marker);
         marker.__dohFilterId = detour.id;
         const title = split && direction === "REVERSE" ? "ขากลับ B → A" : split ? "ขาไป A → B" : "ทางเลี่ยง";
         marker.getElement?.()?.setAttribute("aria-label", `${title}: ${detour.route_name}`);
@@ -371,6 +372,7 @@ export function useLongdoRouteLayers({
           filterOpacity: 1,
         });
         polyline.bindPopup(() => popupFor(forwardPopupDir, paired && !grouped), popupOptions);
+        bindMapPopupInitialReveal(map, polyline);
         polyline.on("popupopen", () => activateDirection(forwardPopupDir, paired && !grouped));
         polyline.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
@@ -409,6 +411,7 @@ export function useLongdoRouteLayers({
             filterOpacity: 1,
           });
           revPolyline.bindPopup(() => popupFor("REVERSE", true), popupOptions);
+          bindMapPopupInitialReveal(map, revPolyline);
           addDirectionMarker(revLatLngs, "REVERSE", true);
           revPolyline.on("popupopen", () => activateDirection("REVERSE", true));
           revPolyline.on("click", (e: any) => {
@@ -477,7 +480,7 @@ export function useLongdoRouteLayers({
         const refreshLabel = publicMode
           ? () => labelPublicDetourEndpointMarker(marker, getPublicDetourEndpointLabel(detour, point, directionForEndpoint()))
           : undefined;
-        bindDetourEndpointReveal(map, marker);
+        bindMapPopupInitialReveal(map, marker);
         if (publicMode) bindPublicEndpointInspector(L, map, marker, markers, point,
           () => overviewFocusRef.current(detour.id, directionForEndpoint()), false);
         detourPhotoMarkerRefs.current.push({ marker, point, hasPhoto, detourId: detour.id, refreshLabel });
@@ -528,9 +531,10 @@ export function useLongdoRouteLayers({
   useEffect(() => {
     const L = leafletRef.current;
     const group = floodGroupRef.current;
+    const map = leafletMapRef.current;
     floodLinesRef.current = {};
     floodMarkerRefs.current = [];
-    if (!mapReady || !L || !group) return;
+    if (!mapReady || !L || !group || !map) return;
     group.clearLayers();
     if (!effectiveShowFloodLayer) return;
     const renderer = rendererRef.current;
@@ -545,7 +549,7 @@ export function useLongdoRouteLayers({
     const fDash = dashArrayFor(floodStyle);
 
     const countDetoursForFlood = (flood: FloodRoute) => getLinkedDetoursForFlood(flood, systemData).length;
-    const floodPopupOpts = getResponsivePopupOptions(L, 370, 300, "doh-flood-leaflet-popup");
+    const floodPopupOpts = { ...getResponsivePopupOptions(L, 370, 300, "doh-flood-leaflet-popup"), keepInView: false };
 
     const visibleFloods = (systemData.floodRoutes || []).filter((flood) => isFloodLineVisibleOnCurrentMap(flood));
 
@@ -584,6 +588,7 @@ export function useLongdoRouteLayers({
           baseBorderWidth: Number(floodStyle?.borderWidth) || 0,
         };
         polyline.bindPopup(() => buildFloodPopupHtml(flood, countDetoursForFlood(flood), publicMode), floodPopupOpts);
+        bindMapPopupInitialReveal(map, polyline);
         polyline.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           activationRef.current?.({ type: "FLOOD", id: flood.id });
@@ -628,6 +633,7 @@ export function useLongdoRouteLayers({
         marker.getElement()?.setAttribute("aria-label", clusterAriaLabel);
         floodMarkerRefs.current.push({ marker, item, ariaLabel: clusterAriaLabel, color: pinColor, waveIcon: floodWaveIcon, waveBadge: floodWaveBadge });
         marker.bindPopup(() => buildFloodPopupHtml(primarySeg, countDetoursForFlood(primarySeg), publicMode), floodPopupOpts);
+        bindMapPopupInitialReveal(map, marker);
         marker.on("click", (e: any) => {
           L.DomEvent.stopPropagation(e);
           activationRef.current?.({ type: "FLOOD", id: primarySeg.id });
@@ -668,6 +674,7 @@ export function useLongdoRouteLayers({
           });
 
           marker.bindPopup(() => buildFloodPopupHtml(item.flood, countDetoursForFlood(item.flood), publicMode), floodPopupOpts);
+          bindMapPopupInitialReveal(map, marker);
           marker.on("click", (e: any) => {
             L.DomEvent.stopPropagation(e);
             activationRef.current?.({ type: "FLOOD", id: item.flood.id });

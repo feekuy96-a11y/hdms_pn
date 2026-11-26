@@ -738,15 +738,15 @@ export function buildPublicDetourEndpointPopup(
   `;
 }
 
-/** Correct the initial endpoint reveal at most once, never an operator's pan/zoom. */
-export function bindDetourEndpointReveal(map: any, marker: any) {
-  marker.on("popupopen", ({ popup }: { popup: { getElement: () => HTMLElement | null } }) => {
+/** Correct the initial popup reveal at most once, never an operator's pan/zoom. */
+export function bindMapPopupInitialReveal(map: any, layer: any) {
+  layer.on("popupopen", ({ popup }: { popup: { getElement: () => HTMLElement | null } }) => {
     const popupElement = popup.getElement();
     if (!popupElement) return;
     const cancelReveal = () => {
       clearTimeout(revealTimer);
       map.off("dragstart zoomstart", cancelReveal);
-      marker.off("popupclose", cancelReveal);
+      layer.off("popupclose", cancelReveal);
       popupElement.removeEventListener("pointerdown", cancelReveal, true);
     };
     const revealTimer = setTimeout(() => {
@@ -776,7 +776,7 @@ export function bindDetourEndpointReveal(map: any, marker: any) {
       if (x || y) map.panBy([x, y], { animate: false });
     }, 450);
     map.on("dragstart zoomstart", cancelReveal);
-    marker.on("popupclose", cancelReveal);
+    layer.on("popupclose", cancelReveal);
     popupElement.addEventListener("pointerdown", cancelReveal, true);
   });
 }
