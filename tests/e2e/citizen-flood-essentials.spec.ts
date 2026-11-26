@@ -84,7 +84,10 @@ test("long Thai detour dossier title reflows at enlarged text while real close s
     updatedAt: checkedAt, floodRoutes: [{ ...fakeFlood, latest_photo_url: photo }],
     detourRoutes: [{ id: "D-LONG", flood_id_ref: fakeFlood.id, route_name: longRoad, description: "1. เลี้ยวซ้าย\n2. กลับสู่ถนนหลัก",
       direction_mode: "TWO_WAY", is_active: true, updated_at: checkedAt,
-      detour_meta: { start_point_photo: { url: photo, caption: "ภาพแนวกว้างสำหรับหน้ารายละเอียดจากเส้น" } },
+      detour_meta: {
+        start_point_photo: { url: photo, caption: "ภาพแนวกว้างสำหรับหน้ารายละเอียดจากเส้น" },
+        end_point_photo: { subdistrict: "ตาเซะ", district: "เมืองยะลา", province: "ยะลา", caption: "คำอธิบายจุด B ที่ไม่มีภาพ" },
+      },
       lat_start: 6.89, lon_start: 101.183, lat_end: 6.895, lon_end: 101.21,
       coordinates_json: [[101.183, 6.89], [101.21, 6.895]] }],
     highwayLayers: [], timelineUpdates: [], mitigationProjects: [], offices: [], mapStyles: null,
@@ -117,6 +120,19 @@ test("long Thai detour dossier title reflows at enlarged text while real close s
     const routePhotoBox = (await routePhoto.boundingBox())!;
     expect(routePhotoBox.width).toBeGreaterThan(routePhotoBox.height);
     await expect(dialog.locator("[data-endpoint-photo]")).toHaveCount(0);
+    const pointA = dialog.getByRole("region", { name: "ข้อมูลA · จุดเริ่มต้นที่ปัก", exact: true });
+    await expect(pointA).toContainText("พิกัด: 6.890000, 101.183000");
+    await expect(pointA).toContainText("ยังไม่มีข้อมูลพื้นที่จุดนี้");
+    await expect(pointA).toContainText("ต้นทางของขาไป A → B");
+    await dialog.getByRole("button", { name: "ขากลับ B → A", exact: true }).click();
+    const pointB = dialog.getByRole("region", { name: "ข้อมูลB · จุดสิ้นสุดที่ปัก", exact: true });
+    await expect(pointB).toContainText("พิกัด: 6.895000, 101.210000");
+    await expect(pointB).toContainText("ต.ตาเซะ อ.เมืองยะลา จ.ยะลา");
+    await expect(pointB).toContainText("คำอธิบายจุด B ที่ไม่มีภาพ");
+    await expect(pointB).toContainText("ต้นทางของขากลับ B → A");
+    await expect(pointB.getByRole("img")).toHaveCount(0);
+    await dialog.getByRole("button", { name: "ขาไป A → B", exact: true }).click();
+
     const timelineStep = dialog.locator(".citizen-detour-step").first();
     await expect(timelineStep).toHaveCSS("background-color", "rgb(230, 238, 241)");
     await expect(timelineStep.locator("p")).toHaveCSS("color", "rgb(60, 84, 102)");

@@ -12,6 +12,7 @@ import { drawFloodStatusAccent } from "./longdo-flood-status-accent";
 import {
   addLineCasing,
   bindPublicEndpointInspector,
+  bindDetourEndpointReveal,
   buildPublicDetourEndpointPopup,
   buildDetourFallbackPinSpec,
   buildDetourPointPhotoPopupHtml,
@@ -461,20 +462,22 @@ export function useLongdoRouteLayers({
           .bindPopup(
             () => publicMode
               ? buildPublicDetourEndpointPopup(detour, point, photo, directionForEndpoint(), systemData.floodRoutes || [], pin)
-              : buildDetourPointPhotoPopupHtml(detour, point, photo, pin.lat, pin.lon),
+              : buildDetourPointPhotoPopupHtml(detour, point, photo, pin.lat, pin.lon, directionForEndpoint()),
             publicMode
               ? {
                   ...getResponsivePopupOptions(L, 320, 0, "doh-detour-leaflet-popup"),
+                  keepInView: false,
                   autoPanPaddingTopLeft: L.point(12, 16),
                   autoPanPaddingBottomRight: L.point(12, 112),
                 }
-              : getResponsivePopupOptions(L, 380, 260, "doh-detour-leaflet-popup")
+              : { ...getResponsivePopupOptions(L, 380, 260, "doh-detour-leaflet-popup"), keepInView: false }
           )
           .addTo(group);
         markers.set(point, marker);
         const refreshLabel = publicMode
           ? () => labelPublicDetourEndpointMarker(marker, getPublicDetourEndpointLabel(detour, point, directionForEndpoint()))
           : undefined;
+        bindDetourEndpointReveal(map, marker);
         if (publicMode) bindPublicEndpointInspector(L, map, marker, markers, point,
           () => overviewFocusRef.current(detour.id, directionForEndpoint()), false);
         detourPhotoMarkerRefs.current.push({ marker, point, hasPhoto, detourId: detour.id, refreshLabel });

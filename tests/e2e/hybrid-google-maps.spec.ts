@@ -164,8 +164,8 @@ test.describe("Public detour endpoints on mobile", () => {
   });
 
   for (const scenario of [
-    { trip: "ขาไป A → B", focus: "ขาไป (A → B)", a: "จุดเริ่มต้น", b: "จุดสิ้นสุด" },
-    { trip: "ขากลับ B → A", focus: "ขากลับ (B → A)", a: "จุดสิ้นสุด", b: "จุดเริ่มต้น" },
+    { trip: "ขาไป A → B", focus: "ขาไป (A → B)", a: "ต้นทาง", b: "ปลายทาง" },
+    { trip: "ขากลับ B → A", focus: "ขากลับ (B → A)", a: "ปลายทาง", b: "ต้นทาง" },
   ]) {
     test(`endpoint popup and marker names agree with ${scenario.trip} at 390×844`, async ({ page, isMobile }) => {
       test.skip(!isMobile, "Runs in the mobile browser project.");
@@ -188,8 +188,10 @@ test.describe("Public detour endpoints on mobile", () => {
         await expect.soft(marker, `marker ${letter} should name the point and its travel role`)
           .toHaveAccessibleName(new RegExp(`(?=.*\\b${letter}\\b)(?=.*${role})`), { timeout: 1000 });
         await marker.press("Enter");
-        const popup = page.getByRole("region", { name: `${letter} · ${role}`, exact: true });
-        await expect(popup.getByRole("heading", { name: `${letter} · ${role}`, exact: true })).toBeVisible();
+        const savedIdentity = letter === "A" ? "A · จุดเริ่มต้นที่ปัก" : "B · จุดสิ้นสุดที่ปัก";
+        const popup = page.getByRole("region", { name: savedIdentity, exact: true });
+        await expect(popup.getByRole("heading", { name: savedIdentity, exact: true })).toBeVisible();
+        await expect(popup.locator(".citizen-endpoint-trip-direction")).toHaveText(`${role}ของ${scenario.trip}`);
         await expect(popup.locator("[data-endpoint-coordinate]")).toHaveText(letter === "A" ? "พิกัด: 6.781210, 101.131210" : "พิกัด: 6.811320, 101.171320");
         await expect(popup.locator("[data-endpoint-locality]")).toHaveText(letter === "A" ? "ต.บานา อ.เมืองปัตตานี จ.ปัตตานี" : "ต.ตาเซะ อ.เมืองยะลา จ.ยะลา");
         await expect(popup.locator(".citizen-endpoint-caption")).toContainText(letter === "A" ? "หน้าโรงเรียน" : "แยกตลาด");
