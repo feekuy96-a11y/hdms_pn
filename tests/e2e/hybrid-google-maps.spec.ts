@@ -99,6 +99,7 @@ test.describe("Public detour endpoints on mobile", () => {
       await expect(page.locator(".citizen-ui")).toHaveAttribute("data-citizen-theme", theme);
       await page.locator(".doh-detour-symbol").press("Enter");
       for (const direction of [forward, reverse]) {
+        await expect(direction).toHaveCSS("transition-property", "box-shadow");
         await direction.click();
         await expect(direction).toHaveAttribute("aria-pressed", "true");
 

@@ -163,6 +163,10 @@
   background: var(--bg-card);
   color: var(--text-primary);
 }
+/* Do not interpolate a light foreground over the old light surface, or vice versa. */
+:is([data-citizen-theme], [data-admin-theme]) :is(.hdms-contrast-switch > button, .hdms-map-control) {
+  transition-property: box-shadow;
+}
 :is([data-citizen-theme], [data-admin-theme]) .hdms-contrast-switch > button { border-width: 1px; }
 :is([data-citizen-theme], [data-admin-theme]) :is(.hdms-contrast-switch > button, .hdms-map-control, .hdms-map-surface):focus-visible { outline-offset: 2px; }
 
