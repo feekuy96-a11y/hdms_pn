@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import type React from "react";
 import { SystemDataPayload } from "@/db/default-data";
 import {
@@ -150,7 +151,66 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
     availableHighways, useCarriagewaySnapping, editOriginalFloodDirRef, handleClearRoute,
   } = params;
 
+  const linkedCreateAttempt = useRef<Parameters<typeof upsertRouteAction>[0] | null>(null);
+  const linkedRequestInFlight = useRef(false);
+  const [linkedDetourPending, setLinkedDetourPending] = useState(false);
+
+  const submitLinkedDetour = async (payload: Parameters<typeof upsertRouteAction>[0]) => {
+    linkedCreateAttempt.current = payload;
+    try {
+      const result = await upsertRouteAction(payload);
+      if (!result.success || result.savedId !== payload.id || result.detourLinkState !== "LINKED") {
+        setLinkedDetourPending(true);
+        const known = result.success && result.savedId === payload.id && result.detourLinkState === "PENDING";
+        const title = known ? "บันทึกทางเลี่ยงแล้ว แต่ยังผูกเหตุการณ์ไม่สำเร็จ" : "ยังยืนยันผลการบันทึกทางเลี่ยงไม่ได้";
+        const message = `ใช้ปุ่มลองผูกเหตุการณ์อีกครั้งเพื่อดำเนินการกับทางเลี่ยงเดิมโดยไม่อัปโหลดรูปใหม่ หากปิดหน้านี้ ให้ตรวจรายการทางเลี่ยงก่อนสร้างใหม่ (รหัส ${payload.id})`;
+        if (showErrorModal) showErrorModal(title, message);
+        else onToast(`${title}: ${message}`);
+        return null;
+      }
+      linkedCreateAttempt.current = null;
+      setLinkedDetourPending(false);
+      return result;
+    } catch {
+      // A timeout/invalid response need not mean the insert failed. Keep
+      // the original ID and uploaded media; retry will not allocate either.
+      setLinkedDetourPending(true);
+      const title = "ยังยืนยันผลการบันทึกทางเลี่ยงไม่ได้";
+      const message = `ใช้ปุ่มลองผูกเหตุการณ์อีกครั้งเพื่อดำเนินการกับทางเลี่ยงเดิม หากปิดหน้านี้ ให้ตรวจรายการทางเลี่ยงก่อนสร้างใหม่ (รหัส ${payload.id})`;
+      if (showErrorModal) showErrorModal(title, message);
+      else onToast(`${title}: ${message}`);
+      return null;
+    }
+  };
+
+  const completeDetourRetry = async (result: Awaited<ReturnType<typeof upsertRouteAction>>) => {
+    if (result.savedId) {
+      try {
+        await syncReportingRowAction({ recordId: result.savedId, recordType: "DETOUR", updatedAt: new Date().toISOString() });
+      } catch { /* The committed route already has a report job; this only wakes the worker. */ }
+    }
+    try { await onDataRefresh(result.systemData); } catch { onToast("ผูกเหตุการณ์แล้ว แต่ไม่สามารถโหลดข้อมูลล่าสุด กรุณารีเฟรชหน้าจอ"); }
+    showSuccessModal("ผูกทางเลี่ยงกับเหตุการณ์สำเร็จ", "ใช้ทางเลี่ยงและรูปเดิม ไม่ได้สร้างรายการใหม่");
+    setRouteEditId("");
+    setFieldImages([]);
+    handleClearRoute();
+    if (onClearEditingRoute) onClearEditingRoute();
+  };
+
   const handleSubmitRoute = async () => {
+    if (linkedRequestInFlight.current) return;
+    if (routeMode === "DETOUR" && !routeEditId && linkedCreateAttempt.current) {
+      linkedRequestInFlight.current = true;
+      setIsSubmitting(true);
+      try {
+        const result = await submitLinkedDetour(linkedCreateAttempt.current);
+        if (result) await completeDetourRetry(result);
+      } finally {
+        linkedRequestInFlight.current = false;
+        setIsSubmitting(false);
+      }
+      return;
+    }
     // Never silently turn a missing/legacy direction into bidirectional traffic.
     const hasPhotoLocationValues = (loc?: DetourPointPhotoLocationInput | null) =>
       Boolean(
@@ -263,6 +323,9 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
 
     const uploadedMediaIds: string[] = [];
     let mediaPersisted = false;
+    const isLinkedCreate = routeMode === "DETOUR" && !routeEditId && Boolean(detourRefId);
+    const linkedCreateId = isLinkedCreate ? `D-${crypto.randomUUID()}` : undefined;
+    if (isLinkedCreate) linkedRequestInFlight.current = true;
     setIsSubmitting(true);
     try {
       const coords = (
@@ -548,8 +611,9 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
                   : []))
           : [];
 
-      const res = await upsertRouteAction({
-        id: routeEditId || undefined,
+      const payload: Parameters<typeof upsertRouteAction>[0] = {
+        id: routeEditId || linkedCreateId,
+        ...(linkedCreateId ? { linkedDetourCreate: true } : {}),
         recordType: routeMode,
         routeNo: chosenRouteNo,
         kmStart,
@@ -618,7 +682,9 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
               ),
             })
           : undefined,
-      });
+      };
+      const res = linkedCreateId ? await submitLinkedDetour(payload) : await upsertRouteAction(payload);
+      if (!res) return;
 
       if (res.success) {
         mediaPersisted = true;
@@ -648,9 +714,10 @@ export function useMapRouteSubmit(params: UseMapRouteSubmitParams) {
         onToast("ข้อผิดพลาด: " + err.message);
       }
     } finally {
+      if (isLinkedCreate) linkedRequestInFlight.current = false;
       setIsSubmitting(false);
     }
   };
 
-  return { handleSubmitRoute };
+  return { handleSubmitRoute, linkedDetourPending };
 }
