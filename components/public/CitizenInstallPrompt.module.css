@@ -1,0 +1,30 @@
+.prompt { display: none; }
+
+@media (max-width: 767px) and (min-height: 421px) and (pointer: coarse) {
+  .prompt {
+    position: fixed;
+    z-index: 445;
+    inset-inline: max(.45rem, env(safe-area-inset-left)) max(.45rem, env(safe-area-inset-right));
+    inset-block-end: calc(3.75rem + env(safe-area-inset-bottom));
+    display: grid;
+    gap: .25rem;
+    padding: .38rem .55rem .5rem;
+    max-inline-size: 28rem;
+    margin-inline: auto;
+    border: 1px solid var(--hdms-control-edge);
+    border-radius: .85rem;
+    background: var(--surface-panel);
+    color: var(--text-primary);
+    box-shadow: var(--hdms-shadow);
+  }
+  :global(.citizen-ui):has(:global(.doh-map-popup-open), :global([data-hdms-layers-open=true])) .prompt { display: none; }
+  .summary { display: grid; grid-template-columns: 1.8rem minmax(0, 1fr) 44px; align-items: center; gap: .4rem; }
+  .summary strong { font-weight: 750; }
+  .summary p, .help { margin: 0; color: var(--text-secondary); line-height: 1.35; font-size: .78rem; }
+  .symbol { display: block; width: 30px; height: 30px; border-radius: .42rem; }
+  .dismiss, .action { min-height: 44px; border: 1px solid var(--border-subtle); border-radius: .5rem; cursor: pointer; }
+  .dismiss { display: grid; place-items: center; min-width: 44px; background: var(--bg-input); color: var(--text-primary); }
+  .action { display: flex; align-items: center; justify-content: center; gap: .4rem; background: var(--brand-active-bg); color: var(--brand-active-text); font-size: .83rem; font-weight: 750; }
+  .action:disabled { cursor: wait; }
+  .help { padding: .2rem .1rem .1rem; }
+}
