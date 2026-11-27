@@ -130,4 +130,10 @@ test("editing a saved detour uses each stored pin, not route-wide area or a gues
   await expect(page.getByLabel("ตำบลภาพจุดเริ่มต้น A")).toHaveValue("มายอ");
   await page.getByRole("button", { name: "วิเคราะห์คำแนะนำอัตโนมัติ", exact: true }).click();
   await expect(page.locator("#edit-detour-advice-textarea")).toHaveValue(/A → จุด B \(ต\.มายอ อ\.มายอ → ยังไม่ยืนยันพื้นที่\)/);
+  await page.getByRole("button", { name: "เปิดเครื่องมือวาดแผนที่", exact: true }).click();
+  const mapEditTabs = page.getByRole("tablist", { name: "เลือกจุดต้นทางหรือปลายทางของทางเลี่ยง" });
+  await expect(mapEditTabs).toBeVisible();
+  await expect(page.getByRole("textbox", { name: /^ตำบลภาพ.*A/ })).toHaveValue("ปะนาเระ");
+  await mapEditTabs.getByRole("tab", { name: /จุด B/ }).click();
+  await expect(page.getByRole("textbox", { name: /^จังหวัดภาพ.*B/ })).toHaveValue("");
 });
