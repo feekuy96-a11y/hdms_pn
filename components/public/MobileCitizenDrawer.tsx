@@ -207,7 +207,7 @@ export function MobileCitizenDrawer({
                 </div>
               </div>
               {hasCounts && mobileDrawerStage !== "peek" && (
-                <section className={`${glass.passability} mt-2 space-y-1.5`} aria-labelledby="citizen-mobile-passability">
+                <section className="mt-2 space-y-1.5" aria-labelledby="citizen-mobile-passability">
                   <h3 id="citizen-mobile-passability" className="text-xs font-semibold text-slate-300">สถานะการผ่านทางจากรายงานน้ำท่วม</h3>
                   <SituationSummary counts={situationCounts} activeFilter={selectedStatusFilter} onFilter={handleStatusFilter} />
                 </section>
