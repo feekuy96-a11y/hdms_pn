@@ -2,8 +2,8 @@ import { expect,test,type Page } from "@playwright/test";
 
 const base=process.env.BASE_PATH||"";
 const date="2026-11-24T01:10:00.000Z";
-const flood={id:"F-LOCAL-CLOSURE",route_no:"43",section_name:"ช่วงน้ำท่วมทดสอบ",km_start:"5+000",km_end:"6+000",lat_start:6.821,lon_start:101.233,
-  lat_end:6.825,lon_end:101.244,coordinates_json:[[101.233,6.821],[101.244,6.825]],water_level_cm:50,traffic_status:"CLOSED",
+const flood={id:"F-LOCAL-CLOSURE",route_no:"43",section_name:"ช่วงน้ำท่วมทดสอบ",km_start:"5+000",km_end:"6+000",lat_start:5.811,lon_start:101.233,
+  lat_end:5.815,lon_end:101.244,coordinates_json:[[101.233,5.811],[101.244,5.815]],water_level_cm:50,traffic_status:"CLOSED",
   latest_photo_url:"",is_active:true,updated_at:date,direction_meta:{}};
 const detour={id:"D-LOCAL-CLOSURE",is_active:true,geometry_revision:2,updated_at:date,direction_mode:"FORWARD_ONLY",flood_id_ref:flood.id,
   route_name:"ทางเลี่ยงประกอบข้อมูล",lon_start:101.202,lat_start:6.816,lon_end:101.294,lat_end:6.838,
@@ -56,6 +56,8 @@ test("closure details, map and photo persist locally and appear on both pages on
     await section.getByLabel(`พื้นที่ ${side}`).fill(`พื้นที่ ${side} สำหรับทดสอบ`);
     await section.getByLabel(`จุดสังเกต ${side}`).fill(`จุดสังเกต ${side}`);
   }
+  await expect(map.locator(".doh-draft-endpoint")).toHaveCount(2);
+  await expect(map.locator(".doh-draft-endpoint.leaflet-marker-draggable")).toHaveCount(0);
   await section.getByRole("button",{name:"หาแนวถนน A–B"}).click();
   await expect(section.getByText("แสดงแนวจากระบบแล้ว",{exact:false})).toBeVisible();
   await section.getByLabel("เริ่มปิด (วันและเวลาไทย)").fill("2026-11-24T08:10");
@@ -74,7 +76,17 @@ test("closure details, map and photo persist locally and appear on both pages on
   await publicPage.goto(href!);
   await expect(publicPage.getByRole("heading",{name:"ข้อมูลปิดการจราจร"})).toBeVisible();
   await expect(publicPage.getByText("ปิดทั้งสองทิศทาง · กม. 0+000 ถึง กม. 12+000")).toBeVisible();
-  await expect(publicPage.getByTestId("local-closure-map").locator(".leaflet-container")).toBeVisible();
+  const savedMap=publicPage.getByTestId("local-closure-map").locator(".leaflet-container");
+  await expect(savedMap).toBeVisible();
+  await expect(savedMap.locator(".doh-draft-endpoint")).toHaveCount(2);
+  await expect(savedMap.locator(".doh-draft-endpoint.leaflet-marker-draggable")).toHaveCount(0);
+  await expect.poll(()=>savedMap.evaluate(el=>{
+    const map=el.getBoundingClientRect();
+    return [...el.querySelectorAll(".doh-draft-endpoint")].every(pin=>{
+      const box=pin.getBoundingClientRect(),x=box.x+box.width/2,y=box.y+box.height/2;
+      return x>=map.left&&x<=map.right&&y>=map.top&&y<=map.bottom;
+    });
+  })).toBe(true);
   await expect(publicPage.getByRole("img",{name:"รูปจุดปิด A"})).toBeVisible();
   await expect(publicPage.getByText("ทางเลี่ยงประกอบข้อมูล",{exact:true})).toBeVisible();
   const reread=await open(page,isMobile);

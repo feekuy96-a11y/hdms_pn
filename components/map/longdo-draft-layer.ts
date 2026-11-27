@@ -13,6 +13,7 @@ export interface DraftPickMarkerPoint {
   lon: number;
   label: string;
   mode: string;
+  draggable?: boolean;
 }
 
 export interface RenderDraftAndConflictLayerParams {
@@ -167,7 +168,7 @@ export function renderDraftAndConflictLayer({
       const marker = L.marker([point.lat, point.lon], {
         icon,
         zIndexOffset: isReversePin ? 1250 : 1200,
-        draggable: true,
+        draggable: point.draggable !== false,
       })
         .bindTooltip(tooltipText, { direction: "top" })
         .addTo(group);

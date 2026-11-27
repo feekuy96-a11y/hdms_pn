@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Construction, MapPin, Route, ImagePlus, Save } from "lucide-react";
 import type { FloodRoute, SystemDataPayload } from "@/db/default-data";
 import { snapRouteAction } from "@/app/actions/doh-actions";
@@ -28,7 +28,6 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
   const [pick,setPick]=useState<"A"|"B"|null>(null);
   const [busy,setBusy]=useState(false);
   const [feedback,setFeedback]=useState("");
-  const seq=useRef(0);
   const center=useMemo<ClosureCoordinate|null>(()=>
     Number.isFinite(incident.lon_start)&&Number.isFinite(incident.lat_start) ? [incident.lon_start,incident.lat_start] : null,
   [incident.lon_start,incident.lat_start]);
@@ -41,11 +40,11 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
   function pickPoint(lat:number,lon:number,mode:string) {
     if(busy||!pick||mode!==`CLOSURE-${pick}`)return;
     const side=pick==="A"?"a":"b";
-    const point:ClosureCoordinate=[lon,lat], token=++seq.current;
+    const point:ClosureCoordinate=[lon,lat];
     setRecord(r=>({...r,line:[],[side]:{...r[side],position:point,area:""}}));
     setSaved(false);setPick(null);setFeedback("");
     void resolveDetourPinArea(...point).then(area=>{
-      if(!area||token!==seq.current)return;
+      if(!area)return;
       setRecord(r=>r[side].position===point&&!r[side].area?{
         ...r,[side]:{...r[side],area:[area.tambon&&`ต.${area.tambon}`,area.amphoe&&`อ.${area.amphoe}`,area.province&&`จ.${area.province}`].filter(Boolean).join(" ")}
       }:r);

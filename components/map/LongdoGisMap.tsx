@@ -86,7 +86,7 @@ interface LongdoGisMapProps {
   draftReverseCoordinates?: [number, number][];
   draftWaypoints?: [number, number][];
   draftReverseWaypoints?: [number, number][];
-  draftPickMarkers?: { lat: number; lon: number; label: string; mode: string }[];
+  draftPickMarkers?: { lat: number; lon: number; label: string; mode: string; draggable?: boolean }[];
   draftDirectionMeta?: "TWO_WAY" | "FORWARD" | "REVERSE" | "UNKNOWN";
   draftConflictPoints?: [number, number][];
   onWaypointDragged?: (index: number, newCoord: [number, number]) => void;
@@ -101,6 +101,7 @@ interface LongdoGisMapProps {
   editableOfficeId?: string | null;
   draftMode?: "FLOOD" | "DETOUR";
   focusCoordinates?: [number, number] | null;
+  fitPreviewCoordinates?: [number, number][];
   incomingGisLines?: [number, number][][];
   className?: string;
   publicMode?: boolean;
@@ -151,6 +152,7 @@ export function LongdoGisMap({
   editableOfficeId = null,
   draftMode = "FLOOD",
   focusCoordinates = null,
+  fitPreviewCoordinates,
   incomingGisLines = EMPTY_LINES,
   className = "h-full w-full",
   publicMode = false,
@@ -557,12 +559,17 @@ export function LongdoGisMap({
     };
   }, [mapReady]);
 
-  // 2. FlyTo focus when coordinates change
+  // Wait for initialization; a read-only record may have widely separated endpoints.
   useEffect(() => {
-    if (leafletMapRef.current && focusCoordinates) {
-      leafletMapRef.current.flyTo(toLeafletLatLng(focusCoordinates) as any, 13, { duration: 1.2 });
+    const map = leafletMapRef.current;
+    if (!mapReady || !map) return;
+    if (fitPreviewCoordinates && fitPreviewCoordinates.length >= 2) {
+      map.stop();
+      map.fitBounds(fitPreviewCoordinates.map(toLeafletLatLng) as any, { padding: [28, 28], maxZoom: 14, animate: false });
+    } else if (focusCoordinates) {
+      map.flyTo(toLeafletLatLng(focusCoordinates) as any, 13, { duration: 1.2 });
     }
-  }, [focusCoordinates]);
+  }, [focusCoordinates, fitPreviewCoordinates, mapReady]);
 
   // Coordinate editing has priority over feature inspection. The cursor is also
   // restored reliably when the operator exits the edit command.

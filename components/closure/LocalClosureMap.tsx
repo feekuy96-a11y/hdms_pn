@@ -15,11 +15,14 @@ export function LocalClosureMap({ data, record, center, pick, onPick }: {
   }),[data]);
   const pins = useMemo(() => ([
     [record.a.position,"A"], [record.b.position,"B"],
-  ] as const).flatMap(([p,label]) => p ? [{ lon:p[0],lat:p[1],label,mode:`CLOSURE-${label}` }] : []),
+  ] as const).flatMap(([p,label]) => p ? [{ lon:p[0],lat:p[1],label,mode:`CLOSURE-${label}`,draggable:false }] : []),
   [record.a.position,record.b.position]);
+  const readOnlyBounds = useMemo(() => onPick ? undefined :
+    [...(record.a.position ? [record.a.position] : []), ...record.line, ...(record.b.position ? [record.b.position] : [])],
+  [onPick,record.a.position,record.b.position,record.line]);
   return <div data-testid="local-closure-map" className="relative h-72 overflow-hidden rounded-xl border border-[var(--border-subtle)]">
     <Map systemData={context} selectedFloodId="" onSelectFlood={noSelection}
       adminPickMode={pick ? `CLOSURE-${pick}` : null} onCoordinatePicked={onPick}
-      draftCoordinates={record.line} draftPickMarkers={pins} draftMode="FLOOD" focusCoordinates={center}/>
+      draftCoordinates={record.line} draftPickMarkers={pins} draftMode="FLOOD" focusCoordinates={center} fitPreviewCoordinates={readOnlyBounds}/>
   </div>;
 }
