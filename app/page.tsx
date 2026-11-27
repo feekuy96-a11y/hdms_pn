@@ -20,7 +20,7 @@ import { CitizenInstallPrompt } from "@/components/public/CitizenInstallPrompt";
 import { CitizenOfficeDirectory } from "@/components/public/CitizenOfficeDirectory";
 import { CitizenThemeSymbol } from "@/components/public/CitizenThemeSymbol";
 import { GisFocusModeBar } from "@/components/public/GisFocusModeBar";
-import type { GisFocusViewportSnapshot } from "@/lib/gis-focus-mode";
+import type { GisFocusDirection, GisFocusViewportSnapshot } from "@/lib/gis-focus-mode";
 
 const LongdoGisMap = dynamic(
   () => import("@/components/map/LongdoGisMap").then((mod) => mod.LongdoGisMap),
@@ -244,6 +244,11 @@ export default function HomePage() {
     onBeforeEnterFocus: handleBeforeEnterFocus,
     onAfterExitFocus: handleAfterExitFocus,
   });
+
+  const [returnFloodFocus, setReturnFloodFocus] = useState<{ floodId: string; detourId: string; directions: GisFocusDirection[] } | null>(null);
+  useEffect(() => {
+    if (gisFocus.status !== "focused" || gisFocus.targetType !== "DETOUR") setReturnFloodFocus(null);
+  }, [gisFocus.status, gisFocus.targetType]);
 
   const handleEnterDetourFocus = (...args: Parameters<typeof enterDetourFocus>) => {
     if (!args[0]) return;
@@ -982,13 +987,15 @@ export default function HomePage() {
             onChangeDirection={(direction) =>
               updateFocusOptions({ direction, refit: true, openDirectionEndpoint: true })
             }
-            onToggleLinkedDetour={(show, detourId) =>
-              updateFocusOptions({
-                showLinkedDetour: show,
-                linkedDetourId: detourId,
-                refit: true,
-              })
-            }
+            onOpenLinkedDetour={(detourId, directions) => {
+              if (gisFocus.targetType !== "FLOOD" || !gisFocus.targetId || !directions.length) return;
+              setReturnFloodFocus({ floodId: gisFocus.targetId, detourId, directions });
+              handleEnterDetourFocus(detourId, directions[0]);
+            }}
+            linkedDirections={returnFloodFocus?.detourId === gisFocus.targetId ? returnFloodFocus?.directions : undefined}
+            onFloodDetails={flood => handleSelectFlood(flood)}
+            onReturnToFlood={gisFocus.targetType === "DETOUR" && returnFloodFocus?.detourId === gisFocus.targetId
+              ? () => handleEnterFloodFocus(returnFloodFocus.floodId) : undefined}
           />
           {selectedRouteFilter !== "ALL" && activeRouteChip && (
             <div
