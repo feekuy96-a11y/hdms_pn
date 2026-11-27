@@ -239,7 +239,7 @@ test.describe("Shared GIS Focus Mode — Pure State & Geometry Contracts", () =>
 });
 
 test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
-  test("Flood Focus -> linked detour overlay -> A/B switch -> Exit via Esc on Desktop", async ({ page, isMobile }) => {
+  test("Flood Focus -> linked detour -> A/B switch -> Exit via Esc on Desktop", async ({ page, isMobile }) => {
     test.skip(isMobile, "Desktop Esc & sidebar verification");
     const payload = createMockPayload();
     await page.route("**/functions/v1/hdms-api", (route) =>
@@ -260,10 +260,13 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
     await expect(focusBar).toContainText("ซ่อนชั้นข้อมูลอื่นชั่วคราว");
     await expect(focusBar).toContainText("ระดับน้ำ 35 ซม.");
 
-    const overlayBtn = page.getByTestId("gis-focus-toggle-linked-detour");
-    await expect(overlayBtn).toBeVisible();
-    await overlayBtn.click();
-    await expect(overlayBtn).toHaveAttribute("aria-pressed", "true");
+    const openDetour = page.getByTestId("gis-focus-open-linked-detour");
+    await expect(openDetour).toBeVisible();
+    await expect(focusBar.locator("[data-flood-focus-status]").first()).toContainText("รถเล็กผ่านไม่ได้");
+    await expect(focusBar.getByRole("button", { name: "อ่านคำแนะนำเส้นทาง" })).toHaveCount(0);
+    await openDetour.click();
+    await expect(focusBar).toContainText("โหมดโฟกัส: เส้นทางเลี่ยง");
+    await expect(focusBar.getByRole("button", { name: "กลับไปจุดน้ำท่วม" })).toBeVisible();
     await expect(page.getByTestId("gis-focus-dir-reverse")).toBeVisible();
     await page.getByTestId("gis-focus-dir-reverse").click();
     await expect(page.getByTestId("gis-focus-dir-reverse")).toHaveAttribute("aria-pressed", "true");
@@ -275,6 +278,112 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
     if (await focusBar.isVisible()) await page.keyboard.press("Escape");
     await expect(focusBar).toHaveCount(0);
     await expect(floodDialog).toHaveCount(0);
+  });
+
+  test("multiple linked detours require a choice and open that route's B marker before returning to the same flood", async ({ page, isMobile }, testInfo) => {
+    const payload = createMockPayload();
+    const first = payload.detourRoutes[0];
+    const second = structuredClone(first);
+    second.id = "D-SECOND-LINK";
+    second.route_name = "ทางเลี่ยงสายเลือกทดสอบ";
+    second.direction_mode = "REVERSE_ONLY";
+    second.detour_meta = { ...second.detour_meta, reverse_distance_m: 1900, reverse_duration_s: 180, end_point_photo: { caption: "จุดสังเกตของเส้นที่สอง" } };
+    payload.floodRoutes[1].traffic_status = "CLOSED";
+    payload.detourRoutes.push(second);
+    await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
+    await page.goto(`${base}/`);
+    await page.locator(".doh-map-capsule-pin").first().press("Enter");
+    await page.locator(".doh-flood-leaflet-popup").getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).click();
+    const bar = page.getByTestId("gis-focus-mode-bar");
+    await expect(bar).toContainText("นาจวก - ดอนยาง");
+    await expect(bar.getByRole("listitem").filter({ hasText: "ซ้ายทาง" })).toContainText("รถเล็กผ่านไม่ได้");
+    await expect(bar.getByRole("listitem").filter({ hasText: "ขวาทาง" })).toContainText("ผ่านไม่ได้");
+    await expect(page.locator(".hdms-focus-endpoint")).toHaveCount(0);
+    const choices = bar.getByRole("list", { name: "ทางเลี่ยงที่เกี่ยวข้อง" });
+    await bar.getByRole("button", { name: "ดูทางเลี่ยง (2 เส้น)", exact: true }).click();
+    await expect(choices.getByRole("button")).toHaveCount(2);
+    const secondChoice = choices.getByRole("button", { name: /ทางเลี่ยงสายเลือกทดสอบ.*เฉพาะขากลับ/ });
+    await expect(secondChoice).toContainText("ขากลับ: 1.9 กม. · ประมาณ 3 นาที");
+    await page.screenshot({ path: testInfo.outputPath("flood-focus-linked-route-selection.png"), animations: "disabled" });
+    await expect(bar).toContainText("โหมดโฟกัส: เหตุการณ์น้ำท่วม");
+    await expect(page.locator(".hdms-focus-endpoint")).toHaveCount(0);
+    await secondChoice.click();
+    await expect(bar).toContainText("ทางเลี่ยงสายเลือกทดสอบ");
+    if (isMobile) await bar.getByRole("button", { name: "ตัวเลือกเส้นทาง", exact: true }).click();
+    await expect(bar.getByTestId("gis-focus-dir-forward")).toHaveCount(0);
+    await bar.getByTestId("gis-focus-dir-reverse").click();
+    const popup = page.locator("[data-detour-endpoint=END]");
+    await expect(popup).toBeVisible();
+    await expect(popup).toContainText("จุดสังเกตของเส้นที่สอง");
+    await bar.getByRole("button", { name: "กลับไปจุดน้ำท่วม" }).click();
+    await expect(bar).toContainText("นาจวก - ดอนยาง");
+    await expect(bar).toContainText("โหมดโฟกัส: เหตุการณ์น้ำท่วม");
+    await expect(page.locator("[data-detour-endpoint], .hdms-focus-endpoint")).toHaveCount(0);
+    await expect(choices).toHaveCount(0);
+    await expect(bar.getByRole("button", { name: "ดูทางเลี่ยง (2 เส้น)", exact: true })).toBeVisible();
+  });
+
+  test("flood focus uses visible severity tokens and distinguishes freshness in both themes", async ({ page }) => {
+    const payload = createMockPayload();
+    payload.floodRoutes[1].traffic_status = "CLOSED";
+    await page.clock.install({ time: new Date("2026-11-24T07:00:00.000Z") });
+    await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
+    await page.goto(`${base}/`);
+    await page.locator(".doh-map-capsule-pin").first().press("Enter");
+    await page.locator(".doh-flood-leaflet-popup").getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).click();
+    const bar = page.getByTestId("gis-focus-mode-bar");
+    const freshness = bar.locator(".citizen-freshness");
+    await expect(freshness).toHaveAttribute("data-freshness", "fresh");
+    await expect(freshness.locator("svg")).toHaveCount(1);
+    const readColor = (severity: string) => bar.locator(`[data-flood-focus-status=${severity}]`).evaluate(node => getComputedStyle(node).color);
+    const red = await readColor("red"), orange = await readColor("orange");
+    expect(red).not.toBe(orange);
+    const themeButton = page.getByRole("button", { name: /เปิดธีม(?:มืด|สว่าง)/ });
+    const theme = page.locator(".citizen-ui");
+    const oldTheme = await theme.getAttribute("data-citizen-theme");
+    await themeButton.click();
+    await expect(theme).not.toHaveAttribute("data-citizen-theme", oldTheme!);
+    expect(await readColor("red")).not.toBe(red);
+    expect(await readColor("orange")).not.toBe(orange);
+    expect(await readColor("red")).not.toBe(await readColor("orange"));
+    await page.clock.fastForward(3 * 60 * 60_000);
+    await expect(freshness).toHaveAttribute("data-freshness", "aging");
+    await expect(freshness.locator("svg")).toHaveCount(0);
+    await page.clock.fastForward(3 * 60 * 60_000);
+    await expect(freshness).toHaveAttribute("data-freshness", "stale");
+    await expect(freshness).toContainText("โปรดตรวจสอบซ้ำ");
+  });
+
+  test("unconfirmed links do not count as eligible detour choices", async ({ page }) => {
+    const payload = createMockPayload();
+    const first = payload.detourRoutes[0];
+    payload.detourRoutes.push({ ...first, id: "D-PENDING", route_name: "ทางเลี่ยงรอตรวจสอบ" });
+    payload.eventDetourLinks = [
+      { eventId: "EV-F-42-LT", detourId: first.id, eventDirection: "BOTH", detourDirection: "FORWARD", position: 1, recommendation: "RECOMMENDED", reviewedGeometryVersion: 1 },
+      { eventId: "EV-F-42-LT", detourId: "D-PENDING", eventDirection: "BOTH", detourDirection: "TWO_WAY", position: 2, recommendation: "PENDING", reviewedGeometryVersion: null },
+    ];
+    await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
+    await page.goto(`${base}/`);
+    await page.locator(".doh-map-capsule-pin").first().press("Enter");
+    await page.locator(".doh-flood-leaflet-popup").getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).click();
+    const bar = page.getByTestId("gis-focus-mode-bar");
+    await bar.getByRole("button", { name: "ดูทางเลี่ยง", exact: true }).click();
+    await expect(bar).toContainText(first.route_name);
+    await expect(bar.getByRole("list", { name: "ทางเลี่ยงที่เกี่ยวข้อง" })).toHaveCount(0);
+    await expect(bar.getByTestId("gis-focus-dir-reverse")).toHaveCount(0);
+  });
+
+  test("flood focus without linked routes does not offer an unrelated detour", async ({ page }) => {
+    const payload = createMockPayload();
+    payload.detourRoutes = [];
+    await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
+    await page.goto(`${base}/`);
+    await page.locator(".doh-map-capsule-pin").first().press("Enter");
+    await page.locator(".doh-flood-leaflet-popup").getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).click();
+    const bar = page.getByTestId("gis-focus-mode-bar");
+    await expect(bar).toContainText("ยังไม่มีทางเลี่ยงที่ยืนยันทิศทางสำหรับจุดนี้");
+    await expect(bar.getByTestId("gis-focus-open-linked-detour")).toHaveCount(0);
+    await expect(bar.getByRole("button", { name: "รายละเอียดน้ำท่วม" })).toBeVisible();
   });
 
   test("Detour Focus from DetourDossierModal on Mobile collapses drawer and exits cleanly", async ({ page, isMobile }) => {
@@ -685,9 +794,8 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
     expect(layoutCheck.hitFloatingList).toEqual({ present: true, hitSelf: true });
     expect(layoutCheck.hitExitBtn).toEqual({ present: true, hitSelf: true });
 
-    // Toggle linked detour overlay -> verify fitBounds places endpoints cleanly above mobile Focus Bar
-    await page.getByRole("button", { name: "ตัวเลือกเส้นทาง" }).click();
-    await page.getByTestId("gis-focus-toggle-linked-detour").click();
+    // Opening the linked route should keep its endpoints clear of the mobile Focus Bar.
+    await page.getByTestId("gis-focus-open-linked-detour").click();
     await page.waitForTimeout(550);
 
     const focusClearance = await page.evaluate(() => {
@@ -727,7 +835,7 @@ test.describe("Shared GIS Focus Mode — Public Map E2E", () => {
     const focusBar = page.getByTestId("gis-focus-mode-bar");
     await expect(focusBar).toBeVisible();
     await page.waitForTimeout(450);
-    await page.getByTestId("gis-focus-toggle-linked-detour").click();
+    await page.getByTestId("gis-focus-open-linked-detour").click();
     await page.waitForTimeout(550);
 
     const desktopLayout = await page.evaluate(() => {
