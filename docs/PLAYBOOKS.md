@@ -3,7 +3,7 @@
 ทุก playbook ใช้ร่วมกับ `AGENTS.md` (กฎ R1–R12, Challenge Protocol, รูปแบบรายงาน) เลือกเฉพาะอันที่ตรงกับงาน
 
 ## P0 ก่อนเริ่มทุกงาน (1 นาที)
-1. จัดประเภทงาน: UI / DB / Edge Function / ประสิทธิภาพ / deploy / CI แดง / เอกสาร
+1. จัดประเภทงาน: UI / DB / Edge Function / ประสิทธิภาพ / deploy / CI แดง / เอกสาร แล้วใช้ [เช็กลิสต์ก่อนเข้า CI](PRE_CI_CHECKLIST.md) สำหรับเกณฑ์ผ่านและหลักฐานแต่ละช่วง
 2. `grep -rn "<คำสำคัญ>" docs/archive/history/CHANGELOG.md docs/BACKLOG.md docs/archive/history/SUPPLEMENTAL_RULES.md docs/archive/history/DECISION_LOG.md | head` — เคยทำ/ตัดสินใจเรื่องนี้ไว้หรือยัง
 3. ทำ Challenge (AGENTS §3) ก่อนลงมือ — ถ้าแนวคิดมีปัญหา ชี้และเสนอทางเลือก
 
@@ -25,7 +25,7 @@
 ### การรัน E2E ในเครื่องแบบประหยัดเวลา (ตกลงแล้ว 2026-11-18)
 - ใช้ `PLAYWRIGHT_STATIC=1` ต่อ `out/` จาก `npm run build:pages` ให้ตรงกับ Production จริง ไม่ต้องรันรอบ `next start` ซ้ำ
 - รันเฉพาะไฟล์ `tests/e2e/*.spec.ts` ที่ตรงกับส่วนที่แก้ ร่วมกับ `tests/e2e/smoke.spec.ts` (ไม่ต้องรันทั้งชุดในเครื่อง) และจำกัดไม่เกิน 2 workers บน Windows (กำหนดไว้ใน `playwright.config.ts` แล้ว) เพื่อไม่ให้ Chromium แย่ง CPU จน timeout
-- ใช้ GitHub Actions (`ci.yml`) รันชุด E2E ฉบับเต็มบน static export รอบเดียวตอนเปิด PR
+- ใช้ GitHub Actions (`ci.yml`) ตรวจ static export เมื่อเปิดหรืออัปเดต PR และเมื่อ push เข้า `main`: browser 2 ชุด, offline ในชุดแรก และสรุป `verify`
 
 ## P3 งานฐานข้อมูล / RPC
 1. ตรวจนิยามจริง: `SELECT pg_get_functiondef('public.<fn>()'::regprocedure);` (ขอให้เจ้าของรัน หรืออ่านผ่าน MCP แบบอ่านอย่างเดียว) — ห้ามเชื่อไฟล์ใน `db/*.sql`
@@ -49,7 +49,7 @@
 4. กฎเฉพาะแผนที่ใน `docs/ARCHITECTURE.md` §5
 
 ## P6 Deploy / ย้อนกลับ / ช่วงเกิดเหตุน้ำท่วม
-- Deploy ปกติ: push main → `deploy.yml` (lint → typecheck → build:pages → Pages) ดูผลที่ GitHub → Actions
+- Deploy ปกติ: push `main` → `ci.yml` ผ่าน → `deploy.yml` สร้างและปล่อย Pages จาก SHA ที่ผ่าน CI ดูผลที่ GitHub → Actions
 - ช่วงเกิดเหตุ (ข้อมูลประชาชนต้องถูกต้องที่สุด): **ห้ามปล่อยฟีเจอร์ใหม่ที่ไม่ผ่านด่านตรวจ** ถ้าต้องแก้ด่วน ให้แก้ให้เล็กที่สุดและใช้ Re-run/Manual dispatch หลังตรวจ log
 - ย้อนกลับเว็บ: `git revert <commit>` แล้ว push (หรือ revert ผ่านหน้า commit ใน GitHub) · ย้อน Edge Function: deploy ไฟล์เวอร์ชันก่อนหน้า · ย้อน SQL: ตามแผนในคอมเมนต์ migration
 - ย้อนเว็บและ Edge Function **พร้อมกัน** ถ้าสัญญา API เปลี่ยน
