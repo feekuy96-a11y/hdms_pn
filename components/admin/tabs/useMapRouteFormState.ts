@@ -6,7 +6,7 @@ import type {
   SystemDataPayload,
 } from "@/db/default-data";
 import { clearAdminMapDraft } from "@/components/admin/tabs/map-draft-storage";
-import { compressImageToAdaptiveBase64, reverseGeocodeTambonAmphoe } from "@/lib/gis-utils";
+import { compressImageToAdaptiveBase64, resolveDetourPinArea } from "@/lib/gis-utils";
 import type { DetourDirectionModeType } from "@/lib/constants";
 import {
   FloodDirectionCode,
@@ -237,12 +237,14 @@ export function useMapRouteFormState({
       options?.source ?? (options?.manual ? "MANUAL" : "ROUTE_ENDPOINT");
     const reqId = ++photoAreaRequestRef.current[target];
     const manualFields = manualPhotoAreaFields.current[target];
+    const freshPin = resolvedSource === "MAP" || resolvedSource === "MANUAL";
+    if (freshPin) manualFields.clear();
     const nowIso = new Date().toISOString();
 
     setLoc((prev) => {
       const sameCoords = Number(prev.lat) === coords.lat && Number(prev.lon) === coords.lon;
       const preserve = (field: AreaField, hint: string) =>
-        manualFields.has(field) ? prev[field] : hint || (sameCoords ? prev[field] : "");
+        manualFields.has(field) ? prev[field] : hint || (!freshPin && sameCoords ? prev[field] : "");
       return {
         lat: formattedLat,
         lon: formattedLon,
@@ -259,15 +261,13 @@ export function useMapRouteFormState({
       photoAreaRequestRef.current[target] === reqId &&
       Number(prev.lat) === Number(formattedLat) && Number(prev.lon) === Number(formattedLon);
     try {
-      const lookup = await reverseGeocodeTambonAmphoe(coords.lon, coords.lat);
-      // The nearest-district fallback is only an estimate, not a verified endpoint area.
-      const loc = lookup?.source === "district" ? null : lookup;
+      const loc = await resolveDetourPinArea(coords.lon, coords.lat);
       setLoc((prev) => {
         if (!isCurrent(prev)) return prev;
         const keepOrLookup = (field: AreaField, value?: string) =>
           manualFields.has(field) ? prev[field] : prev[field] || value || "";
-        const subdistrict = keepOrLookup("subdistrict", loc?.subdistrict);
-        const district = keepOrLookup("district", loc?.district);
+        const subdistrict = keepOrLookup("subdistrict", loc?.tambon);
+        const district = keepOrLookup("district", loc?.amphoe);
         const province = keepOrLookup("province", loc?.province);
         return {
           ...prev,

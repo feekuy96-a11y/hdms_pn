@@ -25,7 +25,8 @@ import {
   extractDirectionalAdvice,
   extractDirectionalAdviceForEdit,
   generateAutoDetourAdvice,
-  localArea,
+  parseDetourAdvicePin,
+  resolveDetourPinArea,
 } from "@/lib/gis-utils";
 import {
   calculatePolylineRoadDistanceKm,
@@ -319,17 +320,17 @@ export function useDetourManagement({
 
     if (validTarget && (!nextSub || !nextDist)) {
       const targetId = d.id;
-      void localArea(targetLon, targetLat)
+      void resolveDetourPinArea(targetLon, targetLat)
         .then((loc) => {
           if (modalEditDetourIdRef.current !== targetId) return;
           setLoc((prev) => {
-            const finalSub = prev.subdistrict || loc.tambon || "";
-            const finalDist = prev.district || loc.amphoe || "";
+            const finalSub = prev.subdistrict || loc?.tambon || "";
+            const finalDist = prev.district || loc?.amphoe || "";
             return {
               ...prev,
               subdistrict: finalSub,
               district: finalDist,
-              province: prev.province || loc.province || "ปัตตานี",
+              province: prev.province || loc?.province || "ปัตตานี",
               areaStatus: finalSub || finalDist ? "resolved" : "not_found",
             };
           });
@@ -425,15 +426,23 @@ export function useDetourManagement({
       return undefined;
     };
 
+    const start = parseDetourAdvicePin(editingDetour.lon_start, editingDetour.lat_start);
+    const end = parseDetourAdvicePin(editingDetour.lon_end, editingDetour.lat_end);
+    if (!start || !end) {
+      onToast("กรุณากำหนดพิกัดจุด A และ B ก่อนวิเคราะห์คำแนะนำ");
+      return;
+    }
     const advice = await generateAutoDetourAdvice(
-      [editingDetour.lon_start, editingDetour.lat_start],
-      [editingDetour.lon_end, editingDetour.lat_end],
+      start,
+      end,
       forwardCoords,
-      linkedFlood?.route_no || "43",
+      linkedFlood?.route_no,
       systemData.highwayLayers || [],
       reverseCoords,
       editingDetour.direction_mode,
       {
+        startPin: parseDetourAdvicePin(editDetourStartPhotoLocation.lon, editDetourStartPhotoLocation.lat) ?? undefined,
+        endPin: parseDetourAdvicePin(editDetourEndPhotoLocation.lon, editDetourEndPhotoLocation.lat) ?? undefined,
         forwardWaypoints: parseCoordArray(editingDetour.detour_meta?.waypoints_json),
         reverseWaypoints: parseCoordArray(editingDetour.reverse_waypoints_json),
       }

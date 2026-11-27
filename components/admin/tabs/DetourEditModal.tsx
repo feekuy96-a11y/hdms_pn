@@ -25,7 +25,7 @@ import type {
 import { DirectionSwitch } from "@/components/ui/DirectionSwitch";
 import { calculatePolylineRoadDistanceKm } from "@/lib/detour-presentation";
 import { normalizeMediaUrl } from "@/lib/flood-event-schema";
-import { composeDirectionalAdvice, extractDirectionalAdviceForEdit, localArea } from "@/lib/gis-utils";
+import { composeDirectionalAdvice, extractDirectionalAdviceForEdit, resolveDetourPinArea } from "@/lib/gis-utils";
 import {
   EMPTY_DETOUR_PHOTO_LOCATION,
   type DetourPhotoLocationState,
@@ -376,23 +376,24 @@ export function DetourEditModal({
         lon: validCoord ? lon.toFixed(6) : "",
         subdistrict: savedSub,
         district: savedDist,
-        province: savedProv || (validCoord ? "ปัตตานี" : ""),
+        province: savedProv,
         locationSource: resolvedSource,
         resolvedAt,
         areaStatus: hasArea ? "resolved" : validCoord ? "resolving" : "idle",
       });
       if (validCoord && (!savedSub || !savedDist)) {
-        void localArea(lon, lat)
+        void resolveDetourPinArea(lon, lat)
           .then((loc) => {
             if (targetDetourId && activeDetourIdRef.current !== targetDetourId) return;
             setLoc((prev) => {
-              const nextSub = prev.subdistrict || loc.tambon || "";
-              const nextDist = prev.district || loc.amphoe || "";
+              if (Number(prev.lat) !== Number(lat.toFixed(6)) || Number(prev.lon) !== Number(lon.toFixed(6))) return prev;
+              const nextSub = prev.subdistrict || loc?.tambon || "";
+              const nextDist = prev.district || loc?.amphoe || "";
               return {
                 ...prev,
                 subdistrict: nextSub,
                 district: nextDist,
-                province: prev.province || loc.province || "ปัตตานี",
+                province: prev.province || loc?.province || "",
                 areaStatus: nextSub || nextDist ? "resolved" : "not_found",
                 resolvedAt: new Date().toISOString(),
               };

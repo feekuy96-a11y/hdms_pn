@@ -5,6 +5,7 @@ import { SystemDataPayload } from "@/db/default-data";
 import {
   compressImageToAdaptiveBase64,
   generateAutoDetourAdvice,
+  parseDetourAdvicePin,
 } from "@/lib/gis-utils";
 import { readRouteFile } from "@/lib/route-import";
 import type { FloodPhotoItem } from "@/lib/flood-event-schema";
@@ -21,6 +22,8 @@ export interface UseMapRouteMediaAndImportParams {
   startLon: string | number;
   endLat: string | number;
   endLon: string | number;
+  detourStartPin?: { lat: string; lon: string };
+  detourEndPin?: { lat: string; lon: string };
   setStartLat: (v: string | number) => void;
   setStartLon: (v: string | number) => void;
   setEndLat: (v: string | number) => void;
@@ -49,7 +52,7 @@ export function useMapRouteMediaAndImport(params: UseMapRouteMediaAndImportParam
     setSectionName,
     setDetourName,
     setDetourDesc,
-    startLat, startLon, endLat, endLon,
+    startLat, startLon, endLat, endLon, detourStartPin, detourEndPin,
     setStartLat, setStartLon, setEndLat, setEndLon,
     draftCoordinates, setDraftCoordinates,
     draftWaypoints, setDraftWaypoints,
@@ -102,20 +105,24 @@ export function useMapRouteMediaAndImport(params: UseMapRouteMediaAndImportParam
 
   // Generate Detour Advice
   const handleGenerateDetourAdviceClick = async () => {
-    const numSLat = Number(startLat) || 6.834;
-    const numSLon = Number(startLon) || 101.186;
-    const numELat = Number(endLat) || 6.839;
-    const numELon = Number(endLon) || 101.192;
+    const start = parseDetourAdvicePin(startLon, startLat);
+    const end = parseDetourAdvicePin(endLon, endLat);
+    if (!start || !end) {
+      onToast("กรุณากำหนดพิกัดจุด A และ B ก่อนวิเคราะห์คำแนะนำ");
+      return;
+    }
 
     const advice = await generateAutoDetourAdvice(
-      [numSLon, numSLat],
-      [numELon, numELat],
+      start,
+      end,
       draftCoordinates,
       routeNo,
       systemData.highwayLayers || [],
       draftReverseCoordinates,
       detourDirectionMode,
       {
+        startPin: parseDetourAdvicePin(detourStartPin?.lon, detourStartPin?.lat) ?? undefined,
+        endPin: parseDetourAdvicePin(detourEndPin?.lon, detourEndPin?.lat) ?? undefined,
         forwardWaypoints: draftWaypoints,
         reverseWaypoints: draftReverseCoordinates.length >= 2 ? draftReverseWaypoints : undefined,
       }
