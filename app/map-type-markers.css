@@ -20,6 +20,15 @@
   color: var(--hdms-white);
 }
 
+/* The inner flood glyph has one meaning. Status keeps non-color cues on
+   the outer edge, and readable status text in the marker label/details. */
+.doh-map-capsule-pin .doh-type-flood.doh-capsule-red { outline-style: double; outline-width: 3px; }
+.doh-map-capsule-pin .doh-type-flood.doh-capsule-orange { outline-style: dashed; }
+.doh-map-capsule-pin .doh-type-flood.doh-capsule-amber { outline-style: dotted; }
+.doh-map-capsule-pin .doh-type-flood.doh-capsule-sky { outline-style: solid; }
+.doh-map-capsule-pin .doh-type-flood:is(.doh-capsule-green,.doh-capsule-emerald) { outline-style: solid; outline-width: 1px; }
+.doh-map-capsule-pin .doh-type-flood.doh-capsule-slate { outline-style: dashed; outline-offset: 1px; }
+
 .doh-type-flood-wave {
   display: inline-flex;
   align-items: center;
