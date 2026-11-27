@@ -1,5 +1,7 @@
 "use client";
 
+import type { AdminRegistryMapFilter } from "@/lib/admin-registry-map-filter";
+
 import React from "react";
 import workspace from "../AdminWorkspace.module.css";
 import { SystemDataPayload } from "@/db/default-data";
@@ -16,7 +18,7 @@ import { DetourViewModal } from "./DetourViewModal";
 
 interface DetourManagementTabProps {
   systemData: SystemDataPayload;
-  onMapRouteIdsChange?: (ids: ReadonlySet<string> | null) => void;
+  onMapRouteIdsChange?: (filter: AdminRegistryMapFilter | null) => void;
   onDataRefresh: (data?: any) => Promise<any> | void;
   onToast: (msg: string) => void;
   showConfirmModal: (title: string, message: string, onConfirm: () => void) => void;
@@ -117,11 +119,12 @@ export function DetourManagementTab({
     showErrorModal,
   });
 
+  const isMapRegistryNarrowed = detourFilter !== "ALL" || floodFilter !== "ALL" || searchQuery.trim() !== "";
   React.useEffect(() => {
     if (!onMapRouteIdsChange) return;
-    onMapRouteIdsChange(new Set(filteredDetours.map((route) => route.id)));
+    onMapRouteIdsChange({ matchedIds: new Set(filteredDetours.map((route) => route.id)), isNarrowed: isMapRegistryNarrowed });
     return () => onMapRouteIdsChange(null);
-  }, [filteredDetours, onMapRouteIdsChange]);
+  }, [filteredDetours, isMapRegistryNarrowed, onMapRouteIdsChange]);
 
 
   return (
@@ -188,7 +191,7 @@ export function DetourManagementTab({
               </option>
             ))}
           </select>
-          {(detourFilter !== "ALL" || floodFilter !== "ALL" || searchQuery.trim() !== "") && (
+          {isMapRegistryNarrowed && (
             <button
               type="button"
               onClick={() => {

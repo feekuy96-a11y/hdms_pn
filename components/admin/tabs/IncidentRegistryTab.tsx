@@ -1,5 +1,7 @@
 "use client";
 
+import type { AdminRegistryMapFilter } from "@/lib/admin-registry-map-filter";
+
 import React from "react";
 import workspace from "../AdminWorkspace.module.css";
 import { RegistryUpdateTime } from "../RegistryUpdateTime";
@@ -28,7 +30,7 @@ import { IncidentDetailModal } from "./IncidentDetailModal";
 
 interface IncidentRegistryTabProps {
   systemData: SystemDataPayload;
-  onMapRouteIdsChange?: (ids: ReadonlySet<string> | null) => void;
+  onMapRouteIdsChange?: (filter: AdminRegistryMapFilter | null) => void;
   onDataRefresh: (data?: any) => Promise<any> | void;
   onToast: (msg: string) => void;
   showConfirmModal: (title: string, message: string, onConfirm: () => void) => void;
@@ -125,11 +127,13 @@ export function IncidentRegistryTab({
     showSuccessModal,
   });
 
+  const isMapRegistryNarrowed = Boolean(incidentSearch.trim()) || incidentFilter === "RESOLVED" ||
+    routeNoFilter !== "ALL" || trafficStatusFilter !== "ALL" || subdivisionFilter !== "ALL";
   React.useEffect(() => {
     if (!onMapRouteIdsChange) return;
-    onMapRouteIdsChange(new Set(filteredIncidents.map((route) => route.id)));
+    onMapRouteIdsChange({ matchedIds: new Set(filteredIncidents.map((route) => route.id)), isNarrowed: isMapRegistryNarrowed });
     return () => onMapRouteIdsChange(null);
-  }, [filteredIncidents, onMapRouteIdsChange]);
+  }, [filteredIncidents, isMapRegistryNarrowed, onMapRouteIdsChange]);
 
 
   return (

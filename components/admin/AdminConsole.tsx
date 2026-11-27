@@ -1,5 +1,7 @@
 "use client";
 
+import type { AdminRegistryMapFilter } from "@/lib/admin-registry-map-filter";
+
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import workspace from "./AdminWorkspace.module.css";
@@ -58,8 +60,8 @@ const ExternalJobsTab = dynamic(
 
 interface AdminConsoleProps {
   systemData: SystemDataPayload;
-  onFloodMapIdsChange?: (ids: ReadonlySet<string> | null) => void;
-  onDetourMapIdsChange?: (ids: ReadonlySet<string> | null) => void;
+  onFloodMapIdsChange?: (filter: AdminRegistryMapFilter | null) => void;
+  onDetourMapIdsChange?: (filter: AdminRegistryMapFilter | null) => void;
   onDataRefresh: (data?: any) => Promise<any> | void;
   adminPickMode: string | null;
   setAdminPickMode: (mode: string | null) => void;
