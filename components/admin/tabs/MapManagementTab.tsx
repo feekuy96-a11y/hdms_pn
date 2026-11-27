@@ -1,5 +1,6 @@
 "use client";
 
+import type { SavedRouteEditReference } from "@/components/map/longdo-draft-layer";
 import workspace from "../AdminWorkspace.module.css";
 
 import React from "react";
@@ -69,6 +70,7 @@ interface MapManagementTabProps {
   onClearEditingRoute?: () => void;
   onCancelFloodEdit?: () => void;
   onAbandonFloodReturn?: () => void;
+  onSavedEditReferenceChange?: (reference: SavedRouteEditReference | null) => void;
   registerFloodExitGuard?: (guard: ((leave: () => void) => void) | null) => void;
 }
 
@@ -105,6 +107,7 @@ export function MapManagementTab({
   onCancelFloodEdit,
   onAbandonFloodReturn,
   registerFloodExitGuard,
+  onSavedEditReferenceChange,
 }: MapManagementTabProps) {
   const {
     routeMode, setRouteMode, routingRequest, originalRouteCoordinates, originalReverseRouteCoordinates,
@@ -294,9 +297,19 @@ export function MapManagementTab({
     onToast,
   });
 
+  const [savedEditReference, setSavedEditReference] = React.useState<SavedRouteEditReference | null>(null);
+  React.useLayoutEffect(() => {
+    const active = savedEditReference?.id === routeEditId && savedEditReference?.id === editingRoute?.id &&
+      savedEditReference?.type === routeMode && savedEditReference?.type === editingRoute?.type
+      ? savedEditReference : null;
+    onSavedEditReferenceChange?.(active);
+    return () => onSavedEditReferenceChange?.(null);
+  }, [editingRoute?.id, editingRoute?.type, onSavedEditReferenceChange, routeEditId, routeMode, savedEditReference]);
+
   // Hydrate existing record on edit + listen to preset flood context
   useMapRouteHydration({
     editingRoute,
+    setSavedEditReference,
     systemData,
     setRouteMode,
     setRouteEditId,

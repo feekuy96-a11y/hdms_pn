@@ -1093,3 +1093,113 @@ test("existing flood can be edited offline in the open form without submitting o
   await expect(field).toHaveValue("แก้ไขน้ำท่วมขณะออฟไลน์");
   expect(writes).toEqual([]);
 });
+
+for (const type of ["flood", "detour"] as const) {
+  test(`saved ${type} geometry remains a reference during endpoint editing and is removed on exit`, async ({ page, isMobile, baseURL }, testInfo) => {
+    await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+    const baseFlood = offlineFormFixture.floodRoutes[0];
+    const forward = [[101.171, 6.824], [101.188, 6.850], [101.205, 6.839]];
+    const reverse = [[101.205, 6.843], [101.188, 6.854], [101.171, 6.828]];
+    const startEnd = { lon_start: 101.171, lat_start: 6.824, lon_end: 101.205, lat_end: 6.839 };
+    const fixture = {
+      ...offlineFormFixture,
+      floodRoutes: type === "flood" ? [
+        { ...baseFlood, ...startEnd, road_side: "BOTH", coordinates_json: forward,
+          direction_meta: { eventId: "compare-flood", roadSide: "BOTH", directionCode: "BOTH", carriageway_type: "DUAL_CARRIAGEWAY" } },
+        { ...baseFlood, id: "F-COMPARE-REVERSE", road_side: "RIGHT", coordinates_json: reverse,
+          lon_start: 101.205, lat_start: 6.843, lon_end: 101.171, lat_end: 6.828,
+          direction_meta: { eventId: "compare-flood", roadSide: "RIGHT", directionCode: "B_TO_A" } },
+      ] : [],
+      detourRoutes: type === "detour" ? [{ ...offlineFormFixture.detourRoutes[0], ...startEnd, direction_mode: "TWO_WAY",
+        coordinates_json: forward, reverse_coordinates_json: reverse }] : [],
+    };
+    const writes: string[] = [];
+    await page.route("**/*", async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname === "/functions/v1/hdms-api") {
+        const request = route.request().postDataJSON();
+        const action: string = request?.action ?? "";
+        if (action === "snapRouteAction") return route.fulfill({ json: request.args });
+        if (action === "computeGoogleDetourRouteAction") return route.fulfill({ json: { configured: false } });
+        if (action === "reverseGeocodeGoogleAction") return route.fulfill({ json: {} });
+        if (action && !/^(get|proxy)/.test(action)) writes.push(action);
+        return route.fulfill({ json: fixture });
+      }
+      if (url.pathname.includes("/route/v1/driving/")) {
+        const coords = url.pathname.split("/").at(-1)!.split(";").map((pair) => pair.split(",").map(Number));
+        return route.fulfill({ json: { code: "Ok", routes: [{
+          distance: 1200, duration: 90, geometry: { type: "LineString", coordinates: coords },
+        }] } });
+      }
+      return url.origin === new URL(baseURL!).origin ? route.continue() : route.abort();
+    });
+    await page.goto(base + "/admin/");
+    const reference = page.locator(".doh-saved-edit-line");
+    const legend = page.getByRole("group", { name: "เปรียบเทียบแนวเส้น" });
+    await expect(reference).toHaveCount(0);
+    const menu = type === "flood" ? "รายการเหตุการณ์" : "รายการทางเลี่ยง";
+    await openOfflineAdminMenu(page, isMobile, menu);
+    if (type === "flood") await page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ }).first().click();
+    await page.getByRole("button", { name: "แก้ไข", exact: true }).first().click();
+    if (type === "detour") await page.getByRole("button", { name: "เปิดเครื่องมือวาดแผนที่" }).click();
+
+    const mapPane = page.getByRole("button", { name: "แผนที่ GIS", exact: true });
+    const formPane = page.getByRole("button", { name: "ฟอร์มข้อมูล", exact: true });
+    if (isMobile) await mapPane.tap();
+    await expect(reference).toHaveCount(2);
+    await expect(legend.getByText("แนวเดิม", { exact: true })).toBeVisible();
+    await expect(legend.getByText("แนวที่กำลังแก้", { exact: true })).toBeVisible();
+    for (const line of await reference.all()) {
+      await expect(line).toHaveAttribute("stroke-dasharray", "8 8");
+      await expect(line).toHaveAttribute("stroke-linecap", "butt");
+      await expect(line).toHaveAttribute("stroke", "var(--hdms-slate-500)");
+      await expect(line).not.toHaveClass(/leaflet-interactive/);
+    }
+
+    const savedPathLengths = () => reference.evaluateAll((lines) => lines.map((line) => (line as SVGPathElement).getTotalLength()));
+    const originalLengths = await savedPathLengths();
+    expect(originalLengths.every((length) => length > 0)).toBe(true);
+    const edits = [
+      { button: "เลือกจุด A", field: "พิกัดจุด A", x: .45 },
+      { button: "เลือกจุด B", field: "พิกัดจุด B", x: .6 },
+      { button: "เลือกจุดเริ่ม B→A", field: "พิกัดจุดเริ่มต้นขากลับ (B → A)", x: .65 },
+      { button: "เลือกจุดปลาย B→A", field: "พิกัดจุดสิ้นสุดขากลับ (B → A)", x: .4 },
+    ];
+    for (const { button, field, x } of edits) {
+      if (isMobile) await formPane.tap();
+      const input = page.getByLabel(field, { exact: true });
+      const previous = await input.inputValue();
+      await page.getByRole("button", { name: button, exact: true }).click();
+      if (isMobile) await mapPane.tap();
+      const map = page.locator(".hdms-map-canvas").first();
+      const bounds = (await map.boundingBox())!;
+      await map.click({ position: { x: bounds.width * x, y: bounds.height * .55 } });
+      await expect(reference).toHaveCount(2);
+      if (isMobile) await formPane.tap();
+      await expect(input).not.toHaveValue(previous);
+      if (isMobile) await mapPane.tap();
+      await expect(legend.getByText("แนวที่กำลังแก้", { exact: true })).toBeVisible();
+      expect(await savedPathLengths()).toEqual(originalLengths);
+    }
+
+    await expect(legend.getByText("แนวที่กำลังแก้", { exact: true })).toBeVisible();
+    const zoom = page.getByRole("button", { name: "Zoom in", exact: true });
+    expect((await legend.boundingBox())!.y + (await legend.boundingBox())!.height).toBeLessThan((await zoom.boundingBox())!.y);
+    await zoom.click();
+    await expect(reference.first()).toBeVisible();
+    await page.locator(".hdms-admin-map-pane").screenshot({
+      path: testInfo.outputPath(`saved-${type}-reference.png`), animations: "disabled",
+    });
+    if (isMobile) await formPane.tap();
+    await openOfflineAdminMenu(page, isMobile, menu);
+    const discard = page.getByRole("button", { name: "ละทิ้งการเปลี่ยนแปลง", exact: true });
+    if (type === "flood") await discard.click();
+    await expect(reference).toHaveCount(0);
+    await expect(legend).toHaveCount(0);
+    expect(writes).toEqual([]);
+    await page.goto(base + "/");
+    await expect(page.locator(".leaflet-container").first()).toBeVisible();
+    await expect(reference).toHaveCount(0);
+    await expect(legend).toHaveCount(0);
+  });
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import type { SavedRouteEditReference } from "@/components/map/longdo-draft-layer";
 import type { AdminRegistryMapFilter } from "@/lib/admin-registry-map-filter";
 
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -85,6 +86,7 @@ interface AdminConsoleProps {
   } | null) => void;
   draftConflictPoints?: Array<{ coord: [number, number]; label: string }>;
   setDraftConflictPoints?: (points: Array<{ coord: [number, number]; label: string }>) => void;
+  onSavedEditReferenceChange?: (reference: SavedRouteEditReference | null) => void;
   onDraftModeChange?: (mode: "FLOOD" | "DETOUR") => void;
   pickedCoordinate?: { lat: number; lon: number; mode: string } | null;
   onFocusCoordinates?: (coords: [number, number]) => void;
@@ -120,6 +122,7 @@ export function AdminConsole({
   draftConflictPoints,
   setDraftConflictPoints,
   onDraftModeChange,
+  onSavedEditReferenceChange,
   pickedCoordinate,
   onFocusCoordinates,
   onToast,
@@ -584,6 +587,7 @@ export function AdminConsole({
               vertexEvent={vertexEvent}
               onVertexEditChange={onVertexEditChange}
               onVertexEditTargetChange={onVertexEditTargetChange}
+              onSavedEditReferenceChange={onSavedEditReferenceChange}
               editingRoute={editingRoute}
               onClearEditingRoute={() => setEditingRoute(null)}
               onCancelFloodEdit={resumeIncidentRegistry}

@@ -41,7 +41,7 @@ import { renderDirectionalArrows } from "./longdo-arrow-layer";
 import { installRouteMotion } from "./longdo-route-motion";
 import { HIGHWAY_MOTION_MIN_ZOOM, routeMotionEffect, routeMotionSpeedPercent } from "@/lib/route-motion";
 import { renderVertexEditHandles } from "./longdo-vertex-handles";
-import { renderDraftAndConflictLayer } from "./longdo-draft-layer";
+import { renderDraftAndConflictLayer, type SavedRouteEditReference } from "./longdo-draft-layer";
 import { useLongdoFocusLayer } from "./useLongdoFocusLayer";
 import { useAdministrativeBoundaries } from "./useAdministrativeBoundaries";
 import { useLongdoPopupBridge, useLongdoRouteLayers } from "./useLongdoRouteLayers";
@@ -69,6 +69,7 @@ interface LongdoGisMapProps {
   onSelectDetour?: (detour: DetourRoute) => void;
   adminPickMode?: string | null;
   onCoordinatePicked?: (lat: number, lon: number, mode: string) => void;
+  savedEditReference?: SavedRouteEditReference | null;
   draftCoordinates?: [number, number][];
   draftReverseCoordinates?: [number, number][];
   draftWaypoints?: [number, number][];
@@ -122,6 +123,7 @@ export function LongdoGisMap({
   onSelectDetour,
   adminPickMode = null,
   onCoordinatePicked,
+  savedEditReference,
   draftCoordinates = EMPTY_COORDS,
   draftReverseCoordinates = EMPTY_COORDS,
   draftWaypoints = EMPTY_COORDS,
@@ -893,8 +895,17 @@ export function LongdoGisMap({
 
   // 4c & 4d. Detour routes + Flood routes & markers Hook
   // Restrict the admin overlays to the active registry without trimming linked popup data.
-  const drawnFloodRoutes = registryRoutes?.floodRoutes ?? systemData.floodRoutes;
-  const drawnDetourRoutes = registryRoutes?.detourRoutes ?? systemData.detourRoutes;
+  const editReference = publicMode ? null : savedEditReference;
+  const drawnFloodRoutes = useMemo(() => {
+    const routes = registryRoutes?.floodRoutes ?? systemData.floodRoutes;
+    return editReference?.type === "FLOOD"
+      ? routes.filter((route) => !editReference.lines.some((line) => line.id === route.id))
+      : routes;
+  }, [editReference, registryRoutes?.floodRoutes, systemData.floodRoutes]);
+  const drawnDetourRoutes = useMemo(() => {
+    const routes = registryRoutes?.detourRoutes ?? systemData.detourRoutes;
+    return editReference?.type === "DETOUR" ? routes.filter((route) => route.id !== editReference.id) : routes;
+  }, [editReference, registryRoutes?.detourRoutes, systemData.detourRoutes]);
   const legendSystemData = useMemo(() => registryRoutes ? { ...systemData, ...registryRoutes } : systemData, [registryRoutes, systemData]);
 
   useLongdoRouteLayers({
@@ -1078,6 +1089,35 @@ export function LongdoGisMap({
       });
     }
   }, [publicMode, suspendRouteFiltering, routeFilteringEnabled, highlightFloodIds, highlightDetourIds, isFilterActive, searchQuery, highlightHighwayRouteNos, activeCardFocus, activePopupEntity, mapReady, systemData.floodRoutes, drawnFloodRoutes, drawnDetourRoutes, systemData.highwayLayers, mapStyles, showMainHwy, showSecHwy, showRoadLabels, showSecondaryAtCurrentZoom, criticalHighwayRouteNos, currentZoom, showFloodLayer, showDetourLayer]);
+
+  // Saved reference has no listeners, editing handles, route arrows, or effect animation.
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    const L = leafletRef.current;
+    if (!mapReady || !map || !L || !editReference) return;
+    const paneName = "hdms-saved-edit-reference";
+    const pane = map.getPane(paneName) || map.createPane(paneName);
+    pane.style.zIndex = "399"; // Below the existing draft renderer (overlayPane, 400).
+    pane.style.pointerEvents = "none";
+    const renderer = L.svg({ pane: paneName, padding: 0.5 });
+    const group = L.layerGroup().addTo(map);
+    for (const { coordinates } of editReference.lines) {
+      L.polyline(coordinates.map(toLeafletLatLng), {
+        renderer,
+        className: "doh-saved-edit-line",
+        color: "var(--hdms-slate-500)",
+        weight: 11,
+        dashArray: "8 8",
+        lineCap: "butt",
+        opacity: 0.9,
+        interactive: false,
+      }).addTo(group);
+    }
+    return () => {
+      group.remove();
+      renderer.remove();
+    };
+  }, [editReference, mapReady]);
 
   // 4f. Admin draft route (A->B and B->A), conflict alerts, imported-GIS preview and draggable markers.
   useEffect(() => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { draftRouteStroke, type SavedRouteEditReference } from "@/components/map/longdo-draft-layer";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LonLat, VertexEditEvent } from "@/lib/line-edit";
 import dynamic from "next/dynamic";
@@ -12,6 +13,7 @@ import {
   type AdminOperationalDataPayload,
   type AdminStaticGisDataPayload,
 } from "@/app/actions/doh-actions";
+import { DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload } from "@/db/default-data";
 import { AdminConsole } from "@/components/admin/AdminConsole";
 import workspace from "@/components/admin/AdminWorkspace.module.css";
@@ -124,6 +126,7 @@ export default function AdminPage() {
     }
   };
   const [adminPickMode, setAdminPickMode] = useState<string | null>(null);
+  const [savedEditReference, setSavedEditReference] = useState<SavedRouteEditReference | null>(null);
   const [draftCoordinates, setDraftCoordinates] = useState<[number, number][]>([]);
   const [draftWaypoints, setDraftWaypoints] = useState<[number, number][]>([]);
   const [draftReverseCoordinates, setDraftReverseCoordinates] = useState<[number, number][]>([]);
@@ -598,6 +601,7 @@ export default function AdminPage() {
               draftConflictPoints={draftConflictPoints}
               setDraftConflictPoints={setDraftConflictPoints}
               onDraftModeChange={setDraftMode}
+              onSavedEditReferenceChange={setSavedEditReference}
               pickedCoordinate={pickedCoordinate}
               onFocusCoordinates={(coords) => setFocusCoordinates(coords)}
               onToast={showToast}
@@ -646,6 +650,14 @@ export default function AdminPage() {
               mobileActivePane === "form" ? "hidden lg:flex" : "flex"
             } hdms-admin-map-pane h-[calc(100dvh-8.5rem)] min-h-[22.5rem] lg:h-auto lg:min-h-0 lg:flex-1 relative isolate flex-col bg-surface-canvas`}
           >
+            {savedEditReference && (
+              <div role="group" aria-label="เปรียบเทียบแนวเส้น" className="hdms-map-surface flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b px-3 py-1.5 text-xs font-semibold">
+                <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="w-5 border-t-2 border-dashed border-[var(--hdms-slate-500)]" />แนวเดิม</span>
+                {(draftCoordinates.length >= 2 || draftReverseCoordinates.length >= 2) && (
+                  <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="w-5 border-t-2" style={{ borderColor: draftRouteStroke(draftMode, systemData.mapStyles || DEFAULT_MAP_STYLES) }} />แนวที่กำลังแก้</span>
+                )}
+              </div>
+            )}
             <div className="relative min-h-0 flex-1">
             <SharedOperationalMap
               systemData={systemData}
@@ -679,6 +691,7 @@ export default function AdminPage() {
                   setFocusCoordinates([detour.lon_start, detour.lat_start]);
                 }
               }}
+              savedEditReference={savedEditReference}
               adminPickMode={adminPickMode}
               onCoordinatePicked={(lat, lon, mode) => {
                 setPickedCoordinate({ lat, lon, mode, ts: Date.now() });
