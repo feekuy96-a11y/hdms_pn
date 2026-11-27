@@ -135,6 +135,9 @@ export function presentSavedDetourStep(raw: string, stepNumber: number): DetourT
     const lead = text.match(prefix)?.[0];
     if (!lead) continue;
     let detail = text.slice(lead.length).replace(/^\s*[:：]\s*/, "").trim();
+    // A saved departure may also carry the first travelled segment. The
+    // start badge describes a map position, not the length of that segment.
+    if (iconType === "start" && distance) detail = [detail, distance[0].trim()].filter(Boolean).join(" ");
     // For a legacy arrival phrase, keep the original meaning underneath the common title.
     if (iconType === "end" && /^(?:ถึงจุดบรรจบ|ถึงจุดหมาย)/.test(lead)) detail = text;
     return {

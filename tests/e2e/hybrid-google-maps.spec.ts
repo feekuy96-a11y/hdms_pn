@@ -234,6 +234,12 @@ test.describe("Public detour endpoints on mobile", () => {
     expect(legacy.totalDistanceFormatted).toBe("13.1");
     expect(legacy.steps.map(step => step.badge)).toEqual(["กม. 104+850", "", ""]);
     expect(legacy.steps[0].detail).toContain("กม. 104+850");
+    const withDepartureDistance = getDetourTimelinePresentation(
+      "1. จุดเริ่มต้น: ตาม ปน.2003 (ระยะทาง 5.0 กม.)\n2. เลี้ยวขวา: ที่แยก\n3. จุดสิ้นสุด: ถนนหลัก", 7000,
+    );
+    expect(withDepartureDistance.steps[0]).toMatchObject({
+      title: "จุดเริ่มต้น", detail: "ตาม ปน.2003 (ระยะทาง 5.0 กม.)", badge: "0 กม.",
+    });
   });
 
   for (const portal of ["public", "admin"] as const) {
