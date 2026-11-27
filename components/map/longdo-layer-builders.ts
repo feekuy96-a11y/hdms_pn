@@ -433,12 +433,12 @@ export function buildZoomAdaptiveFloodPinSpec(
       html: `
         <div class="${item.capsuleClass} doh-type-flood doh-capsule-zoom-mid" style="--flood-pin-accent:${accent}" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
           ${waveBadge}
-          <span>ทล.${escapeHtml(item.flood.route_no)}</span>
+          <span class="doh-flood-pin-label">ทล.${escapeHtml(item.flood.route_no)}</span>
         </div>
       `,
       className: "doh-map-capsule-pin",
       iconSize: [78, 28],
-      iconAnchor: [39, 14],
+      iconAnchor: [14, 14],
     };
   }
   const isPending = item.statusLabel === "รอตรวจสอบสถานะ";
@@ -447,14 +447,16 @@ export function buildZoomAdaptiveFloodPinSpec(
     html: `
       <div class="${item.capsuleClass} doh-type-flood doh-capsule-zoom-near" style="--flood-pin-accent:${accent}" title="ทล.${escapeHtml(item.flood.route_no)}${escapeHtml(item.sideBadge)} - ${escapeHtml(item.statusLabel)}">
         ${waveBadge}
-        <span>ทล.${escapeHtml(item.flood.route_no)}</span>
-        ${item.segmentCount === undefined ? "" : `<span>${escapeHtml(item.segmentCount)} ช่วง</span>`}
-        <span class="opacity-95 font-mono text-[11px]">· ${escapeHtml(item.levelText)}</span>
-        ${isPending ? '<span class="bg-black/25 px-1.5 py-0.5 rounded text-[10px] font-bold">รอตรวจสอบ</span>' : ""}
+        <span class="doh-flood-pin-label">
+          <span>ทล.${escapeHtml(item.flood.route_no)}</span>
+          ${item.segmentCount === undefined ? "" : `<span>${escapeHtml(item.segmentCount)} ช่วง</span>`}
+          <span class="opacity-95 font-mono text-[11px]">· ${escapeHtml(item.levelText)}</span>
+          ${isPending ? '<span class="bg-black/25 px-1.5 py-0.5 rounded text-[10px] font-bold">รอตรวจสอบ</span>' : ""}
+        </span>
       </div>
     `,
     className: "doh-map-capsule-pin",
     iconSize: [labelWidth, 28],
-    iconAnchor: [labelWidth / 2, 14],
+    iconAnchor: [14, 14],
   };
 }

@@ -63,20 +63,21 @@ for (const admin of [false, true]) {
     await expect(c).toBeVisible();
     await expect(w).toBeVisible();
     await expect(c).toHaveCSS("color", "rgb(255, 255, 255)");
-    await expect(w).toHaveCSS("background-image", /linear-gradient/);
+    await expect(w.locator(".doh-type-flood-wave")).toHaveCSS("background-image", /linear-gradient/);
     await expect(detour).toHaveCSS("background-image", /linear-gradient.*255, 227, 148.*246, 187, 71/);
     await expect(detour).toHaveCSS("color", "rgb(20, 35, 49)");
     await expect(map.locator(".doh-type-flood .hdms-status-sign")).toHaveCount(0);
     await expect(c).toHaveCSS("--flood-pin-accent", "#dc2626");
     await expect(w).toHaveCSS("--flood-pin-accent", "#f97316");
     await expect(w).toHaveAttribute("title", /รถเล็กผ่านไม่ได้/);
-    expect(await c.evaluate(el => getComputedStyle(el).backgroundImage)).not.toBe(await w.evaluate(el => getComputedStyle(el).backgroundImage));
+    expect(await c.locator(".doh-type-flood-wave").evaluate(el => getComputedStyle(el).backgroundImage))
+      .toBe(await w.locator(".doh-type-flood-wave").evaluate(el => getComputedStyle(el).backgroundImage));
 
     const contrast = await map.evaluate(() => {
       const lum = (r: number, g: number, b: number) => [r, g, b].map((x) => x / 255)
         .map((v) => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4)
         .reduce((s, v, i) => s + [0.2126, 0.7152, 0.0722][i] * v, 0);
-      return [".doh-type-flood", ".doh-type-detour"].map((selector) => {
+      return [".doh-type-flood-wave", ".doh-type-detour"].map((selector) => {
         const css = getComputedStyle(document.querySelector(selector)!);
         const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
         const read = (value: string) => {
@@ -105,7 +106,7 @@ const knownStatuses = [
   ["PASSABLE", "emerald", "ผ่านได้ปกติ"],
 ] as const;
 
-test("five flood markers share one glyph but keep distinct status bands, silhouettes and edges in both themes", async ({ page, baseURL, isMobile }, testInfo) => {
+test("five statuses share a solid outline and have distinct glow and gradient labels", async ({ page, baseURL, isMobile }, testInfo) => {
   test.skip(isMobile || before, "Desktop capture of five status fixtures");
   await page.setViewportSize({ width: 1440, height: 900 });
   await fixture(page, new URL(baseURL!).origin);
@@ -123,6 +124,7 @@ test("five flood markers share one glyph but keep distinct status bands, silhoue
   const bands = new Set<string>();
   const glyphs = new Set<string>();
   const edges = new Set<string>();
+  const glows = new Set<string>();
   const silhouettes = new Set<string>();
   for (const theme of ["light", "dark"] as const) {
     if (theme === "dark") await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
@@ -133,8 +135,15 @@ test("five flood markers share one glyph but keep distinct status bands, silhoue
       const shape = marker.locator('[data-flood-type-glyph="wave"]');
       await expect(shape).toHaveCount(1);
       glyphs.add((await shape.getAttribute("d"))!);
-      edges.add(await marker.evaluate(el=>{const style=getComputedStyle(el);return `${style.outlineStyle}:${style.outlineWidth}`;}));
-      silhouettes.add(await marker.evaluate(el => getComputedStyle(el).borderRadius));
+      await expect(marker.locator(".doh-flood-pin-label")).toHaveCount(0);
+      const circle = marker.locator(".doh-type-flood-wave");
+      const appearance=await circle.evaluate(el=>{
+        const style=getComputedStyle(el);
+        return {outline:`${style.outlineStyle}:${style.outlineWidth}`,glow:style.boxShadow};
+      });
+      edges.add(appearance.outline);
+      glows.add(appearance.glow);
+      silhouettes.add(await circle.evaluate(el => getComputedStyle(el).borderRadius));
       await expect(marker.locator(".doh-type-flood-wave svg")).toHaveCSS("stroke", "rgb(255, 255, 255)");
       await expect(marker.locator(".hdms-status-sign")).toHaveCount(0);
       bands.add(await marker.evaluate(el => getComputedStyle(el).getPropertyValue("--flood-pin-accent").trim()));
@@ -143,8 +152,16 @@ test("five flood markers share one glyph but keep distinct status bands, silhoue
   }
   expect(bands.size).toBe(5);
   expect(glyphs.size).toBe(1);
-  expect(edges.size).toBe(5);
-  expect(silhouettes.size).toBe(5);
+  expect([...edges]).toEqual(["solid:2px"]);
+  expect(glows.size).toBe(5);
+  expect(silhouettes).toEqual(new Set(["50%"]));
+  const zoom = page.getByRole("button", { name: "Zoom in", exact: true });
+  await zoom.click();
+  const labels = page.locator(".doh-capsule-zoom-mid .doh-flood-pin-label");
+  await expect(labels).toHaveCount(5);
+  const labelColors = await labels.evaluateAll((elements) => elements.map((el) => getComputedStyle(el).backgroundImage));
+  expect(new Set(labelColors).size).toBe(5);
+  for (const element of await labels.all()) await expect(element).toHaveCSS("background-image", /linear-gradient/);
 });
 
 for (const admin of [false, true]) {

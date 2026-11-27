@@ -648,6 +648,7 @@ export function useLongdoRouteLayers({
         }).addTo(group);
         marker.__dohFilterIds = ev.segments.map((segment) => segment.id);
         marker.getElement()?.setAttribute("aria-label", clusterAriaLabel);
+        fitFloodPinLabel(map, marker);
         floodMarkerRefs.current.push({ marker, item, ariaLabel: clusterAriaLabel, color: pinColor });
         bindSharedMapPopup(L, map, marker, "flood", publicMode, () => buildFloodPopupHtml(primarySeg, countDetoursForFlood(primarySeg), publicMode));
         marker.on("click", (e: any) => {
@@ -679,6 +680,7 @@ export function useLongdoRouteLayers({
           }).addTo(group);
           marker.__dohFilterId = item.flood.id;
           marker.getElement()?.setAttribute("aria-label", markerAriaLabel);
+          fitFloodPinLabel(map, marker);
           floodMarkerRefs.current.push({
             marker,
             item,
@@ -704,17 +706,35 @@ export function useLongdoRouteLayers({
     };
   }, [mapReady, systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, floodDisplayMode, mapStyles, publicMode]);
 
+  function fitFloodPinLabel(map: any, marker: any) {
+    const pin = marker.getElement();
+    const badge = pin?.querySelector(".doh-flood-pin-label");
+    if (!badge || !map) return;
+    const x = map.latLngToContainerPoint(marker.getLatLng()).x;
+    const clearance = 26; // 14 px pin radius + the gap and viewport breathing room.
+    const right = map.getSize().x - x - clearance;
+    const left = x - clearance;
+    const showLeft = right < 180 && left > right;
+    badge.classList.toggle("doh-flood-pin-label-left", showLeft);
+    badge.style.setProperty("--flood-label-limit", `${Math.max(56, Math.floor(showLeft ? left : right))}px`);
+  }
+
   // Zoom must never recreate flood layers: an open popup belongs to the marker,
   // so update only its responsive icon in-place.
   useEffect(() => {
     const L = leafletRef.current;
-    if (!mapReady || !L) return;
+    const map = leafletMapRef.current;
+    if (!mapReady || !L || !map) return;
 
     floodMarkerRefs.current.forEach(({ marker, item, ariaLabel, color }) => {
       marker.setIcon(
         L.divIcon(buildZoomAdaptiveFloodPinSpec(item, currentZoom, color))
       );
       marker.getElement()?.setAttribute("aria-label", ariaLabel);
+      fitFloodPinLabel(map, marker);
     });
-  }, [mapReady, floodDisplayMode, currentZoom, leafletRef]);
+    const dockLabels = () => floodMarkerRefs.current.forEach(({ marker }) => fitFloodPinLabel(map, marker));
+    map.on("moveend resize", dockLabels);
+    return () => { map.off("moveend resize", dockLabels); };
+  }, [mapReady, floodDisplayMode, currentZoom, leafletRef, leafletMapRef]);
 }
