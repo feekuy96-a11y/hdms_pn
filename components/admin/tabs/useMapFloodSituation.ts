@@ -74,7 +74,7 @@ export function useMapFloodSituation({
   const [routeStatus, setRouteStatus] = useState<TrafficStatusValue>("WARNING");
   const [selectedMeasure, setSelectedMeasure] = useState<string>(SAFETY_MEASURES[0]);
   const [directionCode, setDirectionCode] = useState<FloodDirectionCode>("UNKNOWN");
-  const [affectedParts, setAffectedParts] = useState<AffectedRoadPart[]>(["UNSPECIFIED"]);
+  const [affectedParts, setAffectedParts] = useState<AffectedRoadPart[]>(["ALL_LANES"]);
   const [reverseRouteWaterLevel, setReverseRouteWaterLevel] = useState<number | string>("");
   const [reverseRouteStatus, setReverseRouteStatus] = useState<TrafficStatusValue>("WARNING");
   const [reverseWaterLevelKnown, setReverseWaterLevelKnown] = useState<boolean>(true);
@@ -209,7 +209,7 @@ export function useMapFloodSituation({
     setWaterLevelKnown(true);
     setUseCarriagewaySnapping(false);
     setDirectionCode("UNKNOWN");
-    setAffectedParts(["UNSPECIFIED"]);
+    setAffectedParts(["ALL_LANES"]);
     setRouteStatus("WARNING");
     setReverseRouteWaterLevel("");
     setReverseRouteStatus("WARNING");
