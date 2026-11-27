@@ -6,6 +6,8 @@ import type { LatLng, Polyline } from "leaflet";
 import { SystemDataPayload, DetourRoute } from "@/db/default-data";
 import { APP_CONFIG, LAYER_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { MapLegendOverlay, type MapSidePaneControl } from "./MapLegendOverlay";
+import { MapCurrentWeatherCard } from "./MapCurrentWeatherCard";
+import { WEATHER_LIVE_TEST_PARAM, WEATHER_PUBLIC_ENABLED, WEATHER_TEST_ENABLED } from "@/lib/map-current-weather";
 import {
   escapeHtml,
   isFloodLineVisibleOnCurrentMap,
@@ -195,6 +197,11 @@ export function LongdoGisMap({
 
   const [activeBaseMap, setActiveBaseMap] = useState<"road" | "sat" | "longdo">("longdo");
   const [isLayerControlCollapsed, setIsLayerControlCollapsed] = useState(true);
+  const [weatherLiveTest, setWeatherLiveTest] = useState(false);
+  const [weatherMapLocation, setWeatherMapLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  useEffect(() => {
+    if (publicMode) setWeatherLiveTest(new URLSearchParams(window.location.search).get(WEATHER_LIVE_TEST_PARAM) === "1");
+  }, [publicMode]);
   const [mapReady, setMapReady] = useState(false);
   const [isMapPopupOpen, setIsMapPopupOpen] = useState(false);
   const [activePopupEntity, setActivePopupEntity] = useState<{ type: "HIGHWAY" | "FLOOD" | "DETOUR"; id: string } | null>(null);
@@ -608,6 +615,9 @@ export function LongdoGisMap({
           const l = leafletRef.current;
           if (!m || !l) return;
           const latLng: [number, number] = [position.coords.latitude, position.coords.longitude];
+          if (publicMode && weatherLiveTest) {
+            setWeatherMapLocation({ latitude: Number(latLng[0].toFixed(2)), longitude: Number(latLng[1].toFixed(2)) });
+          }
           if (userLocationMarkerRef.current) userLocationMarkerRef.current.setLatLng(latLng);
           else {
             userLocationMarkerRef.current = l.circleMarker(latLng, {
@@ -625,6 +635,7 @@ export function LongdoGisMap({
           setIsLocating(false);
         },
         (error) => {
+          if (publicMode && weatherLiveTest) setWeatherMapLocation(null);
           const message = error.code === error.PERMISSION_DENIED
             ? "ไม่ได้รับอนุญาตให้ใช้ตำแหน่ง กรุณาเปิดสิทธิ์ในเบราว์เซอร์"
             : "ไม่พบตำแหน่งของคุณ กรุณาลองอีกครั้ง";
@@ -1532,6 +1543,10 @@ export function LongdoGisMap({
         className="hdms-map-canvas w-full h-full relative z-0"
         style={{ position: "absolute", inset: 0 }}
       />
+
+      {(WEATHER_TEST_ENABLED || WEATHER_PUBLIC_ENABLED || weatherLiveTest) && publicMode && !isFocusMode && !isMapPopupOpen && isLayerControlCollapsed && (
+        <MapCurrentWeatherCard key={focusCoordinates?.join(",") ?? "pattani"} focusCoordinates={focusCoordinates} liveTest={weatherLiveTest} mapLocation={weatherMapLocation} />
+      )}
 
       <MapLegendOverlay
         publicMode={publicMode}
