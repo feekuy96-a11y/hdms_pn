@@ -24,7 +24,7 @@ import type {
 } from "@/db/default-data";
 import { DirectionSwitch } from "@/components/ui/DirectionSwitch";
 import { calculatePolylineRoadDistanceKm } from "@/lib/detour-presentation";
-import { normalizeMediaUrl } from "@/lib/flood-event-schema";
+import { DetourPointPhotoPreview } from "./DetourPointPhotoPreview";
 import { composeDirectionalAdvice, extractDirectionalAdviceForEdit, resolveDetourPinArea } from "@/lib/gis-utils";
 import {
   EMPTY_DETOUR_PHOTO_LOCATION,
@@ -59,13 +59,13 @@ export interface DetourEditModalProps {
   editDetourDurationMinRev: string;
   setEditDetourDurationMinRev: (value: string) => void;
   editDetourStartPhotoUrl: string;
-  setEditDetourStartPhotoUrl: (value: string) => void;
+  setEditDetourStartPhotoUrl: React.Dispatch<React.SetStateAction<string>>;
   editDetourStartPhotoCaption: string;
   setEditDetourStartPhotoCaption: (value: string) => void;
   editDetourStartPhotoLocation?: DetourPhotoLocationState;
   setEditDetourStartPhotoLocation?: React.Dispatch<React.SetStateAction<DetourPhotoLocationState>>;
   editDetourEndPhotoUrl: string;
-  setEditDetourEndPhotoUrl: (value: string) => void;
+  setEditDetourEndPhotoUrl: React.Dispatch<React.SetStateAction<string>>;
   editDetourEndPhotoCaption: string;
   setEditDetourEndPhotoCaption: (value: string) => void;
   editDetourEndPhotoLocation?: DetourPhotoLocationState;
@@ -791,10 +791,13 @@ export function DetourEditModal({
                   <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-2.5 space-y-2">
                     {photoUrl && (
                       <div className="relative">
-                        <img
-                          src={normalizeMediaUrl(photoUrl)}
+                        <DetourPointPhotoPreview
+                          key={`${editingDetour.id}:${activePointTab}:${photoUrl}`}
+                          recordId={editingDetour.id}
+                          endpoint={activePointTab}
+                          source={photoUrl}
+                          onRecovered={(url) => setPhotoUrl((current) => current === photoUrl ? url : current)}
                           alt={`ภาพทางเข้า${pointName}`}
-                          className="h-28 w-full rounded-md object-contain bg-slate-900"
                         />
                         <button
                           type="button"
