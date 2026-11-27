@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import publicDisplayCopy from "../../config/public-display-copy.json";
 
 const base = process.env.BASE_PATH || "";
 const empty = {
@@ -17,7 +18,7 @@ const messages = {
   loading: "กำลังโหลดข้อมูลสถานการณ์ล่าสุด…",
   unavailable: "ตรวจสอบข้อมูลล่าสุดไม่สำเร็จ โปรดลองอีกครั้ง",
   stale: "อัปเดตไม่สำเร็จ กำลังแสดงข้อมูลจากการโหลดครั้งก่อน",
-  empty: "ยังไม่มีรายงานจุดน้ำท่วม",
+  empty: publicDisplayCopy.emptyFloodReports,
   fresh: /มีข้อมูลสถานการณ์อัปเดตล่าสุดจากศูนย์ปฏิบัติการ/,
 };
 async function resultsPanel(page: Page, isMobile: boolean) {
