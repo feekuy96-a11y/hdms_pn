@@ -149,15 +149,15 @@ test("closure details, map and photo persist locally and appear on both pages on
   expect(unexpected).toEqual([]);
 });
 
-test("closure highway mode slices the selected section and clears stale geometry when switching modes", async ({ page, isMobile }) => {
+test("closure highway mode slices imported numeric and decimal chainages and clears stale geometry when switching modes", async ({ page, isMobile }) => {
   const highwayLayers = [{
     layer_id: "MAIN_HIGHWAY", layer_name: "ทางหลวงสายหลัก", is_visible: true, metadata: {},
     geojson_data: { type: "FeatureCollection", features: [
       { type: "Feature", properties: { route_no: "43", section_group_id: "H-OWN", section_name: "ช่วงน้ำท่วมทดสอบ",
-        km_start: "0+000", km_end: "12+000", direction_code: "A_TO_B", branch_type: "MAIN_CARRIAGEWAY" },
+        km_start: 0, km_end: "12.5", direction_code: "A_TO_B", branch_type: "MAIN_CARRIAGEWAY" },
       geometry: { type: "LineString", coordinates: [[101.20,6.815],[101.235,6.82],[101.27,6.83]] } },
       { type: "Feature", properties: { route_no: "43", section_group_id: "H-NEXT", section_name: "ตอนถัดไป",
-        km_start: "12+000", km_end: "16+000", direction_code: "A_TO_B", branch_type: "MAIN_CARRIAGEWAY" },
+        km_start: "12+500", km_end: "16+000", direction_code: "A_TO_B", branch_type: "MAIN_CARRIAGEWAY" },
       geometry: { type: "LineString", coordinates: [[101.27,6.83],[101.30,6.84]] } },
     ]},
   }];
@@ -180,13 +180,16 @@ test("closure highway mode slices the selected section and clears stale geometry
   const end=section.getByLabel("กม. สิ้นสุด (B)",{exact:true});
   const generate=section.getByRole("button",{name:"สร้างแนวจากช่วง กม."});
   await expect(start).toHaveValue("0+000");
-  await expect(end).toHaveValue("12+000");
+  await expect(end).toHaveValue("12+500");
   await start.fill("1+000");
   await end.fill("13+000");
   await generate.click();
   await expect(section.getByRole("status")).toContainText("ไม่พบแนวที่ครอบคลุม");
   const marks=section.getByTestId("local-closure-map").locator(".doh-draft-endpoint");
   await expect(marks).toHaveCount(0);
+  await end.fill("10");
+  await generate.click();
+  await expect(section.getByRole("status")).toContainText("กรอกช่วง กม. แบบ 0+000");
   await end.fill("10+000");
   await generate.click();
   await expect(section.getByRole("status")).toContainText("สร้างแนวและหมุด A/B");
