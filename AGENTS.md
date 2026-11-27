@@ -5,6 +5,7 @@
 - When starting or resuming HDMS work, read `docs/AI_HANDOFF.md` for the latest verified release and recent changes; verify against `origin/main` and the deployment workflow before relying on it.
 
 - Read `docs/CODEBASE_MAP.md` first to jump directly to target files and commands instead of scanning or grepping the whole repo.
+- Before editing, start here and read the current guide for **every affected topic** in the table below, not just the first match. If the scope expands, read the newly relevant guide before editing that area. For example, a road-closure form with a map pin and saved state needs the UI, Map/GIS, and Data guides. Report any required guide or verification you could not check.
 - Inspect only files needed for the assigned task. Preserve unrelated working-tree changes.
 - During incremental edits, run `npm run check:fast` and `npx eslint <changed-files> --max-warnings=0`; run `npm run check:deploy` once before the PR for runtime changes. For a documentation-only edit, verify changed links, commands and scope; this does not change the configured GitHub gates.
 - Before editing, state the paths in scope. After editing, inspect `git diff --check` and the relevant diff.
