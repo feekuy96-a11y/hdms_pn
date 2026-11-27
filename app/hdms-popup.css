@@ -98,6 +98,31 @@ div[data-hdms-popup=photo] { background: var(--hdms-scrim); }
 .leaflet-popup.hdms-popup-map .leaflet-popup-content :is([class~="text-slate-300"],[class~="text-slate-400"],[class~="text-slate-500"]) { color: var(--text-secondary); }
 .leaflet-popup.hdms-popup-map .leaflet-popup-content :is([class*="bg-[#0d"],[class*="bg-[#0e"],[class*="bg-[#0f"]) { background-color: var(--bg-input); border-color: var(--border-subtle); }
 
+/* Shared flood-popup tones: admin and citizen inherit the same semantic theme. */
+.hdms-popup-map .doh-flood-popup-area { color: var(--text-primary); }
+.hdms-popup-map .doh-flood-popup-area svg { stroke: currentColor; }
+.hdms-popup-map .doh-flood-popup-status { color: inherit; }
+.hdms-popup-map .doh-flood-popup-status-bar.status-red {
+  background: var(--status-danger-wash);
+  border-color: var(--status-danger-ink);
+  color: var(--status-danger-ink);
+}
+.hdms-popup-map .doh-flood-popup-status-bar.status-amber {
+  background: var(--status-warning-low-wash);
+  border-color: var(--status-warning-low-ink);
+  color: var(--status-warning-low-ink);
+}
+.hdms-popup-map .doh-flood-popup-status-bar.status-sky {
+  background: var(--status-info-wash);
+  border-color: var(--status-info-ink);
+  color: var(--status-info-ink);
+}
+.hdms-popup-map .doh-flood-popup-status-bar.status-green {
+  background: var(--status-normal-wash);
+  border-color: var(--status-normal-ink);
+  color: var(--status-normal-ink);
+}
+
 /* Pair every highway field with its own theme-aware surface and text. */
 .doh-highway-popup .doh-highway-divider { border-color: var(--border-subtle); }
 .doh-highway-popup .doh-highway-metric {

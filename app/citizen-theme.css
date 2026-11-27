@@ -122,42 +122,6 @@
   color: var(--cta-primary-text);
 }
 .citizen-ui .doh-detour-popup .doh-detour-nav-btn .doh-detour-nav-sub { color: inherit; }
-.citizen-ui .doh-flood-popup-area { color: var(--cit-ink); }
-.citizen-ui .doh-flood-popup-area svg { stroke: currentColor; }
-.citizen-ui .doh-flood-popup-water { color: var(--cit-water); }
-.citizen-ui .doh-flood-popup-status { color: inherit; }
-.citizen-ui .doh-flood-popup-status-bar.status-red {
-  background: var(--status-danger-wash);
-  border-color: var(--status-danger-ink);
-  color: var(--status-danger-ink);
-}
-.citizen-ui .doh-flood-popup-status-bar.status-amber {
-  background: var(--status-warning-low-wash);
-  border-color: var(--status-warning-low-ink);
-  color: var(--status-warning-low-ink);
-}
-.citizen-ui .doh-flood-popup-status-bar.status-sky {
-  background: var(--status-info-wash);
-  border-color: var(--status-info-ink);
-  color: var(--status-info-ink);
-}
-.citizen-ui .doh-flood-popup-status-bar.status-green {
-  background: var(--status-normal-wash);
-  border-color: var(--status-normal-ink);
-  color: var(--status-normal-ink);
-}
-.citizen-ui .doh-flood-popup-card [class*="bg-[#20384A]"] {
-  background: var(--bg-input);
-  border-color: var(--border-subtle);
-}
-.citizen-ui .doh-flood-popup-card [class*="text-[#B5CBD9]"] { color: var(--text-secondary); }
-.citizen-ui .doh-flood-popup-card strong.text-white { color: var(--text-primary); }
-.citizen-ui .doh-flood-popup-card button[class*="bg-[#20384A]"] {
-  background: var(--bg-card);
-  border-color: var(--hdms-control-edge);
-  color: var(--text-primary);
-}
-.citizen-ui .doh-flood-popup-card button[class*="bg-[#20384A]"]:hover { background: var(--state-hover); }
 .citizen-ui [role=status][class*="bg-slate-950"] { background: var(--surface-floating); color: var(--cit-ink); }
 .citizen-ui[data-citizen-theme=light] [role=alert][class*="bg-slate-950"] { background: #f9e5e6; color: #84242c; }
 .citizen-ui .citizen-legend { scrollbar-color: var(--cit-sub) var(--surface-panel); }

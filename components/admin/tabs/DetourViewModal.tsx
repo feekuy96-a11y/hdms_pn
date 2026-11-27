@@ -278,7 +278,7 @@ export function DetourViewModal({
               </strong>
             </span>
           </div>
-          <div className="rounded-xl border border-amber-500/20 bg-slate-950/80 p-3 text-xs text-amber-100/95 leading-relaxed max-h-48 overflow-y-auto font-sans">
+          <div className="rounded-xl border border-amber-500/20 bg-slate-950/80 p-3 text-xs text-[color:var(--text-primary)] leading-relaxed max-h-48 overflow-y-auto font-sans">
             {adviceText ? <AdviceText text={adviceText} /> : "ไม่มีคำแนะนำการเดินทางเฉพาะทิศทาง"}
           </div>
         </div>
