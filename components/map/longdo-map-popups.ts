@@ -231,9 +231,9 @@ function resolveMapPopupOptions(L: any, kind: MapPopupKind, publicMode: boolean)
     case "flood":
       return { ...getResponsivePopupOptions(L, 370, 300, "doh-flood-leaflet-popup"), keepInView: false };
     case "detour":
-      return { ...getResponsivePopupOptions(L, 440, 320, "doh-detour-leaflet-popup"), keepInView: false };
+      return { ...getResponsivePopupOptions(L, 440, 0, "doh-detour-leaflet-popup"), keepInView: false };
     case "focused-endpoint":
-      return { ...getResponsivePopupOptions(L, 350, 240, "doh-detour-leaflet-popup"), keepInView: false };
+      return { ...getResponsivePopupOptions(L, 350, 0, "doh-detour-leaflet-popup"), keepInView: false };
     case "endpoint":
       return publicMode
         ? {
@@ -242,7 +242,7 @@ function resolveMapPopupOptions(L: any, kind: MapPopupKind, publicMode: boolean)
             autoPanPaddingTopLeft: L.point(12, 16),
             autoPanPaddingBottomRight: L.point(12, 112),
           }
-        : { ...getResponsivePopupOptions(L, 380, 260, "doh-detour-leaflet-popup"), keepInView: false };
+        : { ...getResponsivePopupOptions(L, 380, 0, "doh-detour-leaflet-popup"), keepInView: false };
   }
 }
 
@@ -324,14 +324,14 @@ function buildDetourStepsHtml(steps: DetourTimelineStep[]): string {
       const iconSvg = getDetourStepIconSvg(step.iconType);
 
       return `
-      <li class="relative flex items-start gap-3">
+      <li class="doh-detour-step-row relative flex items-start">
         ${!isLast ? `<div class="doh-detour-timeline-line absolute left-[0.6875rem] top-6 bottom-[-8px] border-l-2 border-dashed border-amber-500/45" aria-hidden="true"></div>` : ""}
         <div class="doh-detour-step-number hdms-guide-number relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black tabular-nums shadow" aria-hidden="true">
           ${step.stepNumber}
         </div>
-        <div class="doh-detour-step-card hdms-guide-card flex-1 min-w-0 rounded-xl border p-2.5 shadow-sm">
-          <div class="flex items-start justify-between gap-2">
-            <div class="flex items-center gap-1.5 min-w-0">
+        <div class="doh-detour-step-card hdms-guide-card flex-1 min-w-0 rounded-lg border shadow-sm">
+          <div class="doh-detour-step-top">
+            <div class="doh-detour-step-lead">
               ${iconSvg}
               <span class="doh-detour-step-title hdms-guide-title font-bold text-xs font-heading break-words">${escapeHtml(step.title)}</span>
             </div>
@@ -389,7 +389,7 @@ export function buildDetourTimelineSectionHtml(presentation: DetourTimelinePrese
 
   return `
     <div class="space-y-2">
-      <ol class="m-0 list-none space-y-2 p-0" role="list">
+      <ol class="doh-detour-step-list m-0 list-none p-0" role="list">
         ${buildDetourStepsHtml(presentation.steps)}
       </ol>
       ${buildDetourTimelineSummaryHtml(presentation)}
@@ -465,7 +465,7 @@ export function buildDetourPopupHtml(
   const directionBtnClass = "min-h-[2.75rem] py-2 px-2.5 text-xs font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 border disabled:cursor-not-allowed";
 
   return `
-    <div class="doh-detour-popup text-xs p-3 sm:p-3.5 w-[min(20.25rem,calc(100vw-2rem))] sm:w-[23.75rem] max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body rounded-2xl border-t-4 border-amber-500 flex flex-col gap-2.5 select-text">
+    <div class="doh-detour-popup hdms-detour-density text-xs max-w-full max-h-[min(54dvh,21.875rem)] sm:max-h-none overflow-y-auto sm:overflow-visible overscroll-contain font-body rounded-2xl border-t-4 border-amber-500 flex flex-col gap-2.5 select-text">
       <!-- ส่วนที่ 1: Header (แถวเดียว: ไอคอนทางเลี่ยง + ชื่อ + ป้ายโหมดทิศทาง) -->
       <div class="doh-detour-header hdms-map-popup-heading flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-surface shrink-0">
         <div class="flex items-center gap-2 min-w-0">
@@ -551,8 +551,8 @@ export function buildDetourPopupHtml(
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
             </div>
             <div class="text-left min-w-0">
-              <div class="font-black text-xs leading-tight truncate">ดูบน Google Maps</div>
-              <div id="detour-nav-subtext-${safeId}" class="doh-detour-nav-sub text-[11px] font-bold leading-tight mt-0.5 truncate">
+              <div class="doh-detour-nav-label font-black text-xs leading-tight">ดูบน Google Maps</div>
+              <div id="detour-nav-subtext-${safeId}" class="doh-detour-nav-sub text-[11px] font-bold leading-tight mt-0.5">
                 ${isRev ? "(ขากลับ B ➔ A)" : "(ขาไป A ➔ B)"}
               </div>
             </div>
@@ -724,7 +724,7 @@ function buildEndpointDirectionGuide(detour: DetourRoute, direction: DetourDirec
       : timeline.steps;
     const directions = notice || !steps.length
       ? `<p>${escapeHtml(notice || "ยังไม่มีคำแนะนำที่บันทึกในทิศทางนี้")}</p>`
-      : `<ol class="m-0 list-none space-y-2 p-0" role="list">${buildDetourStepsHtml(savedSteps)}</ol>`;
+      : `<ol class="doh-detour-step-list m-0 list-none p-0" role="list">${buildDetourStepsHtml(savedSteps)}</ol>`;
     return `<div class="hdms-endpoint-guide-content">${directions}${buildDetourTimelineSummaryHtml(timeline)}</div>`;
   })();
   return `<section data-endpoint-guide class="hdms-endpoint-guide" aria-label="คำแนะนำทางเลี่ยงตามทิศการเดินทาง">
@@ -754,7 +754,7 @@ export function buildMapDetourEndpointPopup(
     ? 'data-public-photo'
     : `onclick="const img=this.querySelector('img'); if(img) window.__openDetourPointPhoto?.(img.src,img.alt)"`;
   return `
-    <section data-detour-endpoint="${point}" class="doh-detour-point-photo-popup hdms-endpoint-card font-body" aria-label="${escapeHtml(title)}">
+    <section data-detour-endpoint="${point}" class="doh-detour-point-photo-popup hdms-endpoint-card hdms-detour-density font-body" aria-label="${escapeHtml(title)}">
       <header class="hdms-endpoint-header">
         <span class="hdms-endpoint-pin" aria-hidden="true">
           <svg viewBox="0 0 36 46" width="34" height="44"><path d="M18 2a15 15 0 0 0-15 15c0 10 15 25 15 25s15-15 15-25A15 15 0 0 0 18 2Z" fill="currentColor" stroke="var(--hdms-white)" stroke-width="2"/><text x="18" y="23" fill="var(--hdms-white)" text-anchor="middle" font-size="16" font-weight="800">${letter}</text></svg>

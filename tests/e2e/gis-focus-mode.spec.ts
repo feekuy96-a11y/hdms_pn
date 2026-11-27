@@ -1784,3 +1784,50 @@ for (const kind of ["flood", "detour"] as const) {
     });
   }
 }
+
+test("detour summary and endpoint guide keep compact text spacing and readable route units", async ({ page, isMobile }, testInfo) => {
+  await page.setViewportSize({ width: isMobile ? 390 : 1280, height: isMobile ? 844 : 900 });
+  const payload = createMockPayload();
+  payload.detourRoutes[0].description = "ขาไป:\n1. จุดเริ่มต้น\n2. ขับตรงตามถนนในเขตตำบลท่ากำชำ อำเภอหนองจิก จังหวัดปัตตานี\n3. ถึงจุดบรรจบทางหลวงสายหลัก";
+  await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: payload }));
+  await page.goto(base + "/");
+  await page.locator(".doh-detour-symbol").first().press("Enter");
+  const overview = page.locator(".doh-detour-popup");
+  const assertCards = async (scope: typeof overview) => {
+    const cards = scope.locator(".doh-detour-step-card:visible");
+    await expect(cards.first()).toBeVisible();
+    const layout = await cards.evaluateAll(nodes => nodes.map(node => {
+      const card = node as HTMLElement;
+      const p = card.querySelector<HTMLElement>(".doh-detour-step-detail");
+      const badge = card.querySelector<HTMLElement>(".doh-detour-step-badge")!;
+      return {
+        horizontalOverflow: card.scrollWidth - card.clientWidth,
+        badge: getComputedStyle(badge).whiteSpace,
+        paragraphGap: p ? parseFloat(getComputedStyle(p).marginTop) : 0,
+        paragraphEnd: p ? parseFloat(getComputedStyle(p).marginBottom) : 0,
+        lineHeight: parseFloat(getComputedStyle(card).lineHeight),
+      };
+    }));
+    expect(layout.every(x => x.horizontalOverflow <= 1 && x.badge === "nowrap" &&
+      x.paragraphGap < x.lineHeight && x.paragraphEnd === 0)).toBeTruthy();
+    expect(await scope.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+  };
+  await expect(overview).toBeVisible();
+  await assertCards(overview);
+  await expect(overview.getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true })).toHaveCSS("min-height","44px");
+  await page.screenshot({ path: testInfo.outputPath("compact-detour-guide.png"), animations:"disabled" });
+  await overview.getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true }).click();
+  await expect(page.getByTestId("gis-focus-mode-bar")).toBeVisible();
+  if (isMobile) {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "150%"; });
+  }
+  await page.locator(".hdms-focus-endpoint.doh-detour-photo-start").press("Enter");
+  const endpoint = page.locator("[data-detour-endpoint=START]");
+  await expect(endpoint).toBeVisible();
+  const detail = endpoint.locator("[data-endpoint-scroll]");
+  await detail.press("End");
+  await assertCards(endpoint);
+  await expect(endpoint.getByRole("button", { name:"ดูตำแหน่งบนแผนที่", exact:true })).toBeInViewport();
+  await page.screenshot({ path: testInfo.outputPath("compact-endpoint-guide.png"), animations:"disabled" });
+});

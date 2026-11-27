@@ -231,12 +231,12 @@ div[data-hdms-popup=photo] { background: var(--hdms-scrim); }
 .hdms-popup-map .leaflet-popup-content > .hdms-endpoint-card {
   display: flex;
   flex-direction: column;
-  inline-size: min(320px, calc(100vw - 42px));
+  inline-size: min(calc(100vw - 2.5rem), clamp(15rem, 14rem + 11vw, 19.5rem));
   max-block-size: min(53dvh, 29rem);
   overflow: hidden;
   color: var(--text-primary);
   background: var(--bg-card);
-  font-size: .8rem;
+  font-size: clamp(.75rem, .7rem + .22vw, .875rem);
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
@@ -362,7 +362,7 @@ div[data-hdms-popup=photo] { background: var(--hdms-scrim); }
 }
 .hdms-endpoint-guide h4 { margin: 0; font-size: .82rem; font-weight: 800; }
 .hdms-endpoint-guide .hdms-endpoint-guide-direction { margin: .12rem 0 .48rem; color: var(--text-secondary); font-weight: 650; }
-.hdms-endpoint-guide .doh-detour-step-badge { flex-shrink: 1; white-space: normal; overflow-wrap: anywhere; }
+
 
 .hdms-endpoint-guide-content { display: grid; gap: .5rem; }
 .hdms-endpoint-guide .doh-detour-condition-badge { white-space: normal; overflow-wrap: anywhere; }
@@ -372,4 +372,80 @@ div[data-hdms-popup=photo] { background: var(--hdms-scrim); }
   .hdms-popup-map .leaflet-popup-content > .hdms-endpoint-card {
     max-block-size: min(66dvh, 356px);
   }
+}
+
+/* Shared by the React dossier and the two Leaflet guide presentations. Scale to the
+   guide's own width, not only the browser: the admin map can sit in a narrow pane. */
+.hdms-detour-density {
+  container-type: inline-size;
+}
+.hdms-popup-map .leaflet-popup-content > .doh-detour-popup {
+  inline-size: min(calc(100vw - 2.5rem), clamp(16rem, 15.5rem + 10vw, 22rem));
+  padding: clamp(.45rem, .35rem + .5vw, .75rem);
+  gap: .5rem;
+}
+.hdms-detour-density .doh-detour-step-list {
+  display: grid;
+  gap: clamp(.28rem, 1.6cqi, .55rem);
+}
+.hdms-detour-density .doh-detour-step-row {
+  gap: clamp(.3rem, 2cqi, .65rem);
+}
+.hdms-detour-density .doh-detour-step-card {
+  padding: clamp(.36rem, 2cqi, .66rem);
+  font-size: clamp(.75rem, .69rem + .4cqi, .875rem);
+  line-height: 1.35;
+}
+.hdms-detour-density .doh-detour-step-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: .22em .5em;
+}
+.hdms-detour-density .doh-detour-step-lead {
+  display: flex;
+  align-items: start;
+  gap: .35em;
+  flex: 1 1 8em;
+  min-inline-size: 0;
+}
+.hdms-detour-density .doh-detour-step-title {
+  font-size: 1em;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.hdms-detour-density .doh-detour-step-badge {
+  flex: none;
+  margin-inline-start: auto;
+  padding: .1em .45em;
+  font-size: max(.75rem, .94em);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hdms-detour-density .doh-detour-step-detail {
+  margin: .3em 0 0;
+  font-size: max(.75rem, .98em);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.hdms-detour-density .doh-detour-hero-card {
+  padding: clamp(.42rem, 2.3cqi, .7rem);
+}
+.hdms-detour-density .doh-detour-hero-card :is(h5,p) { margin-block: 0; }
+.hdms-detour-density .doh-detour-hero-card .doh-detour-scope {
+  margin-block-start: .26em;
+  font-size: clamp(.75rem, .69rem + .4cqi, .86rem);
+  line-height: 1.4;
+}
+
+.hdms-detour-density :is(.doh-detour-heading,.doh-detour-route-name,.hdms-endpoint-header h3) {
+  font-size: clamp(.86rem, .76rem + .7cqi, 1.02rem);
+}
+.hdms-detour-density .doh-detour-nav-label {
+  font-size: clamp(.75rem, .67rem + .45cqi, .85rem);
+}
+.hdms-detour-density :is(.doh-detour-nav-label,.doh-detour-nav-sub) {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }

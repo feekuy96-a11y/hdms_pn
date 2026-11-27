@@ -254,7 +254,7 @@ export function DetourDossierModal({
             );
 
             return (
-              <section aria-label="คำแนะนำเส้นทาง" className="space-y-3 pt-1">
+              <section aria-label="คำแนะนำเส้นทาง" className="hdms-detour-density space-y-3 pt-1">
                 {/* Section Header */}
                 <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-white">
                   <Route className="w-5 h-5 hdms-guide-accent" />
@@ -263,7 +263,7 @@ export function DetourDossierModal({
 
                 {/* Step Timeline Container (numbered strictly for travel steps 1..N) */}
                 {timeline.steps.length > 0 ? (
-                  <div className="relative space-y-3 pl-1">
+                  <div className="doh-detour-step-list relative pl-1">
                     {/* Vertical Connector Line */}
                     {timeline.steps.length > 1 && (
                       <div
@@ -273,7 +273,7 @@ export function DetourDossierModal({
                     )}
 
                     {timeline.steps.map((st) => (
-                      <div key={st.stepNumber} className="relative flex items-start">
+                      <div key={st.stepNumber} className="doh-detour-step-row relative flex items-start">
                         {/* Step Number Circle */}
                         <div
                           aria-hidden="true"
@@ -283,20 +283,20 @@ export function DetourDossierModal({
                         </div>
 
                         {/* Step Card */}
-                        <div className="citizen-detour-step hdms-guide-card ml-3 flex-1 min-w-0 rounded-2xl border p-3 shadow-sm">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="citizen-detour-step doh-detour-step-card hdms-guide-card flex-1 min-w-0 rounded-lg border shadow-sm">
+                          <div className="doh-detour-step-top">
+                            <div className="doh-detour-step-lead">
                               {renderStepIcon(st.iconType)}
-                              <span className="font-heading font-bold text-sm hdms-guide-title break-words">
+                              <span className="doh-detour-step-title font-heading font-bold hdms-guide-title break-words">
                                 {st.title}
                               </span>
                             </div>
-                            <span className="hdms-guide-badge rounded-md border px-2 py-0.5 font-mono text-xs whitespace-nowrap shrink-0">
+                            <span className="doh-detour-step-badge hdms-guide-badge rounded-md border font-mono">
                               {st.badge}
                             </span>
                           </div>
                           {st.detail && (
-                            <p className="text-xs hdms-guide-copy mt-1 leading-normal break-words">
+                            <p className="doh-detour-step-detail hdms-guide-copy break-words">
                               {st.detail}
                             </p>
                           )}
