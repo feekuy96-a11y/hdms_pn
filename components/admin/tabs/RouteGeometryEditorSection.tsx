@@ -1,5 +1,7 @@
 "use client";
 
+import { DetourPointPhotoInput } from "./DetourPointPhotoInput";
+
 import React from "react";
 import type { DetourPointLocationSource } from "@/db/default-data";
 import { ActionButton, FormSection, ToolGroup } from "@/components/admin/ui";
@@ -741,16 +743,11 @@ export function RouteGeometryEditorSection({
                     ล้างพิกัดจุด {activePointConfig.pointLabel}
                   </button>
                 )}
-                <label className="cursor-pointer rounded-lg border border-emerald-700/70 bg-emerald-950/40 hover:bg-emerald-900/60 px-2.5 py-1 text-[11px] font-heading font-bold text-emerald-200 transition">
-                  {activePointConfig.uploadLabel}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    aria-label={activePointConfig.uploadAriaLabel}
-                    className="sr-only"
-                    onChange={(e) => handleDetourPointPhotoUpload(activePointConfig.endpoint, e)}
-                  />
-                </label>
+                <DetourPointPhotoInput
+                  label={activePointConfig.uploadLabel}
+                  ariaLabel={activePointConfig.uploadAriaLabel}
+                  onChange={(e) => handleDetourPointPhotoUpload(activePointConfig.endpoint, e)}
+                />
               </div>
             </div>
             {activePointConfig.photoUrl && (
