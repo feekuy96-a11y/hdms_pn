@@ -101,7 +101,7 @@ export function ThaiIncidentDateTimePicker({ id, value, onChange }: { id: string
           {Array.from({length: daysInMonth(draft.year, draft.month)}, (_,i) => i + 1).map(day => <button key={day} type="button" data-calendar-day={day}
             aria-label={dateLabel({ ...draft, day })} aria-pressed={draft.day === day} tabIndex={draft.day === day ? 0 : -1}
             onKeyDown={dayKey} onClick={() => setDraft({ ...draft, day })}
-            className="min-h-10 rounded-md text-sm tabular-nums hover:bg-surface-card aria-pressed:bg-amber-400 aria-pressed:font-bold aria-pressed:text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]">{day}</button>)}
+            className="min-h-10 rounded-md text-sm tabular-nums hover:bg-[var(--state-hover)] aria-pressed:bg-[var(--state-selected)] aria-pressed:font-bold aria-pressed:text-[color:var(--text-primary)] aria-pressed:ring-1 aria-pressed:ring-inset aria-pressed:ring-[var(--focus-ring)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]">{day}</button>)}
         </div>
         <div className="my-3 flex flex-wrap items-center gap-2 border-t border-surface pt-3">
           <span className="text-sm font-semibold">เวลา (24 ชั่วโมง)</span>
@@ -116,7 +116,7 @@ export function ThaiIncidentDateTimePicker({ id, value, onChange }: { id: string
         </div>
         <footer className="flex flex-wrap justify-end gap-2">
           <button className={control + " px-3"} type="button" onClick={() => dialog.current?.close()}>ยกเลิก</button>
-          <button type="button" className="min-h-10 rounded-lg bg-amber-400 px-3 text-sm font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
+          <button type="button" className="min-h-10 rounded-lg bg-[var(--cta-primary-bg)] px-3 text-sm font-bold text-[color:var(--cta-primary-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
             onClick={() => { onChange(serializeIncidentWallTime(draft)); dialog.current?.close(); }}>ใช้วันและเวลานี้</button>
         </footer>
       </>}
