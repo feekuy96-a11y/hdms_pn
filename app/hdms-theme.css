@@ -82,6 +82,23 @@
   }
 }
 
+/* Opt-in: keep the scrollbar legible without changing the scroll container. */
+.hdms-themed-scrollbar {
+  --hdms-scroll-thumb: var(--hdms-control-edge);
+  --hdms-scroll-track: var(--bg-input);
+  scrollbar-color: var(--hdms-scroll-thumb) var(--hdms-scroll-track);
+}
+.hdms-themed-scrollbar::-webkit-scrollbar-track { background: var(--hdms-scroll-track); }
+.hdms-themed-scrollbar::-webkit-scrollbar-thumb { background: var(--hdms-scroll-thumb); }
+.hdms-themed-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
+@media (forced-colors: active) {
+  .hdms-themed-scrollbar { scrollbar-color: auto; }
+  .hdms-themed-scrollbar::-webkit-scrollbar-track { background: Canvas; }
+  .hdms-themed-scrollbar::-webkit-scrollbar-thumb,
+  .hdms-themed-scrollbar::-webkit-scrollbar-thumb:hover { background: CanvasText; }
+}
+
 /* Tone pairs remain legible when a legacy feature supplies a semantic accent class. */
 :root {
   --status-danger-ink: #962b35;

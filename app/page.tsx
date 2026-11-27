@@ -786,7 +786,7 @@ export default function HomePage() {
             {/* Route Quick Filter Chips (Available for both floods and detours) */}
             {routeChips.length > 1 && (
               <div className="relative">
-                <div className="flex gap-1.5 overflow-x-auto pb-1 pr-6 scrollbar-none text-[0.75rem]/[1.1rem]">
+                <div className="flex gap-1.5 overflow-x-auto pb-1 pr-6 hdms-themed-scrollbar text-[0.75rem]/[1.1rem]">
                   {routeChips.map((chip) => {
                     const isActive = selectedRouteFilter === chip.id;
                     return (
@@ -811,7 +811,7 @@ export default function HomePage() {
           </div>
 
           {/* Incident & Detour Cards Scrollable List */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+          <div className="flex-1 overflow-y-auto p-3 space-y-2.5 hdms-themed-scrollbar">
             {readState !== "ready" && <p className="text-xs text-slate-300" role="status">{PUBLIC_READ_MESSAGES[readState]}</p>}
             {fetchedAtLabel && <p className="text-xs text-slate-300">
               ดึงข้อมูลสำเร็จล่าสุด {fetchedAtLabel} น.
