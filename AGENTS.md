@@ -6,6 +6,7 @@
 
 - Read `docs/CODEBASE_MAP.md` first to jump directly to target files and commands instead of scanning or grepping the whole repo.
 - Inspect only files needed for the assigned task. Preserve unrelated working-tree changes.
+- At each stage, use the [pre-CI checklist](docs/PRE_CI_CHECKLIST.md) to define expected results, trace dependencies, choose tests and record evidence. Use full required GitHub CI before release; focused local checks do not replace it.
 - During incremental edits, run `npm run check:fast` and `npx eslint <changed-files> --max-warnings=0`; run full `npm run check:deploy` once before commit/PR.
 - Before editing, state the paths in scope. After editing, inspect `git diff --check` and the relevant diff.
 - Output diffs and concise verification results only; do not paste full source files or claim checks not run.
