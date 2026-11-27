@@ -539,7 +539,9 @@ export function useEventDetourLinkModal({
           reviewedGeometryVersion: resolved.reviewedGeometryVersion,
         };
         const originalIndex = loaded.links.findIndex((row) => row.detourId === selectedDetourId);
-        candidateLinks.splice(originalIndex < 0 ? candidateLinks.length : originalIndex, 0, newOrUpdated);
+        // A new link from the detour workspace becomes the first choice for
+        // that event. Editing an existing link must preserve its manual rank.
+        candidateLinks.splice(originalIndex < 0 ? 0 : originalIndex, 0, newOrUpdated);
       }
 
       const mergedLinks = resequenceEventDetourLinks(candidateLinks);
