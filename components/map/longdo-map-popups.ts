@@ -937,12 +937,12 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMo
 
   const isClosed = flood.traffic_status === "CLOSED";
   const statusThemeClass = isClosed
-    ? "status-red bg-[#3e161a] text-[#fca5a5] border-[#7f1d1d]"
+    ? "status-red"
     : statusInfo.accentColor === "#38bdf8"
-      ? "status-sky bg-[#0c2b3d] text-[#7dd3fc] border-[#0369a1]"
+      ? "status-sky"
       : statusInfo.accentColor === "#10b981"
-        ? "status-green bg-[#0f2e22] text-[#6ee7b7] border-[#047857]"
-        : "status-amber bg-[#362210] text-[#fcd34d] border-[#78350f]";
+        ? "status-green"
+        : "status-amber";
 
   return `
     <div class="doh-flood-popup-card w-[min(360px,calc(100vw-24px))] max-w-full max-h-[min(52dvh,21rem)] sm:max-h-[min(85dvh,34rem)] overflow-y-auto overscroll-contain p-3 font-body text-slate-100 bg-[#142638] rounded-2xl shadow-2xl flex flex-col gap-2 border border-[#526D83]/40">
@@ -959,13 +959,13 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMo
       </div>
 
       <!-- ส่วนที่ 2: ภาพเหตุการณ์ (ทันทีใต้ Header, aspect 16:7) -->
-      <div class="relative overflow-hidden rounded-xl bg-slate-950 border border-[#526D83]/30 aspect-[16/7] w-full shrink-0">
+      <div class="relative overflow-hidden rounded-xl bg-[var(--bg-input)] border border-[var(--border-subtle)] aspect-[16/7] w-full shrink-0">
         ${safePhoto
           ? `<button type="button" data-public-photo aria-haspopup="dialog" aria-label="ขยายภาพสถานการณ์เต็มจอ" class="block h-full w-full cursor-zoom-in">
               <img src="${safePhoto}" alt="ภาพสถานการณ์น้ำท่วม ${escapeHtml(flood.section_name)}" class="h-full w-full object-cover">
               <span data-photo-error hidden>โหลดภาพตัวอย่างไม่สำเร็จ · แตะเพื่อลองเปิดภาพ</span>
             </button>`
-          : `<div class="flex h-full w-full flex-col items-center justify-center bg-[#20384A]/60 text-slate-400 p-2">
+          : `<div class="flex h-full w-full flex-col items-center justify-center text-slate-400 p-2">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="mb-1 opacity-60" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
               <span class="text-[11px] font-medium text-slate-400">ยังไม่มีภาพถ่ายเหตุการณ์</span>
             </div>`}
@@ -982,19 +982,19 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMo
       <!-- ส่วนที่ 4: ข้อมูลสำคัญ 2 ช่อง (จัด Grid 2 คอลัมน์) -->
       <div class="grid grid-cols-2 gap-2 shrink-0">
         <!-- ซ้าย: ระดับน้ำล่าสุด -->
-        <div class="rounded-xl bg-[#20384A] p-2 border border-[#526D83]/40 flex flex-col justify-center">
-          <div class="text-[11px] text-[#B5CBD9] font-medium leading-none mb-1">ระดับน้ำล่าสุด</div>
+        <div class="rounded-xl bg-[var(--bg-input)] p-2 border border-[var(--border-subtle)] flex flex-col justify-center">
+          <div class="text-[11px] text-slate-400 font-medium leading-none mb-1">ระดับน้ำล่าสุด</div>
           ${waterKnown
             ? `<div class="flex items-baseline gap-1 mt-0.5">
-                <strong class="doh-flood-popup-water font-heading font-black text-xl sm:text-2xl text-[#F6A52F] tabular-nums leading-none">${escapeHtml(flood.water_level_cm ?? 0)}</strong>
-                <span class="text-xs text-[#F6A52F]/90 font-bold">ซม.</span>
+                <strong class="doh-flood-popup-water font-heading font-black text-xl sm:text-2xl text-[color:var(--status-warning-low-ink)] tabular-nums leading-none">${escapeHtml(flood.water_level_cm ?? 0)}</strong>
+                <span class="text-xs text-[color:var(--status-warning-low-ink)] font-bold">ซม.</span>
               </div>`
-            : `<div class="doh-flood-popup-water font-heading font-bold text-xs sm:text-sm text-[#F6A52F] mt-0.5 leading-tight">รอตรวจสอบระดับน้ำ</div>`}
+            : `<div class="doh-flood-popup-water font-heading font-bold text-xs sm:text-sm text-[color:var(--status-warning-low-ink)] mt-0.5 leading-tight">รอตรวจสอบระดับน้ำ</div>`}
         </div>
 
         <!-- ขวา: ส่วนของถนนที่ได้รับผลกระทบ -->
-        <div class="rounded-xl bg-[#20384A] p-2 border border-[#526D83]/40 flex flex-col justify-center">
-          <div class="text-[11px] text-[#B5CBD9] font-medium leading-none mb-1">ส่วนที่ได้รับผลกระทบ</div>
+        <div class="rounded-xl bg-[var(--bg-input)] p-2 border border-[var(--border-subtle)] flex flex-col justify-center">
+          <div class="text-[11px] text-slate-400 font-medium leading-none mb-1">ส่วนที่ได้รับผลกระทบ</div>
           <strong class="font-heading font-bold text-xs sm:text-sm text-white leading-tight block break-words mt-0.5">${escapeHtml(lanesDisplay)}</strong>
         </div>
       </div>
@@ -1046,7 +1046,7 @@ export function buildFloodPopupHtml(flood: FloodRoute, detourCount = 0, publicMo
           type="button"
           aria-label="ดูตำแหน่งบนแผนที่"
           onclick="window.__focusFloodOnMap && window.__focusFloodOnMap('${safeId}')"
-          class="min-h-11 rounded-xl border border-[#526D83] bg-[#20384A] hover:bg-[#2a485e] active:bg-[#182b3a] px-3 py-2 font-heading text-xs sm:text-sm font-bold text-white shadow-md transition cursor-pointer flex items-center justify-center text-center leading-tight touch-manipulation"
+          class="min-h-11 rounded-xl border border-[var(--hdms-control-edge)] bg-[var(--bg-input)] hover:bg-[var(--state-hover)] active:bg-[var(--state-selected)] px-3 py-2 font-heading text-xs sm:text-sm font-bold text-white shadow-md transition cursor-pointer flex items-center justify-center text-center leading-tight touch-manipulation"
         >
           <span>ดูบนแผนที่</span>
         </button>
