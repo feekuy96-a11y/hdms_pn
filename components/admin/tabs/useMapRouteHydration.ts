@@ -1,6 +1,7 @@
 "use client";
 
 import { decodeFloodImpactParts } from "@/lib/flood-event-schema";
+import { savedRouteEditLine, type SavedRouteEditReference } from "@/components/map/longdo-draft-layer";
 import React, { useEffect, useRef } from "react";
 import { type DetourPointPhoto, SystemDataPayload } from "@/db/default-data";
 import {
@@ -37,6 +38,7 @@ type TrafficStatus = AdminMapDraftSnapshot["routeStatus"];
 export interface UseMapRouteHydrationParams {
   editingRoute?: { type: "FLOOD" | "DETOUR"; id: string } | null;
   systemData: SystemDataPayload;
+  setSavedEditReference: (reference: SavedRouteEditReference | null) => void;
   setRouteMode: (v: "FLOOD" | "DETOUR") => void;
   setRouteEditId: (v: string) => void;
   setRouteNo: (v: string) => void;
@@ -115,6 +117,7 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
   const {
     editingRoute,
     systemData,
+    setSavedEditReference,
     setRouteMode,
     setRouteEditId,
     setRouteNo,
@@ -256,6 +259,7 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
       originalRouteCoordinates.current = coords.map((coordinate) => [...coordinate] as [number, number]);
       setDraftCoordinates(coords);
 
+      const savedLines = savedRouteEditLine(id, coords);
       let revCoords: [number, number][] = [];
       if (effectiveSide === "BOTH") {
         const existingRevSibling = meta.eventId
@@ -271,6 +275,7 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
             try { revCoords = JSON.parse(existingRevSibling.coordinates_json); } catch { revCoords = []; }
           }
         }
+        if (existingRevSibling) savedLines.push(...savedRouteEditLine(existingRevSibling.id, revCoords));
         if (revCoords.length < 2) {
           const matchedGroup = findBestHighwayGroupForSelection(
             systemData.highwayLayers,
@@ -297,6 +302,7 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
         setReverseWaterLevelKnown(true);
         setReverseAffectedParts(["ALL_LANES"]);
       }
+      setSavedEditReference(savedLines.length ? { type, id, lines: savedLines } : null);
       // Preserve the existing record shape on edit; new reports still require
       // explicit confirmation when neither roadway metadata nor a choice exists.
       setCarriagewayChoice(effectiveSide === "BOTH"
@@ -461,6 +467,8 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
       else if (typeof detour.reverse_coordinates_json === "string") {
         try { revCoords = JSON.parse(detour.reverse_coordinates_json); } catch { revCoords = []; }
       }
+      const savedLines = [...savedRouteEditLine(id, coords), ...savedRouteEditLine(id, revCoords)];
+      setSavedEditReference(savedLines.length ? { type, id, lines: savedLines } : null);
       setCarriagewayChoice(revCoords.length >= 2 ? "DIVIDED" : "SHARED");
       originalReverseRouteCoordinates.current = revCoords.map((coordinate) => [...coordinate] as [number, number]);
       setDraftReverseCoordinates?.(revCoords);
