@@ -62,6 +62,7 @@ interface MapLegendOverlayProps {
   isMapPopupOpen?: boolean;
   publicMode?: boolean;
   publicStatusSummary?: React.ReactNode;
+  hideSituationSummary?: boolean;
   isSidebarCollapsed?: boolean;
   sidePaneControl?: MapSidePaneControl;
 }
@@ -110,6 +111,7 @@ export function MapLegendOverlay({
   isMapPopupOpen = false,
   publicMode = true,
   publicStatusSummary,
+  hideSituationSummary = false,
   isSidebarCollapsed = false,
   sidePaneControl,
 }: MapLegendOverlayProps) {
@@ -378,7 +380,7 @@ export function MapLegendOverlay({
             <PaneIcon size={18} aria-hidden="true" />
           </button>
         )}
-      {isLayerControlCollapsed && (publicMode ? (!isMapPopupOpen && publicStatusSummary) : (
+      {!hideSituationSummary && isLayerControlCollapsed && (publicMode ? (!isMapPopupOpen && publicStatusSummary) : (
         <div>
           <MapStatusRow
             label="สรุปสถานการณ์และแถบควบคุมบนแผนที่"

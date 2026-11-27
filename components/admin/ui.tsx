@@ -77,7 +77,14 @@ export function ActionButton({ variant = "secondary", active = false, className 
   );
 }
 
-export function StickyActionBar({ children }: { children: React.ReactNode }) {
+export function StickyActionBar({ children, themed = false }: { children: React.ReactNode; themed?: boolean }) {
+  if (themed) {
+    return (
+      <div data-hdms-sticky-actions className="sticky bottom-0 z-10 flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2 shadow-[var(--hdms-shadow)]">
+        {children}
+      </div>
+    );
+  }
   return (
     <div className="sticky bottom-0 z-10 -mx-[0.25rem] flex gap-[0.5em] rounded-xl border border-slate-700 bg-slate-950/95 p-[0.75rem] shadow-[0_-10px_24px_rgba(2,6,23,0.65)] backdrop-blur">
       {children}

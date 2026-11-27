@@ -19,6 +19,11 @@ export function useModalAccessibility(isOpen: boolean, onClose: () => void) {
     returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      // A focused, explicitly managed in-dialog popup may consume Escape first.
+      const localEscape = event.target instanceof Element
+        ? event.target.closest("[data-hdms-local-escape]")
+        : null;
+      if (localEscape && dialogRef.current?.contains(localEscape)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       onCloseRef.current();

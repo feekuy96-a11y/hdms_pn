@@ -41,7 +41,7 @@ import { renderDirectionalArrows } from "./longdo-arrow-layer";
 import { installRouteMotion } from "./longdo-route-motion";
 import { HIGHWAY_MOTION_MIN_ZOOM, routeMotionEffect, routeMotionSpeedPercent } from "@/lib/route-motion";
 import { renderVertexEditHandles } from "./longdo-vertex-handles";
-import { renderDraftAndConflictLayer, type SavedRouteEditReference } from "./longdo-draft-layer";
+import { renderDraftAndConflictLayer, type ClosureDraftPresentation, type SavedRouteEditReference } from "./longdo-draft-layer";
 import { useLongdoFocusLayer } from "./useLongdoFocusLayer";
 import { useAdministrativeBoundaries } from "./useAdministrativeBoundaries";
 import { useLongdoPopupBridge, useLongdoRouteLayers } from "./useLongdoRouteLayers";
@@ -81,6 +81,7 @@ interface LongdoGisMapProps {
   onReverseWaypointDragged?: (index: number, newCoord: [number, number]) => void;
   /** Freeform line editor (Google My Maps style): show draggable handles on every vertex of the draft line. */
   vertexEditable?: boolean;
+  lockVertexEndpoints?: boolean;
   vertexEditCoordinates?: [number, number][];
   onVertexMoved?: (index: number, newCoord: [number, number]) => void;
   onVertexInserted?: (index: number, coord: [number, number]) => void;
@@ -88,8 +89,10 @@ interface LongdoGisMapProps {
   onOfficeDragged?: (officeId: string, newPosition: { lat: number; lon: number }) => void;
   editableOfficeId?: string | null;
   draftMode?: "FLOOD" | "DETOUR";
+  closurePresentation?: ClosureDraftPresentation;
   focusCoordinates?: [number, number] | null;
   fitPreviewCoordinates?: [number, number][];
+  animateCoordinateFocus?: boolean;
   incomingGisLines?: [number, number][][];
   className?: string;
   publicMode?: boolean;
@@ -134,6 +137,7 @@ export function LongdoGisMap({
   onWaypointDragged,
   onReverseWaypointDragged,
   vertexEditable = false,
+  lockVertexEndpoints = false,
   vertexEditCoordinates,
   onVertexMoved,
   onVertexInserted,
@@ -143,6 +147,8 @@ export function LongdoGisMap({
   draftMode = "FLOOD",
   focusCoordinates = null,
   fitPreviewCoordinates,
+  animateCoordinateFocus = true,
+  closurePresentation,
   incomingGisLines = EMPTY_LINES,
   className = "h-full w-full",
   publicMode = false,
@@ -558,9 +564,13 @@ export function LongdoGisMap({
       map.stop();
       map.fitBounds(fitPreviewCoordinates.map(toLeafletLatLng) as any, { padding: [28, 28], maxZoom: 14, animate: false });
     } else if (focusCoordinates) {
-      map.flyTo(toLeafletLatLng(focusCoordinates) as any, 13, { duration: 1.2 });
+      if (animateCoordinateFocus) map.flyTo(toLeafletLatLng(focusCoordinates) as any, 13, { duration: 1.2 });
+      else {
+        map.stop();
+        map.setView(toLeafletLatLng(focusCoordinates) as any, 13, { animate: false });
+      }
     }
-  }, [focusCoordinates, fitPreviewCoordinates, mapReady]);
+  }, [focusCoordinates, fitPreviewCoordinates, animateCoordinateFocus, mapReady]);
 
   // Coordinate editing has priority over feature inspection. The cursor is also
   // restored reliably when the operator exits the edit command.
@@ -1120,13 +1130,17 @@ export function LongdoGisMap({
   }, [editReference, mapReady]);
 
   // 4f. Admin draft route (A->B and B->A), conflict alerts, imported-GIS preview and draggable markers.
+  const activeClosurePickMode = closurePresentation ? adminPickMode : undefined;
   useEffect(() => {
     const L = leafletRef.current;
     const group = draftGroupRef.current;
     if (!mapReady || !L || !group) return;
+    const closureSvgRenderer = closurePresentation?.onSelect && !activeClosurePickMode ? L.svg() : undefined;
     renderDraftAndConflictLayer({
       L,
       group,
+      closurePresentation,
+      closureSvgRenderer,
       renderer: rendererRef.current,
       incomingGisLines,
       draftCoordinates,
@@ -1149,8 +1163,9 @@ export function LongdoGisMap({
       draftLineRef.current = null;
       revDraftLineRef.current = null;
       group.clearLayers();
+      closureSvgRenderer?.remove();
     };
-  }, [mapReady, incomingGisLines, draftCoordinates, draftReverseCoordinates, draftWaypoints, draftReverseWaypoints, draftConflictPoints, draftPickMarkers, draftMode, mapStyles, vertexEditable]);
+  }, [mapReady, incomingGisLines, draftCoordinates, draftReverseCoordinates, draftWaypoints, draftReverseWaypoints, draftConflictPoints, draftPickMarkers, draftMode, mapStyles, vertexEditable, closurePresentation, activeClosurePickMode]);
 
   // 4f-arrows. Directional Arrow System (Items 2 & 4): Viewport-culled, zoom-gated directional arrows for highways, detours, and active draft previews.
   useEffect(() => {
@@ -1159,6 +1174,8 @@ export function LongdoGisMap({
     const group = arrowGroupRef.current;
     if (!mapReady || !L || !map || !group) return;
     group.clearLayers();
+    // A closure preview is a blocked segment, not a direction-of-travel guide.
+    if (closurePresentation) return;
 
     let timer: ReturnType<typeof setTimeout> | null = null;
     const drawArrows = () => {
@@ -1213,7 +1230,7 @@ export function LongdoGisMap({
       map.off("moveend zoomend", schedule);
       group.clearLayers();
     };
-  }, [mapReady, systemData.highwayLayers, drawnDetourRoutes, drawnFloodRoutes, detourDisplayMode, mapStyles, effectiveShowMainHwy, effectiveShowSecHwy, effectiveShowDetourLayer, effectiveShowFloodLayer, showSecondaryAtCurrentZoom, currentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode, vertexEditable, routeFilteringEnabled, isFilterActive, searchQuery, activeCardFocus, activePopupEntity, highlightDetourIds, highlightHighwayRouteNos]);
+  }, [mapReady, systemData.highwayLayers, drawnDetourRoutes, drawnFloodRoutes, detourDisplayMode, mapStyles, effectiveShowMainHwy, effectiveShowSecHwy, effectiveShowDetourLayer, effectiveShowFloodLayer, showSecondaryAtCurrentZoom, currentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode, vertexEditable, routeFilteringEnabled, isFilterActive, searchQuery, activeCardFocus, activePopupEntity, highlightDetourIds, highlightHighwayRouteNos, closurePresentation]);
 
   // 4h. Freeform vertex editor: draggable handle on every vertex + "+" handle on every segment middle.
   // Only vertices inside the viewport are drawn (at most MAX_VERTEX_HANDLES), so long lines stay fast.
@@ -1236,6 +1253,7 @@ export function LongdoGisMap({
         draftCoordinates,
         draftReverseCoordinates,
         vertexEditCoordinates,
+        lockEndpoints: lockVertexEndpoints,
         draftLineRef,
         revDraftLineRef,
         onVertexMovedRef,
@@ -1254,7 +1272,7 @@ export function LongdoGisMap({
       map.off("moveend", schedule);
       group.clearLayers();
     };
-  }, [mapReady, vertexEditable, draftCoordinates, draftReverseCoordinates, vertexEditCoordinates]);
+  }, [mapReady, vertexEditable, lockVertexEndpoints, draftCoordinates, draftReverseCoordinates, vertexEditCoordinates]);
 
   // 4g. DOH offices & highway stations
   useEffect(() => {
@@ -1322,6 +1340,7 @@ export function LongdoGisMap({
       <MapLegendOverlay
         publicMode={publicMode}
         publicStatusSummary={publicStatusSummary}
+        hideSituationSummary={Boolean(closurePresentation)}
         isSidebarCollapsed={isSidebarCollapsed}
         sidePaneControl={sidePaneControl}
         systemData={legendSystemData}
