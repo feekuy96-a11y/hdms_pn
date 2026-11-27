@@ -1,0 +1,46 @@
+.card {
+  --weather-bottom: max(5.5rem, calc(env(safe-area-inset-bottom) + 4.5rem));
+  bottom: var(--weather-bottom);
+  right: 0.5rem;
+}
+
+.panel {
+  max-height: min(44dvh, calc(100dvh - 1rem - var(--weather-bottom) - 3rem));
+}
+
+@media (min-width: 64rem) {
+  .card {
+    --weather-bottom: 2rem;
+    right: 0.75rem;
+  }
+}
+
+/* In short viewports leave a dedicated right lane for the map buttons. */
+@media (max-height: 44rem) {
+  .card {
+    right: 4rem;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .motion[data-weather-motion="rain"] {
+    animation: weather-rain 620ms ease 3;
+  }
+  .motion[data-weather-motion="cloud"] {
+    animation: weather-cloud 850ms ease 2;
+  }
+  .motion[data-weather-motion="sun"] {
+    animation: weather-sun 1200ms ease 2;
+    transform-origin: center;
+  }
+}
+
+@keyframes weather-rain {
+  50% { transform: translateY(2px); }
+}
+@keyframes weather-cloud {
+  50% { transform: translateX(2px); }
+}
+@keyframes weather-sun {
+  50% { transform: rotate(24deg); }
+}
