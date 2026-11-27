@@ -25,7 +25,7 @@ import type {
 import { DirectionSwitch } from "@/components/ui/DirectionSwitch";
 import { calculatePolylineRoadDistanceKm } from "@/lib/detour-presentation";
 import { normalizeMediaUrl } from "@/lib/flood-event-schema";
-import { composeDirectionalAdvice, extractDirectionalAdviceForEdit, localArea } from "@/lib/gis-utils";
+import { composeDirectionalAdvice, extractDirectionalAdviceForEdit, resolveDetourPinArea } from "@/lib/gis-utils";
 import {
   EMPTY_DETOUR_PHOTO_LOCATION,
   type DetourPhotoLocationState,
@@ -76,7 +76,7 @@ export interface DetourEditModalProps {
   setEditIsActive: (value: boolean) => void;
   isSubmitting: boolean;
   onClose: () => void;
-  onGenerateAdvice: () => void;
+  onGenerateAdvice: (photoLocations: { start: DetourPhotoLocationState; end: DetourPhotoLocationState }) => void;
   onPointPhotoUpload: (point: "START" | "END", e: React.ChangeEvent<HTMLInputElement>) => void;
   onEditOnMap: (detourId: string) => void;
   onSave: (photoLocations?: {
@@ -368,7 +368,7 @@ export function DetourEditModal({
       const savedSub = saved?.subdistrict?.trim() || "";
       const savedDist = saved?.district?.trim() || "";
       const savedProv = saved?.province?.trim() || "";
-      const hasArea = Boolean(savedSub || savedDist);
+      const hasArea = Boolean(savedSub && savedDist);
       const resolvedSource = saved?.locationSource ?? source;
       const resolvedAt = saved?.resolvedAt ?? new Date().toISOString();
       setLoc({
@@ -376,34 +376,35 @@ export function DetourEditModal({
         lon: validCoord ? lon.toFixed(6) : "",
         subdistrict: savedSub,
         district: savedDist,
-        province: savedProv || (validCoord ? "ปัตตานี" : ""),
+        province: savedProv,
         locationSource: resolvedSource,
         resolvedAt,
         areaStatus: hasArea ? "resolved" : validCoord ? "resolving" : "idle",
       });
       if (validCoord && (!savedSub || !savedDist)) {
-        void localArea(lon, lat)
+        void resolveDetourPinArea(lon, lat)
           .then((loc) => {
             if (targetDetourId && activeDetourIdRef.current !== targetDetourId) return;
             setLoc((prev) => {
-              const nextSub = prev.subdistrict || loc.tambon || "";
-              const nextDist = prev.district || loc.amphoe || "";
+              if (Number(prev.lat) !== Number(lat.toFixed(6)) || Number(prev.lon) !== Number(lon.toFixed(6))) return prev;
+              const nextSub = prev.subdistrict || loc?.tambon || "";
+              const nextDist = prev.district || loc?.amphoe || "";
               return {
                 ...prev,
                 subdistrict: nextSub,
                 district: nextDist,
-                province: prev.province || loc.province || "ปัตตานี",
-                areaStatus: nextSub || nextDist ? "resolved" : "not_found",
+                province: prev.province || loc?.province || "",
+                areaStatus: nextSub && nextDist ? "resolved" : "not_found",
                 resolvedAt: new Date().toISOString(),
               };
             });
           })
           .catch(() => {
             if (targetDetourId && activeDetourIdRef.current !== targetDetourId) return;
-            setLoc((prev) => ({
+            setLoc((prev) => prev.lat !== lat.toFixed(6) || prev.lon !== lon.toFixed(6) ? prev : {
               ...prev,
-              areaStatus: prev.subdistrict || prev.district ? "resolved" : "not_found",
-            }));
+              areaStatus: prev.subdistrict && prev.district ? "resolved" : "not_found",
+            });
           });
       }
     },
@@ -448,8 +449,8 @@ export function DetourEditModal({
         targetLat,
         targetLon,
         {
-          subdistrict: photo?.subdistrict || (endpoint === "START" ? editingDetour.subdistrict : ""),
-          district: photo?.district || (endpoint === "START" ? editingDetour.district : ""),
+          subdistrict: photo?.subdistrict,
+          district: photo?.district,
           province: photo?.province,
           locationSource: photo?.locationSource ?? (hasSavedCoord ? "MANUAL" : "ROUTE_ENDPOINT"),
           resolvedAt: photo?.resolvedAt,
@@ -590,7 +591,7 @@ export function DetourEditModal({
 
               <button
                 type="button"
-                onClick={onGenerateAdvice}
+                onClick={() => onGenerateAdvice({ start: effectiveStartLoc, end: effectiveEndLoc })}
                 className="min-h-10 text-xs bg-amber-500 text-slate-950 font-heading font-bold px-3 py-2 rounded-lg shadow hover:bg-amber-400 flex items-center gap-1 shrink-0"
               >
                 <Sparkles className="w-3.5 h-3.5" aria-hidden="true" /> วิเคราะห์คำแนะนำอัตโนมัติ
@@ -777,9 +778,7 @@ export function DetourEditModal({
                         activePointTab,
                         lat,
                         lon,
-                        isStartTab
-                          ? { subdistrict: editingDetour.subdistrict, district: editingDetour.district }
-                          : undefined,
+                        undefined,
                         editingDetour.id,
                         "ROUTE_ENDPOINT"
                       );

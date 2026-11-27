@@ -6,7 +6,7 @@ import type {
   SystemDataPayload,
 } from "@/db/default-data";
 import { clearAdminMapDraft } from "@/components/admin/tabs/map-draft-storage";
-import { compressImageToAdaptiveBase64, reverseGeocodeTambonAmphoe } from "@/lib/gis-utils";
+import { compressImageToAdaptiveBase64, resolveDetourPinArea } from "@/lib/gis-utils";
 import type { DetourDirectionModeType } from "@/lib/constants";
 import {
   FloodDirectionCode,
@@ -141,6 +141,7 @@ export function useMapRouteFormState({
   const startPhotoLocManualRef = useRef(false);
   const endPhotoLocManualRef = useRef(false);
   const photoAreaRequestRef = useRef({ START: 0, END: 0 });
+  const photoAreaCoordinateRef = useRef({ START: "", END: "" });
   type AreaField = "subdistrict" | "district" | "province";
   const manualPhotoAreaFields = useRef({ START: new Set<AreaField>(), END: new Set<AreaField>() });
   const [forceStraightThrough, setForceStraightThrough] = useState(false);
@@ -237,10 +238,14 @@ export function useMapRouteFormState({
       options?.source ?? (options?.manual ? "MANUAL" : "ROUTE_ENDPOINT");
     const reqId = ++photoAreaRequestRef.current[target];
     const manualFields = manualPhotoAreaFields.current[target];
+    const key = `${formattedLat},${formattedLon}`;
+    const freshPin = photoAreaCoordinateRef.current[target] !== key;
+    if (freshPin) manualFields.clear();
+    photoAreaCoordinateRef.current[target] = key;
     const nowIso = new Date().toISOString();
 
     setLoc((prev) => {
-      const sameCoords = Number(prev.lat) === coords.lat && Number(prev.lon) === coords.lon;
+      const sameCoords = Number(prev.lat) === Number(formattedLat) && Number(prev.lon) === Number(formattedLon);
       const preserve = (field: AreaField, hint: string) =>
         manualFields.has(field) ? prev[field] : hint || (sameCoords ? prev[field] : "");
       return {
@@ -259,15 +264,13 @@ export function useMapRouteFormState({
       photoAreaRequestRef.current[target] === reqId &&
       Number(prev.lat) === Number(formattedLat) && Number(prev.lon) === Number(formattedLon);
     try {
-      const lookup = await reverseGeocodeTambonAmphoe(coords.lon, coords.lat);
-      // The nearest-district fallback is only an estimate, not a verified endpoint area.
-      const loc = lookup?.source === "district" ? null : lookup;
+      const loc = await resolveDetourPinArea(coords.lon, coords.lat);
       setLoc((prev) => {
         if (!isCurrent(prev)) return prev;
         const keepOrLookup = (field: AreaField, value?: string) =>
           manualFields.has(field) ? prev[field] : prev[field] || value || "";
-        const subdistrict = keepOrLookup("subdistrict", loc?.subdistrict);
-        const district = keepOrLookup("district", loc?.district);
+        const subdistrict = keepOrLookup("subdistrict", loc?.tambon);
+        const district = keepOrLookup("district", loc?.amphoe);
         const province = keepOrLookup("province", loc?.province);
         return {
           ...prev,
@@ -292,6 +295,8 @@ export function useMapRouteFormState({
     if (manual && (patch.lat !== undefined || patch.lon !== undefined)) {
       manualRef.current = true;
       photoAreaRequestRef.current[target] += 1;
+      photoAreaCoordinateRef.current[target] = "";
+      manualPhotoAreaFields.current[target].clear();
     }
     if (manual) {
       for (const field of ["subdistrict", "district", "province"] as const) {
@@ -300,7 +305,9 @@ export function useMapRouteFormState({
     }
     const setLoc = target === "START" ? setDetourStartPhotoLocation : setDetourEndPhotoLocation;
     setLoc((prev) => {
-      const next = { ...prev, ...patch };
+      const changedCoordinates = manual && ((patch.lat !== undefined && Number(prev.lat) !== Number(patch.lat)) ||
+        (patch.lon !== undefined && Number(prev.lon) !== Number(patch.lon)));
+      const next = { ...prev, ...(changedCoordinates ? { subdistrict: "", district: "", province: "", areaStatus: "idle" as const } : {}), ...patch };
       if (manual) {
         if (patch.lat !== undefined || patch.lon !== undefined) {
           next.locationSource = patch.locationSource ?? "MANUAL";
@@ -370,6 +377,7 @@ export function useMapRouteFormState({
     durationRevManualRef.current = false;
     startPhotoLocManualRef.current = false;
     endPhotoLocManualRef.current = false;
+    photoAreaCoordinateRef.current = { START: "", END: "" };
     manualPhotoAreaFields.current.START.clear();
     manualPhotoAreaFields.current.END.clear();
     photoAreaRequestRef.current.START += 1;

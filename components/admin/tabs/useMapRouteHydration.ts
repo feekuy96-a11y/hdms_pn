@@ -12,7 +12,7 @@ import {
   sliceBranchByKmRange,
 } from "@/components/admin/tabs/map-management-helpers";
 import { detourDurationSeconds as readDetourDurationSeconds } from "@/lib/detour-presentation";
-import { localArea } from "@/lib/gis-utils";
+import { localArea, resolveDetourPinArea } from "@/lib/gis-utils";
 import {
   AFFECTED_LANES_OPTIONS,
   type AffectedShoulderType,
@@ -387,122 +387,47 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
         photo: DetourPointPhoto | undefined,
         fallbackLat: number,
         fallbackLon: number,
-        areaHint: { subdistrict?: string; district?: string } | null,
         manualRef: React.MutableRefObject<boolean> | undefined,
         setLoc: React.Dispatch<React.SetStateAction<DetourPhotoLocationState>> | undefined
       ) => {
         if (!setLoc) return;
-        const hasPhotoCoord =
-          typeof photo?.lat === "number" &&
-          typeof photo?.lon === "number" &&
-          Number.isFinite(photo.lat) &&
-          Number.isFinite(photo.lon) &&
-          Math.abs(photo.lat) <= 90 &&
-          Math.abs(photo.lon) <= 180 &&
-          (photo.lat !== 0 || photo.lon !== 0);
-        const savedSub = photo?.subdistrict?.trim() || "";
-        const savedDist = photo?.district?.trim() || "";
-        const savedProv = photo?.province?.trim() || "";
-        const hasSavedMeta = hasPhotoCoord || Boolean(savedSub || savedDist || savedProv);
-        const savedSource = photo?.locationSource;
-        const savedResolvedAt = photo?.resolvedAt;
-
-        if (hasSavedMeta) {
-          if (manualRef) manualRef.current = true;
-          const targetLat = hasPhotoCoord ? photo!.lat! : fallbackLat;
-          const targetLon = hasPhotoCoord ? photo!.lon! : fallbackLon;
-          const validTarget =
-            Number.isFinite(targetLat) &&
-            Number.isFinite(targetLon) &&
-            Math.abs(targetLat) <= 90 &&
-            Math.abs(targetLon) <= 180 &&
-            (targetLat !== 0 || targetLon !== 0);
-          const hasAreaText = Boolean(savedSub || savedDist);
-          setLoc({
-            lat: validTarget ? targetLat.toFixed(6) : "",
-            lon: validTarget ? targetLon.toFixed(6) : "",
-            subdistrict: savedSub,
-            district: savedDist,
-            province: savedProv || (validTarget ? "ปัตตานี" : ""),
-            locationSource: savedSource ?? (hasPhotoCoord ? "MANUAL" : "ROUTE_ENDPOINT"),
-            resolvedAt: savedResolvedAt,
-            areaStatus: hasAreaText ? "resolved" : validTarget ? "resolving" : "idle",
-          });
-          if (validTarget && (!savedSub || !savedDist)) {
-            void localArea(targetLon, targetLat)
-              .then((loc) => {
-                if (hydratedRouteKey.current !== key) return;
-                setLoc((prev) => {
-                  const nextSub = prev.subdistrict || loc.tambon || "";
-                  const nextDist = prev.district || loc.amphoe || "";
-                  return {
-                    ...prev,
-                    subdistrict: nextSub,
-                    district: nextDist,
-                    province: prev.province || loc.province || "ปัตตานี",
-                    areaStatus: nextSub || nextDist ? "resolved" : "not_found",
-                  };
-                });
-              })
-              .catch(() => {
-                if (hydratedRouteKey.current !== key) return;
-                setLoc((prev) => ({
-                  ...prev,
-                  areaStatus: prev.subdistrict || prev.district ? "resolved" : "not_found",
-                }));
-              });
-          }
-          return;
-        }
-
-        if (manualRef) manualRef.current = false;
-        const hasFallback =
-          Boolean(photo?.url || photo?.caption) &&
-          Number.isFinite(fallbackLat) &&
-          Number.isFinite(fallbackLon) &&
-          Math.abs(fallbackLat) <= 90 &&
-          Math.abs(fallbackLon) <= 180 &&
-          (fallbackLat !== 0 || fallbackLon !== 0);
-        if (!hasFallback) {
+        const photoPin = typeof photo?.lat === "number" && typeof photo?.lon === "number" &&
+          Number.isFinite(photo.lat) && Number.isFinite(photo.lon) &&
+          Math.abs(photo.lat) <= 90 && Math.abs(photo.lon) <= 180 && (photo.lat !== 0 || photo.lon !== 0);
+        const lat = photoPin ? photo!.lat! : fallbackLat;
+        const lon = photoPin ? photo!.lon! : fallbackLon;
+        const valid = Number.isFinite(lat) && Number.isFinite(lon) &&
+          Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && (lat !== 0 || lon !== 0);
+        const subdistrict = photo?.subdistrict?.trim() || "";
+        const district = photo?.district?.trim() || "";
+        const province = photo?.province?.trim() || "";
+        if (manualRef) manualRef.current = Boolean(photoPin || subdistrict || district || province);
+        if (!photo?.url && !photo?.caption && !manualRef?.current && !photoPin && !subdistrict && !district && !province) {
           setLoc(EMPTY_DETOUR_PHOTO_LOCATION);
           return;
         }
-
-        const hintSub = areaHint?.subdistrict?.trim() || "";
-        const hintDist = areaHint?.district?.trim() || "";
+        const latText = valid ? lat.toFixed(6) : "", lonText = valid ? lon.toFixed(6) : "";
         setLoc({
-          lat: fallbackLat.toFixed(6),
-          lon: fallbackLon.toFixed(6),
-          subdistrict: hintSub,
-          district: hintDist,
-          province: "ปัตตานี",
-          locationSource: savedSource ?? "ROUTE_ENDPOINT",
-          resolvedAt: savedResolvedAt,
-          areaStatus: hintSub || hintDist ? "resolved" : "resolving",
+          lat: latText,
+          lon: lonText,
+          subdistrict, district, province,
+          locationSource: photo?.locationSource ?? (photoPin ? "MANUAL" : "ROUTE_ENDPOINT"),
+          resolvedAt: photo?.resolvedAt,
+          areaStatus: subdistrict && district ? "resolved" : valid ? "resolving" : "idle",
         });
-        if (!hintSub || !hintDist) {
-          void localArea(fallbackLon, fallbackLat)
-            .then((loc) => {
-              if (hydratedRouteKey.current !== key || manualRef?.current) return;
-              setLoc((prev) => {
-                const nextSub = prev.subdistrict || loc.tambon || "";
-                const nextDist = prev.district || loc.amphoe || "";
-                return {
-                  ...prev,
-                  subdistrict: nextSub,
-                  district: nextDist,
-                  province: prev.province || loc.province || "ปัตตานี",
-                  areaStatus: nextSub || nextDist ? "resolved" : "not_found",
-                };
-              });
-            })
-            .catch(() => {
-              if (hydratedRouteKey.current !== key || manualRef?.current) return;
-              setLoc((prev) => ({
-                ...prev,
-                areaStatus: prev.subdistrict || prev.district ? "resolved" : "not_found",
-              }));
+        if (valid && (!subdistrict || !district || !province)) {
+          void resolveDetourPinArea(lon, lat).then((area) => {
+            if (hydratedRouteKey.current !== key) return;
+            setLoc((prev) => {
+              if (Number(prev.lat) !== Number(latText) || Number(prev.lon) !== Number(lonText)) return prev;
+              const nextSub = prev.subdistrict || area?.tambon || "";
+              const nextDist = prev.district || area?.amphoe || "";
+              return {
+                ...prev, subdistrict: nextSub, district: nextDist, province: prev.province || area?.province || "",
+                areaStatus: nextSub && nextDist ? "resolved" : "not_found",
+              };
             });
+          });
         }
       };
 
@@ -517,9 +442,6 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
         startPhoto,
         fallbackStartLat,
         fallbackStartLon,
-        detour.subdistrict && detour.district
-          ? { subdistrict: detour.subdistrict, district: detour.district }
-          : null,
         startPhotoLocManualRef,
         setDetourStartPhotoLocation
       );
@@ -527,7 +449,6 @@ export function useMapRouteHydration(params: UseMapRouteHydrationParams) {
         endPhoto,
         fallbackEndLat,
         fallbackEndLon,
-        null,
         endPhotoLocManualRef,
         setDetourEndPhotoLocation
       );

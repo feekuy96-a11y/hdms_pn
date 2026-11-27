@@ -320,54 +320,50 @@ test.describe("Public detour endpoints on mobile", () => {
   }
 });
 
-test("admin keeps independent manual and looked-up areas when endpoint responses are stale or unavailable", async ({ page }) => {
-  const calls: number[] = [];
-  let releaseOld!: () => void;
-  const oldRequest = new Promise<void>((resolve) => { releaseOld = resolve; });
-  await page.route("**/functions/v1/hdms-api", async (route) => {
-    const { action, args } = route.request().postDataJSON();
-    if (action === "reverseGeocodeGoogleAction") {
-      const lat = Number(args[1]);
-      calls.push(lat);
-      if (lat === 6.78121) await oldRequest;
-      const area = lat === 6.78121 ? ["บานา", "เมืองปัตตานี", "ปัตตานี"]
-        : lat === 6.81132 ? ["ตาเซะ", "เมืองยะลา", "ยะลา"] : null;
-      return route.fulfill({ json: area ? { configured: true, available: true, found: true, subdistrict: area[0], district: area[1], province: area[2] }
-        : { configured: true, available: true, found: false } });
-    }
-    if (action === "proxyReverseGeocodeAction") return route.fulfill({ json: { available: true, found: false } });
+test("admin keeps A and B independent and ignores a stale pin lookup or unverified area", async ({ page }) => {
+  let boundaryRequested = false;
+  const geocodeCalls: string[] = [];
+  let releaseLookup!: () => void;
+  const holdLookup = new Promise<void>((resolve) => { releaseLookup = resolve; });
+  await page.route("**/functions/v1/hdms-api", (route) => {
+    const { action } = route.request().postDataJSON();
+    if (/Geocode/.test(action)) geocodeCalls.push(action);
     if (/^get/.test(action)) return route.fulfill({ json: { floodRoutes: [], detourRoutes: [], offices: [], highwayLayers: [], timelineUpdates: [], mitigationProjects: [], systemSettings: {} } });
     return route.abort();
   });
-  await page.route("https://api.longdo.com/**", route => route.abort());
-  await page.route("https://nominatim.openstreetmap.org/**", route => route.abort());
-  await page.route("**/data/highway-base-network.json", route => route.fulfill({ json: { subdistricts: [], routes: [], districtsGeojson: { type: "FeatureCollection", features: [] } } }));
+  await page.route("**/data/highway-base-network.json", async (route) => {
+    boundaryRequested = true;
+    await holdLookup;
+    return route.fulfill({ json: baseHighwayNetwork });
+  });
   await page.goto(`${process.env.BASE_PATH || ""}/admin/`);
   await page.getByRole("button", { name: "ทางเลี่ยง", exact: true }).click();
   const a = page.getByLabel("พิกัดจุด A", { exact: true });
   const b = page.getByLabel("พิกัดจุด B", { exact: true });
   const set = async (input: Locator, value: string) => { await input.fill(value); await input.blur(); };
   try {
-    await set(b, "6.81132, 101.17132");
+    await set(a, "6.852110, 101.489043");
+    await expect.poll(() => boundaryRequested).toBe(true);
+    await page.getByLabel(/ตำบลภาพ.*A/).fill("ชื่อตรวจทานของหมุดเดิม");
+    await set(a, "6.94, 101.66");
+    await set(b, "6.718100, 101.419500");
+    releaseLookup();
     const tabs = page.getByRole("tablist", { name: "เลือกจุดต้นทางหรือปลายทางของทางเลี่ยง" });
     await tabs.getByRole("tab", { name: /จุด B/ }).click();
-    await expect(page.getByLabel(/ตำบลภาพ.*B/)).toHaveValue("ตาเซะ");
-    await expect(page.getByLabel(/อำเภอภาพ.*B/)).toHaveValue("เมืองยะลา");
-    await expect(page.getByLabel(/จังหวัดภาพ.*B/)).toHaveValue("ยะลา");
+    await expect(page.getByLabel(/ตำบลภาพ.*B/)).toHaveValue("มายอ");
+    await expect(page.getByLabel(/อำเภอภาพ.*B/)).toHaveValue("มายอ");
+    await expect(page.getByLabel(/จังหวัดภาพ.*B/)).toHaveValue("ปัตตานี");
     await tabs.getByRole("tab", { name: /จุด A/ }).click();
-    await set(a, "6.78121, 101.13121");
-    await expect.poll(() => calls.includes(6.78121)).toBe(true);
-    await page.getByLabel(/ตำบลภาพ.*A/).fill("ตำบลกรอกเอง");
-    await set(a, "6.97590, 101.42340");
-    await expect.poll(() => calls.includes(6.9759)).toBe(true);
-    releaseOld();
-    await expect(page.getByText(/พิกัดหมุด A บนแผนที่: 6.9759, 101.4234/)).toBeVisible();
-    await expect(page.getByLabel(/ตำบลภาพ.*A/)).toHaveValue("ตำบลกรอกเอง");
-    await expect(page.getByLabel(/อำเภอภาพ.*A/)).toHaveValue("");
+    await expect(page.getByLabel(/ตำบลภาพ.*A/)).toHaveValue("");
+    await expect(page.getByLabel(/จังหวัดภาพ.*A/)).toHaveValue("");
+    await page.getByLabel(/ตำบลภาพ.*A/).fill("ชื่อตรวจทานของหมุดใหม่");
     await tabs.getByRole("tab", { name: /จุด B/ }).click();
-    await expect(page.getByLabel(/ตำบลภาพ.*B/)).toHaveValue("ตาเซะ");
+    await expect(page.getByLabel(/ตำบลภาพ.*B/)).toHaveValue("มายอ");
+    await tabs.getByRole("tab", { name: /จุด A/ }).click();
+    await expect(page.getByLabel(/ตำบลภาพ.*A/)).toHaveValue("ชื่อตรวจทานของหมุดใหม่");
+    expect(geocodeCalls).toEqual([]);
   } finally {
-    releaseOld();
+    releaseLookup();
   }
 });
 
@@ -482,8 +478,19 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
     expect(prodHit?.label).toBe("ทล.418 (งาแม่ - ยุโป)");
   });
 
-  test("Tier 1 Google Geocoding & Routes proxy generates Thai turn-by-turn advice with via waypoints", async () => {
+  test("Google Routes proxy generates Thai advice when its polyline matches the selected route and preserves via waypoints", async () => {
     const originalFetch = globalThis.fetch;
+    const drawn: [number, number][] = [[101.48904, 6.85211], [101.49000, 6.85300], [101.49300, 6.85400]];
+    const encode = (coords: [number, number][]) => {
+      const prev = [0, 0];
+      return coords.map(([lon, lat]) => [lat, lon].map((value, j) => {
+        const next = Math.round(value * 1e5), delta = next - prev[j]; prev[j] = next;
+        let bits = delta < 0 ? ~(delta << 1) : delta << 1;
+        let out = "";
+        while (bits >= 32) { out += String.fromCharCode((32 | (bits & 31)) + 63); bits >>= 5; }
+        return out + String.fromCharCode(bits + 63);
+      }).join("")).join("");
+    };
     const edgeCalls: { action: string; args: unknown[] }[] = [];
 
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -516,10 +523,10 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
               found: true,
               distanceMeters: 4200,
               durationSeconds: 360,
-              encodedPolyline: "_p~iF~ps|U_ulLnnqC",
+              encodedPolyline: encode(drawn),
               steps: [
-                { maneuver: "DEPART", instructions: "มุ่งหน้าทางทิศเหนือไปตาม ทล.42", distanceMeters: 850, durationSeconds: 60, startLocation: [101.25, 6.85] },
-                { maneuver: "TURN_LEFT", instructions: "เลี้ยวซ้ายเข้าสู่ ทางหลวงชนบท ปน.2010", distanceMeters: 3350, durationSeconds: 300, startLocation: [101.26, 6.86] },
+                { maneuver: "DEPART", instructions: "มุ่งหน้าทางทิศเหนือไปตาม ทล.42", distanceMeters: 850, durationSeconds: 60, startLocation: drawn[0] },
+                { maneuver: "TURN_LEFT", instructions: "เลี้ยวซ้ายเข้าสู่ ทางหลวงชนบท ปน.2010", distanceMeters: 3350, durationSeconds: 300, startLocation: drawn[1] },
               ],
             }),
             { status: 200, headers: { "Content-Type": "application/json" } }
@@ -531,24 +538,25 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
 
     try {
       const advice = await generateAutoDetourAdvice(
-        [101.25, 6.85],
-        [101.28, 6.88],
-        [[101.25, 6.85], [101.28, 6.88]],
+        drawn[0],
+        drawn[2],
+        drawn,
         "42",
         [],
         undefined,
         "FORWARD_ONLY",
-        { forwardWaypoints: [[101.265, 6.865]] }
+        { forwardWaypoints: [drawn[1]] }
       );
 
-      expect(advice).toContain("ต.รูสะมิแล อ.เมืองปัตตานี");
+      expect(advice).toContain("ต.ปะนาเระ อ.ปะนาเระ");
+      expect(edgeCalls.some(call => call.action === "reverseGeocodeGoogleAction")).toBe(false);
       expect(advice).toContain("เลี้ยวซ้ายเข้าสู่ ทางหลวงชนบท ปน.2010 (ระยะทาง 3.4 กม.)");
       expect(advice).toContain("รวมระยะทางเลี่ยง: 4.2 กม.");
       expect(advice).toContain("ประมาณ 6 นาที");
 
       const routeCall = edgeCalls.find((c) => c.action === "computeGoogleDetourRouteAction");
       expect(routeCall).toBeDefined();
-      expect((routeCall?.args[0] as any)?.intermediates).toEqual([[101.265, 6.865]]);
+      expect((routeCall?.args[0] as any)?.intermediates).toEqual([drawn[1]]);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -586,6 +594,7 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
               {
                 distance: 2500,
                 duration: 210,
+                geometry: { type: "LineString", coordinates: [[101.25, 6.85], [101.28, 6.88]] },
                 legs: [
                   {
                     steps: [

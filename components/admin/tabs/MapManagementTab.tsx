@@ -495,6 +495,7 @@ export function MapManagementTab({
     setDetourName,
     setDetourDesc,
     startLat, startLon, endLat, endLon,
+    detourStartPin: detourStartPhotoLocation, detourEndPin: detourEndPhotoLocation,
     setStartLat, setStartLon, setEndLat, setEndLon,
     draftCoordinates, setDraftCoordinates,
     draftWaypoints, setDraftWaypoints,

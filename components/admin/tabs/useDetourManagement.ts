@@ -25,7 +25,8 @@ import {
   extractDirectionalAdvice,
   extractDirectionalAdviceForEdit,
   generateAutoDetourAdvice,
-  localArea,
+  parseDetourAdvicePin,
+  resolveDetourPinArea,
 } from "@/lib/gis-utils";
 import {
   calculatePolylineRoadDistanceKm,
@@ -301,17 +302,18 @@ export function useDetourManagement({
       return;
     }
 
-    const nextSub = savedSub || (isStart ? d.subdistrict || "" : "");
-    const nextDist = savedDist || (isStart ? d.district || "" : "");
+    // Keep explicit point labels, not the older route-level area of another point.
+    const nextSub = savedSub;
+    const nextDist = savedDist;
     const nextSource =
       photo?.locationSource ?? (hasSavedCoord ? "MANUAL" : "ROUTE_ENDPOINT");
-    const hasArea = Boolean(nextSub.trim() || nextDist.trim());
+    const hasArea = Boolean(nextSub && nextDist);
     setLoc({
       lat: validTarget ? targetLat.toFixed(6) : "",
       lon: validTarget ? targetLon.toFixed(6) : "",
       subdistrict: nextSub,
       district: nextDist,
-      province: savedProv || (validTarget ? "ปัตตานี" : ""),
+      province: savedProv,
       locationSource: nextSource,
       resolvedAt: photo?.resolvedAt,
       areaStatus: hasArea ? "resolved" : validTarget ? "resolving" : "idle",
@@ -319,27 +321,28 @@ export function useDetourManagement({
 
     if (validTarget && (!nextSub || !nextDist)) {
       const targetId = d.id;
-      void localArea(targetLon, targetLat)
+      void resolveDetourPinArea(targetLon, targetLat)
         .then((loc) => {
           if (modalEditDetourIdRef.current !== targetId) return;
           setLoc((prev) => {
-            const finalSub = prev.subdistrict || loc.tambon || "";
-            const finalDist = prev.district || loc.amphoe || "";
+            if (prev.lat !== targetLat.toFixed(6) || prev.lon !== targetLon.toFixed(6)) return prev;
+            const finalSub = prev.subdistrict || loc?.tambon || "";
+            const finalDist = prev.district || loc?.amphoe || "";
             return {
               ...prev,
               subdistrict: finalSub,
               district: finalDist,
-              province: prev.province || loc.province || "ปัตตานี",
-              areaStatus: finalSub || finalDist ? "resolved" : "not_found",
+              province: prev.province || loc?.province || "",
+              areaStatus: finalSub && finalDist ? "resolved" : "not_found",
             };
           });
         })
         .catch(() => {
           if (modalEditDetourIdRef.current !== targetId) return;
-          setLoc((prev) => ({
+          setLoc((prev) => prev.lat !== targetLat.toFixed(6) || prev.lon !== targetLon.toFixed(6) ? prev : {
             ...prev,
-            areaStatus: prev.subdistrict || prev.district ? "resolved" : "not_found",
-          }));
+            areaStatus: prev.subdistrict && prev.district ? "resolved" : "not_found",
+          });
         });
     }
   };
@@ -396,7 +399,7 @@ export function useDetourManagement({
   };
 
   // Auto Generate Advice inside Modal
-  const handleGenerateAdviceInModal = async () => {
+  const handleGenerateAdviceInModal = async (photoLocations?: { start: DetourPhotoLocationState; end: DetourPhotoLocationState }) => {
     if (!editingDetour) return;
     const linkedFlood = floodList.find((f) => f.id === editDetourRefId);
     const forwardCoords = typeof editingDetour.coordinates_json === "string"
@@ -425,15 +428,25 @@ export function useDetourManagement({
       return undefined;
     };
 
+    const start = parseDetourAdvicePin(editingDetour.lon_start, editingDetour.lat_start);
+    const end = parseDetourAdvicePin(editingDetour.lon_end, editingDetour.lat_end);
+    if (!start || !end) {
+      onToast("กรุณากำหนดพิกัดจุด A และ B ก่อนวิเคราะห์คำแนะนำ");
+      return;
+    }
+    const startPhoto = photoLocations?.start ?? editDetourStartPhotoLocation;
+    const endPhoto = photoLocations?.end ?? editDetourEndPhotoLocation;
     const advice = await generateAutoDetourAdvice(
-      [editingDetour.lon_start, editingDetour.lat_start],
-      [editingDetour.lon_end, editingDetour.lat_end],
+      start,
+      end,
       forwardCoords,
-      linkedFlood?.route_no || "43",
+      linkedFlood?.route_no,
       systemData.highwayLayers || [],
       reverseCoords,
       editingDetour.direction_mode,
       {
+        startPin: parseDetourAdvicePin(startPhoto.lon, startPhoto.lat) ?? undefined,
+        endPin: parseDetourAdvicePin(endPhoto.lon, endPhoto.lat) ?? undefined,
         forwardWaypoints: parseCoordArray(editingDetour.detour_meta?.waypoints_json),
         reverseWaypoints: parseCoordArray(editingDetour.reverse_waypoints_json),
       }

@@ -21,7 +21,8 @@
 // re-exported from lib/gis-utils.ts, so existing imports keep working.
 
 import { proxyReverseGeocodeAction, reverseGeocodeGoogleAction } from "@/app/actions/doh-actions";
-import { loadBaseHighwayNetwork, resetBaseHighwayNetworkCache } from "./gis-data";
+import { loadBaseHighwayNetwork, resetBaseHighwayNetworkCache, type SubdistrictDataEntry } from "./gis-data";
+import { pointToSegmentDistanceMeters } from "./gis/conflict-detection";
 
 export interface AreaInfo {
   /** Village name without "บ." - only from an online source, "" otherwise. */
@@ -115,6 +116,93 @@ export async function findPattaniDistrictName(coord: [number, number]): Promise<
     }
   }
   return bestName;
+}
+
+type AreaPoint = [number, number];
+const REVIEW_BAND_METERS = 15;
+
+function detourAreaAt(point: AreaPoint, subdistricts: SubdistrictDataEntry[]): AreaInfo | null {
+  const [lon, lat] = point;
+  const matches = subdistricts.filter((s) => {
+    const [x1, y1, x2, y2] = s.bounds;
+    return lon >= x1 && lon <= x2 && lat >= y1 && lat <= y2 &&
+      s.polygon && s.polygon.length >= 3 && isPointInPolygon(point, s.polygon);
+  });
+  if (matches.length !== 1) return null;
+  const [{ tambon, amphoe, polygon }] = matches;
+  // The reference is simplified. Do not assert a tambon in its review band.
+  if (polygon.some((vertex, i) =>
+    pointToSegmentDistanceMeters(point, polygon[(i + polygon.length - 1) % polygon.length], vertex) <= REVIEW_BAND_METERS
+  )) return null;
+  return { village: "", tambon, amphoe, province: "ปัตตานี", road: "", source: "local", confidence: "low" };
+}
+
+/** Exact point-in-boundary lookup for detour pins; do not borrow a nearby address. */
+export async function resolveDetourPinArea(lon: number, lat: number): Promise<AreaInfo | null> {
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+  try {
+    const { subdistricts } = await loadBaseHighwayNetwork();
+    return detourAreaAt([lon, lat], subdistricts);
+  } catch {
+    return null;
+  }
+}
+
+function edgeCrossingFractions(a: AreaPoint, b: AreaPoint, c: AreaPoint, d: AreaPoint): number[] {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const ex = d[0] - c[0], ey = d[1] - c[1];
+  const qx = c[0] - a[0], qy = c[1] - a[1];
+  const cross = dx * ey - dy * ex;
+  const epsilon = 1e-12;
+  if (Math.abs(cross) > epsilon) {
+    const t = (qx * ey - qy * ex) / cross, u = (qx * dy - qy * dx) / cross;
+    return t > 0 && t < 1 && u >= -epsilon && u <= 1 + epsilon ? [t] : [];
+  }
+  if (Math.abs(qx * dy - qy * dx) > epsilon) return [];
+  const lenSquared = dx * dx + dy * dy;
+  if (!lenSquared) return [];
+  return [c, d].map(([x, y]) => ((x - a[0]) * dx + (y - a[1]) * dy) / lenSquared)
+    .filter((t) => t > 0 && t < 1);
+}
+
+/** Follow the selected line in travel order, retaining unknown and re-entered areas. */
+export async function traceDetourRouteAreas(line: AreaPoint[]): Promise<Array<AreaInfo | null>> {
+  if (line.length < 2 || line.length > 5_000 ||
+      !line.every((p) => Number.isFinite(p?.[0]) && Number.isFinite(p?.[1]))) return [null];
+  try {
+    const { subdistricts } = await loadBaseHighwayNetwork();
+    const areas: Array<AreaInfo | null> = [];
+    let previous: string | undefined;
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1], b = line[i];
+      if (a[0] === b[0] && a[1] === b[1]) continue;
+      const minX = Math.min(a[0], b[0]), maxX = Math.max(a[0], b[0]);
+      const minY = Math.min(a[1], b[1]), maxY = Math.max(a[1], b[1]);
+      const nearby = subdistricts.filter(({ bounds: [x1, y1, x2, y2], polygon }) =>
+        !!polygon?.length && x1 <= maxX && x2 >= minX && y1 <= maxY && y2 >= minY);
+      const cuts = [0, 1];
+      for (const { polygon } of nearby) {
+        for (let n = 0; n < polygon.length; n++) {
+          cuts.push(...edgeCrossingFractions(a, b, polygon[n], polygon[(n + 1) % polygon.length]));
+        }
+      }
+      cuts.sort((x, y) => x - y);
+      for (let n = 1; n < cuts.length; n++) {
+        if (cuts[n] - cuts[n - 1] <= 1e-8) continue;
+        const t = (cuts[n] + cuts[n - 1]) / 2;
+        const area = detourAreaAt([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])], nearby);
+        const key = area ? `${area.tambon}|${area.amphoe}` : "?";
+        if (key !== previous) {
+          areas.push(area);
+          previous = key;
+          if (areas.length > 80) return [null];
+        }
+      }
+    }
+    return areas.length > 0 ? areas : [null];
+  } catch {
+    return [null];
+  }
 }
 
 /**
