@@ -87,3 +87,47 @@ for (const detourLeavesDrawnRoute of [false, true]) {
     expect(await advice.inputValue()).not.toMatch(/รถยนต์ทุกชนิด|สัญจรต่อได้ตามปกติ/);
   });
 }
+
+test("editing a saved detour uses each stored pin, not route-wide area or a guessed province", async ({ page, baseURL, isMobile }) => {
+  const origin = new URL(baseURL!).origin;
+  const a = [101.489043, 6.852110], b = [101.660000, 6.940000];
+  const data = { updatedAt: "2026-11-27T00:00:00Z", floodRoutes: [], detourRoutes: [{
+    id: "DET-PIN-REVIEW", direction_mode: "FORWARD_ONLY", route_name: "ทางเลี่ยงทดสอบพิกัดเดิม", description: "", is_active: true,
+    lat_start: a[1], lon_start: a[0], lat_end: b[1], lon_end: b[0], coordinates_json: [a, b],
+    subdistrict: "พ่อมิ่ง", district: "ปะนาเระ",
+    detour_meta: { start_point_photo: { lat: a[1], lon: a[0], caption: "ภาพต้นทาง" },
+    end_point_photo: { lat: b[1], lon: b[0], caption: "ภาพปลายทาง" } },
+  }], timelineUpdates: [], mitigationProjects: [], offices: [], highwayLayers: [], mapStyles: null,
+  systemSettings: { name: "ทดสอบ", org: "ทดสอบ", phone: "1586" } };
+  await page.route("**/*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.origin === origin) return route.continue();
+    if (url.pathname.endsWith("/functions/v1/hdms-api")) {
+      const { action } = route.request().postDataJSON() || {};
+      if (String(action).includes("Geocode")) return route.fulfill({ json: {
+        available: true, configured: true, found: true, subdistrict: "พ่อมิ่ง", district: "ปะนาเระ",
+      } });
+      return route.fulfill({ json: data });
+    }
+    return route.abort();
+  });
+  await page.goto((process.env.BASE_PATH || "") + "/admin/");
+  const list = page.getByRole("button", { name: "รายการทางเลี่ยง", exact: true });
+  if (isMobile && !await list.isVisible()) await page.getByRole("button", { name: "เมนู", exact: true }).click();
+  await list.click();
+  await page.getByRole("button", { name: "แก้ไข", exact: true }).first().click();
+  await expect(page.getByLabel("ตำบลภาพจุดเริ่มต้น A")).toHaveValue("ปะนาเระ");
+  await page.getByRole("tab", { name: /จุด B/ }).click();
+  await expect(page.getByText(/ยังไม่พบข้อมูลพื้นที่/)).toBeVisible();
+  await expect(page.getByLabel("จังหวัดภาพจุดสิ้นสุด B")).toHaveValue("");
+  await page.getByRole("tab", { name: /จุด A/ }).click();
+  await page.getByRole("button", { name: "ดึงจากจุด A", exact: true }).click();
+  await expect(page.getByLabel("ตำบลภาพจุดเริ่มต้น A")).toHaveValue("ปะนาเระ");
+  const lon = page.getByLabel("ลองจิจูดภาพจุดเริ่มต้น A"), lat = page.getByLabel("ละติจูดภาพจุดเริ่มต้น A");
+  await lon.fill("101.419500");
+  await lat.fill("6.718100");
+  await lat.blur();
+  await expect(page.getByLabel("ตำบลภาพจุดเริ่มต้น A")).toHaveValue("มายอ");
+  await page.getByRole("button", { name: "วิเคราะห์คำแนะนำอัตโนมัติ", exact: true }).click();
+  await expect(page.locator("#edit-detour-advice-textarea")).toHaveValue(/A → จุด B \(ต\.มายอ อ\.มายอ → ยังไม่ยืนยันพื้นที่\)/);
+});
