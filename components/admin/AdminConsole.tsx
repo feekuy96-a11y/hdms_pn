@@ -58,6 +58,8 @@ const ExternalJobsTab = dynamic(
 
 interface AdminConsoleProps {
   systemData: SystemDataPayload;
+  onFloodMapIdsChange?: (ids: ReadonlySet<string> | null) => void;
+  onDetourMapIdsChange?: (ids: ReadonlySet<string> | null) => void;
   onDataRefresh: (data?: any) => Promise<any> | void;
   adminPickMode: string | null;
   setAdminPickMode: (mode: string | null) => void;
@@ -98,6 +100,8 @@ interface AdminConsoleProps {
 
 export function AdminConsole({
   systemData,
+  onFloodMapIdsChange,
+  onDetourMapIdsChange,
   onDataRefresh,
   adminPickMode,
   setAdminPickMode,
@@ -590,6 +594,7 @@ export function AdminConsole({
           {(activeTab === "incidents" || (activeTab === "map" && editingRoute?.type === "FLOOD")) && (
             <div hidden={activeTab !== "incidents"} inert={activeTab !== "incidents"}>
             <IncidentRegistryTab
+              onMapRouteIdsChange={activeTab === "incidents" ? onFloodMapIdsChange : undefined}
               systemData={systemData}
               onDataRefresh={onDataRefresh}
               onToast={onToast}
@@ -622,6 +627,7 @@ export function AdminConsole({
           {/* TAB 4: Detour Routes Management */}
           {activeTab === "detours" && (
             <DetourManagementTab
+              onMapRouteIdsChange={onDetourMapIdsChange}
               systemData={systemData}
               onDataRefresh={onDataRefresh}
               onToast={onToast}

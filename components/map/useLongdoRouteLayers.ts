@@ -195,6 +195,8 @@ export interface UseLongdoRouteLayersParams {
   onActivateMapEntity?: (entity: { type: "FLOOD" | "DETOUR"; id: string }) => void;
   mapReady: boolean;
   systemData: SystemDataPayload;
+  drawnFloodRoutes: SystemDataPayload["floodRoutes"];
+  drawnDetourRoutes: SystemDataPayload["detourRoutes"];
   mapStyles: NonNullable<SystemDataPayload["mapStyles"]>;
   effectiveShowDetourLayer: boolean;
   effectiveShowFloodLayer: boolean;
@@ -222,6 +224,8 @@ export function useLongdoRouteLayers({
   onFocusOverviewDetour,
   mapReady,
   systemData,
+  drawnFloodRoutes,
+  drawnDetourRoutes,
   mapStyles,
   effectiveShowDetourLayer,
   effectiveShowFloodLayer,
@@ -325,7 +329,7 @@ export function useLongdoRouteLayers({
       if (!layoutFrame) layoutFrame = window.requestAnimationFrame(layoutSymbols);
     };
 
-    (systemData.detourRoutes || []).forEach((detour) => {
+    drawnDetourRoutes.forEach((detour) => {
       if (!detour.is_active) return;
       const dirMode = detour.direction_mode || "TWO_WAY";
       const fwdCoords = parseRouteCoordinates(detour.coordinates_json);
@@ -536,7 +540,7 @@ export function useLongdoRouteLayers({
       detourPhotoMarkerRefs.current = [];
       group.clearLayers();
     };
-  }, [mapReady, systemData.detourRoutes, effectiveShowDetourLayer, detourDisplayMode, mapStyles, publicMode]);
+  }, [mapReady, drawnDetourRoutes, effectiveShowDetourLayer, detourDisplayMode, mapStyles, publicMode]);
 
   // A/B photo markers reveal progressively without recreating detour layers or
   // their open popups: show only the selected detour, or nearby endpoints at close zoom.
@@ -570,7 +574,7 @@ export function useLongdoRouteLayers({
 
     const countDetoursForFlood = (flood: FloodRoute) => getLinkedDetoursForFlood(flood, systemData).length;
 
-    const visibleFloods = (systemData.floodRoutes || []).filter((flood) => isFloodLineVisibleOnCurrentMap(flood));
+    const visibleFloods = drawnFloodRoutes.filter(isFloodLineVisibleOnCurrentMap);
 
     // First draw polylines for all visible flood routes using configured unified line style
     visibleFloods.forEach((flood) => {
@@ -704,7 +708,7 @@ export function useLongdoRouteLayers({
       floodLinesRef.current = {};
       floodMarkerRefs.current = [];
     };
-  }, [mapReady, systemData.floodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, floodDisplayMode, mapStyles, publicMode]);
+  }, [mapReady, drawnFloodRoutes, systemData.detourRoutes, effectiveShowFloodLayer, floodDisplayMode, mapStyles, publicMode]);
 
   function fitFloodPinLabel(map: any, marker: any) {
     const pin = marker.getElement();

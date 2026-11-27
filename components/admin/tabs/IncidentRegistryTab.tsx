@@ -28,6 +28,7 @@ import { IncidentDetailModal } from "./IncidentDetailModal";
 
 interface IncidentRegistryTabProps {
   systemData: SystemDataPayload;
+  onMapRouteIdsChange?: (ids: ReadonlySet<string> | null) => void;
   onDataRefresh: (data?: any) => Promise<any> | void;
   onToast: (msg: string) => void;
   showConfirmModal: (title: string, message: string, onConfirm: () => void) => void;
@@ -38,6 +39,7 @@ interface IncidentRegistryTabProps {
 
 export function IncidentRegistryTab({
   systemData,
+  onMapRouteIdsChange,
   onDataRefresh,
   onToast,
   showConfirmModal,
@@ -122,6 +124,13 @@ export function IncidentRegistryTab({
     showConfirmModal,
     showSuccessModal,
   });
+
+  React.useEffect(() => {
+    if (!onMapRouteIdsChange) return;
+    onMapRouteIdsChange(new Set(filteredIncidents.map((route) => route.id)));
+    return () => onMapRouteIdsChange(null);
+  }, [filteredIncidents, onMapRouteIdsChange]);
+
 
   return (
     <div className="w-full">
