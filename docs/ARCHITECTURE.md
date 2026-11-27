@@ -73,10 +73,10 @@
 - `.mcp.json` ล็อกเป็น `read_only=true` และจำกัดเฉพาะฟีเจอร์อ่าน (`docs,database,debugging,development`) ตาม ADR-001 แล้วใน `UPDATE-137` (ปิด B-002)
 
 ## 7. ทดสอบและ CI/CD
-- `tests/e2e/*.spec.ts` (Playwright; โปรเจกต์ `desktop-chromium` = Desktop Chrome 1280×720, `mobile-chromium` = Pixel 7) mock ที่ `**/functions/v1/hdms-api` จึงตอบทุก action ด้วยข้อมูลชุดเดียว
-- `.github/workflows/ci.yml` (PR + push main): lint → typecheck → build:pages → e2e (static)
-- `.github/workflows/deploy.yml` (`workflow_run` รอ `CI` เขียวบน `main` + `workflow_dispatch` เผื่อฉุกเฉิน): checkout `head_sha` → lint → typecheck → build:pages → deploy (ปิด B-003 ใน `UPDATE-137` ไม่รัน Playwright ซ้ำ)
-- `npm run check` = lint + typecheck + `build` (ไม่ใช่ `build:pages`) จึงอาจผ่านทั้งที่ deploy ไม่ผ่าน
+- Playwright กำหนดโปรไฟล์และการเก็บ trace ใน [`playwright.config.ts`](../playwright.config.ts); เลือก fixture ตาม spec งานที่เปลี่ยน หลีกเลี่ยงการเขียนข้อมูลจริงจากเทสต์
+- สถานะและด่านที่มีผลจริงดู [CI workflow](../.github/workflows/ci.yml) ของ commit ที่ตรวจ ไม่เดาจากเอกสารเก่า เมื่อเป็นชุดเต็มใช้ static Pages export, Chromium บนคอม/มือถือ และชุด offline opt-in/rollback; ใช้ [Playbooks](PLAYBOOKS.md) สำหรับวิธีทำงานและแก้ปัญหา
+- [Pages workflow](../.github/workflows/deploy.yml) ปกติรับ push บน `main` ที่ CI ผ่าน และ build ตาม SHA นั้น; manual dispatch เป็นทางแยกที่ต้องอยู่ในขอบเขตที่อนุมัติ ใช้ `npm run check:deploy` สำหรับ build แบบ Pages ไม่ใช้ `npm run check` เป็นหลักฐานแทน
+- [Public offline](PUBLIC_OFFLINE.md) และคิวรายงานของแอดมินเป็นคนละหน้าที่: snapshot ฝั่งประชาชนไม่ใช่ข้อมูลสด ส่วนคิวแอดมินอาจรอส่ง จึงต้องบอกสถานะจริง ไม่สับสนว่าบันทึกเข้าฐานสำเร็จแล้ว
 
 ## 8. โค้ดเก่าที่ไม่อยู่ใน path จริง (ห้ามขยาย ดู B-007)
 `server/routing-service.mjs`, Postgres ใน `docker-compose.yml`, ข้อความ "Server Actions"/Docker ใน `DESIGN.md`/`MANUAL.md`
