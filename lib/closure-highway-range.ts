@@ -1,5 +1,5 @@
 import { parseKmPostMeters, type HighwaySectionGroup } from "@/lib/highway-schema";
-import type { ClosureCoordinate } from "@/lib/closure-local-record";
+import type { ClosureCoordinate } from "@/lib/closure-record";
 import { slicePolylineByKmRange } from "@/lib/gis-utils";
 
 export function closureKmMeters(value: string): number | null {

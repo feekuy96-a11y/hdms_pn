@@ -251,21 +251,8 @@ export function GisFocusModeBar({
           )}
         </div>
 
-        {/* Exit Focus Button */}
-        <button
-          type="button"
-          onClick={onExit}
-          aria-label="ออกจากโหมดโฟกัส"
-          data-testid="gis-focus-exit-btn"
-          className="inline-flex min-h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-slate-600 bg-slate-800 px-2.5 py-1.5 font-heading text-xs font-bold text-white transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 sm:px-3"
-        >
-          <X aria-hidden="true" className="h-4 w-4" />
-          <span className="sm:hidden">ออก</span>
-          <span className="hidden sm:inline">ออกจากโหมดโฟกัส</span>
-          <kbd className="hdms-key-hint hidden rounded px-1.5 py-0.5 font-mono text-[0.65rem] sm:inline">
-            Esc
-          </kbd>
-        </button>
+        <FocusExitButton onExit={onExit}/>
+
       </div>
 
       {!targetMissing && showDirectionToggle && (
@@ -361,5 +348,46 @@ export function GisFocusModeBar({
         </div>
       )}
       </div>
+  );
+}
+
+// The compact variant has no citizen-only direction or dossier callbacks.
+export function CompactGisFocusModeBar({ label, onExit }: { label: string; onExit: () => void }) {
+  return (
+    <div
+      data-testid="admin-gis-focus-exit-bar"
+      role="region"
+      aria-label="แถบควบคุมโหมดโฟกัสบนแผนที่"
+      className="pointer-events-auto absolute bottom-16 lg:bottom-4 left-1/2 -translate-x-1/2 z-[460] flex w-fit max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-full border border-sky-400/50 bg-surface-floating/95 py-1 pl-3.5 pr-1.5 text-xs font-heading text-slate-100 shadow-2xl backdrop-blur-md"
+    >
+      <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-sky-400" />
+      <span className="truncate max-w-[14rem] sm:max-w-[20rem] font-bold">
+        โฟกัส: {label}
+      </span>
+      <FocusExitButton onExit={onExit} compact/>
+    </div>
+  );
+}
+
+
+function FocusExitButton({ onExit, compact = false }: { onExit: () => void; compact?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onExit}
+      aria-label={compact ? "ออกจากโฟกัส" : "ออกจากโหมดโฟกัส"}
+      title={compact ? "ออกจากโหมดโฟกัส (Esc)" : undefined}
+      data-testid="gis-focus-exit-btn"
+      className={compact
+        ? "inline-flex min-h-[2.25rem] shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-slate-950 transition hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 cursor-pointer"
+        : "inline-flex min-h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-slate-600 bg-slate-800 px-2.5 py-1.5 font-heading text-xs font-bold text-white transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 sm:px-3"}
+    >
+      <X aria-hidden="true" className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+      {compact ? <span>ออกจากโฟกัส</span> : <>
+        <span className="sm:hidden">ออก</span>
+        <span className="hidden sm:inline">ออกจากโหมดโฟกัส</span>
+        <kbd className="hdms-key-hint hidden rounded px-1.5 py-0.5 font-mono text-[0.65rem] sm:inline">Esc</kbd>
+      </>}
+    </button>
   );
 }

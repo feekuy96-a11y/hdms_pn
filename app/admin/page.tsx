@@ -1,5 +1,6 @@
 "use client";
 
+import { draftRouteStroke, type SavedRouteEditReference } from "@/components/map/longdo-draft-layer";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LonLat, VertexEditEvent } from "@/lib/line-edit";
 import dynamic from "next/dynamic";
@@ -12,6 +13,7 @@ import {
   type AdminOperationalDataPayload,
   type AdminStaticGisDataPayload,
 } from "@/app/actions/doh-actions";
+import { DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload } from "@/db/default-data";
 import { AdminConsole } from "@/components/admin/AdminConsole";
 import workspace from "@/components/admin/AdminWorkspace.module.css";
@@ -24,27 +26,9 @@ function isAdminTheme(value: string | null): value is AdminTheme {
   return value === "system" || value === "light" || value === "dark";
 }
 
-const LongdoGisMap = dynamic(
-  () => import("@/components/map/LongdoGisMap").then((mod) => mod.LongdoGisMap),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="h-full min-h-[22rem] w-full bg-surface-canvas p-4" role="status" aria-live="polite">
-        <span className="sr-only">กำลังโหลดแผนที่ GIS ปัตตานี</span>
-        <div aria-hidden="true" className="h-full min-h-[20rem] rounded-2xl border border-surface bg-slate-900/60 p-4">
-          <div className="h-5 w-48 rounded-md bg-slate-700/70 animate-pulse motion-reduce:animate-none" />
-          <div className="mt-4 h-8 w-64 rounded-xl bg-slate-800/80 animate-pulse motion-reduce:animate-none" />
-          <div className="mt-6 grid h-[calc(100%-7rem)] grid-cols-3 gap-3 opacity-60">
-            <div className="rounded-xl bg-slate-800/80 animate-pulse motion-reduce:animate-none" />
-            <div className="rounded-xl bg-slate-700/50 animate-pulse motion-reduce:animate-none" />
-            <div className="rounded-xl bg-slate-800/70 animate-pulse motion-reduce:animate-none" />
-          </div>
-        </div>
-      </div>
-    ),
-  }
-);
-import type { GisMapViewportApi } from "@/components/map/LongdoGisMap";
+
+import { SharedOperationalMap, type GisMapViewportApi } from "@/components/map/SharedOperationalMap";
+import { CompactGisFocusModeBar } from "@/components/map/GisFocusModeBar";
 import { useSharedGisFocus } from "@/components/map/useSharedGisFocus";
 import { resolveAdminRegistryMapRoutes, type AdminRegistryMapFilter } from "@/lib/admin-registry-map-filter";
 import { computeGisFilterHighlights } from "@/lib/gis-filter-rules";
@@ -52,7 +36,7 @@ import { OfflineSyncStatus } from "@/components/offline/OfflineSyncStatus";
 import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
 import { calculateRoadSnappedRoute } from "@/lib/gis-utils";
 import Link from "next/link";
-import { ArrowLeft, ArrowUp, Search, RotateCw, FileText, PieChart, Settings, Smartphone, X, Sun, Moon, Monitor } from "lucide-react";
+import { ArrowLeft, ArrowUp, Search, RotateCw, FileText, PieChart, Settings, Smartphone, Sun, Moon, Monitor } from "lucide-react";
 import { OfficialReportDispatchModal } from "@/components/admin/OfficialReportDispatchModal";
 const ExecutiveDashboard = dynamic(
   () => import("@/components/executive/ExecutiveDashboard").then((mod) => mod.ExecutiveDashboard),
@@ -142,6 +126,7 @@ export default function AdminPage() {
     }
   };
   const [adminPickMode, setAdminPickMode] = useState<string | null>(null);
+  const [savedEditReference, setSavedEditReference] = useState<SavedRouteEditReference | null>(null);
   const [draftCoordinates, setDraftCoordinates] = useState<[number, number][]>([]);
   const [draftWaypoints, setDraftWaypoints] = useState<[number, number][]>([]);
   const [draftReverseCoordinates, setDraftReverseCoordinates] = useState<[number, number][]>([]);
@@ -616,6 +601,7 @@ export default function AdminPage() {
               draftConflictPoints={draftConflictPoints}
               setDraftConflictPoints={setDraftConflictPoints}
               onDraftModeChange={setDraftMode}
+              onSavedEditReferenceChange={setSavedEditReference}
               pickedCoordinate={pickedCoordinate}
               onFocusCoordinates={(coords) => setFocusCoordinates(coords)}
               onToast={showToast}
@@ -664,8 +650,16 @@ export default function AdminPage() {
               mobileActivePane === "form" ? "hidden lg:flex" : "flex"
             } hdms-admin-map-pane h-[calc(100dvh-8.5rem)] min-h-[22.5rem] lg:h-auto lg:min-h-0 lg:flex-1 relative isolate flex-col bg-surface-canvas`}
           >
+            {savedEditReference && (
+              <div role="group" aria-label="เปรียบเทียบแนวเส้น" className="hdms-map-surface flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b px-3 py-1.5 text-xs font-semibold">
+                <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="w-5 border-t-2 border-dashed border-[var(--hdms-slate-500)]" />แนวเดิม</span>
+                {(draftCoordinates.length >= 2 || draftReverseCoordinates.length >= 2) && (
+                  <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="w-5 border-t-2" style={{ borderColor: draftRouteStroke(draftMode, systemData.mapStyles || DEFAULT_MAP_STYLES) }} />แนวที่กำลังแก้</span>
+                )}
+              </div>
+            )}
             <div className="relative min-h-0 flex-1">
-            <LongdoGisMap
+            <SharedOperationalMap
               systemData={systemData}
               registryRoutes={isEditingBlocked ? undefined : mapRegistryRoutes}
               isSidebarCollapsed={isSidebarCollapsed}
@@ -697,6 +691,7 @@ export default function AdminPage() {
                   setFocusCoordinates([detour.lon_start, detour.lat_start]);
                 }
               }}
+              savedEditReference={savedEditReference}
               adminPickMode={adminPickMode}
               onCoordinatePicked={(lat, lon, mode) => {
                 setPickedCoordinate({ lat, lon, mode, ts: Date.now() });
@@ -750,29 +745,7 @@ export default function AdminPage() {
               onFocusDetourOnMap={handleEnterDetourFocus}
             />
 
-            {isFocused && adminFocusLabel && (
-              <div
-                data-testid="admin-gis-focus-exit-bar"
-                role="region"
-                aria-label="แถบควบคุมโหมดโฟกัสบนแผนที่"
-                className="pointer-events-auto absolute bottom-16 lg:bottom-4 left-1/2 -translate-x-1/2 z-[460] flex w-fit max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-full border border-sky-400/50 bg-surface-floating/95 py-1 pl-3.5 pr-1.5 text-xs font-heading text-slate-100 shadow-2xl backdrop-blur-md"
-              >
-                <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-sky-400" />
-                <span className="truncate max-w-[14rem] sm:max-w-[20rem] font-bold">
-                  โฟกัส: {adminFocusLabel}
-                </span>
-                <button
-                  type="button"
-                  data-testid="gis-focus-exit-btn"
-                  onClick={() => handleExitGisFocus()}
-                  title="ออกจากโหมดโฟกัส (Esc)"
-                  className="inline-flex min-h-[2.25rem] shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-slate-950 transition hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 cursor-pointer"
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>ออกจากโฟกัส</span>
-                </button>
-              </div>
-            )}
+            {isFocused && adminFocusLabel && <CompactGisFocusModeBar label={adminFocusLabel} onExit={handleExitGisFocus}/>}
 
             {adminPickMode && (
               <div

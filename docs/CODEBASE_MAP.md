@@ -4,6 +4,8 @@
 
 ก่อนเริ่มและก่อนส่งงาน ใช้ [เช็กลิสต์ก่อนเข้า CI](PRE_CI_CHECKLIST.md) แล้วเลือกไฟล์และเทสต์เฉพาะส่วนจากตารางด้านล่าง
 
+งาน UI/UX ให้เริ่มจาก [UI Contract ฉบับปัจจุบัน](UI_CONTRACT.md) แล้วค้นไฟล์/เทสต์จากตารางด้านล่าง
+
 ## 1. Public Dashboard (`/`)
 | งาน / อาการ | ไฟล์เป้าหมาย (อ่านเฉพาะไฟล์นี้) | คำสั่งตรวจเฉพาะจุด |
 |---|---|---|
@@ -43,6 +45,8 @@
 | Panel ปรับแนวถนนทางหลวง (Geometry Editor Panel) | `components/admin/tabs/HighwayGeometryEditorPanel.tsx` | `npx eslint components/admin/tabs/HighwayGeometryEditorPanel.tsx --max-warnings=0` |
 
 ## 3. Map & GIS Engine (Safety-Sensitive: `{ lon, lat }` / `POINT(lng lat)`)
+
+เริ่มจาก [คู่มือโมดูลแผนที่ร่วม](map-modules/README.md) เพื่อเลือกไฟล์และเทสต์ของปุ่ม เลเยอร์ ป๊อปอัพ สถานะ หรือโหมดโฟกัสก่อนแก้
 | งาน / อาการ | ไฟล์เป้าหมาย | คำสั่งตรวจเฉพาะจุด |
 |---|---|---|
 | Longdo Map canvas, layers, popups, markers | `components/map/LongdoGisMap.tsx` | `npm run check:fast` |

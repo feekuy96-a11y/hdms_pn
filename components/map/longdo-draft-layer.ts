@@ -9,6 +9,25 @@ import {
   toLeafletLatLng,
 } from "./longdo-map-popups";
 
+export type SavedRouteEditReference = {
+  type: "FLOOD" | "DETOUR";
+  id: string;
+  lines: Array<{ id: string; coordinates: [number, number][] }>;
+};
+
+export function savedRouteEditLine(id: string, coordinates: [number, number][]) {
+  // Never draw a connection over an invalid or missing position; this is display-only.
+  if (!Array.isArray(coordinates) || coordinates.length < 2 ||
+      !coordinates.every((point) => Array.isArray(point) && Number.isFinite(point[0]) &&
+        Number.isFinite(point[1]) && Math.abs(point[0]) <= 180 && Math.abs(point[1]) <= 90)) return [];
+  return [{ id, coordinates: coordinates.map(([lon, lat]): [number, number] => [lon, lat]) }];
+}
+
+export function draftRouteStroke(mode: SavedRouteEditReference["type"], mapStyles: SystemDataPayload["mapStyles"]) {
+  return (mode === "FLOOD" ? mapStyles?.flood?.color : mapStyles?.detour?.color) ||
+    (mode === "FLOOD" ? LAYER_CONFIG.FLOOD_RED_LINE.color : LAYER_CONFIG.DETOUR_YELLOW_LINE.color);
+}
+
 export interface DraftPickMarkerPoint {
   lat: number;
   lon: number;
@@ -90,9 +109,7 @@ export function renderDraftAndConflictLayer({
   });
 
   const draftStyle = draftMode === "FLOOD" ? mapStyles.flood : mapStyles.detour;
-  const draftColor = closurePresentation ? TRAFFIC_ACCENT.red :
-    draftStyle?.color ||
-    (draftMode === "FLOOD" ? LAYER_CONFIG.FLOOD_RED_LINE.color : LAYER_CONFIG.DETOUR_YELLOW_LINE.color);
+  const draftColor = closurePresentation ? TRAFFIC_ACCENT.red : draftRouteStroke(draftMode, mapStyles);
   const draftDash = closurePresentation ? undefined : dashArrayFor(draftStyle);
 
   // Snapped draft route (Primary / Forward A->B)
@@ -198,15 +215,25 @@ export function renderDraftAndConflictLayer({
         icon,
         zIndexOffset: isReversePin ? 1250 : 1200,
         draggable: point.draggable !== false,
+        autoPanOnFocus: !isClosurePoint,
       })
         .bindTooltip(isClosurePoint ? `จุดปิด ${point.label}` : tooltipText, { direction: "top" })
         .addTo(group);
       if (isClosurePoint) {
-        marker.getElement()?.setAttribute("aria-label", `จุดปิด ${point.label}`);
+        const markerElement = marker.getElement();
+        markerElement?.setAttribute("aria-label", `จุดปิด ${point.label}`);
         if (closurePresentation?.onSelect && !adminPickModeRef.current) {
-          marker.on("click", (event: any) => {
-            L.DomEvent.stopPropagation(event);
-            closurePresentation.onSelect?.(point.label as "A" | "B");
+          const target = point.label as "A" | "B";
+          markerElement?.addEventListener("click", (event: MouseEvent) => {
+            event.preventDefault();
+            event.stopPropagation();
+            closurePresentation.onSelect?.(target);
+          });
+          markerElement?.addEventListener("keydown", (event: KeyboardEvent) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            event.stopPropagation();
+            closurePresentation.onSelect?.(target);
           });
         }
       }

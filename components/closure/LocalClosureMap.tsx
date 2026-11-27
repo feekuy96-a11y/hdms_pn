@@ -2,7 +2,7 @@
 import { useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { SystemDataPayload } from "@/db/default-data";
-import type { ClosureCoordinate, LocalClosureRecord } from "@/lib/closure-local-record";
+import type { ClosureCoordinate, RoadClosureRecord } from "@/lib/closure-record";
 import { Construction, X } from "lucide-react";
 import type { ClosureDraftPresentation } from "@/components/map/longdo-draft-layer";
 
@@ -12,11 +12,11 @@ const Map = dynamic(() => import("@/components/map/LongdoGisMap").then(m=>m.Long
 const noSelection = () => {};
 type ClosureTarget="A"|"B"|"SECTION";
 const labelFor=(target:ClosureTarget)=>target==="SECTION"?"ดูสรุปช่วงปิดการจราจร":`จุดปิด ${target}`;
-function ClosurePopup({record,target,onClose,focusClose}:{record:LocalClosureRecord;target:ClosureTarget;onClose:()=>void;focusClose:boolean}) {
+function ClosurePopup({record,target,onClose,focusClose}:{record:RoadClosureRecord;target:ClosureTarget;onClose:()=>void;focusClose:boolean}) {
   const stop=target==="SECTION"?null:target==="A"?record.a:record.b;
   const km=record.a.km&&record.b.km?` · กม. ${record.a.km} ถึง กม. ${record.b.km}`:"";
   const route=record.roadMode==="MAP_AB"?record.route:`ทล. ${record.route}`;
-  return <section aria-label="รายละเอียดช่วงปิดบนแผนที่" data-closure-popup={target} data-hdms-popup="panel"
+  return <section aria-label="รายละเอียดช่วงปิดบนแผนที่" data-closure-popup={target} data-hdms-popup="panel" data-hdms-local-escape
     className="absolute inset-x-2 top-2 z-[1000] mx-auto grid max-h-[calc(100%-1rem)] max-w-[22rem] gap-2 overflow-y-auto rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3 text-sm text-[var(--text-primary)]"
     onKeyDown={e=>{if(e.key==="Escape"){e.stopPropagation();onClose();}}}>
     <button type="button" aria-label="ปิดรายละเอียดบนแผนที่" data-hdms-popup-close ref={node=>{if(focusClose)node?.focus({preventScroll:true});}} className="absolute right-1 top-1 grid h-11 w-11 place-items-center rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]" onClick={onClose}><X size={19} aria-hidden="true"/></button>
@@ -31,7 +31,7 @@ function ClosurePopup({record,target,onClose,focusClose}:{record:LocalClosureRec
 }
 
 export function LocalClosureMap({ data, record, center, pick, onPick, fitEndpoints = false, vertexEditor }: {
-  data: SystemDataPayload; record: LocalClosureRecord; center: ClosureCoordinate | null;
+  data: SystemDataPayload; record: RoadClosureRecord; center: ClosureCoordinate | null;
   pick?: "A"|"B"|null; onPick?: (lat:number,lon:number,mode:string)=>void;
   fitEndpoints?: boolean;
   vertexEditor?: {

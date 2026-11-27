@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Construction, MapPin, Route, ImagePlus, Save, Layers, PencilLine, Undo2, Trash2, Check, Milestone, Flag, ClipboardList, MapPinCheck } from "lucide-react";
+import { Construction, MapPin, Route, ImagePlus, Copy, FileCode2, Layers, PencilLine, Undo2, Trash2, Check, Milestone, Flag, ClipboardList, MapPinCheck } from "lucide-react";
 import type { FloodRoute, SystemDataPayload } from "@/db/default-data";
 import { snapRouteAction } from "@/app/actions/doh-actions";
 import { groupHighwayFeatures, cleanHighwaySectionName } from "@/lib/highway-schema";
@@ -10,7 +10,8 @@ import { getLinkedDetoursForFlood } from "@/lib/event-detour-links";
 import { haversineDistanceKm } from "@/lib/gis/geo-math";
 import { compressImageToAdaptiveBase64 } from "@/lib/gis/image-compress";
 import { parseRouteCoordinates } from "@/components/public/public-route-helpers";
-import { readLocalClosure, safeLocalPhoto, saveLocalClosure, type ClosureCoordinate, type ClosureRoadMode, type ClosureStop, type LocalClosureRecord } from "@/lib/closure-local-record";
+import { safeLocalPhoto, type ClosureCoordinate, type ClosureRoadMode, type ClosureStop, type RoadClosureRecord } from "@/lib/closure-record";
+import { createClosureImportSql } from "@/lib/closure-import-sql";
 import { LocalClosureMap } from "./LocalClosureMap";
 import { StickyActionBar } from "@/components/admin/ui";
 
@@ -48,12 +49,13 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
       openButtonRef.current?.focus();
     }
   },[open]);
-  const [record,setRecord]=useState<LocalClosureRecord>(()=>readLocalClosure(eventId)??{
+  const initialRecord=():RoadClosureRecord=>({
     version:1,eventId,route:incidentRoad?.routeNo||"ถนนทั่วไป",section:incidentRoad?.sectionName||"",
     roadMode:incidentRoad?"HIGHWAY_KM":"MAP_AB",highwayGroupId:incidentRoad?.groupId,
     a:{...newStop(),km:incidentRoad?.kmStart||""},b:{...newStop(),km:incidentRoad?.kmEnd||""},line:[],reason:"",note:"",begins:"",detourIds:[],savedAt:"",
   });
-  const [saved,setSaved]=useState(Boolean(record.savedAt));
+  const [record,setRecord]=useState<RoadClosureRecord>(initialRecord);
+  const [preview,setPreview]=useState(false);
   const [pick,setPick]=useState<"A"|"B"|null>(null);
   const [busy,setBusy]=useState(false);
   const [feedback,setFeedback]=useState("");
@@ -71,14 +73,14 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
     Number.isFinite(incident.lon_start)&&Number.isFinite(incident.lat_start) ? [incident.lon_start,incident.lat_start] : null,
   [incident.lon_start,incident.lat_start]);
   const detours=useMemo(()=>getLinkedDetoursForFlood(incident,data).flatMap(({detour})=>detour.is_active?[detour]:[]),[incident,data]);
-  const update=(next: Partial<LocalClosureRecord>)=>{setRecord(r=>({...r,...next}));setSaved(false);setFeedback("");};
+  const update=(next: Partial<RoadClosureRecord>)=>{setRecord(r=>({...r,...next}));setFeedback("");};
   const pointFields=(side:"a"|"b",p:Partial<ClosureStop>)=>{
-    setRecord(r=>({...r,[side]:{...r[side],...p}}));setSaved(false);setFeedback("");
+    setRecord(r=>({...r,[side]:{...r[side],...p}}));setFeedback("");
   };
 
   function setRoadMode(roadMode:ClosureRoadMode) {
     if(roadMode===mode)return;
-    setPick(null);resetLineEditing();
+    setPreview(false);setPick(null);resetLineEditing();
     setRoadNo(roadMode==="HIGHWAY_KM" ? incidentRoad?.routeNo||"" : "");
     update({roadMode,highwayGroupId:roadMode==="HIGHWAY_KM"?incidentRoad?.groupId:undefined,
       route:roadMode==="HIGHWAY_KM"?incidentRoad?.routeNo||"": "ถนนทั่วไป",
@@ -89,7 +91,7 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
 
   function changeHighwaySection(groupId:string,routeNo:string) {
     const section=chapters.find(item=>item.groupId===groupId&&item.routeNo===routeNo);
-    resetLineEditing();
+    setPreview(false);resetLineEditing();
     update({highwayGroupId:section?.groupId,route:section?.routeNo||"",
       section:section?.sectionName||"",a:{...newStop(),km:section?.kmStart||""},b:{...newStop(),km:section?.kmEnd||""},line:[]});
   }
@@ -119,7 +121,7 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
     const a=line[0],b=line[line.length-1];
     update({line,a:{...newStop(),position:a,km:aKm},b:{...newStop(),position:b,km:bKm}});
     lookUpArea("a",a);lookUpArea("b",b);
-    setFeedback("สร้างแนวและหมุด A/B จากช่วง กม. แล้ว กรุณาตรวจบนแผนที่ก่อนบันทึก");
+    setFeedback("สร้างแนวและหมุด A/B จากช่วง กม. แล้ว กรุณาตรวจบนแผนที่ก่อนเตรียม SQL");
   }
 
   function pickPoint(lat:number,lon:number,mode:string) {
@@ -128,7 +130,7 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
     const side=pick==="A"?"a":"b";
     const point:ClosureCoordinate=[lon,lat];
     setRecord(r=>({...r,line:[],[side]:{...r[side],position:point,area:""}}));
-    setSaved(false);setPick(null);setFeedback("");
+    setPick(null);setFeedback("");
     lookUpArea(side,point);
   }
 
@@ -184,14 +186,31 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
     finally {setBusy(false);}
   }
 
-  function save(e:FormEvent) {
+  const [prepared,setPrepared]=useState<{source:RoadClosureRecord;statement:string}|null>(null);
+  const sqlRef=useRef<HTMLTextAreaElement>(null);
+  const statement=prepared?.source===record?prepared.statement:null;
+
+  async function copySql() {
+    if(!statement)return;
+    setFeedbackStage("save");
+    try {
+      await navigator.clipboard.writeText(statement);
+      setFeedback("คัดลอก SQL แล้ว ยังไม่ได้บันทึกข้อมูล");
+    } catch {
+      sqlRef.current?.focus();
+      sqlRef.current?.select();
+      setFeedback("คัดลอกอัตโนมัติไม่ได้ กรุณาคัดลอกข้อความที่เลือก");
+    }
+  }
+
+  function prepareSql(e:FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if(busy)return;
     setFeedbackStage("save");
     if(mode==="HIGHWAY_KM"&&(!selected||record.line.length<2)){
-      setFeedback("เลือกตอนควบคุมและสร้างแนวจากช่วง กม. ก่อนบันทึก");return;
+      setFeedback("เลือกตอนควบคุมและสร้างแนวจากช่วง กม. ก่อนเตรียม SQL");return;
     }
-    if(!record.a.position||!record.b.position){setFeedback("ปักหมุด A และ B บนแผนที่ก่อนบันทึก");return;}
+    if(!record.a.position||!record.b.position){setFeedback("ปักหมุด A และ B บนแผนที่ก่อนเตรียม SQL");return;}
     if(record.a.position[0]===record.b.position[0]&&record.a.position[1]===record.b.position[1]){
       setFeedback("หมุด A และ B ต้องเป็นคนละจุด");return;
     }
@@ -202,24 +221,27 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
        !record.a.landmark.trim()||!record.b.landmark.trim()){
       setFeedback("กรอกเหตุผล พื้นที่และจุดสังเกตของ A/B ให้ครบ");return;
     }
-    const next={...record,savedAt:new Date().toISOString()};
-    try {saveLocalClosure(next);setRecord(next);setSaved(true);setFeedback("บันทึกข้อมูลในเบราว์เซอร์นี้แล้ว");}
-    catch {setFeedback("บันทึกไม่ได้ พื้นที่จัดเก็บของเบราว์เซอร์อาจเต็มหรือถูกปิด");}
+    const next={...record,roadMode:mode,savedAt:new Date().toISOString()};
+    setPrepared(null);
+    try {
+      setPrepared({source:record,statement:createClosureImportSql(next,eventId)});
+      setFeedback("เตรียม SQL แล้ว ยังไม่ได้บันทึกข้อมูล");
+    } catch(error) {
+      setFeedback(error instanceof Error?error.message:"เตรียม SQL ไม่ได้");
+    }
   }
 
-  const viewHref=`${process.env.NEXT_PUBLIC_BASE_PATH||""}/?closure-view=${encodeURIComponent(eventId)}`;
   return <section aria-label="ข้อมูลปิดการจราจร" className="mt-4 grid min-w-0 gap-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-3 text-[var(--text-primary)] sm:p-4">
     <header className="flex items-start gap-3">
       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--status-danger-wash)] text-[var(--status-danger-ink)]"><Construction size={21} aria-hidden="true"/></span>
       <div className="min-w-0 space-y-0.5">
         <h4 ref={formTitleRef} tabIndex={-1} className="scroll-mt-3 text-base font-bold focus:outline-none">ข้อมูลปิดการจราจร</h4>
-        <p className={helper}>ปิดทั้งสองทิศทาง · บันทึกเฉพาะในเบราว์เซอร์นี้</p>
+        <p className={helper}>ปิดทั้งสองทิศทาง · เตรียมข้อมูลสำหรับนำเข้า Supabase</p>
       </div>
     </header>
     {!open ? <div className="flex flex-wrap gap-2">
-      <button ref={openButtonRef} className={primary} type="button" onClick={()=>setOpen(true)}>{saved?"แก้ไขข้อมูลปิดการจราจร":"กรอกข้อมูลปิดการจราจร"}</button>
-      {saved&&<a className={button} href={viewHref} target="_blank" rel="noopener">ดูบนแผนที่หน้าประชาชน</a>}
-    </div> : <form className="grid min-w-0 gap-5" onSubmit={save}>
+      <button ref={openButtonRef} className={primary} type="button" onClick={()=>setOpen(true)}>กรอกข้อมูลปิดการจราจร</button>
+    </div> : <form className="grid min-w-0 gap-5" onSubmit={prepareSql}>
       <fieldset className={step}>
         <legend className={stepTitle}><span className={stepNumber} aria-hidden="true">1</span>เลือกประเภทถนน</legend>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -263,7 +285,7 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
           maxLength={260} onChange={e=>update({section:e.target.value})}/></label>
         <div className="flex flex-wrap gap-2">
         {(["A","B"] as const).map(side=><button type="button" key={side} className={button} aria-pressed={pick===side} disabled={busy}
-            onClick={()=>{resetLineEditing();setPick(pick===side?null:side);setFeedback("");}}><MapPin size={16} aria-hidden="true"/>
+            onClick={()=>{setPreview(false);resetLineEditing();setPick(pick===side?null:side);setFeedback("");}}><MapPin size={16} aria-hidden="true"/>
           {record[side==="A"?"a":"b"].position?"ย้ายจุด":"ปักจุด"} {side}</button>)}
         <button type="button" className={primary} disabled={busy||Boolean(pick)||!record.a.position||!record.b.position} onClick={()=>void findLine()}>
           <Route size={16} aria-hidden="true"/>หาแนวถนน A–B</button>
@@ -274,7 +296,7 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
         {feedback&&feedbackStage==="map"&&<p role="status" className="rounded-lg bg-[var(--bg-input)] px-3 py-2 text-sm">{feedback}</p>}
         {pick&&<p role="status" className="flex items-center gap-2 rounded-lg bg-[var(--bg-input)] px-3 py-2 text-sm font-semibold"><MapPin size={17} aria-hidden="true"/>แตะแผนที่เพื่อปักจุด {pick}</p>}
         {record.line.length>=2&&<div role="group" aria-label="เครื่องมือแก้แนวเส้น" className="flex flex-wrap gap-2">
-          <button type="button" className={vertexEditing?primary:button} aria-pressed={vertexEditing} disabled={busy||Boolean(pick)}
+          <button type="button" className={vertexEditing?primary:button} aria-pressed={vertexEditing} disabled={busy||Boolean(pick)||preview}
             onClick={()=>{setVertexEditing(!vertexEditing);setVertexIndex(null);}}>{vertexEditing?<Check size={16} aria-hidden="true"/>:<PencilLine size={16} aria-hidden="true"/>}{vertexEditing?"เสร็จสิ้นการดัดเส้น":"ดัดแนวเส้น"}</button>
           {vertexEditing&&<>
             <button type="button" className={button} disabled={vertexIndex===null} onClick={()=>vertexIndex!==null&&editLine(vertexIndex,"remove")}><Trash2 size={16} aria-hidden="true"/>ลบจุดที่เลือก</button>
@@ -282,8 +304,13 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
           </>}
         </div>}
         {vertexEditing&&<p className={helper}><strong>เพิ่มจุด:</strong> แตะจุดกึ่งกลาง · <strong>ย้ายจุด:</strong> ลากจุดกลางเส้น · <strong>ลบจุด:</strong> เลือกจุดแล้วกดลบ หมุด A/B จะอยู่ที่เดิม</p>}
-        <LocalClosureMap data={data} record={record} center={center} pick={pick} fitEndpoints onPick={mode==="MAP_AB"?pickPoint:undefined}
-          vertexEditor={vertexEditing?{onMove:(index,point)=>editLine(index,"move",point),onInsert:(index,point)=>editLine(index,"insert",point),
+        {record.a.position&&record.b.position&&<button type="button" className={button+" w-fit"} disabled={busy}
+          aria-pressed={preview} onClick={()=>{setPreview(!preview);setPick(null);resetLineEditing();}}>
+          {preview?"กลับสู่แผนที่แก้ไข":"ดูตัวอย่างบนแผนที่"}
+        </button>}
+        {preview&&<p className={helper}>ตัวอย่างในฟอร์มนี้เท่านั้น ยังไม่เผยแพร่และไม่บันทึกลงเบราว์เซอร์</p>}
+        <LocalClosureMap key={preview?"preview":"edit"} data={data} record={record} center={center} pick={preview?null:pick} fitEndpoints={!preview} onPick={!preview&&mode==="MAP_AB"?pickPoint:undefined}
+          vertexEditor={!preview&&vertexEditing?{onMove:(index,point)=>editLine(index,"move",point),onInsert:(index,point)=>editLine(index,"insert",point),
             onSelect:(index,via)=>via==="contextmenu"?editLine(index,"remove"):setVertexIndex(index)}:undefined}/>
       </fieldset>
       <fieldset className={step}>
@@ -325,18 +352,25 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
       </fieldset>
       </fieldset>
       <fieldset className={step}>
-        <legend className={stepTitle}><span className={stepNumber} aria-hidden="true">6</span>ตรวจข้อมูลก่อนบันทึก</legend>
+        <legend className={stepTitle}><span className={stepNumber} aria-hidden="true">6</span>ตรวจข้อมูลก่อนเตรียม SQL</legend>
       <div className="grid gap-2 rounded-xl bg-[var(--bg-input)] p-3">
         <p className="flex items-center gap-2 text-sm font-bold"><ClipboardList size={17} aria-hidden="true"/>ปิดทั้งสองทิศทาง</p>
         {mode==="HIGHWAY_KM"&&selected?<><p className="break-words text-sm">ทล. {selected.routeNo} · {selected.sectionName}</p>
           <p className="flex items-center gap-2 text-sm tabular-nums"><Flag size={16} aria-hidden="true"/>กม. {record.a.km||"–"} ถึง {record.b.km||"–"}</p></>:record.a.position&&record.b.position&&<p className="flex items-center gap-2 text-sm"><MapPinCheck size={16} aria-hidden="true"/>ระบุตำแหน่ง A และ B แล้ว</p>}
       </div>
-      <p className="text-xs text-[var(--text-secondary)]">บันทึกในเบราว์เซอร์นี้เท่านั้น ไม่เผยแพร่บนแผนที่สาธารณะ</p>
-      {saved&&<a className={button+" w-fit"} href={viewHref} target="_blank" rel="noopener">ดูบนแผนที่หน้าประชาชน</a>}
+      <p className={helper}>ฟอร์มนี้ไม่บันทึกข้อมูลเอง นำคำสั่งไปใช้ใน SQL Editor ของโปรเจกต์ HDMS เพื่อเพิ่มรายการใหม่ หากมีรายการสำหรับเหตุการณ์นี้อยู่แล้ว คำสั่งจะไม่เขียนทับ</p>
+      {statement&&<div className="grid min-w-0 gap-2 rounded-lg bg-[var(--bg-input)] p-3">
+        <label className={labelStyle}>คำสั่งนำเข้า Supabase
+          <textarea ref={sqlRef} value={statement} readOnly spellCheck={false} dir="ltr"
+            className={field+" min-h-24 py-2 font-mono text-xs"} />
+        </label>
+        <button type="button" className={button+" w-fit"} onClick={()=>void copySql()}><Copy size={16} aria-hidden="true"/>คัดลอก SQL</button>
+        <p className={helper}>คำสั่งมีข้อมูลและรูปถ่ายของเหตุการณ์ ใช้เฉพาะใน SQL Editor ของโปรเจกต์ HDMS</p>
+      </div>}
       </fieldset>
       <StickyActionBar themed>
-        <button type="submit" disabled={busy} data-hdms-primary className={primary}><Save size={16} aria-hidden="true"/>บันทึกข้อมูลปิดการจราจร</button>
-        <button type="button" className={button} disabled={busy} onClick={()=>{returnToTrigger.current=true;setPick(null);setOpen(false);}}>ย่อฟอร์ม</button>
+        <button type="submit" data-hdms-primary disabled={busy} className={primary}><FileCode2 size={16} aria-hidden="true"/>เตรียม SQL สำหรับนำเข้า</button>
+        <button type="button" className={button} disabled={busy} onClick={()=>{setPrepared(null);setFeedback("");returnToTrigger.current=true;setPick(null);setOpen(false);}}>ย่อฟอร์ม</button>
         {feedback&&feedbackStage==="save"&&<p role="status" className="basis-full text-sm">{feedback}</p>}
       </StickyActionBar>
     </form>}

@@ -1,5 +1,5 @@
 import { Flag, MapPin, Milestone, Navigation } from "lucide-react";
-import type { ClosureStop } from "@/lib/closure-local-record";
+import type { ClosureStop } from "@/lib/closure-record";
 
 export function ClosureStopDetails({ stop, compact = false }: { stop: ClosureStop; compact?: boolean }) {
   const rows = [

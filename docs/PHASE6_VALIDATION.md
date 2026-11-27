@@ -1,5 +1,7 @@
 # Phase 6 — รายงานตรวจแก้และ Release Gate (11 พฤศจิกายน 2026)
 
+> **เอกสารประวัติ:** ไม่ใช้เป็นคำสั่งปัจจุบัน กฎหน้าจอให้ยึด [UI Contract](UI_CONTRACT.md)
+
 ## ฐานการแก้ไข
 - ZIP ต้นฉบับที่เจ้าของส่ง: `hdms_pn-main.zip`
 - Patch ก่อนหน้า: `Phase6_All_Patches_Combined_For_Test_20261111.zip`

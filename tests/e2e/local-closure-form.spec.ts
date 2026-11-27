@@ -23,7 +23,7 @@ async function fixture(page:Page,origin:string,unexpected:string[]) {
       unexpected.push(request?.action || "unexpected HDMS request");
       return route.fulfill({status:400,json:{error:"unexpected action"}});
     }
-    if (/auth\/v1|traffic.closure|storage\/v1/.test(url.pathname)) unexpected.push(url.pathname);
+    if (/auth\/v1|traffic.closure|road_closure|storage\/v1/.test(url.pathname)) unexpected.push(url.pathname);
     return route.abort();
   });
 }
@@ -37,13 +37,13 @@ async function open(page:Page,isMobile:boolean) {
   return page.getByRole("region",{name:"ข้อมูลปิดการจราจร"});
 }
 
-test("closure details, map and photo persist locally and appear on both pages only in the recording browser",async({ page,context,browser,isMobile,baseURL })=>{
+test("closure has an Admin-only in-memory preview and does not persist or expose browser data",async({page,context,isMobile,baseURL})=>{
   const unexpected:string[]=[],origin=new URL(baseURL!).origin;
   if(isMobile&&process.env.HDMS_CLOSURE_NARROW==="1") await page.setViewportSize({width:360,height:800});
   await fixture(page,origin,unexpected);
   const section=await open(page,isMobile);
   await section.getByRole("button",{name:"กรอกข้อมูลปิดการจราจร"}).click();
-  const save=section.getByRole("button",{name:"บันทึกข้อมูลปิดการจราจร"});
+  const save=section.getByRole("button",{name:"เตรียม SQL สำหรับนำเข้า"});
   const actionBar=section.locator("[data-hdms-sticky-actions]");
   await expect(actionBar).toHaveCSS("position","sticky");
   await expect(actionBar).toBeInViewport();
@@ -74,78 +74,61 @@ test("closure details, map and photo persist locally and appear on both pages on
   await section.getByRole("checkbox",{name:"ทางเลี่ยงประกอบข้อมูล"}).check();
   await section.getByLabel("แนบรูปจุด A").setInputFiles({name:"local.png",mimeType:"image/png",buffer:goodPhoto});
   await expect(section.getByRole("img",{name:"รูปจุดปิด A"})).toBeVisible();
-  await save.click();
-  await expect(section.getByRole("status")).toContainText("บันทึกข้อมูลในเบราว์เซอร์นี้แล้ว");
-  const link=section.getByRole("link",{name:"ดูบนแผนที่หน้าประชาชน"});
-  const href=await link.getAttribute("href");
-  expect(href).toContain("?closure-view=");
-  const publicPage=await context.newPage();
-  if(isMobile&&process.env.HDMS_CLOSURE_NARROW==="1") await publicPage.setViewportSize({width:360,height:800});
-  await fixture(publicPage,origin,unexpected);
-  await publicPage.goto(href!);
-  await expect(publicPage.getByRole("heading",{name:"ข้อมูลปิดการจราจร"})).toBeVisible();
-  await expect(publicPage.getByText("ปิดทั้งสองทิศทาง",{exact:true})).toBeVisible();
-  const savedMap=publicPage.getByTestId("local-closure-map").locator(".leaflet-container");
-  await expect(savedMap).toBeVisible();
-  await expect(savedMap.locator(".doh-draft-endpoint")).toHaveCount(2);
-  await expect(savedMap.locator(".doh-draft-endpoint.leaflet-marker-draggable")).toHaveCount(0);
-  await expect.poll(()=>savedMap.evaluate(el=>{
-    const map=el.getBoundingClientRect();
-    return [...el.querySelectorAll(".doh-draft-endpoint")].every(pin=>{
-      const box=pin.getBoundingClientRect(),x=box.x+box.width/2,y=box.y+box.height/2;
-      return x>=map.left&&x<=map.right&&y>=map.top&&y<=map.bottom;
-    });
-  })).toBe(true);
-  const markerA=savedMap.getByRole("button",{name:"จุดปิด A",exact:true});
-  const markerB=savedMap.getByRole("button",{name:"จุดปิด B",exact:true});
-  const summary=savedMap.getByRole("button",{name:"ดูสรุปช่วงปิดการจราจร",exact:true});
+  await expect(section.getByLabel("คำสั่งนำเข้า Supabase")).toHaveCount(0);
+  const keys=await page.evaluate(()=>[...Object.keys(localStorage),...Object.keys(sessionStorage)]
+    .filter(key=>key.startsWith("hdms:closure-local:v1:")));
+  expect(keys).toEqual([]);
+  await section.getByRole("button",{name:"ดูตัวอย่างบนแผนที่"}).click();
+  const previewMap=section.getByTestId("local-closure-map");
+  await previewMap.scrollIntoViewIfNeeded();
+  await expect(previewMap.locator(".doh-draft-endpoint")).toHaveCount(2);
+  await expect(previewMap.locator(".doh-draft-endpoint.leaflet-marker-draggable")).toHaveCount(0);
+  const markerA=previewMap.getByRole("button",{name:"จุดปิด A",exact:true});
+  const markerB=previewMap.getByRole("button",{name:"จุดปิด B",exact:true});
+  const summary=previewMap.getByRole("button",{name:"ดูสรุปช่วงปิดการจราจร",exact:true});
   await expect(markerA.locator("svg")).toBeVisible();
   await expect(markerB.locator("svg")).toBeVisible();
-  await markerA.click();
-  await expect(publicPage.locator('[data-closure-popup="A"]')).toContainText("พื้นที่ A สำหรับทดสอบ");
-  await publicPage.getByRole("button",{name:"ปิดรายละเอียดบนแผนที่"}).click();
+  await markerA.press("Enter");
+  await expect(previewMap.locator('[data-closure-popup="A"]')).toContainText("พื้นที่ A สำหรับทดสอบ");
+  const close=previewMap.getByRole("button",{name:"ปิดรายละเอียดบนแผนที่"});
+  await close.click();
   await markerB.click();
-  await expect(publicPage.locator('[data-closure-popup="B"]')).toContainText("พื้นที่ B สำหรับทดสอบ");
-  await publicPage.getByRole("button",{name:"ปิดรายละเอียดบนแผนที่"}).click();
+  await expect(previewMap.locator('[data-closure-popup="B"]')).toContainText("พื้นที่ B สำหรับทดสอบ");
+  await close.click();
   await summary.press("Enter");
-  await expect(publicPage.locator('[data-closure-popup="SECTION"]')).toContainText("ผ่านไม่ได้ทั้งสองทิศทาง");
-  const summaryPanel=publicPage.locator('[data-closure-popup="SECTION"]');
+  const summaryPanel=previewMap.locator('[data-closure-popup="SECTION"]');
+  await expect(summaryPanel).toContainText("ผ่านไม่ได้ทั้งสองทิศทาง");
   await expect(summaryPanel).toContainText("ข้อสังเกตจากพื้นที่");
   await expect(summaryPanel).toHaveAttribute("data-hdms-popup","panel");
-  const close=publicPage.getByRole("button",{name:"ปิดรายละเอียดบนแผนที่"});
   await expect(close).toBeFocused();
   expect((await close.boundingBox())!.width).toBeGreaterThanOrEqual(44);
   await close.press("Escape");
   await expect(summaryPanel).toHaveCount(0);
   await expect(summary).toBeFocused();
-  await expect(savedMap.locator(".doh-dir-arrow-icon")).toHaveCount(0);
-  const readPopupPalette=()=>summaryPanel.evaluate(node=>[getComputedStyle(node).backgroundColor,getComputedStyle(node).color]);
-  await summary.press("Enter");
-  const light=await readPopupPalette();
-  await publicPage.evaluate(()=>localStorage.setItem("hdms.citizen.theme","dark"));
-  await publicPage.reload();
-  await expect(publicPage.getByRole("main")).toHaveAttribute("data-citizen-theme","dark");
-  await summary.press("Enter");
-  const dark=await readPopupPalette();
-  expect(dark[0]).not.toBe(light[0]);
-  expect(dark[1]).not.toBe(light[1]);
-  await publicPage.evaluate(()=>localStorage.removeItem("hdms.citizen.theme"));
-  await expect(publicPage.getByRole("img",{name:"รูปจุดปิด A"})).toBeVisible();
-  await expect(publicPage.getByText("ทางเลี่ยงประกอบข้อมูล",{exact:true})).toBeVisible();
-  const reread=await open(page,isMobile);
-  await reread.getByRole("button",{name:"แก้ไขข้อมูลปิดการจราจร"}).click();
-  await expect(reread.getByLabel("เหตุผลที่ปิด")).toHaveValue("ระดับน้ำสูง");
-  await reread.getByRole("button",{name:"ย่อฟอร์ม"}).click();
-  await expect(reread.getByRole("button",{name:"แก้ไขข้อมูลปิดการจราจร"})).toBeFocused();
-  await publicPage.goto(base+"/");
+  await expect(previewMap.locator(".doh-dir-arrow-icon")).toHaveCount(0);
+  await section.getByRole("button",{name:"กลับสู่แผนที่แก้ไข"}).click();
+  await section.getByRole("button",{name:"ย่อฟอร์ม"}).click();
+  const openButton=section.getByRole("button",{name:"กรอกข้อมูลปิดการจราจร"});
+  await expect(openButton).toBeFocused();
+  await openButton.click();
+  await expect(section.getByLabel("เหตุผลที่ปิด")).toHaveValue("ระดับน้ำสูง");
+  const eventId="EV-"+flood.id;
+  const legacyKey="hdms:closure-local:v1:"+eventId;
+  const legacyStop={km:"",area:"former area",landmark:"former landmark",photo:""};
+  const legacyRecord={version:1,eventId,route:"ถนนเดิม",section:"",begins:"",roadMode:"MAP_AB",
+    reason:"ข้อมูลเดิมห้ามอ่าน",note:"บันทึกเดิม",savedAt:date,detourIds:[],line:[[101.23,5.81],[101.24,5.82]],
+    a:{...legacyStop,position:[101.23,5.81]},b:{...legacyStop,position:[101.24,5.82]}};
+  await page.evaluate(({key,record})=>localStorage.setItem(key,JSON.stringify(record)),{key:legacyKey,record:legacyRecord});
+  const afterNavigation=await open(page,isMobile);
+  await afterNavigation.getByRole("button",{name:"กรอกข้อมูลปิดการจราจร"}).click();
+  await expect(afterNavigation.getByLabel("เหตุผลที่ปิด")).toHaveValue("");
+  const publicPage=await context.newPage();
+  await fixture(publicPage,origin,unexpected);
+  await publicPage.goto(base+"/?closure-view="+encodeURIComponent(eventId));
+  await expect(publicPage.getByRole("main")).toBeVisible();
   await expect(publicPage.getByRole("heading",{name:"ข้อมูลปิดการจราจร"})).toHaveCount(0);
-  const other=await browser.newContext();
-  try {
-    const outside=await other.newPage();await fixture(outside,origin,unexpected);
-    await outside.goto(new URL(href!,origin).toString());
-    await expect(outside.getByText("ไม่พบข้อมูลในเบราว์เซอร์นี้", {exact:false})).toBeVisible();
-    await expect(outside.getByText("ระดับน้ำสูง",{exact:true})).toHaveCount(0);
-  } finally {await other.close();}
+  await expect(publicPage.getByText("ข้อมูลเดิมห้ามอ่าน")).toHaveCount(0);
+  expect(await publicPage.evaluate(key=>JSON.parse(localStorage.getItem(key)!).reason,legacyKey)).toBe("ข้อมูลเดิมห้ามอ่าน");
   expect(unexpected).toEqual([]);
 });
 
@@ -212,8 +195,7 @@ test("closure highway mode slices imported numeric and decimal chainages and cle
   }
   await section.getByLabel("เหตุผลที่ปิด",{exact:true}).fill("ตรวจสอบแนว");
   await section.getByLabel("รายละเอียดเพิ่มเติม",{exact:true}).fill("จนกว่าสถานการณ์จะคลี่คลาย");
-  await section.getByRole("button",{name:"บันทึกข้อมูลปิดการจราจร"}).click();
-  await expect(section.getByRole("status")).toContainText("บันทึกข้อมูลในเบราว์เซอร์นี้แล้ว");
+  await expect(section.getByLabel("คำสั่งนำเข้า Supabase")).toHaveCount(0);
   await section.getByRole("radio",{name:"ถนนทั่วไป · ปัก A/B"}).check();
   await expect(marks).toHaveCount(0);
   await expect(section.getByRole("button",{name:"ปักจุด A"})).toBeVisible();
@@ -232,4 +214,66 @@ test("closure highway mode slices imported numeric and decimal chainages and cle
   await expect(marks).toHaveCount(2);
   await expect(bPoint).toHaveText(bBefore);
   expect(externalActions).toEqual([]);
+});
+
+test("closure prepares and copies one insert-only statement without auth, browser writes or network writes",async({page,isMobile,baseURL})=>{
+  const unexpected:string[]=[],origin=new URL(baseURL!).origin;
+  const eventId="EV-"+flood.id;
+  await fixture(page,origin,unexpected);
+  await page.addInitScript(()=>{
+    Object.defineProperty(navigator,"clipboard",{configurable:true,value:{
+      async writeText(sql:string) { (window as Window&{closureClipboard?:string}).closureClipboard=sql; }
+    }});
+  });
+  const section=await open(page,isMobile);
+  await section.getByRole("button",{name:"กรอกข้อมูลปิดการจราจร"}).click();
+  const prepare=section.getByRole("button",{name:"เตรียม SQL สำหรับนำเข้า"});
+  const statement=section.getByLabel("คำสั่งนำเข้า Supabase");
+  await expect(section.locator("input[type=password], input[type=email]")).toHaveCount(0);
+  await expect(section.getByText(/เข้าสู่ระบบ|บัญชีเจ้าหน้าที่|เชื่อมต่อฐานกลาง/)).toHaveCount(0);
+  await expect(statement).toHaveCount(0);
+  const map=section.getByTestId("local-closure-map").locator(".leaflet-container");
+  await expect(map).toBeVisible();
+  for(const [side,x,y] of [["A",45,90],["B",145,150]] as const){
+    await section.getByRole("button",{name:`ปักจุด ${side}`}).click();
+    await map.click({position:{x,y}});
+    await expect(section.getByText(`แตะแผนที่เพื่อปักจุด ${side}`)).toHaveCount(0);
+    await section.getByLabel(`พื้นที่ ${side}`).fill(`พื้นที่ ${side} สำหรับทดสอบ`);
+    await section.getByLabel(`จุดสังเกต ${side}`).fill(`จุดสังเกต ${side}`);
+  }
+  await section.getByLabel("เหตุผลที่ปิด").fill("ระดับน้ำสูง");
+  await prepare.click();
+  await expect(section.getByText("ตรวจแนวเส้น หมุด A/B และกรอกรายละเอียดให้ครบก่อนเตรียม SQL")).toBeVisible();
+  await expect(statement).toHaveCount(0);
+  await section.getByRole("button",{name:"หาแนวถนน A–B"}).click();
+  await expect(section.getByText("แสดงแนวจากระบบแล้ว",{exact:false})).toBeVisible();
+  const note=`น้ำสูง อักษรไทย 🚧 '; SELECT "ข้อความ"; --`;
+  await section.getByLabel("รายละเอียดเพิ่มเติม").fill(note);
+  await section.getByLabel("แนบรูปจุด A").setInputFiles({name:"test.png",mimeType:"image/png",buffer:goodPhoto});
+  await expect(section.getByRole("img",{name:"รูปจุดปิด A"})).toBeVisible();
+  await prepare.click();
+  const sql=await statement.inputValue();
+  const literal=sql.match(/decode\('([A-Za-z0-9+/]+={0,2})', 'base64'\)/)?.[1];
+  expect(literal).toBeTruthy();
+  expect(sql).toContain("ON CONFLICT (event_id) DO NOTHING");
+  expect(sql).toContain("RETURNING event_id;");
+  expect(sql).not.toContain(note);
+  const record=JSON.parse(Buffer.from(literal!,"base64").toString("utf8"));
+  expect(record).toMatchObject({eventId,note,roadMode:"MAP_AB"});
+  expect(record.a.photo).toMatch(/^data:image\/(jpeg|webp);base64,/);
+  await expect(section.getByRole("status")).toContainText("ยังไม่ได้บันทึกข้อมูล");
+  await section.getByRole("button",{name:"คัดลอก SQL"}).click();
+  expect(await page.evaluate(()=>(window as Window&{closureClipboard?:string}).closureClipboard)).toBe(sql);
+  await expect(section.getByRole("status")).toContainText("คัดลอก SQL แล้ว ยังไม่ได้บันทึกข้อมูล");
+  await section.getByLabel("รายละเอียดเพิ่มเติม").fill("ปรับรายละเอียดใหม่");
+  await expect(statement).toHaveCount(0);
+  const storedClosureKeys=await page.evaluate(()=>[...Object.keys(localStorage),...Object.keys(sessionStorage)]
+    .filter(key=>key.startsWith("hdms-closure-staff")||key.startsWith("hdms:closure-local:v1:")));
+  expect(storedClosureKeys).toEqual([]);
+  expect((await page.context().cookies()).filter(cookie=>cookie.name.startsWith("hdms-closure-staff"))).toEqual([]);
+  const reloadedSection=await open(page,isMobile);
+  await reloadedSection.getByRole("button",{name:"กรอกข้อมูลปิดการจราจร"}).click();
+  await expect(reloadedSection.getByLabel("รายละเอียดเพิ่มเติม")).toHaveValue("");
+  await expect(reloadedSection.getByLabel("คำสั่งนำเข้า Supabase")).toHaveCount(0);
+  expect(unexpected).toEqual([]);
 });
