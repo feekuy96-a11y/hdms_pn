@@ -84,8 +84,8 @@ export function DraftRecoveryBanner({
       className="flex flex-wrap items-center justify-between gap-[0.65em] rounded-xl border border-amber-500/50 bg-amber-950/35 px-[1rem] py-[0.75rem]"
     >
       <p className="max-w-[65ch] text-[0.8125rem] text-amber-200">
-        <strong className="font-heading text-amber-300">พบร่างข้อมูลที่พิมพ์ค้างไว้</strong>{" "}
-        ({recoverableDraft.routeMode === "FLOOD" ? "เส้นน้ำท่วม" : "ทางเลี่ยง"} · บันทึกเมื่อ{" "}
+        <strong className="font-heading text-amber-300">พบร่างข้อมูลในแท็บนี้</strong>{" "}
+        ({recoverableDraft.routeMode === "FLOOD" ? "เส้นน้ำท่วม" : "ทางเลี่ยง"} · แก้ไขล่าสุด{" "}
         {new Date(recoverableDraft.savedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.)
       </p>
       <div className="flex flex-wrap items-center gap-[0.5em]">
