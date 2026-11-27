@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
+import type { Marker } from "leaflet";
 import { DetourRoute, FloodRoute, SystemDataPayload } from "@/db/default-data";
 import { LAYER_CONFIG } from "@/lib/constants";
 import { resolveDetourGoogleMapsNavigation } from "@/lib/detour-navigation";
@@ -212,6 +213,12 @@ export interface UseLongdoRouteLayersParams {
   detourLinesRef: React.MutableRefObject<Array<AnimatedLineEntry & { id: string; filterOpacity: number }>>;
   floodLinesRef: React.MutableRefObject<Record<string, FloodLineEntry & { baseOpacity: number; filterOpacity: number }>>;
   selectedFloodIdRef: React.MutableRefObject<string | null | undefined>;
+}
+
+// A marker is a button, not the map background. Leaflet focuses the map on
+// a bubbled mousedown, which can scroll the Admin workspace before mouseup.
+function keepFloodMarkerPressOnButton(marker: Marker) {
+  marker.getElement()?.addEventListener("mousedown", event => event.stopPropagation());
 }
 
 /**
@@ -650,6 +657,7 @@ export function useLongdoRouteLayers({
           alt: clusterAriaLabel,
           title: clusterAriaLabel,
         }).addTo(group);
+        keepFloodMarkerPressOnButton(marker);
         marker.__dohFilterIds = ev.segments.map((segment) => segment.id);
         marker.getElement()?.setAttribute("aria-label", clusterAriaLabel);
         fitFloodPinLabel(map, marker);
@@ -682,6 +690,7 @@ export function useLongdoRouteLayers({
             alt: markerAriaLabel,
             title: markerAriaLabel,
           }).addTo(group);
+          keepFloodMarkerPressOnButton(marker);
           marker.__dohFilterId = item.flood.id;
           marker.getElement()?.setAttribute("aria-label", markerAriaLabel);
           fitFloodPinLabel(map, marker);
