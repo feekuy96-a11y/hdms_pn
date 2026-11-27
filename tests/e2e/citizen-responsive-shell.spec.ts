@@ -438,7 +438,7 @@ test("public map starts with four grouped tools and keeps one layer panel and th
   }
 });
 
-test("grouped and split floods keep the wave, use the correct status outline and reveal labels at the same zooms", async ({ page }) => {
+test("grouped and split floods keep the wave, keep one solid ring and use status-colored glow and reveal labels at the same zooms", async ({ page }) => {
   const first = { ...payload.floodRoutes[0], direction_meta: { eventId: "EV-WAVE-PARITY" } };
   await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: {
     ...payload,
@@ -475,14 +475,17 @@ test("grouped and split floods keep the wave, use the correct status outline and
   const warning = pins.filter({ has: page.locator(".doh-capsule-orange") });
   const closed = pins.filter({ has: page.locator(".doh-capsule-red") });
   for (const pin of [warning, closed]) {
-    await expect(pin.locator(".doh-capsule-zoom-far")).toHaveCSS("background-image", /linear-gradient/);
+    await expect(pin.locator(".doh-capsule-zoom-far .doh-type-flood-wave")).toHaveCSS("background-image", /linear-gradient/);
+    await expect(pin.locator(".doh-flood-pin-label")).toHaveCount(0);
     await expect(pin.locator(".hdms-status-sign")).toHaveCount(0);
   }
   await expect(warning.locator(".doh-type-flood")).toHaveCSS("--flood-pin-accent", "#f97316");
   await expect(closed.locator(".doh-type-flood")).toHaveCSS("--flood-pin-accent", "#dc2626");
   await expect(pins.first().locator(".doh-capsule-zoom-far")).toBeVisible();
-  await expect(warning.locator(".doh-type-flood")).toHaveCSS("outline-style", "dashed");
-  await expect(closed.locator(".doh-type-flood")).toHaveCSS("outline-style", "double");
+  await expect(warning.locator(".doh-type-flood-wave")).toHaveCSS("outline-style", "solid");
+  await expect(closed.locator(".doh-type-flood-wave")).toHaveCSS("outline-style", "solid");
+  expect(await warning.locator(".doh-type-flood-wave").evaluate(el=>getComputedStyle(el).boxShadow))
+    .not.toBe(await closed.locator(".doh-type-flood-wave").evaluate(el=>getComputedStyle(el).boxShadow));
   const wavePath = await wave(closed).getAttribute("d");
   expect(wavePath).toBeTruthy();
   await expect(wave(warning)).toHaveAttribute("d", wavePath!);
@@ -494,7 +497,7 @@ test("grouped and split floods keep the wave, use the correct status outline and
   await expect(far.locator(".hdms-status-sign")).toHaveCount(0);
   await expect(far).not.toContainText("ทล.");
   await expect(wave()).toHaveAttribute("d", wavePath!);
-  await expect(pins.locator(".doh-type-flood")).toHaveCSS("outline-style", "double");
+  await expect(pins.locator(".doh-type-flood-wave")).toHaveCSS("outline-style", "solid");
   await expect(pins).toHaveAttribute("aria-label", /ทล\.43 \(2 ช่วง\).*45 ซม\./);
   await pins.press("Enter");
   const popup = page.locator(".doh-flood-leaflet-popup");
@@ -509,15 +512,17 @@ test("grouped and split floods keep the wave, use the correct status outline and
   };
   await zoomTo(12);
   const mid = pins.locator(".doh-capsule-zoom-mid");
-  await expect(mid).toHaveText("ทล.43");
+  await expect(mid.locator(".doh-flood-pin-label")).toHaveText("ทล.43");
+  await expect(mid.locator(".doh-flood-pin-label")).toHaveCSS("background-image", /linear-gradient/);
   await expect(wave()).toHaveAttribute("d", wavePath!);
-  await expect(pins.locator(".doh-type-flood")).toHaveCSS("outline-style", "double");
+  await expect(pins.locator(".doh-type-flood-wave")).toHaveCSS("outline-style", "solid");
   await expect(popup).toBeVisible();
   await zoomTo(14);
   const near = pins.locator(".doh-capsule-zoom-near");
+  await expect(near.locator(".doh-flood-pin-label")).toHaveCSS("background-image", /linear-gradient/);
   await expect(near).toContainText(/ทล\.43[\s\S]*2 ช่วง[\s\S]*45 ซม\./);
   await expect(wave()).toHaveAttribute("d", wavePath!);
-  await expect(pins.locator(".doh-type-flood")).toHaveCSS("outline-style", "double");
+  await expect(pins.locator(".doh-type-flood-wave")).toHaveCSS("outline-style", "solid");
   await expect(popup).toBeVisible();
 });
 

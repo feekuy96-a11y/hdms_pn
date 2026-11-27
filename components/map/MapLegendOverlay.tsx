@@ -339,7 +339,7 @@ export function MapLegendOverlay({
       <ul className="hdms-legend-key">
         <li>
           <span className="hdms-legend-sample" data-kind="flood" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path data-flood-type-glyph="wave" d={FLOOD_WAVE_PATH} /></svg></span>
-          <div><strong>จุดน้ำท่วม</strong><p>หมุดรูปคลื่นระบุจุดน้ำท่วม แตะเพื่อดูสถานะการผ่านทาง หมุดทรงเหลี่ยมขอบคู่หมายถึงผ่านไม่ได้</p></div>
+          <div><strong>จุดน้ำท่วม</strong><p>หมุดรูปคลื่นระบุจุดน้ำท่วม แตะเพื่อดูสถานะการผ่านทาง แสงรอบหมุดและป้ายเมื่อซูมเข้าลงสีตามสถานะ</p></div>
         </li>
         <li>
           <span className="hdms-legend-sample" data-kind="detour" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9m-3-3 3 3-3 3M9 19h10m-3-3 3 3-3 3" /></svg></span>

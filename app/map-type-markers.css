@@ -7,40 +7,71 @@
   --map-detour-pin-base: #f6bb47;
 }
 
+/* The geographic anchor is always the red water disk; zoom only adds a label. */
 .doh-map-capsule-pin .doh-type-flood {
   position: relative;
-  background-color: var(--map-flood-pin-base);
-  background-color: color-mix(in srgb, var(--flood-pin-accent) 50%, var(--hdms-slate-900));
-  background-image: linear-gradient(145deg,
-    color-mix(in srgb, var(--flood-pin-accent) 56%, var(--hdms-slate-900)),
-    color-mix(in srgb, var(--flood-pin-accent) 40%, var(--hdms-slate-900)));
-  border-color: var(--hdms-white);
-  outline: 2px solid var(--flood-pin-accent, var(--map-flood-pin-edge));
-  box-shadow: 0 3px 7px color-mix(in srgb, var(--hdms-slate-900) 58%, transparent);
+  display: inline-flex;
+  gap: 0.38rem;
+  align-items: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   color: var(--hdms-white);
 }
 
-/* Keep one flood glyph. The outer silhouette and edge encode severity
-   without introducing a second pictogram or relying on color alone. */
-.doh-map-capsule-pin .doh-type-flood.doh-capsule-red { outline-style: double; outline-width: 3px; }
-.doh-map-capsule-pin .doh-type-flood.doh-capsule-orange { outline-style: dashed; }
-.doh-map-capsule-pin .doh-type-flood.doh-capsule-amber { outline-style: dotted; }
-.doh-map-capsule-pin .doh-type-flood.doh-capsule-sky { outline-style: solid; }
-.doh-map-capsule-pin .doh-type-flood:is(.doh-capsule-green,.doh-capsule-emerald) { outline-style: solid; outline-width: 1px; }
-.doh-map-capsule-pin .doh-type-flood.doh-capsule-slate { outline-style: dashed; outline-offset: 1px; }
+.doh-map-capsule-pin .doh-type-flood:is(.doh-capsule-zoom-mid,.doh-capsule-zoom-near) {
+  height: 1.75rem;
+}
 
-.doh-map-capsule-pin .doh-type-flood.doh-capsule-red { border-radius: 0.19rem; }
-.doh-map-capsule-pin .doh-type-flood.doh-capsule-orange { border-radius: 0.88rem 0.88rem 0.25rem 0.25rem; }
-.doh-map-capsule-pin .doh-type-flood.doh-capsule-amber { border-radius: 0.88rem 0.25rem; }
-.doh-map-capsule-pin .doh-type-flood.doh-capsule-sky { border-radius: 0.5rem; }
-.doh-map-capsule-pin .doh-type-flood:is(.doh-capsule-green,.doh-capsule-emerald) { border-radius: 99em; }
-.doh-map-capsule-pin .doh-type-flood.doh-capsule-slate { border-radius: 0.25rem 0.25rem 0.88rem 0.88rem; }
 
-.doh-type-flood-wave {
+.doh-map-capsule-pin .doh-type-flood-wave {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--hdms-white);
+  border-radius: 50%;
+  background-color: var(--map-flood-pin-base);
+  background-image: linear-gradient(155deg, var(--map-flood-pin-top), var(--map-flood-pin-base));
+  /* One solid ring at every status. The outer glow and zoom label carry status color. */
+  outline: 2px solid var(--flood-pin-accent, var(--map-flood-pin-edge));
+  outline-offset: 1px;
+  box-shadow:
+    0 0 8px 2px color-mix(in srgb, var(--flood-pin-accent, var(--map-flood-pin-edge)) 68%, transparent),
+    0 3px 7px color-mix(in srgb, var(--hdms-slate-900) 55%, transparent);
+}
+
+.doh-map-capsule-pin .doh-flood-pin-label {
+  display: inline-flex;
+  position: absolute;
+  inset-inline-start: calc(100% + 0.38rem);
+  top: 50%;
+  transform: translateY(-50%);
+  max-inline-size: var(--flood-label-limit, 230px);
+  inline-size: max-content;
+  flex-wrap: wrap;
+  white-space: normal;
+  gap: 0.08em 0.35em;
+  align-items: center;
+  flex: none;
+  min-height: 1.5rem;
+  padding: 0.15rem 0.48rem;
+  border: 1px solid var(--flood-pin-accent, var(--map-flood-pin-edge));
+  border-radius: 0.42rem;
+  background-color: var(--hdms-slate-900);
+  background-image: linear-gradient(145deg,
+    color-mix(in srgb, var(--flood-pin-accent) 40%, var(--hdms-slate-900)),
+    color-mix(in srgb, var(--flood-pin-accent) 24%, var(--hdms-slate-900)));
+  color: var(--hdms-white);
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--hdms-slate-900) 42%, transparent);
+}
+
+.doh-map-capsule-pin .doh-flood-pin-label-left {
+  inset-inline-start: auto;
+  inset-inline-end: calc(100% + 0.38rem);
 }
 
 /* Two inks are inside the shape; the negative space around it remains bare. */
@@ -100,14 +131,15 @@
 }
 
 @media (forced-colors: active) {
-  .doh-map-capsule-pin .doh-type-flood,
+  .doh-map-capsule-pin .doh-type-flood-wave,
+  .doh-map-capsule-pin .doh-flood-pin-label,
   .doh-detour-symbol .doh-type-detour {
     border-color: ButtonText;
     background: ButtonFace;
     color: ButtonText;
   }
 
-  .doh-map-capsule-pin .doh-type-flood { outline-color: ButtonText; }
+  .doh-map-capsule-pin .doh-type-flood-wave { outline-color: ButtonText; box-shadow: none; }
   .doh-type-flood-wave svg { stroke: ButtonText; }
 
   .hdms-status-sign {
