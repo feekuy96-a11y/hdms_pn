@@ -1,5 +1,7 @@
 # สถาปัตยกรรมและการออกแบบระบบ DOH_Pattani_Flood (DESIGN.md)
 
+> **ประวัติการออกแบบ (ไม่ใช่กฎ UX/UI ปัจจุบัน):** ใช้ [UI Contract](docs/UI_CONTRACT.md) สำหรับงานออกแบบ และ [Architecture](docs/ARCHITECTURE.md) สำหรับโครงสร้างปัจจุบัน เนื้อหาเดิมเก็บไว้อ้างอิงที่มา
+
 > ⚠️ **ประกาศ (2026-11-08):** เอกสารนี้เป็นภาพรวมเชิงแนวคิดและบางส่วนเก่า (เช่น Server Actions, Docker Postgres, ซิงก์ผ่าน Server Actions) ระบบจริงเป็นเว็บ static บน GitHub Pages เรียก Edge Function `hdms-api` — ดูสถานะปัจจุบันที่ `docs/ARCHITECTURE.md` และกติกาการทำงานที่ `AGENTS.md`
 **ระบบแผนที่รายงานสถานการณ์น้ำท่วมและเส้นทางเลี่ยง แขวงทางหลวงปัตตานี กรมทางหลวง**
 **เวอร์ชัน:** 2.0.0 (Production Next.js + PostgreSQL/PostGIS)
