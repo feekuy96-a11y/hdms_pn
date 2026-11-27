@@ -105,7 +105,7 @@ const knownStatuses = [
   ["PASSABLE", "emerald", "ผ่านได้ปกติ"],
 ] as const;
 
-test("five flood markers share one glyph but keep distinct status bands and edges in both themes", async ({ page, baseURL, isMobile }, testInfo) => {
+test("five flood markers share one glyph but keep distinct status bands, silhouettes and edges in both themes", async ({ page, baseURL, isMobile }, testInfo) => {
   test.skip(isMobile || before, "Desktop capture of five status fixtures");
   await page.setViewportSize({ width: 1440, height: 900 });
   await fixture(page, new URL(baseURL!).origin);
@@ -123,6 +123,7 @@ test("five flood markers share one glyph but keep distinct status bands and edge
   const bands = new Set<string>();
   const glyphs = new Set<string>();
   const edges = new Set<string>();
+  const silhouettes = new Set<string>();
   for (const theme of ["light", "dark"] as const) {
     if (theme === "dark") await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
     for (const [, key, label] of knownStatuses) {
@@ -133,6 +134,7 @@ test("five flood markers share one glyph but keep distinct status bands and edge
       await expect(shape).toHaveCount(1);
       glyphs.add((await shape.getAttribute("d"))!);
       edges.add(await marker.evaluate(el=>{const style=getComputedStyle(el);return `${style.outlineStyle}:${style.outlineWidth}`;}));
+      silhouettes.add(await marker.evaluate(el => getComputedStyle(el).borderRadius));
       await expect(marker.locator(".doh-type-flood-wave svg")).toHaveCSS("stroke", "rgb(255, 255, 255)");
       await expect(marker.locator(".hdms-status-sign")).toHaveCount(0);
       bands.add(await marker.evaluate(el => getComputedStyle(el).getPropertyValue("--flood-pin-accent").trim()));
@@ -142,6 +144,7 @@ test("five flood markers share one glyph but keep distinct status bands and edge
   expect(bands.size).toBe(5);
   expect(glyphs.size).toBe(1);
   expect(edges.size).toBe(5);
+  expect(silhouettes.size).toBe(5);
 });
 
 for (const admin of [false, true]) {
