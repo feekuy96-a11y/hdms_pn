@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import JSZip from "jszip";
+import { restoreDraftLocation } from "../../components/admin/tabs/map-draft-storage";
 
 const menus = [
   ["จัดการระบบ", "ข้อมูลทั่วไปและเบอร์โทรฉุกเฉิน"],
@@ -1047,6 +1048,14 @@ for (const kind of ["น้ำท่วม", "ทางเลี่ยง"] as c
     expect(writes).toEqual([]);
   });
 }
+
+test("restoring a map draft normalizes pending endpoint lookups", () => {
+  const pending = { lat: "6.82", lon: "101.2", subdistrict: "", district: "", province: "", areaStatus: "resolving" as const };
+  expect(restoreDraftLocation(pending)).toEqual({ ...pending, areaStatus: "not_found" });
+  expect(restoreDraftLocation({ ...pending, district: "หนองจิก" }).areaStatus).toBe("resolved");
+  expect(restoreDraftLocation({ ...pending, lat: "", lon: "" }).areaStatus).toBe("idle");
+  expect(pending.areaStatus).toBe("resolving");
+});
 
 test("unsaved online map work stays in the open tab and never changes the previous browser draft", async ({
   page, isMobile, baseURL,

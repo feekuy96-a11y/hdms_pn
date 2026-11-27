@@ -76,8 +76,20 @@ export function hasMeaningfulAdminMapDraft(snapshot: AdminMapDraftSnapshot): boo
   );
 }
 
+export function restoreDraftLocation(location: DetourPhotoLocationState): DetourPhotoLocationState {
+  // A lookup belonged to the prior editor instance and cannot complete in this one.
+  if (location.areaStatus !== "resolving") return location;
+  const hasArea = Boolean(location.subdistrict.trim() || location.district.trim());
+  const hasCoords = Boolean(location.lat.trim() && location.lon.trim());
+  return { ...location, areaStatus: hasArea ? "resolved" : hasCoords ? "not_found" : "idle" };
+}
+
 export function readAdminMapDraft(): AdminMapDraftSnapshot | null {
-  return typeof window !== "undefined" && currentPageDraft ? structuredClone(currentPageDraft) : null;
+  if (typeof window === "undefined" || !currentPageDraft) return null;
+  const snapshot = structuredClone(currentPageDraft);
+  snapshot.detourStartPhotoLocation = restoreDraftLocation(snapshot.detourStartPhotoLocation);
+  snapshot.detourEndPhotoLocation = restoreDraftLocation(snapshot.detourEndPhotoLocation);
+  return snapshot;
 }
 
 export function writeAdminMapDraft(snapshot: AdminMapDraftSnapshot): void {
