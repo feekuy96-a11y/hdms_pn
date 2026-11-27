@@ -43,6 +43,8 @@
 | Panel ปรับแนวถนนทางหลวง (Geometry Editor Panel) | `components/admin/tabs/HighwayGeometryEditorPanel.tsx` | `npx eslint components/admin/tabs/HighwayGeometryEditorPanel.tsx --max-warnings=0` |
 
 ## 3. Map & GIS Engine (Safety-Sensitive: `{ lon, lat }` / `POINT(lng lat)`)
+
+เริ่มจาก [คู่มือโมดูลแผนที่ร่วม](map-modules/README.md) เพื่อเลือกไฟล์และเทสต์ของปุ่ม เลเยอร์ ป๊อปอัพ สถานะ หรือโหมดโฟกัสก่อนแก้
 | งาน / อาการ | ไฟล์เป้าหมาย | คำสั่งตรวจเฉพาะจุด |
 |---|---|---|
 | Longdo Map canvas, layers, popups, markers | `components/map/LongdoGisMap.tsx` | `npm run check:fast` |
