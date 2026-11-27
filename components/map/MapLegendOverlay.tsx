@@ -3,6 +3,7 @@
 import React from "react";
 import { Layers, Plus, Minus, Building2, ChevronUp, LocateFixed, Info, X, PanelLeftOpen, PanelLeftClose, ArrowLeftRight, Check } from "lucide-react";
 import { SystemDataPayload } from "@/db/default-data";
+import { FLOOD_WAVE_PATH } from "@/lib/flood-map-symbol";
 import { LAYER_CONFIG } from "@/lib/constants";
 import { resolveVisibleArrowColor } from "@/lib/map-style-utils";
 import type { AdministrativeBoundaryControls } from "./useAdministrativeBoundaries";
@@ -337,8 +338,8 @@ export function MapLegendOverlay({
       <summary>คำอธิบายสัญลักษณ์</summary>
       <ul className="hdms-legend-key">
         <li>
-          <span className="hdms-legend-sample" data-kind="flood" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /></svg></span>
-          <div><strong>จุดน้ำท่วม</strong><p>หมุดรูปคลื่นระบุจุดน้ำท่วม แตะเพื่อดูสถานะการผ่านทาง ขีดสีบนเส้นบอกสถานะตามรายงาน</p></div>
+          <span className="hdms-legend-sample" data-kind="flood" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path data-flood-type-glyph="wave" d={FLOOD_WAVE_PATH} /></svg></span>
+          <div><strong>จุดน้ำท่วม</strong><p>หมุดรูปคลื่นระบุจุดน้ำท่วม แตะเพื่อดูสถานะการผ่านทาง หมุดทรงเหลี่ยมขอบคู่หมายถึงผ่านไม่ได้</p></div>
         </li>
         <li>
           <span className="hdms-legend-sample" data-kind="detour" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 19V9a4 4 0 0 1 4-4h9m-3-3 3 3-3 3M9 19h10m-3-3 3 3-3 3" /></svg></span>
@@ -499,7 +500,7 @@ export function MapLegendOverlay({
 
               <label className="flex min-h-11 sm:min-h-10 items-center justify-between gap-[0.667em] cursor-pointer py-1.5 hdms-guide-title touch-manipulation">
                 <span className="flex items-center gap-[0.667em]">
-                  <span className="hdms-map-symbol inline-flex h-5 w-5 items-center justify-center rounded-md" style={{ backgroundColor: floodSwatch, color: resolveVisibleArrowColor(floodSwatch) }}><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M3 8c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0" /></svg></span>
+                  <span className="hdms-map-symbol inline-flex h-5 w-5 items-center justify-center rounded-md" style={{ backgroundColor: floodSwatch, color: resolveVisibleArrowColor(floodSwatch) }}><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path data-flood-type-glyph="wave" d={FLOOD_WAVE_PATH} /></svg></span>
                   <span>จุดน้ำท่วม <span data-map-tone="danger" className="ml-1 rounded-full px-[0.5em] py-[0.167em] text-[0.75rem]/[1.1rem]">{effectiveShowFloodLayer ? (systemData.floodRoutes || []).filter((item) => isFloodLineVisibleOnCurrentMap(item)).length : 0}</span></span>
                 </span>
                 <input

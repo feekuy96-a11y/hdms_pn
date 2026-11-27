@@ -45,6 +45,11 @@ for (const admin of [false, true]) {
     await expect(pins.first()).toHaveAttribute("aria-label", /ผ่านไม่ได้/);
     await map.screenshot({ path: testInfo.outputPath("grouped.png"), animations: "disabled" });
     await layers.click();
+    const wave = await pins.first().locator('[data-flood-type-glyph="wave"]').getAttribute("d");
+    const legend = map.getByRole("region",{name:"เลเยอร์และสัญลักษณ์แผนที่"});
+    const referencePaths = await legend.locator('[data-flood-type-glyph="wave"]').evaluateAll(el=>el.map(path=>path.getAttribute("d")));
+    expect(referencePaths).toHaveLength(2);
+    expect(referencePaths.every(path=>path===wave)).toBe(true);
     const split = map.getByRole("button", { name: "แยกช่วง", exact: true });
     if (!await split.isVisible()) await map.getByText("ตั้งค่าเพิ่มเติม", { exact: true }).click();
     await split.click();
@@ -100,8 +105,8 @@ const knownStatuses = [
   ["PASSABLE", "emerald", "ผ่านได้ปกติ"],
 ] as const;
 
-test("five flood markers communicate the original status bands and distinct shapes in both themes", async ({ page, baseURL, isMobile }, testInfo) => {
-  test.skip(isMobile || before, "Desktop capture of all five distinct route fixtures");
+test("five flood markers share one glyph but keep distinct status bands, silhouettes and edges in both themes", async ({ page, baseURL, isMobile }, testInfo) => {
+  test.skip(isMobile || before, "Desktop capture of five status fixtures");
   await page.setViewportSize({ width: 1440, height: 900 });
   await fixture(page, new URL(baseURL!).origin);
   await page.route(/\/functions\/v1\/hdms-api\/?$/, (route) => route.fulfill({ json: {
@@ -116,16 +121,20 @@ test("five flood markers communicate the original status bands and distinct shap
   } }));
   await page.goto(base + "/");
   const bands = new Set<string>();
-  const shapes = new Set<string>();
+  const glyphs = new Set<string>();
+  const edges = new Set<string>();
+  const silhouettes = new Set<string>();
   for (const theme of ["light", "dark"] as const) {
     if (theme === "dark") await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
     for (const [, key, label] of knownStatuses) {
       const marker = page.locator(`.doh-type-flood.doh-capsule-${key === "emerald" ? "green" : key}`);
       await expect(marker).toHaveAttribute("title", new RegExp(label));
       await expect(marker.locator("svg")).toHaveCount(1);
-      const shape = marker.locator(`svg [data-flood-status-shape="${key === "emerald" ? "green" : key}"]`);
+      const shape = marker.locator('[data-flood-type-glyph="wave"]');
       await expect(shape).toHaveCount(1);
-      shapes.add((await shape.getAttribute("d"))!);
+      glyphs.add((await shape.getAttribute("d"))!);
+      edges.add(await marker.evaluate(el=>{const style=getComputedStyle(el);return `${style.outlineStyle}:${style.outlineWidth}`;}));
+      silhouettes.add(await marker.evaluate(el => getComputedStyle(el).borderRadius));
       await expect(marker.locator(".doh-type-flood-wave svg")).toHaveCSS("stroke", "rgb(255, 255, 255)");
       await expect(marker.locator(".hdms-status-sign")).toHaveCount(0);
       bands.add(await marker.evaluate(el => getComputedStyle(el).getPropertyValue("--flood-pin-accent").trim()));
@@ -133,7 +142,9 @@ test("five flood markers communicate the original status bands and distinct shap
     }
   }
   expect(bands.size).toBe(5);
-  expect(shapes.size).toBe(5);
+  expect(glyphs.size).toBe(1);
+  expect(edges.size).toBe(5);
+  expect(silhouettes.size).toBe(5);
 });
 
 for (const admin of [false, true]) {

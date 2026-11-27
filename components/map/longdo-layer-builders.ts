@@ -1,3 +1,4 @@
+import { FLOOD_WAVE_PATH } from "@/lib/flood-map-symbol";
 import type { DetourRoute, FloodRoute, SystemDataPayload } from "@/db/default-data";
 import { APP_CONFIG, DEFAULT_MAP_STYLES } from "@/lib/constants";
 import { getLinkedEventsForDetour } from "@/lib/event-detour-links";
@@ -402,22 +403,7 @@ export function computeDeoverlappedMarkerCoord(
   return [renderLat, renderLon];
 }
 
-// One compact sign per flood marker: the flood wave is common, while the
-// upper silhouette signals passability even when the colors look alike.
-const floodStatusSilhouettes = {
-  red: "M4 4h16v7H4zM8 4l4 7m1-7 4 7", // barricade
-  orange: "m12 3 8 9H4zM12 6.5v2", // warning triangle
-  amber: "m7 3-2 9m12-9 2 9M12 4v3m0 2.5V12", // narrowed lane
-  sky: "M6 4h12M9 8h6m-4 4h2", // slow: graduated horizontal lines
-  green: "m6 7 4 4 8-8", // clear: check
-  slate: "M12 2l7 5-7 5-7-5z", // pending: diamond
-} as const;
-
-function floodStatusSymbol(capsuleClass: string) {
-  const tone = capsuleClass.match(/(?:^|\s)doh-capsule-(red|orange|amber|sky|green|emerald|slate)(?=\s|$)/)?.[1];
-  const key = (tone === "emerald" ? "green" : tone ?? "slate") as keyof typeof floodStatusSilhouettes;
-  return `<span class="doh-type-flood-wave" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path data-flood-status-shape="${key}" d="${floodStatusSilhouettes[key]}"/><path d="M3 18c2 1.7 4 1.7 6 0s4-1.7 6 0 4 1.7 6 0"/></svg></span>`;
-}
+const floodWaveSymbol = `<span class="doh-type-flood-wave" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" focusable="false"><path data-flood-type-glyph="wave" d="${FLOOD_WAVE_PATH}"/></svg></span>`;
 
 /** สร้างสเปกไอคอนหมุดน้ำท่วม 3 ระดับตามค่าซูม (Far / Mid / Near) */
 export function buildZoomAdaptiveFloodPinSpec(
@@ -427,7 +413,7 @@ export function buildZoomAdaptiveFloodPinSpec(
 ): DivIconSpec {
   // Encode only a safe CSS color on the badge; its text label is still exposed.
   const accent = markerHex(fColor, TRAFFIC_ACCENT.slate);
-  const waveBadge = floodStatusSymbol(item.capsuleClass);
+  const waveBadge = floodWaveSymbol;
   // The default map viewport is zoom 11. Keep that overview uncluttered and
   // progressively disclose the highway number and water level only after zooming in.
   if (currentZoom <= 11) {
