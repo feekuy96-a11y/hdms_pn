@@ -54,7 +54,7 @@
 ## วิธีส่งงานร่วมกัน
 
 - ทำงานบน branch จาก `origin/main` ใหม่, รัน `npm run check:deploy` และ E2E เฉพาะส่วนที่แก้
-- สร้าง PR; รอ CI ผ่านก่อน merge. หลัง merge ตรวจ Pages workflow และ URL จริง
+- สร้าง PR; รอ CI ผ่านก่อน merge. หลัง merge ใช้ [Playbooks P6](PLAYBOOKS.md#p6-deploy--ย้อนกลับ--ช่วงเกิดเหตุน้ำท่วม) ตรวจ Pages และรายงานหลักฐานตามขั้น
 - ทุกงานอัปเดต `docs/archive/history/CHANGELOG.md`; อัปเดต `BACKLOG`/`KNOWN_ISSUES` เมื่อสถานะงานค้างหรือข้อจำกัดเปลี่ยน; ปรับไฟล์นี้เมื่อมีการเปลี่ยนกติกากลางหรือสถานะ deploy
 
 ## รูปแบบสรุปเมื่อส่งต่อ
