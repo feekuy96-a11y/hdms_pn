@@ -428,12 +428,16 @@
   .citizen-ui .citizen-incident-photo:has(.citizen-gallery-arrows) .citizen-photo-open > img { min-height:114px; }
 }
 
-/* Traffic cards show the count and an explicit label; color is a secondary cue. */
+/* Keep the desktop dock and mobile drawer in the same status order and rows.
+   With five cards the first (most severe visible status) leads at full width. */
 .citizen-status-card-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: .4rem;
 }
+.citizen-status-card-list:has(> li:only-child) { grid-template-columns: minmax(0, 1fr); }
+.citizen-status-card-list:has(> li:nth-child(3):last-child) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.citizen-status-card-list:has(> li:nth-child(5):last-child) > li:first-child { grid-column: 1 / -1; }
 .citizen-status-card-list > li { min-inline-size: 0; }
 .citizen-traffic-card {
   --traffic-accent: var(--traffic-light);

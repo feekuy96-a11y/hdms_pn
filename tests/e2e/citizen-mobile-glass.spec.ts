@@ -412,3 +412,61 @@ test("citizen glass transmits measurable map pixels and the accessible fallback 
   await expect(nav).toHaveCSS("backdrop-filter", "none");
   expect((await sampleMapThroughNav("white")).rail).toEqual((await sampleMapThroughNav("black")).rail);
 });
+
+test("citizen status card rows match across desktop and mobile", async ({ page, isMobile }, testInfo) => {
+  test.setTimeout(45_000);
+  await page.setViewportSize(isMobile ? { width: 320, height: 568 } : { width: 1440, height: 900 });
+  const statuses = ["CLOSED", "NO_SMALL_VEHICLES", "ONE_LANE", "LIGHT_VEHICLES_ONLY", "PASSABLE"];
+  let count = 4;
+  const nav = await openFixture(page, () => ({
+    ...payload,
+    floodRoutes: statuses.slice(0, count).map((traffic_status, i) => ({
+      ...payload.floodRoutes[0], id: `GRID-${i}`, route_no: String(40 + i), traffic_status,
+    })),
+  }));
+  const surface = isMobile
+    ? page.getByRole("dialog", { name: "รายการสายทางและจุดเฝ้าระวัง" })
+    : page.locator(".citizen-sidebar");
+  const list = surface.getByRole("list", { name: "สรุปสถานการณ์ทุกจุด" });
+  await page.getByRole("button", { name: "เปิดธีมมืด" }).click();
+  if (isMobile) await nav.getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
+  for (const [i, rows] of [[2, 2], [1], [2], [3], [1, 2, 2]].entries()) {
+    if (i) {
+      count = [4, 1, 2, 3, 5][i];
+      await page.reload();
+      if (isMobile) await nav.getByRole("button", { name: "เหตุการณ์น้ำท่วม", exact: true }).click();
+    }
+    const cards = list.getByRole("button");
+    await expect(cards).toHaveCount(count);
+    const layout = await cards.evaluateAll((buttons) => buttons.map((button) => {
+      const item = button as HTMLElement;
+      const rect = item.getBoundingClientRect();
+      const parent = item.closest("ul")!.getBoundingClientRect();
+      return { top: rect.top, width: rect.width, full: Math.abs(rect.width - parent.width) < 1,
+        fits: item.scrollWidth <= item.clientWidth && rect.height >= 44 && rect.width >= 44 };
+    }));
+    const actual = [...new Set(layout.map((item) => item.top))].map((top) => layout.filter((item) => item.top === top));
+    if (count === 4) await list.screenshot({ path: testInfo.outputPath("four-status-cards-dark.png"), animations: "disabled" });
+    expect(actual.map((row) => row.length)).toEqual(rows);
+    expect(layout.every((item) => item.fits)).toBe(true);
+    for (const row of actual) {
+      if (row.length === 1) expect(row[0].full).toBe(true);
+      else expect(Math.max(...row.map((item) => item.width)) - Math.min(...row.map((item) => item.width))).toBeLessThan(1);
+    }
+  }
+  // Exercise the narrowest desktop dock and enlarged text on both surfaces.
+  if (!isMobile) await page.setViewportSize({ width: 1024, height: 768 });
+  await page.addStyleTag({ content: "html { font-size: 150%; }" });
+  expect(await list.getByRole("button").evaluateAll((buttons) => buttons.every((button) => {
+    const item = button as HTMLElement;
+    const label = item.querySelector(".citizen-traffic-card-label")!;
+    const rect = item.getBoundingClientRect();
+    const text = label.getBoundingClientRect();
+    return item.scrollWidth <= item.clientWidth && rect.width >= 44 && rect.height >= 44 &&
+      text.left >= rect.left && text.right <= rect.right && text.bottom <= rect.bottom;
+  }))).toBe(true);
+  const first = list.getByRole("button", { name: "1 ผ่านไม่ได้", exact: true });
+  await first.focus();
+  await page.keyboard.press("Enter");
+  await expect(first).toHaveAttribute("aria-pressed", "true");
+});
