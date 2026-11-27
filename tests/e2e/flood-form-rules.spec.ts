@@ -288,6 +288,9 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     await menu.getByRole("button", { name: /รายงานสถานการณ์น้ำท่วม/ }).click();
     const sidePicker = page.getByRole("group", { name: "เลือกฝั่งถนน" });
     await expect(sidePicker).toHaveCount(1);
+    const allLanes = page.getByRole("button", { name: "ทุกช่องจราจร", exact: true });
+    await expect(allLanes).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "ไม่ระบุ", exact: true })).toHaveAttribute("aria-pressed", "false");
     if (outcome === "shared carriageway") {
       const submit = page.getByRole("button", { name: "บันทึกเหตุการณ์", exact: true });
       await submit.click();
@@ -318,7 +321,7 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
     await waterInputSingle.fill("18");
     await expect(statusSelectSingle).toHaveValue("LIGHT_VEHICLES_ONLY");
 
-    await page.getByRole("button", { name: "ทุกช่องจราจร", exact: true }).click();
+    await expect(allLanes).toHaveAttribute("aria-pressed", "true");
     await waterInputSingle.fill("30");
     await expect(statusSelectSingle).toHaveValue("WARNING");
 
@@ -368,6 +371,9 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
         roadSide: "BOTH", waterLevelCm: 0,
         directionMeta: { affectedParts: ["LEFT_FRONTAGE"], frontageShoulderSides: ["LEFT"], waterLevelKnown: true, directionCode: "BOTH", arrow_direction: "TWO_WAY", carriageway_type: "SINGLE_CENTERLINE" },
       });
+      await page.getByRole("dialog", { name: "บันทึกเหตุการณ์น้ำท่วมสำเร็จ" }).getByRole("button", { name: "ปิดหน้าต่าง" }).click();
+      await menu.getByRole("button", { name: /รายงานสถานการณ์น้ำท่วม/ }).click();
+      await expect(allLanes).toHaveAttribute("aria-pressed", "true");
       return;
     }
 
@@ -530,6 +536,19 @@ test.describe("Flood traffic status rules and highway selector deduplication", (
       await page.locator(".doh-map-capsule-pin").first().press("Enter");
       await expect(popup).toContainText("น้ำท่วมบริเวณไหล่ทางซ้ายทาง, ทางขนานซ้ายทาง");
       await expect(popup).not.toContainText("ไหล่ทางของทางขนานซ้ายทาง");
+
+      // Older saved events with no stated impact still reopen as "unspecified", even with the new-form default.
+      legacy.direction_meta.affectedParts = [];
+      legacy.affected_lanes = "";
+      publishedRows = [legacy];
+      const savesBeforeLegacyEdit = savedCalls.length;
+      await page.goto(`${base}/admin/`);
+      await page.getByRole("button", { name: "รายการเหตุการณ์", exact: true }).filter({ visible: true }).first().click();
+      await page.getByRole("button", { name: /กางดูช่วงย่อยทั้งหมด/ }).first().click();
+      await page.locator(".doh-incident-segment").getByRole("button", { name: "แก้ไข", exact: true }).click();
+      await expect(page.getByRole("button", { name: "ไม่ระบุ", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(allLanes).toHaveAttribute("aria-pressed", "false");
+      expect(savedCalls).toHaveLength(savesBeforeLegacyEdit);
 
 
     }
