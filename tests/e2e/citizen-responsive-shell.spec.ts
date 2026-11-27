@@ -438,7 +438,7 @@ test("public map starts with four grouped tools and keeps one layer panel and th
   }
 });
 
-test("grouped and split floods keep the wave, use the correct status shape and reveal labels at the same zooms", async ({ page }) => {
+test("grouped and split floods keep the wave, use the correct status outline and reveal labels at the same zooms", async ({ page }) => {
   const first = { ...payload.floodRoutes[0], direction_meta: { eventId: "EV-WAVE-PARITY" } };
   await page.route("**/functions/v1/hdms-api", route => route.fulfill({ json: {
     ...payload,
@@ -469,7 +469,7 @@ test("grouped and split floods keep the wave, use the correct status shape and r
   await page.getByText("ตั้งค่าเพิ่มเติม", { exact: true }).click();
   await expect(page.getByRole("button", { name: "รวมเหตุการณ์", exact: true })).toHaveAttribute("aria-pressed", "true");
   await layers.click();
-  const wave = (pin = pins.first()) => pin.locator(".doh-type-flood-wave svg path:not([data-flood-status-shape])");
+  const wave = (pin = pins.first()) => pin.locator("[data-flood-type-glyph='wave']");
   await chooseMode("แยกช่วง");
   await expect(pins).toHaveCount(2);
   const warning = pins.filter({ has: page.locator(".doh-capsule-orange") });
@@ -481,8 +481,8 @@ test("grouped and split floods keep the wave, use the correct status shape and r
   await expect(warning.locator(".doh-type-flood")).toHaveCSS("--flood-pin-accent", "#f97316");
   await expect(closed.locator(".doh-type-flood")).toHaveCSS("--flood-pin-accent", "#dc2626");
   await expect(pins.first().locator(".doh-capsule-zoom-far")).toBeVisible();
-  await expect(warning.locator("[data-flood-status-shape]")).toHaveAttribute("data-flood-status-shape", "orange");
-  await expect(closed.locator("[data-flood-status-shape]")).toHaveAttribute("data-flood-status-shape", "red");
+  await expect(warning.locator(".doh-type-flood")).toHaveCSS("outline-style", "dashed");
+  await expect(closed.locator(".doh-type-flood")).toHaveCSS("outline-style", "double");
   const wavePath = await wave(closed).getAttribute("d");
   expect(wavePath).toBeTruthy();
   await expect(wave(warning)).toHaveAttribute("d", wavePath!);
@@ -494,7 +494,7 @@ test("grouped and split floods keep the wave, use the correct status shape and r
   await expect(far.locator(".hdms-status-sign")).toHaveCount(0);
   await expect(far).not.toContainText("ทล.");
   await expect(wave()).toHaveAttribute("d", wavePath!);
-  await expect(pins.locator("[data-flood-status-shape]")).toHaveAttribute("data-flood-status-shape", "red");
+  await expect(pins.locator(".doh-type-flood")).toHaveCSS("outline-style", "double");
   await expect(pins).toHaveAttribute("aria-label", /ทล\.43 \(2 ช่วง\).*45 ซม\./);
   await pins.press("Enter");
   const popup = page.locator(".doh-flood-leaflet-popup");
@@ -511,13 +511,13 @@ test("grouped and split floods keep the wave, use the correct status shape and r
   const mid = pins.locator(".doh-capsule-zoom-mid");
   await expect(mid).toHaveText("ทล.43");
   await expect(wave()).toHaveAttribute("d", wavePath!);
-  await expect(pins.locator("[data-flood-status-shape]")).toHaveAttribute("data-flood-status-shape", "red");
+  await expect(pins.locator(".doh-type-flood")).toHaveCSS("outline-style", "double");
   await expect(popup).toBeVisible();
   await zoomTo(14);
   const near = pins.locator(".doh-capsule-zoom-near");
   await expect(near).toContainText(/ทล\.43[\s\S]*2 ช่วง[\s\S]*45 ซม\./);
   await expect(wave()).toHaveAttribute("d", wavePath!);
-  await expect(pins.locator("[data-flood-status-shape]")).toHaveAttribute("data-flood-status-shape", "red");
+  await expect(pins.locator(".doh-type-flood")).toHaveCSS("outline-style", "double");
   await expect(popup).toBeVisible();
 });
 
