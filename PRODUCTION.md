@@ -21,7 +21,8 @@ The production web site is deployed as a static export on GitHub Pages (`npm run
 - In the incident detail form, prepare and copy the closure SQL. Nothing is saved by the web app. Review it and run it manually only in the existing HDMS project's Supabase SQL Editor. The statement inserts at most one new row keyed to that event. An existing row is never overwritten; no returned event ID means no new row was saved.
 - The statement contains the incident details and any attached photos. Do not share it outside the trusted project console. The form, map preview and prepared SQL are held in memory only. The site does not read, migrate or delete old localStorage entries, open a public preview, update the public map, queue writes or call reporting integrations.
 - Production status, 2026-11-27: the owner-authorized SQL Editor run applied the additive schema to the HDMS database. The table, three RLS policies and trigger were confirmed in the catalog; this does not confirm a Supabase CLI migration ledger entry. No closure records were inserted. Do not reapply the migration just to make the form work. Verify import with synthetic data in a disposable or staging database, not in production.
-- Rollback: revert the web change and preserve the table and any saved records. No Edge Function change is needed.
+- Before exposing the import form or inserting any closure records, apply and verify `20261127150000_preserve_closure_event_on_last_segment_delete.sql`. It keeps a private closure linked when the last operational flood segment is removed; it does not retain public segments or detour links.
+- Rollback: revert the web change and preserve the table and any saved records. No Edge Function change is needed. Preserve the flood cleanup guard while any closure record exists.
 
 ## Rollback & Static Export Notes
 
