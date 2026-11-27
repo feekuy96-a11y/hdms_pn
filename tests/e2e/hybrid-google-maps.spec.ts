@@ -11,6 +11,7 @@ import {
 import { resetAreaLookup, resolveArea } from "../../lib/area-lookup";
 import { fetchOsrmWithFailover, resetOsrmClient } from "../../lib/osrm-client";
 import { sampleWaypointsForGoogleMaps } from "../../lib/detour-navigation";
+import { formatGeneratedDetourStep, getDetourTimelinePresentation, stepRepeatsRouteTotal } from "../../lib/detour-presentation";
 import { buildMapDetourEndpointPopup } from "../../components/map/longdo-map-popups";
 import { resolveDetourPhotoPointCoords } from "../../components/map/longdo-layer-builders";
 import type { SystemDataPayload } from "../../db/default-data";
@@ -168,11 +169,77 @@ test.describe("Public detour endpoints on mobile", () => {
     const route = { ...payload.detourRoutes[0], description: "1. เลี้ยวซ้ายผ่านโรงเรียน" };
     const pin = { lat: route.lat_start, lon: route.lon_start };
     const render = (direction: "FORWARD" | "REVERSE") => buildMapDetourEndpointPopup(route, "START", null, direction, [], pin, true);
-    expect(render("FORWARD")).toContain("เลี้ยวซ้ายผ่านโรงเรียน");
+    expect(render("FORWARD")).toContain('data-guidance-maneuver="turn_left"');
+    expect(render("FORWARD")).toContain(">เลี้ยวซ้าย</span>");
+    expect(render("FORWARD")).toContain(">ผ่านโรงเรียน</p>");
     expect(render("FORWARD").match(/doh-detour-step-title/g)).toHaveLength(1);
     expect(render("REVERSE")).toContain("ยังไม่มีคำแนะนำเลี้ยวทีละขั้นสำหรับทิศทางขากลับ");
     expect(render("REVERSE")).not.toContain("เลี้ยวซ้ายผ่านโรงเรียน");
     expect(buildMapDetourEndpointPopup({ ...route, description: "" }, "START", null, "FORWARD", [], pin, true)).not.toContain("doh-detour-step-title");
+  });
+
+  test("saved headings, details and icons describe the same maneuver in the chosen direction", () => {
+    const forward = [
+      "1. จุดเริ่มต้น: บริเวณ ทล.42 เลี้ยวเข้าทางเลี่ยง ปน.2016",
+      "2. ตรงไป ตามทางหลวงชนบท ปน.2016 (ระยะทาง 13.1 กม.)",
+      "3. เลี้ยวซ้ายเข้าสู่ถนนข้างวงเวียน",
+      "4. เมื่อถึงวงเวียน ให้ใช้ทางออกที่ 2",
+      "5. จุดสิ้นสุด: บรรจบ ทล.4061 สัญจรต่อได้ตามปกติ",
+    ].join("\n");
+    const reverse = [
+      "1. จุดเริ่มต้น: บริเวณ ทล.4061",
+      "2. เลี้ยวขวาผ่านจุดกลับรถ",
+      "3. กลับรถเข้าสู่ถนนบริการ",
+      "4. ตรวจสภาพทางก่อนเดินทาง",
+      "5. จุดสิ้นสุด: บรรจบ ทล.42",
+    ].join("\n");
+    const latest = getDetourTimelinePresentation(forward).steps;
+    expect(latest.map(step => [step.title, step.iconType])).toEqual([
+      ["จุดเริ่มต้น", "start"], ["ตรงไป", "straight"], ["เลี้ยวซ้าย", "turn_left"],
+      ["เมื่อถึงวงเวียน", "roundabout"], ["จุดสิ้นสุด", "end"],
+    ]);
+    expect(latest[1]).toMatchObject({ detail: "ตามทางหลวงชนบท ปน.2016", badge: "13.1 กม." });
+    expect(latest[3].detail).toBe("ให้ใช้ทางออกที่ 2");
+    expect(latest[4].detail).toBe("บรรจบ ทล.4061 สัญจรต่อได้ตามปกติ");
+    expect(getDetourTimelinePresentation(reverse).steps.map(step => step.iconType)).toEqual([
+      "start", "turn_right", "uturn", "instruction", "end",
+    ]);
+    expect(getDetourTimelinePresentation("1. จุด A\n2. ผ่านสะพาน\n3. จุด B").steps.map(step => step.iconType))
+      .toEqual(["start", "instruction", "end"]);
+    expect(getDetourTimelinePresentation("1. ข้อสังเกต: ร้านก่อนวงเวียน").steps[0].iconType).toBe("instruction");
+    expect(getDetourTimelinePresentation("1. ตรงไป\n2. เลี้ยวขวา").steps[1].iconType).toBe("turn_right");
+
+    const route = { ...payload.detourRoutes[0], description: `=== ทิศทางขาไป: จุด A → จุด B ===\n${forward}\n=== ทิศทางขากลับ: จุด B → จุด A ===\n${reverse}` };
+    const pin = { lat: route.lat_start, lon: route.lon_start };
+    const html = (direction: "FORWARD" | "REVERSE") => buildMapDetourEndpointPopup(route, "START", null, direction, [], pin, true);
+    expect(html("FORWARD")).toContain('data-guidance-maneuver="turn_left"');
+    expect(html("FORWARD")).not.toContain('data-guidance-maneuver="turn_right"');
+    expect(html("REVERSE")).toContain('data-guidance-maneuver="turn_right"');
+    expect(html("REVERSE")).not.toContain('data-guidance-maneuver="turn_left"');
+  });
+
+  test("canonical automatic text and legacy display keep total distance separate", () => {
+    expect(formatGeneratedDetourStep("สุดทาง เลี้ยวซ้ายเข้าสู่ ปน.2016")).toBe("เลี้ยวซ้าย: ที่ปลายถนน เข้าสู่ ปน.2016");
+    expect(formatGeneratedDetourStep("เมื่อถึงวงเวียน ให้ใช้ทางออกที่ 2")).toBe("เข้าสู่วงเวียน: ให้ใช้ทางออกที่ 2");
+    expect(formatGeneratedDetourStep("ใช้ทางออก: ตามป้ายไปยังถนนสายหลัก")).toBe("ใช้ทางออก: ตามป้ายไปยังถนนสายหลัก");
+    expect(formatGeneratedDetourStep("กลับรถเข้าสู่ทางขนาน")).toBe("กลับรถ: เข้าสู่ทางขนาน");
+    expect(stepRepeatsRouteTotal(13_100, 13_100)).toBe(true);
+    expect(stepRepeatsRouteTotal(350, 13_100)).toBe(false);
+    const legacy = getDetourTimelinePresentation([
+      "1. จุดเริ่มต้น: ทล.42 กม. 104+850",
+      "2. ตรงไป ตาม ปน.2016 (ระยะทาง 13.1 กม.)",
+      "3. จุดสิ้นสุด: ทล.4061",
+      "- รวมระยะทางเลี่ยง: 13.1 กม.",
+    ].join("\n"));
+    expect(legacy.totalDistanceFormatted).toBe("13.1");
+    expect(legacy.steps.map(step => step.badge)).toEqual(["กม. 104+850", "", ""]);
+    expect(legacy.steps[0].detail).toContain("กม. 104+850");
+    const withDepartureDistance = getDetourTimelinePresentation(
+      "1. จุดเริ่มต้น: ตาม ปน.2003 (ระยะทาง 5.0 กม.)\n2. เลี้ยวขวา: ที่แยก\n3. จุดสิ้นสุด: ถนนหลัก", 7000,
+    );
+    expect(withDepartureDistance.steps[0]).toMatchObject({
+      title: "จุดเริ่มต้น", detail: "ตาม ปน.2003 (ระยะทาง 5.0 กม.)", badge: "0 กม.",
+    });
   });
 
   for (const portal of ["public", "admin"] as const) {
@@ -480,6 +547,7 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
 
   test("Google Routes proxy generates Thai advice when its polyline matches the selected route and preserves via waypoints", async () => {
     const originalFetch = globalThis.fetch;
+    let single = false;
     const drawn: [number, number][] = [[101.48904, 6.85211], [101.49000, 6.85300], [101.49300, 6.85400]];
     const encode = (coords: [number, number][]) => {
       const prev = [0, 0];
@@ -521,10 +589,12 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
               configured: true,
               available: true,
               found: true,
-              distanceMeters: 4200,
-              durationSeconds: 360,
+              distanceMeters: single ? 13_100 : 4200,
+              durationSeconds: single ? 0 : 360,
               encodedPolyline: encode(drawn),
-              steps: [
+              steps: single ? [
+                { maneuver: "DEPART", instructions: "ตรงไปตาม ปน.2016", distanceMeters: 13_100, durationSeconds: 0, startLocation: drawn[0] },
+              ] : [
                 { maneuver: "DEPART", instructions: "มุ่งหน้าทางทิศเหนือไปตาม ทล.42", distanceMeters: 850, durationSeconds: 60, startLocation: drawn[0] },
                 { maneuver: "TURN_LEFT", instructions: "เลี้ยวซ้ายเข้าสู่ ทางหลวงชนบท ปน.2010", distanceMeters: 3350, durationSeconds: 300, startLocation: drawn[1] },
               ],
@@ -550,13 +620,18 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
 
       expect(advice).toContain("ต.ปะนาเระ อ.ปะนาเระ");
       expect(edgeCalls.some(call => call.action === "reverseGeocodeGoogleAction")).toBe(false);
-      expect(advice).toContain("เลี้ยวซ้ายเข้าสู่ ทางหลวงชนบท ปน.2010 (ระยะทาง 3.4 กม.)");
+      expect(advice).toContain("เลี้ยวซ้าย: เข้าสู่ ทางหลวงชนบท ปน.2010 (ระยะทาง 3.4 กม.)");
       expect(advice).toContain("รวมระยะทางเลี่ยง: 4.2 กม.");
       expect(advice).toContain("ประมาณ 6 นาที");
 
       const routeCall = edgeCalls.find((c) => c.action === "computeGoogleDetourRouteAction");
       expect(routeCall).toBeDefined();
       expect((routeCall?.args[0] as any)?.intermediates).toEqual([drawn[1]]);
+      single = true;
+      const oneStep = await generateAutoDetourAdvice(drawn[0], drawn[2], drawn, "42", [], undefined, "FORWARD_ONLY");
+      expect(oneStep).toContain("2. ตรงไป: ตาม ปน.2016");
+      expect(oneStep.match(/13\.1 กม\./g)).toHaveLength(1);
+      expect(oneStep).not.toContain("ใช้เวลาเดินทางประมาณ");
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -602,6 +677,8 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
                       { maneuver: { type: "end of road", modifier: "left", location: [101.254, 6.854] }, distance: 18, name: "ถนนโยธาธิการ", ref: "ปน.2003" },
                       { maneuver: { type: "depart", location: [101.256, 6.856] }, distance: 1200, name: "ถนนโยธาธิการ", ref: "ปน.2003" },
                       { maneuver: { type: "off ramp", modifier: "right", location: [101.26, 6.86] }, distance: 25, name: "ทางเบี่ยง 418", ref: "" },
+                      { maneuver: { type: "off ramp", location: [101.265, 6.865] }, distance: 35, name: "ทางเชื่อมทดสอบ", ref: "" },
+                      { maneuver: { type: "roundabout", location: [101.27, 6.87] }, distance: 60, name: "ถนนพ้นวงเวียน", ref: "" },
                       { maneuver: { type: "arrive", location: [101.28, 6.88] }, distance: 0, name: "ทล.418", ref: "418" },
                     ],
                   },
@@ -628,9 +705,12 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
 
       // Should call Google route proxy at most once per direction (and trip circuit breaker after configured:false)
       expect(googleRouteCalls).toBe(1);
-      expect(advice).toContain("สุดทาง เลี้ยวซ้ายเข้าสู่ ถนนโยธาธิการ ปน.2003 (ระยะทาง 18 ม.)");
-      expect(advice).toContain("ตรงไปตาม ถนนโยธาธิการ ปน.2003 (ระยะทาง 1.2 กม.)");
-      expect(advice).toContain("ใช้ทางออกขวาเข้าสู่ ทางเบี่ยง 418 (ระยะทาง 25 ม.)");
+      expect(advice).toContain("เลี้ยวซ้าย: ที่ปลายถนน เข้าสู่ ถนนโยธาธิการ ปน.2003 (ระยะทาง 18 ม.)");
+      expect(advice).toContain("ตรงไป: ตาม ถนนโยธาธิการ ปน.2003 (ระยะทาง 1.2 กม.)");
+      expect(advice).toContain("ใช้ทางออกขวา: เข้าสู่ ทางเบี่ยง 418 (ระยะทาง 25 ม.)");
+      expect(advice).toContain("ใช้ทางออก: ตามป้ายไปยัง ทางเชื่อมทดสอบ");
+      expect(advice).toContain("เข้าสู่วงเวียน: ตามป้ายมุ่งหน้าสู่ ถนนพ้นวงเวียน");
+      expect(advice).not.toContain("เข้าสู่วงเวียน (เลี้ยวซ้าย)");
       expect(advice).not.toContain("ทล.2003");
     } finally {
       globalThis.fetch = originalFetch;

@@ -82,7 +82,7 @@ test("long Thai detour dossier title reflows at enlarged text while real close s
   const longRoad = "ทางเลี่ยงถนนสายรองช่วงโรงเรียนบ้านมะพร้าวต้นเดียวไปยังแยกหนองจิก";
   await page.route(/\/functions\/v1\/hdms-api\/?$/, route => route.fulfill({ json: {
     updatedAt: checkedAt, floodRoutes: [{ ...fakeFlood, latest_photo_url: photo }],
-    detourRoutes: [{ id: "D-LONG", flood_id_ref: fakeFlood.id, route_name: longRoad, description: "1. เลี้ยวซ้าย\n2. กลับสู่ถนนหลัก",
+    detourRoutes: [{ id: "D-LONG", flood_id_ref: fakeFlood.id, route_name: longRoad, description: "1. เลี้ยวซ้าย: ที่แยกหน้าโรงเรียนเข้าถนนสายรอง\n2. ตรงไป\n3. จุดสิ้นสุด: กลับสู่ถนนหลัก",
       direction_mode: "TWO_WAY", is_active: true, updated_at: checkedAt,
       detour_meta: {
         start_point_photo: { url: photo, caption: "ภาพแนวกว้างสำหรับหน้ารายละเอียดจากเส้น" },
@@ -135,7 +135,12 @@ test("long Thai detour dossier title reflows at enlarged text while real close s
 
     const timelineStep = dialog.locator(".citizen-detour-step").first();
     await expect(timelineStep).toHaveCSS("background-color", "rgb(230, 238, 241)");
-    await expect(timelineStep.locator("p")).toHaveCSS("color", "rgb(60, 84, 102)");
+    await expect(timelineStep.locator(".doh-detour-step-title")).toHaveText("เลี้ยวซ้าย");
+    const detailText = timelineStep.locator(".doh-detour-step-detail");
+    await expect(detailText).toHaveText("ที่แยกหน้าโรงเรียนเข้าถนนสายรอง");
+    await expect(detailText).toHaveCSS("color", "rgb(60, 84, 102)");
+    const plainStep = dialog.locator('.citizen-detour-step').filter({ hasText: "ตรงไป" });
+    await expect(plainStep.locator(".doh-detour-step-detail")).toHaveCount(0);
     const scroller = dialog.locator(".overflow-y-auto").first();
     expect(await scroller.evaluate(el => el.clientHeight)).toBeGreaterThanOrEqual(viewport.height * 0.35);
     const focusMap = dialog.getByRole("button", { name: "ดูตำแหน่งบนแผนที่", exact: true });

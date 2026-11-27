@@ -1,4 +1,5 @@
 import { computeGoogleDetourRouteAction, type GoogleRouteStep } from "@/app/actions/doh-actions";
+import { formatGeneratedDetourStep, stepRepeatsRouteTotal } from "./detour-presentation";
 import { UTM_47N_PARAMS } from "./constants";
 import { parseKmPostMeters } from "./highway-schema";
 import { cleanThaiAdminPrefix, findPattaniDistrictName, isPointInPolygon, resolveArea, localArea, resolveDetourPinArea, traceDetourRouteAreas } from "./area-lookup";
@@ -593,6 +594,24 @@ export function isAdviceOnDrawnRoute(drawn: AdviceCoord[], routed: AdviceCoord[]
   return true;
 }
 
+function pushNumberedDetourSteps(
+  lines: string[], steps: Array<{ instruction: string; meters: number }>, totalMeters: number
+): number {
+  let number = 2; // The separately verified departure marker is always step 1.
+  for (const { instruction, meters } of steps) {
+    const dist = meters >= 1000 ? `${(meters / 1000).toFixed(1)} กม.` : `${Math.round(meters)} ม.`;
+    const showDistance = Number.isFinite(meters) && meters >= 1 &&
+      !(steps.length === 1 && stepRepeatsRouteTotal(meters, totalMeters));
+    lines.push(`${number++}. ${instruction}${showDistance ? ` (ระยะทาง ${dist})` : ""}`);
+  }
+  return number;
+}
+
+function pushDetourAdviceMetrics(lines: string[], meters: number, seconds: number) {
+  if (Number.isFinite(meters) && meters > 0) lines.push(`- รวมระยะทางเลี่ยง: ${(meters / 1000).toFixed(1)} กม.`);
+  if (Number.isFinite(seconds) && seconds > 0) lines.push(`- ใช้เวลาเดินทางประมาณ ${Math.max(1, Math.round(seconds / 60))} นาที`);
+}
+
 async function buildSingleDirectionAdvice(
   queryPoints: AdviceCoord[],
   drawn: AdviceCoord[],
@@ -621,26 +640,17 @@ async function buildSingleDirectionAdvice(
   // Tier 1: Google Maps Routes API (through secure Edge proxy)
   const googleRoute = await computeGoogleRouteHybrid(queryPoints, "TRAFFIC_UNAWARE");
   if (googleRoute?.steps.length && isAdviceOnDrawnRoute(drawn, googleRoute.coords)) {
-    const lines: string[] = [dirHeader];
-    let stepCounter = 1;
-    lines.push(`${stepCounter++}. จุดเริ่มต้น: บริเวณ ${startHwyStr} ${tag(startAddr)}`);
-
-    for (let idx = 0; idx < googleRoute.steps.length; idx++) {
-      const step = googleRoute.steps[idx];
+    const lines = [dirHeader, `1. จุดเริ่มต้น: บริเวณ ${startHwyStr} ${tag(startAddr)}`];
+    const totalMeters = googleRoute.distanceMeters || calculatePolylineLengthKm(drawn) * 1000;
+    const steps = googleRoute.steps.flatMap(step => {
+      const maneuver = String(step.maneuver || "").toUpperCase();
+      if (maneuver === "ARRIVE" || maneuver === "DESTINATION") return [];
       const cleanInstr = (step.instructions || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-      if (!cleanInstr) continue;
-      if (idx === 0 && step.distanceMeters < 15) continue;
-      const distStr = step.distanceMeters >= 1000
-        ? `${(step.distanceMeters / 1000).toFixed(1)} กม.`
-        : `${Math.round(step.distanceMeters)} ม.`;
-      lines.push(`${stepCounter++}. ${cleanInstr}${step.distanceMeters > 0 ? ` (ระยะทาง ${distStr})` : ""}`);
-    }
-
-    lines.push(endLine(stepCounter++));
-    const totalKm = ((googleRoute.distanceMeters || calculatePolylineLengthKm(queryPoints) * 1000) / 1000).toFixed(1);
-    const estMinutes = Math.max(1, Math.round((googleRoute.durationSeconds || Number(totalKm) * 90) / 60));
-    lines.push(`- รวมระยะทางเลี่ยง: ${totalKm} กม.`);
-    lines.push(`- ระยะเวลาเดินทาง: ประมาณ ${estMinutes} นาที`);
+      const instruction = formatGeneratedDetourStep(cleanInstr);
+      return instruction ? [{ instruction, meters: step.distanceMeters }] : [];
+    });
+    lines.push(endLine(pushNumberedDetourSteps(lines, steps, totalMeters)));
+    pushDetourAdviceMetrics(lines, totalMeters, googleRoute.durationSeconds);
     lines.push(routeAreaLine);
     return lines.join("\n");
   }
@@ -706,53 +716,30 @@ async function buildSingleDirectionAdvice(
 
       let action = "ตรงไปตาม";
 
-      if (isFirst) {
-        action = "จุดเริ่มต้น:";
-      } else if (mType === "depart") {
-        // ขั้นตอน depart ของ leg ถัดไป (จาก waypoint กลางเส้นทาง) คือการขับตรงต่อเนื่องบนช่วงถนนนั้น
+      if (isLast && mType === "arrive") continue;
+      if (mType === "depart") {
         action = "ตรงไปตาม";
-      } else if (isLast || mType === "arrive") {
-        action = "ถึงจุดบรรจบทางหลวงสายหลัก:";
       } else if (mType === "roundabout" || mType === "rotary") {
         const exitNumber = Number(s.maneuver.exit);
-        if (Number.isInteger(exitNumber) && exitNumber > 0) {
-          action = `เมื่อถึงวงเวียน ให้ใช้ทางออกที่ ${exitNumber} มุ่งหน้าสู่`;
-        } else if (mMod.includes("left")) {
-          action = "เลี้ยวซ้ายผ่านวงเวียนมุ่งหน้าสู่";
-        } else if (mMod.includes("right")) {
-          action = "เลี้ยวขวาผ่านวงเวียนมุ่งหน้าสู่";
-        } else if (mMod.includes("straight")) {
-          action = "ตรงไปผ่านวงเวียนมุ่งหน้าสู่";
-        } else {
-          action = "เข้าสู่วงเวียน (เลี้ยวซ้าย) มุ่งหน้าสู่";
-        }
-      } else if (mType === "end of road") {
-        if (mMod.includes("left")) action = "สุดทาง เลี้ยวซ้ายเข้าสู่";
-        else if (mMod.includes("right")) action = "สุดทาง เลี้ยวขวาเข้าสู่";
-        else if (mMod.includes("uturn")) action = "สุดทาง กลับรถเข้าสู่";
-        else action = "สุดทาง มุ่งหน้าเข้าสู่";
-      } else if (mType === "turn") {
-        if (mMod.includes("slight left")) action = "เบี่ยงซ้ายเข้าสู่";
-        else if (mMod.includes("sharp left")) action = "เลี้ยวซ้ายหักศอกเข้าสู่";
-        else if (mMod.includes("left")) action = "เลี้ยวซ้ายเข้าสู่";
-        else if (mMod.includes("slight right")) action = "เบี่ยงขวาเข้าสู่";
-        else if (mMod.includes("sharp right")) action = "เลี้ยวขวาหักศอกเข้าสู่";
-        else if (mMod.includes("right")) action = "เลี้ยวขวาเข้าสู่";
-        else if (mMod.includes("uturn")) action = "กลับรถเข้าสู่";
-        else action = "เลี้ยวเข้าสู่";
-      } else if (mType === "continue") {
-        if (mMod.includes("slight left")) action = "เบี่ยงซ้ายตาม";
-        else if (mMod.includes("left")) action = "เลี้ยวซ้ายไปตาม";
-        else if (mMod.includes("slight right")) action = "เบี่ยงขวาตาม";
-        else if (mMod.includes("right")) action = "เลี้ยวขวาไปตาม";
-        else if (mMod.includes("uturn")) action = "กลับรถไปตาม";
-        else action = "ตรงไปต่อเนื่องตาม";
+        action = Number.isInteger(exitNumber) && exitNumber > 0
+          ? `เข้าสู่วงเวียน: ใช้ทางออกที่ ${exitNumber} มุ่งหน้าสู่`
+          : "เข้าสู่วงเวียน: ตามป้ายมุ่งหน้าสู่";
+      } else if (mType === "end of road" || mType === "turn" || mType === "continue") {
+        const qualifier = mType === "end of road" ? "สุดทาง " : "";
+        const after = mType === "continue" ? "ตาม" : "เข้าสู่";
+        if (mMod === "uturn") action = `${qualifier}กลับรถ${after}`;
+        else if (mMod === "slight left" && !qualifier) action = `เบี่ยงซ้าย${after}`;
+        else if (mMod === "slight right" && !qualifier) action = `เบี่ยงขวา${after}`;
+        else if (mMod.includes("left")) action = `${qualifier}เลี้ยวซ้าย${mMod === "sharp left" ? "หักศอก" : ""}${after}`;
+        else if (mMod.includes("right")) action = `${qualifier}เลี้ยวขวา${mMod === "sharp right" ? "หักศอก" : ""}${after}`;
+        else if (mMod === "straight" || mType === "continue") action = "ตรงไปตาม";
+        else action = "เลี้ยว: เข้าสู่";
       } else if (mType === "off ramp") {
-        action = mMod.includes("left") ? "ใช้ทางออกซ้ายเข้าสู่" : "ใช้ทางออกขวาเข้าสู่";
+        action = mMod.includes("left") ? "ใช้ทางออกซ้ายเข้าสู่" :
+          mMod.includes("right") ? "ใช้ทางออกขวาเข้าสู่" : "ใช้ทางออก: ตามป้ายไปยัง";
       } else if (mType === "merge" || mType === "on ramp" || mType === "fork") {
-        action = mMod.includes("right") ? "เบี่ยงขวาเข้าสู่" : "เบี่ยงซ้ายเข้าสู่";
-      } else if (mType === "new name") {
-        action = "ตรงไปตาม";
+        action = mMod.includes("right") ? "เบี่ยงขวาเข้าสู่" :
+          mMod.includes("left") ? "เบี่ยงซ้ายเข้าสู่" : "ใช้ทางเชื่อม: ไปยัง";
       }
 
       const roadName = (s.name || "").trim();
@@ -779,8 +766,8 @@ async function buildSingleDirectionAdvice(
           }
         }
         if (!fullRoad) {
-          const locArea = await localArea(lookaheadLoc[0], lookaheadLoc[1]);
-          if (locArea.tambon && locArea.amphoe) {
+          const locArea = await resolveDetourPinArea(lookaheadLoc[0], lookaheadLoc[1]);
+          if (locArea?.tambon && locArea.amphoe) {
             fullRoad = `เส้นทางเชื่อมต่อท้องถิ่น (ต.${locArea.tambon} อ.${locArea.amphoe})`;
           } else {
             fullRoad = "เส้นทางเชื่อมต่อท้องถิ่น";
@@ -818,30 +805,16 @@ async function buildSingleDirectionAdvice(
       }
     });
 
-    const lines: string[] = [dirHeader];
-
-    const totalKm = (totalDistanceM / 1000).toFixed(1);
-    const estMinutes = Math.max(2, Math.ceil(totalDurationS / 60));
-
-    let stepCounter = 1;
-    // Step 1: จุดเริ่มต้น
     const initHwy = formatRefRoadPrefix(osrmSteps[0]?.ref, startHwyStr);
-    lines.push(`${stepCounter++}. จุดเริ่มต้น: บริเวณ ${initHwy} ${tag(startAddr)}`);
-
-    // Steps กลาง: จุดเลี้ยวและถนนจริง
-    for (const step of consolidated) {
-      if (step.action.includes("จุดเริ่มต้น") || step.action.includes("จุดบรรจบ")) continue;
-      if (step.distanceM < 35 && !/(เลี้ยว|เบี่ยง|กลับรถ|วงเวียน|สุดทาง|ทางออก)/.test(step.action)) continue;
-
-      const distStr = step.distanceM >= 1000 ? `${(step.distanceM / 1000).toFixed(1)} กม.` : `${Math.round(step.distanceM)} ม.`;
-      // A nearest-address lookup can name a different road beside this turn.
-      lines.push(`${stepCounter++}. ${step.action} ${step.road} (ระยะทาง ${distStr})`);
-    }
-
-    // Step สุดท้าย: ถึงจุดหมาย
-    lines.push(endLine(stepCounter++));
-    lines.push(`- รวมระยะทางเลี่ยง: ${totalKm} กม.`);
-    lines.push(`- ระยะเวลาเดินทาง: ประมาณ ${estMinutes} นาที`);
+    const lines = [dirHeader, `1. จุดเริ่มต้น: บริเวณ ${initHwy} ${tag(startAddr)}`];
+    const totalMeters = totalDistanceM || calculatePolylineLengthKm(drawn) * 1000;
+    const steps = consolidated.flatMap(step => {
+      if (step.distanceM < 35 && !/(เลี้ยว|เบี่ยง|กลับรถ|วงเวียน|สุดทาง|ทางออก|ทางเชื่อม)/.test(step.action)) return [];
+      const instruction = formatGeneratedDetourStep(`${step.action} ${step.road}`);
+      return instruction ? [{ instruction, meters: step.distanceM }] : [];
+    });
+    lines.push(endLine(pushNumberedDetourSteps(lines, steps, totalMeters)));
+    pushDetourAdviceMetrics(lines, totalMeters, totalDurationS);
 
     lines.push(routeAreaLine);
     return lines.join("\n");

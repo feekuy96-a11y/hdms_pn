@@ -15,6 +15,7 @@ import {
   ExternalLink,
   Flag,
   Link2,
+  List,
   MapPin,
   Milestone,
   RefreshCw,
@@ -55,8 +56,9 @@ function renderStepIcon(iconType: DetourTimelineStep["iconType"]) {
       return <Undo2 aria-hidden="true" className="w-4 h-4 hdms-guide-icon shrink-0 stroke-[2.5]" />;
     case "roundabout":
       return <RefreshCw aria-hidden="true" className="w-4 h-4 hdms-guide-icon shrink-0 stroke-[2.5]" />;
+    case "instruction":
+      return <List aria-hidden="true" className="w-4 h-4 hdms-guide-icon shrink-0 stroke-[2.5]" />;
     case "straight":
-    default:
       return <ArrowUp aria-hidden="true" className="w-4 h-4 hdms-guide-icon shrink-0 stroke-[2.5]" />;
   }
 }
@@ -273,7 +275,7 @@ export function DetourDossierModal({
                     )}
 
                     {timeline.steps.map((st) => (
-                      <div key={st.stepNumber} className="doh-detour-step-row relative flex items-start">
+                      <div key={st.stepNumber} className="doh-detour-step-row relative flex items-start" data-guidance-maneuver={st.iconType}>
                         {/* Step Number Circle */}
                         <div
                           aria-hidden="true"
@@ -291,9 +293,9 @@ export function DetourDossierModal({
                                 {st.title}
                               </span>
                             </div>
-                            <span className="doh-detour-step-badge hdms-guide-badge rounded-md border font-mono">
+                            {st.badge && <span className="doh-detour-step-badge hdms-guide-badge rounded-md border font-mono">
                               {st.badge}
-                            </span>
+                            </span>}
                           </div>
                           {st.detail && (
                             <p className="doh-detour-step-detail hdms-guide-copy break-words">
