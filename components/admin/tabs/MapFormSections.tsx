@@ -260,8 +260,22 @@ export function MapFormSections({
   const getId = (key: string) => `${sectionId}-${key}`;
   const focusSection = (key: string) => {
     const target = document.getElementById(getId(key));
-    target?.focus({ preventScroll: true });
-    target?.scrollIntoView({ block: "start", inline: "nearest" });
+    if (!target) return;
+    target.focus({ preventScroll: true });
+    const offset = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+    // Desktop scrolls the form pane; mobile can scroll a wider workspace or the page.
+    // Never move the overflow-hidden shell that also contains the map.
+    let pane = target.parentElement;
+    while (pane && pane !== document.body && pane !== document.documentElement) {
+      if (/^(auto|scroll|overlay)$/.test(getComputedStyle(pane).overflowY) &&
+          pane.scrollHeight > pane.clientHeight + 1) {
+        pane.scrollTo({ top: pane.scrollTop + target.getBoundingClientRect().top -
+          pane.getBoundingClientRect().top - pane.clientTop - offset, behavior: "instant" });
+        return;
+      }
+      pane = pane.parentElement;
+    }
+    window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - offset, behavior: "instant" });
   };
 
   return (
