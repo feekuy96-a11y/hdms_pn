@@ -2,6 +2,7 @@
 
 import React from "react";
 import { FormSection } from "@/components/admin/ui";
+import { ThaiIncidentDateTimePicker } from "@/components/admin/ThaiIncidentDateTimePicker";
 import { SAFETY_MEASURES, RoadSideType } from "@/lib/constants";
 import {
   AFFECTED_ROAD_PARTS,
@@ -366,14 +367,8 @@ export function FloodSituationSection({
       <h4 className="border-t border-surface pt-3 text-sm font-bold text-white">เวลา ผู้รายงาน และมาตรการ</h4>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <label htmlFor="flood-started-at-input" className="text-xs text-slate-300 block mb-1">วันและเวลาเริ่มเกิดเหตุ</label>
-          <input
-            id="flood-started-at-input"
-            type="datetime-local"
-            value={startedAt}
-            onChange={(e) => setStartedAt(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
-          />
+          <label id="flood-started-at-input-label" htmlFor="flood-started-at-input" className="text-xs text-slate-300 block mb-1">วันและเวลาเริ่มเกิดเหตุ</label>
+          <ThaiIncidentDateTimePicker id="flood-started-at-input" value={startedAt} onChange={setStartedAt} />
         </div>
         <div>
           <label htmlFor="flood-safety-measure-select" className="text-xs text-slate-300 block mb-1">มาตรการอำนวยความปลอดภัย</label>
