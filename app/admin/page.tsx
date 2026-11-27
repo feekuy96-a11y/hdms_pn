@@ -46,6 +46,7 @@ const LongdoGisMap = dynamic(
 );
 import type { GisMapViewportApi } from "@/components/map/LongdoGisMap";
 import { useSharedGisFocus } from "@/components/map/useSharedGisFocus";
+import { resolveAdminRegistryMapRoutes, type AdminRegistryMapFilter } from "@/lib/admin-registry-map-filter";
 import { computeGisFilterHighlights } from "@/lib/gis-filter-rules";
 import { OfflineSyncStatus } from "@/components/offline/OfflineSyncStatus";
 import { OsrmRoutingBadge } from "@/components/offline/OsrmRoutingBadge";
@@ -63,8 +64,8 @@ import { useSystemFavicon } from "@/lib/use-system-favicon";
 
 export default function AdminPage() {
   const [mapSearch, setMapSearch] = useState("");
-  const [registryFloodIds, setRegistryFloodIds] = useState<ReadonlySet<string> | null>(null);
-  const [registryDetourIds, setRegistryDetourIds] = useState<ReadonlySet<string> | null>(null);
+  const [registryFloodFilter, setRegistryFloodFilter] = useState<AdminRegistryMapFilter | null>(null);
+  const [registryDetourFilter, setRegistryDetourFilter] = useState<AdminRegistryMapFilter | null>(null);
   const isPollingActive = usePollingActivity();
   const [selectedFloodId, setSelectedFloodId] = useState<string>("");
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
@@ -273,10 +274,10 @@ export default function AdminPage() {
     statusFilter: "ALL",
     includeInactive: true,
   }), [systemData, mapSearch]);
-  const mapRegistryRoutes = useMemo(() => ({
-    floodRoutes: registryFloodIds === null ? systemData.floodRoutes : systemData.floodRoutes.filter((route) => registryFloodIds.has(route.id)),
-    detourRoutes: registryDetourIds === null ? systemData.detourRoutes : systemData.detourRoutes.filter((route) => registryDetourIds.has(route.id)),
-  }), [registryFloodIds, registryDetourIds, systemData.floodRoutes, systemData.detourRoutes]);
+  const mapRegistryRoutes = useMemo(
+    () => resolveAdminRegistryMapRoutes(systemData, registryFloodFilter, registryDetourFilter),
+    [systemData, registryFloodFilter, registryDetourFilter]
+  );
 
   const isFetching = bootstrapQuery.isFetching || operationalQuery.isFetching || staticGisQuery.isFetching;
   const isError = bootstrapQuery.isError || operationalQuery.isError || staticGisQuery.isError;
@@ -595,8 +596,8 @@ export default function AdminPage() {
           >
             <AdminConsole
               systemData={systemData}
-              onFloodMapIdsChange={setRegistryFloodIds}
-              onDetourMapIdsChange={setRegistryDetourIds}
+              onFloodMapIdsChange={setRegistryFloodFilter}
+              onDetourMapIdsChange={setRegistryDetourFilter}
               onDataRefresh={async (scope?: "operational" | "static" | "all") => {
                 return await refreshAdminData(scope === "static" || scope === "all" ? scope : "operational");
               }}

@@ -22,8 +22,8 @@ const testData = {
   timelineUpdates: [], mitigationProjects: [], floodEvents: [], eventDetourLinks: [], eventSegments: [],
   systemSettings: { name: "ระบบทดสอบ", org: "ปัตตานี", phone: "1586" },
 };
-async function open(page: Page) {
-  await page.route("**/functions/v1/hdms-api*", (route) => route.fulfill({ json: testData }));
+async function open(page: Page, data: object = testData) {
+  await page.route("**/functions/v1/hdms-api*", (route) => route.fulfill({ json: data }));
   await page.goto(base + "/admin/");
 }
 async function showPane(page: Page, isMobile: boolean, name: "ฟอร์มข้อมูล" | "แผนที่ GIS") {
@@ -40,7 +40,7 @@ async function expectRoutes(page: Page, isMobile: boolean, floodIds: string[], d
   await showPane(page, isMobile, "ฟอร์มข้อมูล");
 }
 
-test("admin detour search and dropdowns filter the actual map overlays without hiding floods", async ({ page, isMobile }) => {
+test("admin detour search and dropdowns show only matched detours and their directly linked floods", async ({ page, isMobile }) => {
   await open(page);
   await page.getByRole("button", { name: "รายการทางเลี่ยง", exact: true }).click();
   const search = page.getByRole("textbox", { name: "ค้นหาเส้นทางเลี่ยง" });
@@ -50,13 +50,13 @@ test("admin detour search and dropdowns filter the actual map overlays without h
   await expectRoutes(page, isMobile, allFloods, ["D-2065", "D-2016"]);
   await search.fill("2065");
   await expect(page.getByText(detours[0].route_name, { exact: true }).last()).toBeVisible();
-  await expectRoutes(page, isMobile, allFloods, ["D-2065"]);
+  await expectRoutes(page, isMobile, ["F-NORTH"], ["D-2065"]);
   await flood.selectOption("F-SOUTH");
-  await expectRoutes(page, isMobile, allFloods, []);
+  await expectRoutes(page, isMobile, [], []);
   await search.clear();
-  await expectRoutes(page, isMobile, allFloods, ["D-2016"]);
+  await expectRoutes(page, isMobile, ["F-SOUTH"], ["D-2016"]);
   await status.selectOption("INACTIVE");
-  await expectRoutes(page, isMobile, allFloods, []);
+  await expectRoutes(page, isMobile, [], []);
   await page.getByRole("button", { name: "ล้างตัวกรอง", exact: true }).click();
   await expectRoutes(page, isMobile, allFloods, ["D-2065", "D-2016"]);
   await search.fill("2065");
@@ -64,7 +64,7 @@ test("admin detour search and dropdowns filter the actual map overlays without h
   await expectRoutes(page, isMobile, allFloods, ["D-2065", "D-2016"]);
 });
 
-test("admin flood search and dropdowns filter flood segments without hiding detours", async ({ page, isMobile }) => {
+test("admin flood search and dropdowns show only matched floods and their directly linked detours", async ({ page, isMobile }) => {
   await open(page);
   await page.getByRole("button", { name: "รายการเหตุการณ์", exact: true }).click();
   const search = page.getByRole("textbox", { name: "ค้นหาเหตุการณ์น้ำท่วม" });
@@ -72,14 +72,47 @@ test("admin flood search and dropdowns filter flood segments without hiding deto
   const detourIds = ["D-2065", "D-2016"];
   await expectRoutes(page, isMobile, ["F-NORTH", "F-SOUTH"], detourIds);
   await search.fill("ฝั่งเหนือ");
-  await expectRoutes(page, isMobile, ["F-NORTH"], detourIds);
+  await expectRoutes(page, isMobile, ["F-NORTH"], ["D-2065"]);
   await road.selectOption("43");
-  await expectRoutes(page, isMobile, [], detourIds);
+  await expectRoutes(page, isMobile, [], []);
   await search.clear();
-  await expectRoutes(page, isMobile, ["F-SOUTH"], detourIds);
+  await expectRoutes(page, isMobile, ["F-SOUTH"], ["D-2016"]);
   await road.selectOption("44");
   await page.getByRole("button", { name: /^ปกติแล้ว/ }).click();
-  await expectRoutes(page, isMobile, [], detourIds);
+  await expectRoutes(page, isMobile, [], []);
   await page.getByRole("button", { name: "ล้างตัวกรอง", exact: true }).click();
   await expectRoutes(page, isMobile, ["F-NORTH", "F-SOUTH"], detourIds);
+});
+
+
+test("admin narrows modern event links in one hop and ignores nearby or withdrawn routes", async ({ page, isMobile }) => {
+  const east = { ...floods[0], ...geometry(6.90), id: "F-EAST", route_no: "45", section_name: "ขอบตะวันออก" };
+  const alternative = { ...detours[0], ...geometry(6.86), id: "D-ALTERNATIVE", flood_id_ref: null, route_name: "ทางเลือกสำรอง 7654" };
+  const withdrawn = { ...detours[0], id: "D-WITHDRAWN", route_name: "ทางเลี่ยงถอนแล้ว 8765" };
+  const link = (eventId: string, detourId: string, position: number, recommendation = "PENDING") => ({
+    eventId, detourId, position, eventDirection: "BOTH", detourDirection: "FORWARD", recommendation, reviewedGeometryVersion: null,
+  });
+  await open(page, {
+    ...testData,
+    floodRoutes: [...floods, east],
+    detourRoutes: [...detours, alternative, withdrawn],
+    eventSegments: [{ flood_id: "F-NORTH", event_id: "EV-NORTH" }, { flood_id: east.id, event_id: "EV-EAST" }],
+    eventDetourLinks: [
+      link("EV-NORTH", "D-2065", 1),
+      link("EV-NORTH", alternative.id, 2),
+      link("EV-NORTH", withdrawn.id, 3, "WITHDRAWN"),
+      link("EV-EAST", "D-2065", 1),
+    ],
+  });
+  await page.getByRole("button", { name: "รายการเหตุการณ์", exact: true }).click();
+  await page.getByRole("textbox", { name: "ค้นหาเหตุการณ์น้ำท่วม" }).fill("ฝั่งเหนือ");
+  await expectRoutes(page, isMobile, ["F-NORTH"], ["D-2065", alternative.id]);
+  await page.getByRole("button", { name: "รายการทางเลี่ยง", exact: true }).click();
+  const search = page.getByRole("textbox", { name: "ค้นหาเส้นทางเลี่ยง" });
+  await search.fill("2065");
+  await expectRoutes(page, isMobile, ["F-NORTH", east.id], ["D-2065"]);
+  await search.fill("8765");
+  await expectRoutes(page, isMobile, [], [withdrawn.id]);
+  await search.fill("ไม่พบรายการ");
+  await expectRoutes(page, isMobile, [], []);
 });

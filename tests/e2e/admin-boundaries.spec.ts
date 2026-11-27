@@ -115,7 +115,13 @@ for (const address of ["/", "/admin/"]) {
 
     const floodMarker = map.locator('.leaflet-marker-icon[aria-label^="ทล.42"]');
     if (isMobile) await floodMarker.tap();
-    else await floodMarker.click();
+    else {
+      const canvas = map.locator(".hdms-map-canvas");
+      await canvas.evaluate(el => el.addEventListener("focus", () => el.setAttribute("data-test-map-focused", ""), { once: true }));
+      await floodMarker.click();
+      // The marker press must not focus the scrollable map canvas before mouseup.
+      await expect(canvas).not.toHaveAttribute("data-test-map-focused", "");
+    }
     const floodPopup = map.locator(".doh-flood-leaflet-popup");
     await expect(floodPopup).toContainText("ช่วงทดสอบหมุดน้ำท่วม");
     await expect(page.locator(outline)).toBeVisible();
