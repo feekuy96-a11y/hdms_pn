@@ -3,8 +3,10 @@ export type ClosureStop = {
   position: ClosureCoordinate | null;
   km: string; area: string; landmark: string; photo: string;
 };
+export type ClosureRoadMode = "HIGHWAY_KM" | "MAP_AB";
 export type LocalClosureRecord = {
   version: 1; eventId: string; route: string; section: string; begins: string;
+  roadMode?: ClosureRoadMode; highwayGroupId?: string;
   reason: string; note: string; a: ClosureStop; b: ClosureStop;
   line: ClosureCoordinate[]; detourIds: string[]; savedAt: string;
 };
@@ -28,6 +30,8 @@ export function readLocalClosure(eventId: string): LocalClosureRecord | null {
     const row = JSON.parse(text) as LocalClosureRecord | null;
     if (!row || row.version !== 1 || row.eventId !== eventId ||
         !short(row.route,80) || !short(row.section,260) || !short(row.savedAt,35) || !short(row.begins,20) ||
+        (row.roadMode !== undefined && row.roadMode !== "HIGHWAY_KM" && row.roadMode !== "MAP_AB") ||
+        (row.highwayGroupId !== undefined && !short(row.highwayGroupId,260)) ||
         !short(row.reason,500) || !short(row.note,500) || !stop(row.a) || !stop(row.b) ||
         !Array.isArray(row.line) || row.line.length > 2000 || !row.line.every(coordinate) ||
         !Array.isArray(row.detourIds) || row.detourIds.length > 60 || !row.detourIds.every(id=>short(id,128))) return null;

@@ -1,6 +1,7 @@
 import React from "react";
 import { SystemDataPayload } from "@/db/default-data";
 import { LAYER_CONFIG } from "@/lib/constants";
+import { TRAFFIC_ACCENT } from "@/lib/traffic-presentation";
 import {
   dashArrayFor,
   escapeHtml,
@@ -16,9 +17,16 @@ export interface DraftPickMarkerPoint {
   draggable?: boolean;
 }
 
+export interface ClosureDraftPresentation {
+  onSelect?: (target: "A" | "B" | "SECTION") => void;
+}
+const closureBarrier = `<svg aria-hidden="true" width="19" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="8" rx="1"/><path d="m5 15 4-8m3 8 4-8m3 8 3-6M5 16v4m14-4v4"/></svg>`;
+
 export interface RenderDraftAndConflictLayerParams {
   L: any;
   group: any;
+  closurePresentation?: ClosureDraftPresentation;
+  closureSvgRenderer?: any;
   renderer: any;
   incomingGisLines: [number, number][][];
   draftCoordinates: [number, number][];
@@ -45,6 +53,8 @@ export interface RenderDraftAndConflictLayerParams {
 export function renderDraftAndConflictLayer({
   L,
   group,
+  closurePresentation,
+  closureSvgRenderer,
   renderer,
   incomingGisLines,
   draftCoordinates,
@@ -80,10 +90,10 @@ export function renderDraftAndConflictLayer({
   });
 
   const draftStyle = draftMode === "FLOOD" ? mapStyles.flood : mapStyles.detour;
-  const draftColor =
+  const draftColor = closurePresentation ? TRAFFIC_ACCENT.red :
     draftStyle?.color ||
     (draftMode === "FLOOD" ? LAYER_CONFIG.FLOOD_RED_LINE.color : LAYER_CONFIG.DETOUR_YELLOW_LINE.color);
-  const draftDash = dashArrayFor(draftStyle);
+  const draftDash = closurePresentation ? undefined : dashArrayFor(draftStyle);
 
   // Snapped draft route (Primary / Forward A->B)
   if (draftCoordinates.length >= 2) {
@@ -92,9 +102,25 @@ export function renderDraftAndConflictLayer({
       weight: 6,
       dashArray: draftDash,
       opacity: 0.95,
-      renderer,
+      renderer: closureSvgRenderer ?? renderer,
+      className: closurePresentation ? "hdms-local-closure-line" : undefined,
     }).addTo(group);
     draftLineRef.current = draftLine;
+    if (closurePresentation?.onSelect && !vertexEditable && !adminPickModeRef.current) {
+      draftLine.on("click", (event: any) => {
+        L.DomEvent.stopPropagation(event);
+        closurePresentation.onSelect?.("SECTION");
+      });
+      const lineEl = draftLine.getElement() as SVGElement | undefined;
+      lineEl?.setAttribute("role", "button");
+      lineEl?.setAttribute("tabindex", "0");
+      lineEl?.setAttribute("aria-label", "ดูสรุปช่วงปิดการจราจร");
+      lineEl?.addEventListener("keydown", event => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        closurePresentation.onSelect?.("SECTION");
+      });
+    }
     draftLine.on("click", (event: any) => {
       const mode = adminPickModeRef.current;
       if (mode !== "ADD_WAYPOINT" && mode !== "ADD_REVERSE_WAYPOINT") return;
@@ -159,19 +185,31 @@ export function renderDraftAndConflictLayer({
           : point.mode === "PICK_REV_END"
             ? "จุดสิ้นสุดขากลับ (B → A) — ลากเพื่อย้าย"
             : `จุด${point.label}`;
+      const isClosurePoint = !!closurePresentation && (point.label==="A" || point.label==="B");
       const icon = L.divIcon({
-        html: `<div style="${badgeStyle}" class="min-w-7 h-7 px-1.5 rounded-full font-heading font-black text-xs flex items-center justify-center shadow-lg">${escapeHtml(point.label)}</div>`,
-        className: isReversePin ? "doh-draft-rev-endpoint" : "doh-draft-endpoint",
-        iconSize: [32, 28],
-        iconAnchor: overlapsForwardPin ? [-2, 14] : [16, 14],
+        html: isClosurePoint
+          ? `<div style="background:${TRAFFIC_ACCENT.red};color:white" class="flex h-11 w-11 items-center justify-center gap-0.5 rounded-xl border-2 border-white text-white shadow-lg">${closureBarrier}<b class="text-xs">${point.label}</b></div>`
+          : `<div style="${badgeStyle}" class="min-w-7 h-7 px-1.5 rounded-full font-heading font-black text-xs flex items-center justify-center shadow-lg">${escapeHtml(point.label)}</div>`,
+        className: isReversePin ? "doh-draft-rev-endpoint" : `doh-draft-endpoint${isClosurePoint ? " hdms-local-closure-pin" : ""}`,
+        iconSize: isClosurePoint ? [44,44] : [32,28],
+        iconAnchor: isClosurePoint ? [22,22] : overlapsForwardPin ? [-2,14] : [16,14],
       });
       const marker = L.marker([point.lat, point.lon], {
         icon,
         zIndexOffset: isReversePin ? 1250 : 1200,
         draggable: point.draggable !== false,
       })
-        .bindTooltip(tooltipText, { direction: "top" })
+        .bindTooltip(isClosurePoint ? `จุดปิด ${point.label}` : tooltipText, { direction: "top" })
         .addTo(group);
+      if (isClosurePoint) {
+        marker.getElement()?.setAttribute("aria-label", `จุดปิด ${point.label}`);
+        if (closurePresentation?.onSelect && !adminPickModeRef.current) {
+          marker.on("click", (event: any) => {
+            L.DomEvent.stopPropagation(event);
+            closurePresentation.onSelect?.(point.label as "A" | "B");
+          });
+        }
+      }
       marker.on("dragend", (event: any) => {
         const position = event.target.getLatLng();
         onCoordinatePickedRef.current?.(Number(position.lat.toFixed(6)), Number(position.lng.toFixed(6)), point.mode);

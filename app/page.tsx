@@ -620,7 +620,7 @@ export default function HomePage() {
   );
 
 
-  if (localClosureEvent) return <LocalClosurePublicPage key={localClosureEvent} eventId={localClosureEvent} data={systemData}/>;
+  if (localClosureEvent) return <LocalClosurePublicPage key={localClosureEvent} eventId={localClosureEvent} data={systemData} theme={citizenTheme}/>;
 
   return (
     <div data-citizen-theme={citizenTheme} className="citizen-ui doh-readable min-h-dvh flex flex-col bg-surface-canvas text-slate-100 font-body"

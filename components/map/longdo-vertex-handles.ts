@@ -9,6 +9,7 @@ export interface RenderVertexEditHandlesParams {
   draftCoordinates: [number, number][];
   draftReverseCoordinates: [number, number][];
   vertexEditCoordinates?: [number, number][];
+  lockEndpoints?: boolean;
   draftLineRef: React.MutableRefObject<any>;
   revDraftLineRef: React.MutableRefObject<any>;
   onVertexMovedRef: React.MutableRefObject<((index: number, coord: [number, number]) => void) | undefined>;
@@ -29,6 +30,7 @@ export function renderVertexEditHandles({
   draftCoordinates,
   draftReverseCoordinates,
   vertexEditCoordinates,
+  lockEndpoints,
   draftLineRef,
   revDraftLineRef,
   onVertexMovedRef,
@@ -48,7 +50,7 @@ export function renderVertexEditHandles({
 
   visible.forEach((index, order) => {
     const isEnd = index === 0 || index === lastIndex;
-    if (step > 1 && order % step !== 0 && !isEnd) return;
+    if ((lockEndpoints && isEnd) || (step > 1 && order % step !== 0 && !isEnd)) return;
     const borderColor = index === 0 ? "#22c55e" : index === lastIndex ? "#ef4444" : "#0284c7";
     const icon = L.divIcon({
       html: `<div style="width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid ${borderColor};box-shadow:0 1px 4px rgba(15,23,42,.6);cursor:grab"></div>`,
