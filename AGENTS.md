@@ -15,10 +15,12 @@
 
 | Work | Current source |
 | --- | --- |
-| UI, responsive layout, forms, map interactions, accessibility | [UI Contract](docs/UI_CONTRACT.md); use [Codebase Map](docs/CODEBASE_MAP.md) for implementation and tests |
-| Static web, GIS rendering, API, data boundaries and security posture | [Architecture](docs/ARCHITECTURE.md) and the active schema/Edge source listed below |
-| Git, testing, CI, deployment and rollback steps | [Playbooks](docs/PLAYBOOKS.md) and the live [CI](.github/workflows/ci.yml) / [Pages](.github/workflows/deploy.yml) definitions |
-| Public offline behavior, limitations and recovery | [Public offline](docs/PUBLIC_OFFLINE.md); Admin reporting queue is separate |
+| UI, forms, responsive layout, accessibility | [UI Contract](docs/UI_CONTRACT.md); find the affected components and tests in [Codebase Map](docs/CODEBASE_MAP.md) |
+| Map, markers, geometric editing and GIS performance | [Architecture](docs/ARCHITECTURE.md) §5 and the relevant schema below. For how the map looks or responds to taps, read the UI Contract as well |
+| Data schema, API, or auth/security boundary | [Architecture](docs/ARCHITECTURE.md) §§2–3, 6 and the active schema/Edge source below; [Production](PRODUCTION.md) records operational constraints |
+| Testing, CI scope, or troubleshooting a failing check | [Playbooks](docs/PLAYBOOKS.md) P2/P7 and the live [CI workflow](.github/workflows/ci.yml) |
+| Git, deployment, or rollback | [Playbooks](docs/PLAYBOOKS.md) P1/P6 and the live [Pages workflow](.github/workflows/deploy.yml) |
+| Public offline behavior and recovery | [Public offline](docs/PUBLIC_OFFLINE.md); the Admin reporting queue is separate and documented in Architecture |
 | Release facts and handover, not standing rules | [AI Handoff](docs/AI_HANDOFF.md), [Known Issues](docs/KNOWN_ISSUES.md) and [Changelog](docs/archive/history/CHANGELOG.md). Reverify time-sensitive claims |
 
 Project rules live here; domain details live in the named current guide. Keep archived rationale but do not use it to override the current sources. For branch, workflow or release changes, keep the previous production behavior until the new behavior and release gates are verified. Never add privileged credentials to the static web build.
