@@ -384,7 +384,9 @@ test("admin links one detour to multiple events with KM ranges and recovers from
     eventPosition: 1,
   });
   expect(store["EV-F-2"].version).toBe(3);
-  expect(store["EV-F-2"].links.map((l) => [l.detourId, l.eventPosition])).toEqual([["D-2", 1], ["D-1", 2]]);
+  expect(store["EV-F-2"].links.map((l) => [l.detourId, l.eventPosition, l.position])).toEqual([
+    ["D-1", 1, 1], ["D-2", 2, 2],
+  ]);
 
   const saveAndReloadSeq = callLog.slice(beforeSaveIdx);
   expect(saveAndReloadSeq).toEqual([
@@ -422,16 +424,16 @@ test("admin links one detour to multiple events with KM ranges and recovers from
   const card = page.locator("article").filter({ hasText: "หนองจิก" }).filter({ visible: true }).first();
   await card.getByRole("button", { name: /ดูรายละเอียด/ }).click();
   const dossier = page.getByRole("dialog", { name: /รายละเอียดจุดน้ำท่วม/ });
-  await expect(dossier.getByText("ทางเลี่ยงที่ 1 – ทางเลี่ยงสาย 4092")).toBeVisible();
-  await expect(dossier.getByText("ทางเลี่ยงที่ 2 – ทางเลี่ยงสาย 418")).toBeVisible();
+  await expect(dossier.getByText("ทางเลี่ยงที่ 2 – ทางเลี่ยงสาย 4092")).toBeVisible();
+  await expect(dossier.getByText("ทางเลี่ยงที่ 1 – ทางเลี่ยงสาย 418")).toBeVisible();
 
   await page.reload();
   const marker = page.locator('.leaflet-marker-icon[aria-label^="ทล.43"][aria-label*="ซม."]')
     .or(page.locator('.leaflet-marker-icon[aria-label^="ทล.43"][aria-label*="หนองจิก"]')).first();
   await marker.click();
   await page.locator(".leaflet-popup").getByRole("button", { name: /ทางเลี่ยง 2 สาย/ }).click();
-  await expect(dossier.getByText("ทางเลี่ยงที่ 1 – ทางเลี่ยงสาย 4092")).toBeVisible();
-  await expect(dossier.getByText("ทางเลี่ยงที่ 2 – ทางเลี่ยงสาย 418")).toBeVisible();
+  await expect(dossier.getByText("ทางเลี่ยงที่ 2 – ทางเลี่ยงสาย 4092")).toBeVisible();
+  await expect(dossier.getByText("ทางเลี่ยงที่ 1 – ทางเลี่ยงสาย 418")).toBeVisible();
 });
 
 test("admin and citizen detail views render all linked detours and linked flood events from doh_event_detour_links", async ({ page }) => {
