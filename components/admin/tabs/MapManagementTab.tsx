@@ -655,7 +655,9 @@ export function MapManagementTab({
           </div>
         )}
 
-        {/* Phase 2.4: Draft Auto-Save Recovery Banner */}
+        <p className="text-xs text-[var(--text-secondary)]">ข้อมูลที่ยังไม่ได้บันทึกจะอยู่ในแท็บนี้เท่านั้น ปิดหรือรีเฟรชแล้วต้องกรอกใหม่</p>
+
+        {/* In-memory draft recovery while this page remains open */}
         <DraftRecoveryBanner
           recoverableDraft={offlineForm.pauseLocalStorage ? null : recoverableDraft}
           routeEditId={routeEditId}

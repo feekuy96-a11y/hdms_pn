@@ -63,7 +63,7 @@
 - [x] `2.1` แยก Admin Query เป็น 2 ระดับ: `["dohAdminStaticGis"]` (`staleTime: 10m`) และ `["dohAdminOperational"]` (`staleTime: 0`) พร้อม 1-RTT initial bootstrap และ read-only actions `getAdminOperationalDataAction`/`getAdminStaticGisDataAction` (*ทำแล้วใน UPDATE-140 — ลด refetch payload จาก 458.2 KB เหลือ 165.2 KB (-63.9%) เมื่อ deploy Edge*)
 - [ ] `2.2` ขยาย Optimistic Concurrency (`row_version` + `409 Conflict` UI) ไปยัง `doh_flood_routes`, `doh_detour_routes`, `doh_highway_layers`
 - [ ] `2.3` เพิ่ม Lightweight Version-Poll / Realtime Banner แจ้งเมื่อมีเจ้าหน้าที่อื่นอัปเดตข้อมูลโดยไม่ล้างฟอร์มที่กำลังพิมพ์
-- [x] `2.4` เพิ่ม Draft Auto-Save (`localStorage` + `map-draft-storage.ts`) พร้อมปุ่มกู้คืนร่างและล้างอัตโนมัติหลังบันทึกสำเร็จใน `MapManagementTab` (*ทำแล้วใน UPDATE-141*)
+- [x] `2.4` เก็บร่างที่ยังไม่บันทึกในหน่วยความจำของแท็บเท่านั้นผ่าน `map-draft-storage.ts` · สลับเมนูอาจกู้คืนได้ แต่ไม่ค้างหลังปิดหรือรีเฟรช · ไม่แตะข้อมูลร่างเก่าในเบราว์เซอร์
 
 ### Phase 3: Frontend State & Modular Refactoring
 - [ ] `3.1` แยก State 20+ ตัวจาก `app/admin/page.tsx` เป็น Scoped Contexts/Hooks (`MapInteractionContext`, `AdminLayoutState`, `useToastQueue`)
@@ -79,7 +79,7 @@
   - [x] มี coverage เพิ่ม/ลบ/ตัด/เชื่อมจุดและ undo/redo ใน `tests/e2e/gis-geometry-operations.spec.ts`; การบันทึกและ error อยู่ใน `gis-geometry-save.spec.ts` (ตรวจ source เท่านั้น)
   - [x] มี coverage 409 Conflict ของ Event–Detour ใน `tests/e2e/event-detour-links-admin.spec.ts`; ไม่ครอบคลุม concurrency ของ 3 ตารางใน Phase 2.2
   - [ ] ตรวจ/เพิ่ม coverage แถบไอคอนที่ viewport 1280px
-  - [ ] เพิ่ม coverage draft recovery (กู้คืน/ลบร่าง/ล้างหลังบันทึกสำเร็จ)
+  - [ ] เพิ่ม coverage draft recovery (กู้คืนในแท็บ/ไม่เก็บหลังรีเฟรช/ล้างหลังบันทึกสำเร็จ)
   - [ ] รัน regression ที่เกี่ยวข้องและยืนยันเสถียรภาพก่อนปิด 4.2
 - [ ] `4.3` เตรียม Auth-Ready Switch (`REQUIRE_ADMIN_AUTH` env flag + `_shared/auth.ts` + `app/login/page.tsx`) สำหรับเปิดใช้เมื่อเจ้าของระบบเปลี่ยนนโยบาย `B-001` — พักไว้ตามคำสั่งเจ้าของ
 - [ ] `4.4` นำ Asset ตราครุฑทางการที่ผ่านอนุมัติมาใช้งานจริง (`B-016`)
