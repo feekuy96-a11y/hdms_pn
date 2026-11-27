@@ -10,7 +10,7 @@
 // What this module does:
 //   - one answer per point, in the same order for every screen:
 //     Google Geocoding proxy (if server key configured) -> Longdo -> Nominatim -> local data
-//   - 30 day cache in memory and in localStorage (administrative names do not change), in-flight de-duplication,
+//   - bounded in-memory cache, in-flight de-duplication (no coordinates persist after the page closes),
 //     and reuse of a nearby answer (35 m) when only the area name is needed
 //   - Nominatim calls are queued at least one second apart, retried once for 429/5xx/timeouts, and after a failure
 //     the online sources are skipped for a minute so offline use is not slowed down
@@ -272,8 +272,7 @@ export async function localArea(lon: number, lat: number): Promise<AreaInfo> {
 
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const LOCAL_ANSWER_TTL_MS = 2 * 60 * 1000;
-const STORE_KEY = "doh-area-cache-v1";
-const STORE_MAX_ENTRIES = 300;
+const MEMORY_MAX_ENTRIES = 300;
 const NEARBY_REUSE_METERS = 35;
 const NOMINATIM_MIN_GAP_MS = 1000;
 const NOMINATIM_TIMEOUT_MS = 3500;
@@ -296,7 +295,6 @@ const NON_TAMBON_TOWN_LABELS = new Set([
 const memory = new Map<string, { at: number; ttl: number; info: AreaInfo }>();
 const inflight = new Map<string, Promise<AreaInfo>>();
 const recent: Array<{ lon: number; lat: number; info: AreaInfo }> = [];
-let persisted: Record<string, { t: number; v: AreaInfo }> | null = null;
 let nominatimQueue: Promise<unknown> = Promise.resolve();
 let lastNominatimAt = 0;
 let nominatimDownUntil = 0;
@@ -312,7 +310,6 @@ export function resetAreaLookup() {
   memory.clear();
   inflight.clear();
   recent.length = 0;
-  persisted = null;
   nominatimQueue = Promise.resolve();
   lastNominatimAt = 0;
   nominatimDownUntil = 0;
@@ -321,11 +318,7 @@ export function resetAreaLookup() {
   googleDownUntil = 0;
   googleGeoConfirmed = false;
   googleGeoProbePromise = null;
-  try {
-    if (typeof window !== "undefined" && window.localStorage) window.localStorage.removeItem(STORE_KEY);
-  } catch {
-    // storage may be blocked; the in-memory cache still works
-  }
+
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -337,36 +330,12 @@ function metersBetween(lon1: number, lat1: number, lon2: number, lat2: number): 
   return Math.hypot(dx, dy);
 }
 
-function readStore(): Record<string, { t: number; v: AreaInfo }> {
-  if (persisted) return persisted;
-  const store: Record<string, { t: number; v: AreaInfo }> = {};
-  try {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const raw = window.localStorage.getItem(STORE_KEY);
-      const parsed = raw ? JSON.parse(raw) : null;
-      if (parsed && typeof parsed === "object") Object.assign(store, parsed);
-    }
-  } catch {
-    // unreadable storage: start empty
-  }
-  persisted = store;
-  return store;
-}
-
-function saveToStore(key: string, info: AreaInfo) {
-  const store = readStore();
-  store[key] = { t: Date.now(), v: info };
-  const keys = Object.keys(store);
-  if (keys.length > STORE_MAX_ENTRIES) {
-    keys
-      .sort((a, b) => store[a].t - store[b].t)
-      .slice(0, keys.length - STORE_MAX_ENTRIES)
-      .forEach((oldKey) => delete store[oldKey]);
-  }
-  try {
-    if (typeof window !== "undefined" && window.localStorage) window.localStorage.setItem(STORE_KEY, JSON.stringify(store));
-  } catch {
-    // quota or blocked storage: ignore
+function rememberArea(key: string, info: AreaInfo, ttl: number) {
+  memory.delete(key);
+  memory.set(key, { at: Date.now(), ttl, info });
+  if (memory.size > MEMORY_MAX_ENTRIES) {
+    const oldest = memory.keys().next().value;
+    if (oldest !== undefined) memory.delete(oldest);
   }
 }
 
@@ -595,12 +564,6 @@ export async function resolveArea(lon: number, lat: number, options: ResolveArea
   const hit = memory.get(key);
   if (hit && now - hit.at < hit.ttl) return hit.info;
 
-  const stored = readStore()[key];
-  if (stored && now - stored.t < CACHE_TTL_MS) {
-    memory.set(key, { at: now, ttl: CACHE_TTL_MS, info: stored.v });
-    return stored.v;
-  }
-
   // Only the area name is needed: reuse a nearby online answer within 35 m unless local boundary differs.
   if (!options.needRoad) {
     const localHint = await localArea(lon, lat);
@@ -619,15 +582,14 @@ export async function resolveArea(lon: number, lat: number, options: ResolveArea
   const task = (async () => {
     const online = await resolveOnline(lon, lat);
     if (online) {
-      memory.set(key, { at: Date.now(), ttl: CACHE_TTL_MS, info: online });
-      saveToStore(key, online);
+      rememberArea(key, online, CACHE_TTL_MS);
       recent.unshift({ lon, lat, info: online });
       if (recent.length > 12) recent.pop();
       return online;
     }
     // Offline or rate limited: answer locally, but remember it only briefly so a later call can upgrade it.
     const fallback = await localArea(lon, lat);
-    memory.set(key, { at: Date.now(), ttl: LOCAL_ANSWER_TTL_MS, info: fallback });
+    rememberArea(key, fallback, LOCAL_ANSWER_TTL_MS);
     return fallback;
   })().finally(() => {
     inflight.delete(key);

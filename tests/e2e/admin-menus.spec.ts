@@ -1048,6 +1048,32 @@ for (const kind of ["น้ำท่วม", "ทางเลี่ยง"] as c
   });
 }
 
+test("unsaved online map work stays in the open tab and never changes the previous browser draft", async ({
+  page, isMobile, baseURL,
+}) => {
+  const writes = await setupOfflineAdmin(page, new URL(baseURL!).origin);
+  const legacy = JSON.stringify({ savedAt: Date.now(), routeMode: "FLOOD", routeNo: "42" });
+  await page.addInitScript(([key, value]) => {
+    if (localStorage.getItem(key) === null) localStorage.setItem(key, value);
+  }, [legacyDraftKey, legacy]);
+  await page.goto(base + "/admin/");
+  await openOfflineAdminMenu(page, isMobile, "รายงานสถานการณ์น้ำท่วม");
+  await expect(page.getByText(/อยู่ในแท็บนี้เท่านั้น/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "กู้คืนร่างที่ค้างไว้" })).toHaveCount(0);
+
+  const field = page.getByPlaceholder("เช่น หน้า รร.บ้านดอนยาง ม.2 ต.ดอนยาง อ.หนองจิก");
+  const draft = "ร่างออนไลน์ทดสอบ ไม่ลงเบราว์เซอร์";
+  await field.fill(draft);
+  await page.waitForTimeout(750); // Pass the draft debounce deadline.
+  expect(await page.evaluate(key => localStorage.getItem(key), legacyDraftKey)).toBe(legacy);
+  await expect(field).toHaveValue(draft);
+  await page.reload();
+  await openOfflineAdminMenu(page, isMobile, "รายงานสถานการณ์น้ำท่วม");
+  await expect(field).not.toHaveValue(draft);
+  expect(await page.evaluate(key => localStorage.getItem(key), legacyDraftKey)).toBe(legacy);
+  expect(writes).toEqual([]);
+});
+
 test("offline detour editor cancels cleanly and only explicit online save submits once", async ({ page, context, isMobile, baseURL }) => {
   const writes = await setupOfflineAdmin(page, new URL(baseURL!).origin);
   await page.goto(base + "/admin/");

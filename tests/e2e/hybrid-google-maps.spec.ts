@@ -759,6 +759,10 @@ test.describe("Hybrid Google Maps Lookup & Detour Navigation", () => {
       expect(second.tambon).toBe("บานา");
       expect(googleGeoCalls).toBe(2);
 
+      const samePoint = await resolveArea(101.275, 6.865);
+      expect(samePoint.tambon).toBe("บานา");
+      expect(googleGeoCalls).toBe(2);
+
       // 13m east of second inside บานา -> reuses nearby within 35m when needRoad is false
       const nearSecond = await resolveArea(101.27512, 6.865);
       expect(nearSecond.tambon).toBe("บานา");
