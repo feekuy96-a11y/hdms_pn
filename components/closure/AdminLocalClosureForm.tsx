@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Construction, MapPin, Route, ImagePlus, Save, Layers, PencilLine, Undo2, Trash2, Check, Milestone, Flag, ClipboardList, MapPinCheck } from "lucide-react";
 import type { FloodRoute, SystemDataPayload } from "@/db/default-data";
 import { snapRouteAction } from "@/app/actions/doh-actions";
@@ -36,6 +36,18 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
   const incidentRoad=chapters.find(section=>routeKey(section.routeNo)===routeKey(incident.route_no)&&
     cleanHighwaySectionName(section.sectionName)===cleanHighwaySectionName(incident.section_name));
   const [open,setOpen]=useState(false);
+  const formTitleRef=useRef<HTMLHeadingElement>(null);
+  const openButtonRef=useRef<HTMLButtonElement>(null);
+  const returnToTrigger=useRef(false);
+  useEffect(()=>{
+    if(open) {
+      formTitleRef.current?.focus({preventScroll:true});
+      formTitleRef.current?.scrollIntoView({block:"start",inline:"nearest"});
+    } else if(returnToTrigger.current) {
+      returnToTrigger.current=false;
+      openButtonRef.current?.focus();
+    }
+  },[open]);
   const [record,setRecord]=useState<LocalClosureRecord>(()=>readLocalClosure(eventId)??{
     version:1,eventId,route:incidentRoad?.routeNo||"ถนนทั่วไป",section:incidentRoad?.sectionName||"",
     roadMode:incidentRoad?"HIGHWAY_KM":"MAP_AB",highwayGroupId:incidentRoad?.groupId,
@@ -200,12 +212,12 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
     <header className="flex items-start gap-3">
       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--status-danger-wash)] text-[var(--status-danger-ink)]"><Construction size={21} aria-hidden="true"/></span>
       <div className="min-w-0 space-y-0.5">
-        <h4 className="text-base font-bold">ข้อมูลปิดการจราจร</h4>
+        <h4 ref={formTitleRef} tabIndex={-1} className="scroll-mt-3 text-base font-bold focus:outline-none">ข้อมูลปิดการจราจร</h4>
         <p className={helper}>ปิดทั้งสองทิศทาง · บันทึกเฉพาะในเบราว์เซอร์นี้</p>
       </div>
     </header>
     {!open ? <div className="flex flex-wrap gap-2">
-      <button className={primary} type="button" onClick={()=>setOpen(true)}>{saved?"แก้ไขข้อมูลปิดการจราจร":"กรอกข้อมูลปิดการจราจร"}</button>
+      <button ref={openButtonRef} className={primary} type="button" onClick={()=>setOpen(true)}>{saved?"แก้ไขข้อมูลปิดการจราจร":"กรอกข้อมูลปิดการจราจร"}</button>
       {saved&&<a className={button} href={viewHref} target="_blank" rel="noopener">ดูบนแผนที่หน้าประชาชน</a>}
     </div> : <form className="grid min-w-0 gap-5" onSubmit={save}>
       <fieldset className={step}>
@@ -324,7 +336,7 @@ export function AdminLocalClosureForm({ incident, data, eventId }: {
       </fieldset>
       <StickyActionBar themed>
         <button type="submit" disabled={busy} data-hdms-primary className={primary}><Save size={16} aria-hidden="true"/>บันทึกข้อมูลปิดการจราจร</button>
-        <button type="button" className={button} disabled={busy} onClick={()=>{setPick(null);setOpen(false);}}>ย่อฟอร์ม</button>
+        <button type="button" className={button} disabled={busy} onClick={()=>{returnToTrigger.current=true;setPick(null);setOpen(false);}}>ย่อฟอร์ม</button>
         {feedback&&feedbackStage==="save"&&<p role="status" className="basis-full text-sm">{feedback}</p>}
       </StickyActionBar>
     </form>}

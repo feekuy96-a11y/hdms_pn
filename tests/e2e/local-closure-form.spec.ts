@@ -47,6 +47,11 @@ test("closure details, map and photo persist locally and appear on both pages on
   const actionBar=section.locator("[data-hdms-sticky-actions]");
   await expect(actionBar).toHaveCSS("position","sticky");
   await expect(actionBar).toBeInViewport();
+  await expect(section.getByRole("heading",{name:"ข้อมูลปิดการจราจร"})).toBeFocused();
+  const firstStep=section.getByRole("group",{name:"เลือกประเภทถนน"});
+  await expect(firstStep).toBeInViewport({ratio:1});
+  const [firstStepBox,actionBarBox]=await Promise.all([firstStep.boundingBox(),actionBar.boundingBox()]);
+  expect(firstStepBox!.y+firstStepBox!.height).toBeLessThanOrEqual(actionBarBox!.y);
   expect((await save.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await save.click();
   await expect(section.getByRole("status")).toContainText("ปักหมุด A และ B");
@@ -75,6 +80,7 @@ test("closure details, map and photo persist locally and appear on both pages on
   const href=await link.getAttribute("href");
   expect(href).toContain("?closure-view=");
   const publicPage=await context.newPage();
+  if(isMobile&&process.env.HDMS_CLOSURE_NARROW==="1") await publicPage.setViewportSize({width:360,height:800});
   await fixture(publicPage,origin,unexpected);
   await publicPage.goto(href!);
   await expect(publicPage.getByRole("heading",{name:"ข้อมูลปิดการจราจร"})).toBeVisible();
@@ -129,6 +135,8 @@ test("closure details, map and photo persist locally and appear on both pages on
   const reread=await open(page,isMobile);
   await reread.getByRole("button",{name:"แก้ไขข้อมูลปิดการจราจร"}).click();
   await expect(reread.getByLabel("เหตุผลที่ปิด")).toHaveValue("ระดับน้ำสูง");
+  await reread.getByRole("button",{name:"ย่อฟอร์ม"}).click();
+  await expect(reread.getByRole("button",{name:"แก้ไขข้อมูลปิดการจราจร"})).toBeFocused();
   await publicPage.goto(base+"/");
   await expect(publicPage.getByRole("heading",{name:"ข้อมูลปิดการจราจร"})).toHaveCount(0);
   const other=await browser.newContext();
