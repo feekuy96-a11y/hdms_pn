@@ -1,5 +1,7 @@
 "use client";
 
+import publicDisplayCopy from "@/config/public-display-copy.json";
+
 import React, { useEffect, useRef } from "react";
 import { useMotionPresence } from "@/components/ui/use-motion-presence";
 import { Waves, Map, Maximize2, Minimize2, Phone, Route, Search, X } from "lucide-react";
@@ -298,7 +300,7 @@ export function MobileCitizenDrawer({
                 {sidebarTab === "DETOUR" && hasCounts && detourList}
                 {readState === "ready" && ((sidebarTab === "FLOOD" && filteredFloods.length === 0) || (sidebarTab === "DETOUR" && filteredDetours.length === 0)) && (
                   <div className="rounded-xl border border-slate-700 p-4 text-sm text-slate-300">
-                    <p>{sidebarTab === "DETOUR" ? "ไม่พบเส้นทางเลี่ยงที่ตรงกับคำค้นหา" : totalFloodCount === 0 ? "ยังไม่มีรายงานจุดน้ำท่วม" : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p>
+                    <p>{sidebarTab === "DETOUR" ? "ไม่พบเส้นทางเลี่ยงที่ตรงกับคำค้นหา" : totalFloodCount === 0 ? publicDisplayCopy.emptyFloodReports : "ไม่พบจุดที่ตรงกับตัวกรอง"}</p>
                     {sidebarTab === "FLOOD" && totalFloodCount === 0 && <p className="mt-1 text-xs">ข้อมูลนี้ไม่ยืนยันว่าทุกเส้นทางปลอดภัย</p>}
                     {(searchQuery || selectedRouteFilter !== "ALL") && <button type="button" className="mt-2 min-h-11 font-bold text-amber-300" onClick={() => { setSearchQuery(""); setSelectedRouteFilter("ALL"); }}>ล้างตัวกรอง</button>}
                   </div>

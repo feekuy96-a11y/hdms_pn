@@ -7,6 +7,7 @@
 - Read `docs/CODEBASE_MAP.md` first to jump directly to target files and commands instead of scanning or grepping the whole repo.
 - Before editing, start here and read the current guide for **every affected topic** in the table below, not just the first match. If the scope expands, read the newly relevant guide before editing that area. For example, a road-closure form with a map pin and saved state needs the UI, Map/GIS, and Data guides. Report any required guide or verification you could not check.
 - Inspect only files needed for the assigned task. Preserve unrelated working-tree changes.
+- At each stage, use the [pre-CI checklist](docs/PRE_CI_CHECKLIST.md) to define expected results, trace dependencies, choose tests and record evidence. Use the GitHub CI gates required for the actual scope before release; focused local checks do not replace it.
 - During incremental edits, run `npm run check:fast` and `npx eslint <changed-files> --max-warnings=0`; run `npm run check:deploy` once before the PR for runtime changes. For a documentation-only edit, verify changed links, commands and scope; this does not change the configured GitHub gates.
 - Before editing, state the paths in scope. After editing, inspect `git diff --check` and the relevant diff.
 - Output diffs and concise verification results only; do not paste full source files or claim checks not run.
@@ -17,9 +18,9 @@
 | Work | Current source |
 | --- | --- |
 | UI, forms, responsive layout, accessibility | [UI Contract](docs/UI_CONTRACT.md); find the affected components and tests in [Codebase Map](docs/CODEBASE_MAP.md) |
-| Map, markers, geometric editing and GIS performance | [Architecture](docs/ARCHITECTURE.md) §5 and the relevant schema below. For how the map looks or responds to taps, read the UI Contract as well |
+| Map, markers, geometric editing and GIS performance | [Map module guide](docs/map-modules/README.md) and [Architecture](docs/ARCHITECTURE.md) §5 and the relevant schema below. For how the map looks or responds to taps, read the UI Contract as well |
 | Data schema, API, or auth/security boundary | [Architecture](docs/ARCHITECTURE.md) §§2–3, 6 and the active schema/Edge source below; [Production](PRODUCTION.md) records operational constraints |
-| Testing, CI scope, or troubleshooting a failing check | [Playbooks](docs/PLAYBOOKS.md) P2/P7 and the live [CI workflow](.github/workflows/ci.yml) |
+| Testing, CI scope, or troubleshooting a failing check | [Playbooks](docs/PLAYBOOKS.md) P2/P7, [CI scope](docs/CI_SCOPE.md) and the live [CI workflow](.github/workflows/ci.yml) |
 | Git, deployment, or rollback | [Playbooks](docs/PLAYBOOKS.md) P1/P6 and the live [Pages workflow](.github/workflows/deploy.yml) |
 | Public offline behavior and recovery | [Public offline](docs/PUBLIC_OFFLINE.md); the Admin reporting queue is separate and documented in Architecture |
 | Release facts and handover, not standing rules | [AI Handoff](docs/AI_HANDOFF.md), [Known Issues](docs/KNOWN_ISSUES.md) and [Changelog](docs/archive/history/CHANGELOG.md). Reverify time-sensitive claims |
@@ -34,6 +35,9 @@ Project rules live here; domain details live in the named current guide. Keep ar
 - Use `--reuse-build` for focused test-only edits. The managed runner verifies the app inputs, build environment (including `BASE_PATH`), and artifact identity before reuse. A mismatch triggers one fresh build. `--full` always builds fresh.
 - On E2E failure, inspect the first failing assertion and relevant trace before retrying. Check data readiness, viewport, overlays and server identity. Use action-specific timeouts for steps that should resolve quickly.
 - Run the shared flood and detour vertex-edit cases with `npm run test:e2e:local -- --reuse-build tests/e2e/admin-menus.spec.ts --grep @vertex-edit --workers=1`. Focused local runs stop at the first failure by default. Open the reported trace with `npx playwright show-trace <trace.zip>` before rerunning a narrowed case.
+- For shared map work, start at [the map module guide](docs/map-modules/README.md). Find the file and focused Playwright command by symptom. Reuse mocked records/fixtures so Admin and Public see the same inputs; do not use live records for regression tests.
+- During edits, run the smallest affected cases (reuse a build only when the managed runner confirms identity). Cover shared behavior deeply on the Public implementation once per relevant browser profile, and retain functional smoke checks in both pages, including mobile overlap, Admin-only edit actions, and the Pattani-boundary flood popup regression.
+- Keep full CI and offline checks for runtime map work as required release gates. Before reducing or rebalancing CI work, measure the slowest shard and individual retries against a comparable baseline; remove only proven duplicate checks without losing an assertion unique to a portal.
 - Poll CI with a compact status query. Fetch failed steps and the first actionable error instead of streaming repeated job lists or full logs. Keep all release checks required by the active workflow for the actual scope; do not bypass failures.
 - When measuring workflow cost, record substantive files opened, builds, E2E retries, and timeout time separately. These are workload indicators rather than account quota measurements.
 

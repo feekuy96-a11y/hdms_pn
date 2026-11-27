@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import publicDisplayCopy from "../../config/public-display-copy.json";
 
 const base = process.env.BASE_PATH || "";
 const enabled = process.env.HDMS_TEST_PUBLIC_OFFLINE === "1";
@@ -99,7 +100,7 @@ test("public service worker opens a warm offline reload and new tab with the sam
   });
   await page.reload();
   await expect(page.getByRole("alert").filter({ hasText: /ตรวจสอบข้อมูลล่าสุดไม่สำเร็จ/ })).toBeVisible();
-  await expect(page.getByText("ยังไม่มีรายงานจุดน้ำท่วม", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(publicDisplayCopy.emptyFloodReports, { exact: true })).toHaveCount(0);
   await expect(summary.getByRole("button", { name: /น้ำท่วม \d+ จุด/ })).toHaveCount(0);
   await page.evaluate(({ key, data }) => localStorage.setItem(key, data), stash);
 

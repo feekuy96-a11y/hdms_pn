@@ -128,6 +128,17 @@ for (const address of ["/", "/admin/"]) {
     await floodPopup.locator(".leaflet-popup-close-button").click();
     await expect(floodPopup).toHaveCount(0);
 
+    // On a narrow map, opening a flood popup may pan the second marker outside
+    // of the viewport. Test the next marker from the normal map view, without
+    // disabling the boundary layer or bypassing real touch hit testing.
+    if (isMobile) {
+      const layers = map.getByRole("button", { name: "เลเยอร์", exact: true });
+      await layers.click();
+      await map.getByRole("button", { name: "รีเซ็ต", exact: true }).click();
+      await expect(toggle).toBeChecked();
+      await layers.click();
+      await expect(toggle).not.toBeVisible();
+    }
     const detourMarker = map.locator('.leaflet-marker-icon[aria-label="ทางเลี่ยง: ปน.2043 ทดสอบหมุดทางเลี่ยง"]');
     if (isMobile) await detourMarker.tap();
     else await detourMarker.click();

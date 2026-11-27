@@ -3,7 +3,7 @@
 ทุก playbook ใช้ร่วมกับ [AGENTS.md](../AGENTS.md) และเอกสารปัจจุบันที่ไฟล์นั้นชี้ เลือกเฉพาะอันที่ตรงกับงาน
 
 ## P0 ก่อนเริ่มทุกงาน (1 นาที)
-1. จัดประเภทงาน: UI / DB / Edge Function / ประสิทธิภาพ / deploy / CI แดง / เอกสาร
+1. จัดประเภทงาน: UI / DB / Edge Function / ประสิทธิภาพ / deploy / CI แดง / เอกสาร แล้วใช้ [เช็กลิสต์ก่อนเข้า CI](PRE_CI_CHECKLIST.md) สำหรับเกณฑ์ผ่านและหลักฐานแต่ละช่วง
 2. `grep -rn "<คำสำคัญ>" docs/archive/history/CHANGELOG.md docs/BACKLOG.md docs/archive/history/SUPPLEMENTAL_RULES.md docs/archive/history/DECISION_LOG.md | head` — เคยทำ/ตัดสินใจเรื่องนี้ไว้หรือยัง
 3. ตรวจความเสี่ยงก่อนลงมือ — ถ้าแนวคิดมีปัญหา ชี้หลักฐานและเสนอทางเลือก
 
@@ -22,7 +22,7 @@
 ### การรัน E2E ในเครื่องแบบประหยัดเวลา (ตกลงแล้ว 2026-11-18)
 - ใช้ `PLAYWRIGHT_STATIC=1` ต่อ `out/` จาก `npm run build:pages` ให้ตรงกับ Production จริง ไม่ต้องรันรอบ `next start` ซ้ำ
 - รันเฉพาะไฟล์ `tests/e2e/*.spec.ts` ที่ตรงกับส่วนที่แก้ ร่วมกับ `tests/e2e/smoke.spec.ts` (ไม่ต้องรันทั้งชุดในเครื่อง) และจำกัดไม่เกิน 2 workers บน Windows (กำหนดไว้ใน `playwright.config.ts` แล้ว) เพื่อไม่ให้ Chromium แย่ง CPU จน timeout
-- ใช้ GitHub Actions (`ci.yml`) รันชุด E2E ฉบับเต็มบน static export รอบเดียวตอนเปิด PR
+- เลือกตาม [เกณฑ์ CI](CI_SCOPE.md) ไม่ข้ามด่านที่กำหนด งานที่กระทบพฤติกรรมเว็บหรือแผนที่ตรวจ static export ด้วย browser 2 ชุด, offline ในชุดแรก และสรุป `verify`
 
 ## P3 งานฐานข้อมูล / RPC
 1. ตรวจนิยามจริง: `SELECT pg_get_functiondef('public.<fn>()'::regprocedure);` (ขอให้เจ้าของรัน หรืออ่านผ่าน MCP แบบอ่านอย่างเดียว) — ห้ามเชื่อไฟล์ใน `db/*.sql`
