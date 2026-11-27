@@ -49,6 +49,29 @@ test("incident and detour edit dialogs keep keyboard focus", async ({ page }) =>
   await fwdDurationInput.fill("28");
   await expect(fwdDurationInput).toHaveValue("28");
 
+  const attach = detour.getByRole("button", { name: "เลือกไฟล์: แนบภาพจุดเริ่มต้น A", exact: true });
+  await attach.focus();
+  const scrollBefore = await detour.evaluate(node=>node.scrollTop);
+  const [cancelled] = await Promise.all([page.waitForEvent("filechooser"), attach.press("Space")]);
+  await expect(attach).toBeFocused();
+  await expect(detour.getByLabel("แนบภาพจุดเริ่มต้น A", { exact: true })).toBeHidden();
+  expect(await detour.evaluate(node=>node.scrollTop)).toBe(scrollBefore);
+  await cancelled.setFiles([]);
+  await expect(detour).toBeVisible();
+  await expect(attach).toBeFocused();
+  const [chosen] = await Promise.all([page.waitForEvent("filechooser"), attach.press("Enter")]);
+  await chosen.setFiles({name:"test.png",mimeType:"image/png",
+    buffer:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z4YQAAAAASUVORK5CYII=","base64")});
+  const preview = detour.getByRole("img", { name: "ภาพทางเข้าจุดเริ่มต้น A", exact: true });
+  await expect(preview).toBeVisible();
+  await expect(attach).toContainText("เปลี่ยนภาพ");
+  await expect(attach).toBeFocused();
+  const existingPreview = await preview.getAttribute("src");
+  const [replacement] = await Promise.all([page.waitForEvent("filechooser"), attach.press("Enter")]);
+  await replacement.setFiles([]);
+  await expect(preview).toHaveAttribute("src", existingPreview!);
+  await expect(attach).toBeFocused();
+
   await detour.getByRole("button", { name: "บันทึกข้อมูล" }).focus();
   await page.keyboard.press("Tab");
   await expect(detour.getByRole("button", { name: "ปิดหน้าต่างแก้ไขเส้นทางเลี่ยง" })).toBeFocused();

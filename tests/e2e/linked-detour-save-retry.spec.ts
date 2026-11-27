@@ -89,9 +89,30 @@ for (const firstReply of ["pending", "disconnected"] as const) {
     await expect(page.getByText(/คำนวณทางเลี่ยงตามถนนสำเร็จ/)).toBeVisible();
     expect(routeRequests).toHaveLength(1);
     expect(routeRequests[0]).toContain("101.21,6.82;101.23,6.83");
-    await page.getByLabel("แนบภาพจุดเริ่มต้น A", { exact: true }).setInputFiles({ name: "a.png", mimeType: "image/png", buffer: image });
+    const attach = async (name: string, filename: string) => {
+      const input = page.getByLabel(name, { exact: true });
+      const button = page.getByRole("button", { name: `เลือกไฟล์: ${name}`, exact: true });
+      // On the baseline the only click target is the wrapping label.
+      const trigger = await button.count() ? button : page.locator("label").filter({has: input});
+      await trigger.evaluate(el => el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" }));
+      const before = await trigger.boundingBox();
+      const scroll = await page.evaluate(() => ({ x:scrollX, y:scrollY }));
+      const [cancelled] = await Promise.all([page.waitForEvent("filechooser"), trigger.click()]);
+      await expect(input).toBeHidden();
+      await expect(button).toBeFocused();
+      expect(await page.evaluate(() => ({x:scrollX,y:scrollY}))).toEqual(scroll);
+      expect(Math.abs((await trigger.boundingBox())!.y - before!.y)).toBeLessThan(2);
+      const beforeCancel = uploads.length;
+      await cancelled.setFiles([]);
+      expect(uploads).toHaveLength(beforeCancel);
+      await expect(button).toBeFocused();
+      const [chosen] = await Promise.all([page.waitForEvent("filechooser"), button.click()]);
+      await chosen.setFiles({ name:filename, mimeType:"image/png", buffer:image });
+      await expect(page.getByText(/แนบภาพบริเวณทางเข้า.*เรียบร้อย/)).toBeVisible();
+    };
+    await attach("แนบภาพจุดเริ่มต้น A","a.png");
     await page.getByRole("tab", { name: /จุด B \(ปลายทาง\)/ }).click();
-    await page.getByLabel("แนบภาพจุดสิ้นสุด B", { exact: true }).setInputFiles({ name: "b.png", mimeType: "image/png", buffer: image });
+    await attach("แนบภาพจุดสิ้นสุด B","b.png");
     await page.getByRole("button", { name: /บันทึกทางเลี่ยงเข้าสู่ระบบสารสนเทศ/ }).click();
 
     const notice = page.getByRole("dialog", { name: firstReply === "pending"

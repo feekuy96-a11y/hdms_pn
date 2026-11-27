@@ -1,5 +1,7 @@
 "use client";
 
+import { DetourPointPhotoInput } from "./DetourPointPhotoInput";
+
 import React from "react";
 import { AdminOfflineFormNotice, isAdminFormOffline, useAdminOfflineForm } from "./AdminOfflineFormNotice";
 import {
@@ -755,16 +757,12 @@ export function DetourEditModal({
                           ล้างพิกัดจุด {pointLabel}
                         </button>
                       )}
-                      <label className="cursor-pointer rounded-md border border-emerald-700/70 bg-emerald-950/40 hover:bg-emerald-900/60 px-2 py-0.5 text-[10px] font-heading font-bold text-emerald-200 transition">
-                        {photoUrl ? "เปลี่ยนภาพ" : `+ แนบภาพ${pointName}`}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          aria-label={`แนบภาพ${pointName}`}
-                          className="sr-only"
-                          onChange={(e) => onPointPhotoUpload(activePointTab, e)}
-                        />
-                      </label>
+                      <DetourPointPhotoInput
+                        compact
+                        label={photoUrl ? "เปลี่ยนภาพ" : `+ แนบภาพ${pointName}`}
+                        ariaLabel={`แนบภาพ${pointName}`}
+                        onChange={(e) => onPointPhotoUpload(activePointTab, e)}
+                      />
                     </div>
                   </div>
 
