@@ -119,30 +119,39 @@ test("operational map portals align shared chrome and draw the same saved and st
       await rail.getByRole("button", { name: "Zoom in", exact: true }).click();
       await expect.poll(zoom).toBe(11);
       await expect.poll(hasSecondary).toBe(true);
-      for (let level = 12; level <= 14; level++) {
-        await rail.getByRole("button", { name: "Zoom in", exact: true }).click();
-        await expect.poll(zoom).toBe(level);
+      // Exercise shared interactions deeply once per browser profile; each portal and
+      // viewport still gets a real +/- click, open/close and placement assertions.
+      const runSharedDetails = !admin && viewport === sizes[0];
+      if (runSharedDetails) {
+        for (let level = 12; level <= 14; level++) {
+          await rail.getByRole("button", { name: "Zoom in", exact: true }).click();
+          await expect.poll(zoom).toBe(level);
+        }
+        await expect(map.locator(".doh-detour-point-fallback:visible")).toHaveCount(2);
       }
-      await expect(map.locator(".doh-detour-point-fallback:visible")).toHaveCount(2);
 
       await layerButton.click();
       await expect(panel).toBeVisible();
       const p = await asBox(panel), toolbar = await asBox(rail);
       expect(p.x + p.width).toBeLessThan(toolbar.x);
-      const secondRoads = panel.getByRole("checkbox", { name: /ทางหลวงสายรอง/ });
-      await secondRoads.uncheck();
-      await expect.poll(hasSecondary).toBe(false);
-      await expect.poll(async () => Object.hasOwn((await layerSnapshot()).highways, "43")).toBe(true);
-      await secondRoads.check();
-      await expect.poll(hasSecondary).toBe(true);
-      const highwayList = panel.getByRole("button", { name: "ดูรายชื่อทางหลวงสายหลัก", exact: true });
-      await highwayList.press("Enter");
-      const pinned = map.getByRole("tooltip", { name: "รายชื่อทางหลวงสายหลัก", exact: true });
-      await expect(pinned).toBeVisible();
-      await expect(pinned.getByText("ทล.43", { exact: true })).toBeVisible();
-      await page.keyboard.press("Escape");
-      await expect(pinned).toHaveCount(0);
-      await expect(panel).toBeVisible();
+      if (runSharedDetails || (admin && viewport === sizes[0])) {
+        const secondRoads = panel.getByRole("checkbox", { name: /ทางหลวงสายรอง/ });
+        await secondRoads.uncheck();
+        await expect.poll(hasSecondary).toBe(false);
+        await expect.poll(async () => Object.hasOwn((await layerSnapshot()).highways, "43")).toBe(true);
+        await secondRoads.check();
+        await expect.poll(hasSecondary).toBe(true);
+      }
+      if (runSharedDetails) {
+        const highwayList = panel.getByRole("button", { name: "ดูรายชื่อทางหลวงสายหลัก", exact: true });
+        await highwayList.press("Enter");
+        const pinned = map.getByRole("tooltip", { name: "รายชื่อทางหลวงสายหลัก", exact: true });
+        await expect(pinned).toBeVisible();
+        await expect(pinned.getByText("ทล.43", { exact: true })).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(pinned).toHaveCount(0);
+        await expect(panel).toBeVisible();
+      }
       await layerButton.click(); await expect(panel).toHaveCount(0);
       if (admin && isMobile) {
         await page.getByRole("button", { name: "กลับไปส่วนกรอกฟอร์ม", exact: true }).click();

@@ -6,13 +6,12 @@ import Link from "next/link";
 import { websiteEmblemClip } from "@/lib/website-emblem";
 import "./citizen-theme.css";
 import "./citizen-field-map.css";
-import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { getPublicSystemDataAction } from "@/app/actions/doh-actions";
 import { AdviceText } from "@/components/AdviceText";
 import { INITIAL_SYSTEM_DATA, SystemDataPayload, FloodRoute, DetourRoute } from "@/db/default-data";
 import { createClient } from "@/lib/supabase/client";
-import type { GisMapViewportApi } from "@/components/map/LongdoGisMap";
+import { SharedOperationalMap, type GisMapViewportApi } from "@/components/map/SharedOperationalMap";
 import { useSharedGisFocus } from "@/components/map/useSharedGisFocus";
 import { PUBLIC_READ_MESSAGES } from "@/components/public/public-read-state";
 import { CitizenPhotoViewer, publicPhotoSource, type CitizenPhoto } from "@/components/public/CitizenPhotoViewer";
@@ -20,29 +19,10 @@ import { CitizenMapStatus, recordedPassability, mapPassabilityLabel, type MapPas
 import { CitizenInstallPrompt } from "@/components/public/CitizenInstallPrompt";
 import { CitizenOfficeDirectory } from "@/components/public/CitizenOfficeDirectory";
 import { CitizenThemeSymbol } from "@/components/public/CitizenThemeSymbol";
-import { GisFocusModeBar } from "@/components/public/GisFocusModeBar";
+import { GisFocusModeBar } from "@/components/map/GisFocusModeBar";
 import type { GisFocusDirection, GisFocusViewportSnapshot } from "@/lib/gis-focus-mode";
 
-const LongdoGisMap = dynamic(
-  () => import("@/components/map/LongdoGisMap").then((mod) => mod.LongdoGisMap),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="h-full min-h-[350px] w-full bg-surface-canvas p-4" role="status" aria-live="polite">
-        <span className="sr-only">กำลังโหลดแผนที่ GIS ปัตตานี</span>
-        <div aria-hidden="true" className="h-full min-h-[318px] rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <div className="h-5 w-40 rounded-md bg-slate-700/70 animate-pulse motion-reduce:animate-none" />
-          <div className="mt-4 h-8 w-56 rounded-xl bg-slate-800/80 animate-pulse motion-reduce:animate-none" />
-          <div className="mt-6 grid h-[calc(100%-7rem)] grid-cols-3 gap-3 opacity-60">
-            <div className="rounded-xl bg-slate-800/80 animate-pulse motion-reduce:animate-none" />
-            <div className="rounded-xl bg-slate-700/50 animate-pulse motion-reduce:animate-none" />
-            <div className="rounded-xl bg-slate-800/70 animate-pulse motion-reduce:animate-none" />
-          </div>
-        </div>
-      </div>
-    ),
-  }
-);
+
 import {
   AlertTriangle,
   Sun,
@@ -921,7 +901,7 @@ export default function HomePage() {
               </div>
             )
           )}
-          <LongdoGisMap
+          <SharedOperationalMap
             isFilterActive={isFilterActive}
             searchQuery={searchQuery}
             highlightHighwayRouteNos={highlightHighwayRouteNos}
