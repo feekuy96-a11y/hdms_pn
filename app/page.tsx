@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LocalClosurePublicPage, useLocalClosureEvent } from "@/components/closure/LocalClosurePublicPage";
 import Link from "next/link";
 import { websiteEmblemClip } from "@/lib/website-emblem";
 import "./citizen-theme.css";
@@ -132,6 +133,7 @@ function isFocusableAfterFocusExit(element: Element | null): element is HTMLElem
 }
 
 export default function HomePage() {
+  const localClosureEvent = useLocalClosureEvent();
   const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL?.startsWith("https://")
     ? process.env.NEXT_PUBLIC_ADMIN_URL
     : null;
@@ -617,6 +619,8 @@ export default function HomePage() {
     </section>
   );
 
+
+  if (localClosureEvent) return <LocalClosurePublicPage key={localClosureEvent} eventId={localClosureEvent} data={systemData}/>;
 
   return (
     <div data-citizen-theme={citizenTheme} className="citizen-ui doh-readable min-h-dvh flex flex-col bg-surface-canvas text-slate-100 font-body"

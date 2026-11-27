@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Link2 } from "lucide-react";
+import { AdminLocalClosureForm } from "@/components/closure/AdminLocalClosureForm";
 import type { FloodRoute, SystemDataPayload } from "@/db/default-data";
 import {
   getEventIdForFloodRoute,
@@ -203,6 +204,9 @@ export function IncidentDetailModal({
             </ul>
           )}
         </div>
+
+        <AdminLocalClosureForm key={viewingEventId ?? viewingIncident.id}
+          eventId={viewingEventId ?? viewingIncident.id} incident={viewingIncident} data={systemData}/>
 
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button
