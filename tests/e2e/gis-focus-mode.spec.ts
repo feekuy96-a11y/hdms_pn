@@ -1336,12 +1336,15 @@ test("focus retains readable direction controls without the duplicate advice pan
   const guide = popup.locator("[data-endpoint-guide]");
   await expect(popup).toHaveAttribute("data-detour-endpoint", "END");
   await expect(guide).toContainText("ใช้สะพาน");
-  await expect(guide).not.toContainText("เลี้ยวซ้ายที่แยก");
+  await expect(guide.locator('[data-guidance-maneuver="turn_left"]')).toHaveCount(0);
   await expect(retiredPanel).toHaveCount(0);
   await forward.click();
   await expect(popup).toHaveCount(1);
   await expect(popup).toHaveAttribute("data-detour-endpoint", "START");
-  await expect(guide).toContainText("เลี้ยวซ้ายที่แยก");
+  const turn = guide.locator('[data-guidance-maneuver="turn_left"]');
+  await expect(turn.locator(".doh-detour-step-title")).toHaveText("เลี้ยวซ้าย");
+  await expect(turn.locator(".doh-detour-step-detail")).toHaveText("ที่แยก");
+  await expect(turn.locator("svg polyline")).toHaveAttribute("points", "9 10 4 15 9 20");
   await expect(guide).not.toContainText("ใช้สะพาน");
   await page.locator(".leaflet-popup-close-button").click();
   await expect(popup).toHaveCount(0);
@@ -1799,10 +1802,10 @@ test("detour summary and endpoint guide keep compact text spacing and readable r
     const layout = await cards.evaluateAll(nodes => nodes.map(node => {
       const card = node as HTMLElement;
       const p = card.querySelector<HTMLElement>(".doh-detour-step-detail");
-      const badge = card.querySelector<HTMLElement>(".doh-detour-step-badge")!;
+      const badge = card.querySelector<HTMLElement>(".doh-detour-step-badge");
       return {
         horizontalOverflow: card.scrollWidth - card.clientWidth,
-        badge: getComputedStyle(badge).whiteSpace,
+        badge: badge ? getComputedStyle(badge).whiteSpace : "nowrap",
         paragraphGap: p ? parseFloat(getComputedStyle(p).marginTop) : 0,
         paragraphEnd: p ? parseFloat(getComputedStyle(p).marginBottom) : 0,
         lineHeight: parseFloat(getComputedStyle(card).lineHeight),

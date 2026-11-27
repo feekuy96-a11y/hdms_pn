@@ -311,8 +311,9 @@ function getDetourStepIconSvg(iconType: DetourTimelineStep["iconType"]): string 
       return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon doh-detour-step-icon--uturn shrink-0" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11"/></svg>`;
     case "roundabout":
       return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon doh-detour-step-icon--guide shrink-0" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`;
+    case "instruction":
+      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" class="hdms-guide-icon shrink-0" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>`;
     case "straight":
-    default:
       return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="hdms-guide-icon doh-detour-step-icon--turn shrink-0" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
   }
 }
@@ -324,7 +325,7 @@ function buildDetourStepsHtml(steps: DetourTimelineStep[]): string {
       const iconSvg = getDetourStepIconSvg(step.iconType);
 
       return `
-      <li class="doh-detour-step-row relative flex items-start">
+      <li class="doh-detour-step-row relative flex items-start" data-guidance-maneuver="${step.iconType}">
         ${!isLast ? `<div class="doh-detour-timeline-line absolute left-[0.6875rem] top-6 bottom-[-8px] border-l-2 border-dashed border-amber-500/45" aria-hidden="true"></div>` : ""}
         <div class="doh-detour-step-number hdms-guide-number relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black tabular-nums shadow" aria-hidden="true">
           ${step.stepNumber}
@@ -335,9 +336,9 @@ function buildDetourStepsHtml(steps: DetourTimelineStep[]): string {
               ${iconSvg}
               <span class="doh-detour-step-title hdms-guide-title font-bold text-xs font-heading break-words">${escapeHtml(step.title)}</span>
             </div>
-            <span class="doh-detour-step-badge hdms-guide-badge shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold">
+            ${step.badge ? `<span class="doh-detour-step-badge hdms-guide-badge shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold">
               ${escapeHtml(step.badge)}
-            </span>
+            </span>` : ""}
           </div>
           ${step.detail ? `<p class="doh-detour-step-detail hdms-guide-copy mt-1 text-xs leading-relaxed break-words [overflow-wrap:anywhere]">${escapeHtml(step.detail)}</p>` : ""}
         </div>
@@ -718,10 +719,7 @@ function buildEndpointDirectionGuide(detour: DetourRoute, direction: DetourDirec
       condition,
       detourDurationSeconds(detour.detour_meta, direction)
     );
-    // The presentation layer can suggest placeholders; the endpoint only shows saved steps.
-    const savedSteps: DetourTimelineStep[] = steps.length === 1
-      ? [{ stepNumber: 1, iconType: "straight", title: steps[0], detail: "", badge: "1" }]
-      : timeline.steps;
+    const savedSteps = timeline.steps;
     const directions = notice || !steps.length
       ? `<p>${escapeHtml(notice || "ยังไม่มีคำแนะนำที่บันทึกในทิศทางนี้")}</p>`
       : `<ol class="doh-detour-step-list m-0 list-none p-0" role="list">${buildDetourStepsHtml(savedSteps)}</ol>`;

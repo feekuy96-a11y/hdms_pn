@@ -55,7 +55,7 @@ export function parseDetourAdvice(rawAdvice: string): { steps: string[]; notes: 
   const steps: string[] = [];
   const notes: string[] = [];
   for (const entry of normalized.split(/\n+/).map((line) => line.trim()).filter(Boolean)) {
-    if (/^={2,}\s*.+?\s*={2,}$/.test(entry)) continue;
+    if (/^={2,}\s*.+?\s*={2,}$/.test(entry) || /^(?:ทิศทาง)?ขา(?:ไป|กลับ)\s*[:：]$/.test(entry)) continue;
     if (/^[-•–]\s*/.test(entry) || /^(?:รวมระยะทาง|สภาพเส้นทาง|หมายเหตุ)/i.test(entry)) {
       notes.push(entry.replace(/^[-•–]\s*/, ""));
     } else {
@@ -92,6 +92,7 @@ export interface DetourTimelineStep {
     | "uturn"
     | "roundabout"
     | "straight"
+    | "instruction"
     | "end";
   title: string;
   detail: string;
@@ -113,20 +114,70 @@ function extractStartStepBadge(stepText: string): string {
   return kmMatch ? `กม. ${kmMatch[1]}` : "0 กม.";
 }
 
-function resolveStepIconType(rawStep: string): DetourTimelineStep["iconType"] {
-  const text = rawStep.trim();
-  if (/วงเวียน/.test(text)) return "roundabout";
-  if (/กลับรถ|ยูเทิร์น/i.test(text)) return "uturn";
-  if (/เลี้ยวซ้าย|หักซ้าย/.test(text)) return "turn_left";
-  if (/เลี้ยวขวา|หักขวา/.test(text)) return "turn_right";
-  if (/เบี่ยงซ้าย|ชิดซ้าย|ทางออก(?:ทาง)?ซ้าย|แยกซ้าย/.test(text)) return "slight_left";
-  if (/เบี่ยงขวา|ชิดขวา|ทางออก(?:ทาง)?ขวา|แยกขวา/.test(text)) return "slight_right";
-  if (/ตรงไป|เดินทางต่อไป|ขับตรง|มุ่งหน้า/.test(text)) return "straight";
-  return "straight";
+// Classify the leading instruction, not a road name or another maneuver mentioned later.
+// Keep meaningful original wording (e.g. an exit number) in the step's description.
+const STEP_PREFIXES: ReadonlyArray<{ prefix: RegExp; iconType: DetourTimelineStep["iconType"]; title?: string }> = [
+  { prefix: /^(?:จุดเริ่มต้น|เริ่มต้น)(?=\s|[:：]|ขา(?:ไป|กลับ)|$)/, iconType: "start", title: "จุดเริ่มต้น" },
+  { prefix: /^(?:จุดสิ้นสุด|สิ้นสุด(?=\s|[:：]|$)|ถึงจุดบรรจบทางหลวงสายหลัก|ถึงจุดบรรจบ|ถึงจุดหมาย)/, iconType: "end", title: "จุดสิ้นสุด" },
+  { prefix: /^(?:สุดทาง[ \t]*)?(?:เลี้ยวซ้าย(?:หักศอก)?|หักซ้าย)/, iconType: "turn_left" },
+  { prefix: /^(?:สุดทาง[ \t]*)?(?:เลี้ยวขวา(?:หักศอก)?|หักขวา)/, iconType: "turn_right" },
+  { prefix: /^(?:สุดทาง[ \t]*)?(?:กลับรถ|ยูเทิร์น)/i, iconType: "uturn" },
+  { prefix: /^(?:เข้าสู่วงเวียน|เมื่อถึงวงเวียน|ผ่านวงเวียน|ออกจากวงเวียน)/, iconType: "roundabout" },
+  { prefix: /^(?:เบี่ยงซ้าย|ชิดซ้าย|ใช้ทางออก(?:ทาง)?ซ้าย|แยกซ้าย)/, iconType: "slight_left" },
+  { prefix: /^(?:เบี่ยงขวา|ชิดขวา|ใช้ทางออก(?:ทาง)?ขวา|แยกขวา)/, iconType: "slight_right" },
+  { prefix: /^(?:ตรงไป(?:ต่อเนื่อง)?|เดินทางต่อไป|ขับตรง(?:ไป)?|มุ่งหน้า)/, iconType: "straight" },
+];
+
+export function presentSavedDetourStep(raw: string, stepNumber: number): DetourTimelineStep {
+  const distance = raw.match(/\s*\((?:ระยะทาง\s*)?([0-9.]+\s*(?:ม\.|กม\.))\)\s*$/);
+  const text = (distance ? raw.slice(0, distance.index) : raw).trim();
+  for (const { prefix, iconType, title } of STEP_PREFIXES) {
+    const lead = text.match(prefix)?.[0];
+    if (!lead) continue;
+    let detail = text.slice(lead.length).replace(/^\s*[:：]\s*/, "").trim();
+    // For a legacy arrival phrase, keep the original meaning underneath the common title.
+    if (iconType === "end" && /^(?:ถึงจุดบรรจบ|ถึงจุดหมาย)/.test(lead)) detail = text;
+    return {
+      stepNumber,
+      iconType,
+      title: title || lead,
+      detail,
+      badge: iconType === "start" ? extractStartStepBadge(raw) :
+        iconType === "end" ? "" : distance?.[1] || "",
+    };
+  }
+  const labelled = text.match(/^(คำแนะนำ|ใช้ทางออก|ใช้ทางเชื่อม|เลี้ยว)\s*[:：]\s*(.+)$/);
+  return { stepNumber, iconType: "instruction", title: labelled?.[1] || text, detail: labelled?.[2] || "", badge: distance?.[1] || "" };
 }
 
-const STEP_VERB_REGEX =
-  /^(?:เมื่อถึงวงเวียน\s*ให้ใช้ทางออกที่\s*\d+\s*มุ่งหน้าสู่|สุดทาง\s*(?:เลี้ยวซ้ายเข้าสู่|เลี้ยวขวาเข้าสู่|กลับรถเข้าสู่|มุ่งหน้าเข้าสู่)|(?:เลี้ยวซ้าย|เลี้ยวขวา)(?:หักศอก)?(?:เข้าสู่|ไปตาม|ผ่านวงเวียนมุ่งหน้าสู่)|(?:เบี่ยงซ้าย|เบี่ยงขวา|ชิดซ้าย|ชิดขวา)(?:เข้าสู่|ตาม)|(?:ใช้ทางออกซ้าย|ใช้ทางออกขวา|ใช้ทางออกทางซ้าย|ใช้ทางออกทางขวา)เข้าสู่|ตรงไป(?:ต่อเนื่อง)?(?:ผ่านวงเวียนมุ่งหน้าสู่|ตาม)|เดินทางต่อไปตามเส้นทาง|เดินทางต่อไปตาม|ขับตรง(?:ไป|ตาม)|เข้าสู่วงเวียน(?:\s*\([^)]+\))?\s*มุ่งหน้าสู่|กลับรถ(?:เข้าสู่|ไปตาม)|เบี่ยงเข้าสู่|เลี้ยวเข้าสู่|มุ่งหน้า)/;
+/** Use the same leading labels for machine-generated instructions and the manual form. */
+export function formatGeneratedDetourStep(text: string): string {
+  const parsed = presentSavedDetourStep(text, 1);
+  const sourceTitle = parsed.title;
+  if (parsed.iconType === "start" || parsed.iconType === "end") return "";
+  if (parsed.iconType === "instruction") {
+    if (parsed.detail) return `${sourceTitle}: ${parsed.detail}`;
+    return sourceTitle ? `คำแนะนำ: ${sourceTitle}` : "";
+  }
+  const title = parsed.iconType === "turn_left" ? "เลี้ยวซ้าย" :
+    parsed.iconType === "turn_right" ? "เลี้ยวขวา" :
+    parsed.iconType === "uturn" ? "กลับรถ" :
+    parsed.iconType === "straight" ? "ตรงไป" :
+    sourceTitle === "เมื่อถึงวงเวียน" ? "เข้าสู่วงเวียน" :
+    sourceTitle;
+  const qualifiers = [
+    sourceTitle.startsWith("สุดทาง") && "ที่ปลายถนน",
+    sourceTitle.includes("หักศอก") && "หักศอก",
+    sourceTitle.endsWith("ต่อเนื่อง") && "ต่อเนื่อง",
+  ].filter(Boolean);
+  const detail = [...qualifiers, parsed.detail].filter(Boolean).join(" ");
+  return detail ? `${title}: ${detail}` : title;
+}
+
+/** A lone route step covering the whole route should not repeat its total as a step badge. */
+export function stepRepeatsRouteTotal(stepMeters: number, totalMeters: number): boolean {
+  return stepMeters > 0 && totalMeters > 0 && Math.abs(stepMeters - totalMeters) < 1;
+}
 
 /**
  * Duration in seconds for the chosen direction when genuinely recorded in detour_meta.
@@ -245,133 +296,30 @@ export function getDetourTimelinePresentation(
   // 4. สร้างโครงสร้าง Steps
   const steps: DetourTimelineStep[] = [];
   let directionNotice: string | undefined;
-  const endBadge = totalDistanceKm > 0 ? `${totalDistanceKm.toFixed(1)} กม.` : "ปลายทาง";
 
   if (rawSteps.length === 0) {
-    // กรณีไม่มีบันทึกขั้นตอน สร้างขั้นตอนมาตรฐาน 2 จุด
-    steps.push({
-      stepNumber: 1,
-      iconType: "start",
-      title: "จุดเริ่มต้น",
-      detail: startLocationHint ? `บริเวณ ${startLocationHint}` : "จุดเริ่มต้นเส้นทางเลี่ยง",
-      badge: "0 กม.",
-    });
-    steps.push({
-      stepNumber: 2,
-      iconType: "end",
-      title: "ถึงจุดบรรจบทางหลวงสายหลัก",
-      detail: endLocationHint ? `${endLocationHint} สัญจรต่อได้ตามปกติ` : "สัญจรต่อได้ตามปกติ",
-      badge: endBadge,
-    });
-  } else if (rawSteps.length === 1) {
-    const single = rawSteps[0];
-    if (/^เส้นทางเลี่ยงนี้เปิดใช้งานเฉพาะ/.test(single)) {
-      directionNotice = single;
-    } else if (/^ยังไม่มีคำแนะนำ/.test(single)) {
-      directionNotice = single;
-      const isReverseNotice = single.includes("ขากลับ") || single.includes("B → A");
-      steps.push({
-        stepNumber: 1,
-        iconType: "start",
-        title: isReverseNotice ? "จุดเริ่มต้น (จุด B)" : "จุดเริ่มต้น",
-        detail: startLocationHint
-          ? `บริเวณ ${startLocationHint}`
-          : isReverseNotice
-            ? "จุดเริ่มต้นฝั่งขากลับ (B → A)"
-            : "จุดเริ่มต้นเส้นทางเลี่ยง",
-        badge: "0 กม.",
-      });
-      steps.push({
-        stepNumber: 2,
-        iconType: "end",
-        title: isReverseNotice ? "ถึงจุดบรรจบทางหลวงสายหลัก (จุด A)" : "ถึงจุดบรรจบทางหลวงสายหลัก",
-        detail: endLocationHint ? `${endLocationHint} — ${single}` : single,
-        badge: endBadge,
-      });
-    } else {
-      steps.push({
-        stepNumber: 1,
-        iconType: "start",
-        title: "จุดเริ่มต้น",
-        detail: single.replace(/^จุดเริ่มต้น:\s*/, "") || (startLocationHint ? `บริเวณ ${startLocationHint}` : "จุดเริ่มต้นเส้นทางเลี่ยง"),
-        badge: extractStartStepBadge(single),
-      });
-      steps.push({
-        stepNumber: 2,
-        iconType: "end",
-        title: "ถึงจุดบรรจบทางหลวงสายหลัก",
-        detail: endLocationHint ? `${endLocationHint} สัญจรต่อได้ตามปกติ` : "สัญจรต่อได้ตามปกติ",
-        badge: endBadge,
-      });
-    }
+    steps.push(
+      { stepNumber: 1, iconType: "start", title: "จุดเริ่มต้น", detail: startLocationHint, badge: "0 กม." },
+      { stepNumber: 2, iconType: "end", title: "จุดสิ้นสุด", detail: endLocationHint, badge: "" }
+    );
+  } else if (rawSteps.length === 1 && /^(?:เส้นทางเลี่ยงนี้เปิดใช้งานเฉพาะ|ยังไม่มีคำแนะนำ)/.test(rawSteps[0])) {
+    directionNotice = rawSteps[0];
   } else {
-    // มีตั้งแต่ 2 ขั้นตอนขึ้นไป
-    rawSteps.forEach((rawStep, index) => {
-      const isFirst = index === 0;
-      const isLast = index === rawSteps.length - 1;
-
-      if (isFirst) {
-        let detail = rawStep;
-        if (/^จุดเริ่มต้น:\s*/.test(detail)) {
-          detail = detail.replace(/^จุดเริ่มต้น:\s*/, "");
-        }
-        steps.push({
-          stepNumber: 1,
-          iconType: "start",
-          title: "จุดเริ่มต้น",
-          detail: detail || (startLocationHint ? `บริเวณ ${startLocationHint}` : "จุดเริ่มต้น"),
-          badge: extractStartStepBadge(rawStep),
-        });
-      } else if (isLast) {
-        const cleanLast = rawStep
-          .replace(/^(?:จุดสิ้นสุด\s*[:：]\s*)?(?:ถึงจุดบรรจบทางหลวงสายหลัก|ถึงจุดบรรจบ)\s*[:：]?\s*/, "")
-          .trim();
-        steps.push({
-          stepNumber: index + 1,
-          iconType: "end",
-          title: "ถึงจุดบรรจบทางหลวงสายหลัก",
-          detail: cleanLast || (endLocationHint ? `${endLocationHint} สัญจรต่อได้ตามปกติ` : "สัญจรต่อได้ตามปกติ"),
-          badge: endBadge,
-        });
+    rawSteps.forEach((step, index) => {
+      // Bare A/B labels in old saved advice identify the two endpoints by their
+      // positions within the selected direction, not by a fixed meaning of A/B.
+      const isEnd = index === rawSteps.length - 1;
+      if (rawSteps.length > 1 && (index === 0 || isEnd) && /^จุด\s*[AB]$/i.test(step)) {
+        steps.push({ stepNumber: index + 1, iconType: isEnd ? "end" : "start",
+          title: isEnd ? "จุดสิ้นสุด" : "จุดเริ่มต้น", detail: step, badge: isEnd ? "" : "0 กม." });
       } else {
-        // ขั้นตอนตรงกลาง (เลี้ยว/เบี่ยง/ตรงไป/วงเวียน/กลับรถ)
-        const iconType = resolveStepIconType(rawStep);
-
-        // แยก badge ระยะทาง เช่น (ระยะทาง 500 ม.)
-        let badge = "";
-        let cleanText = rawStep;
-        const stepDistMatch = rawStep.match(/\((?:ระยะทาง\s*)?([0-9.]+\s*(?:ม\.|กม\.))\)/);
-        if (stepDistMatch) {
-          badge = stepDistMatch[1];
-          cleanText = rawStep.replace(stepDistMatch[0], "").trim();
-        }
-
-        // แยก title กับ detail
-        let title = cleanText;
-        let detail = "";
-        const colonIdx = cleanText.indexOf(":");
-        if (colonIdx !== -1) {
-          title = cleanText.substring(0, colonIdx).trim();
-          detail = cleanText.substring(colonIdx + 1).trim();
-        } else {
-          // หากไม่มี colon ให้ใช้คำกริยาบอกทิศทางนำหน้า
-          const matchVerb = cleanText.match(STEP_VERB_REGEX);
-          if (matchVerb) {
-            title = matchVerb[0];
-            detail = cleanText.substring(matchVerb[0].length).trim();
-          }
-        }
-
-        steps.push({
-          stepNumber: index + 1,
-          iconType,
-          title: title || `ขั้นตอนที่ ${index + 1}`,
-          detail,
-          badge: badge || `${index + 1}`,
-        });
+        steps.push(presentSavedDetourStep(step, index + 1));
       }
     });
   }
+
+  const travelSteps = steps.filter(step => step.iconType !== "start" && step.iconType !== "end");
+  if (travelSteps.length === 1 && travelSteps[0].badge === `${totalDistanceKm.toFixed(1)} กม.`) travelSteps[0].badge = "";
 
   return {
     steps,
