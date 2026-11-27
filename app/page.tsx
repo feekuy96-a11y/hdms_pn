@@ -1,5 +1,7 @@
 "use client";
 
+import publicDisplayCopy from "@/config/public-display-copy.json";
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LocalClosurePublicPage, useLocalClosureEvent } from "@/components/closure/LocalClosurePublicPage";
 import Link from "next/link";
@@ -865,7 +867,7 @@ export default function HomePage() {
                 </div>
                 <h4 className="font-heading font-bold text-white text-xs">
                   {systemData.floodRoutes.length === 0
-                    ? "ยังไม่มีรายงานจุดน้ำท่วม"
+                    ? publicDisplayCopy.emptyFloodReports
                     : "ไม่พบจุดที่ตรงกับตัวกรอง"}
                 </h4>
                 <p className="text-xs text-slate-400 leading-relaxed">
