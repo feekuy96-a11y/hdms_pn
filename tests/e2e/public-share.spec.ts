@@ -92,7 +92,8 @@ test("share the exact public flood and open its dossier from the generated link"
   const share = dialog.getByRole("button", { name: "แชร์เหตุการณ์น้ำท่วม" });
   await expect(share).toBeVisible();
   const rect = await share.boundingBox();
-  expect(rect!.height).toBeGreaterThanOrEqual(44);
+  // Chromium reports transforms in floating point; keep the 44 px target within one layout unit.
+  expect(rect!.height).toBeGreaterThanOrEqual(44 - 1 / 64);
   await share.click();
   await expect(dialog.getByRole("status").filter({ hasText: "ส่งลิงก์ให้แอปที่เลือกแล้ว" })).toBeVisible();
   const sent = await page.evaluate(() => (Reflect.get(window, "testPublicShare") as { sent: string }).sent);
