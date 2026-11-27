@@ -92,36 +92,38 @@ export function useIncidentRegistry({
   }, [systemData.floodRoutes]);
 
   const normalizeOfficeName = (name: string) => name.normalize("NFC").trim().replace(/\s+/g, " ");
-  const subdivisionOptions = Array.from(new Set((systemData.offices || [])
+  const subdivisionOptions = React.useMemo(() => Array.from(new Set((systemData.offices || [])
     .filter((office) => office.type === "SUBDIVISION")
     .map((office) => normalizeOfficeName(office.name))
-    .filter(Boolean))).sort((a, b) => a.localeCompare(b, "th"));
-  const verifiedSubdivisionNames = new Set(subdivisionOptions);
+    .filter(Boolean))).sort((a, b) => a.localeCompare(b, "th")), [systemData.offices]);
 
-  const filteredIncidents = (systemData.floodRoutes || []).filter((r) => {
-    if (incidentFilter === "ACTIVE" && !r.is_active) return false;
-    if (incidentFilter === "RESOLVED" && r.is_active) return false;
-    if (routeNoFilter !== "ALL" && r.route_no !== routeNoFilter) return false;
-    if (trafficStatusFilter !== "ALL" && r.traffic_status !== trafficStatusFilter) return false;
-    if (subdivisionFilter !== "ALL") {
-      // The schema parser prefers structured subdivisionName; its legacy reporter fallback
-      // is accepted only if it is the exact verified name of a configured subdivision.
-      const stored = normalizeOfficeName(parseFloodDirectionMeta(r.direction_meta, r).subdivisionName);
-      const matched = verifiedSubdivisionNames.has(stored) ? `office:${stored}` : "UNASSIGNED";
-      if (matched !== subdivisionFilter) return false;
-    }
-    if (incidentSearch.trim()) {
-      const q = incidentSearch.toLowerCase().trim();
-      return (
-        r.route_no.toLowerCase().includes(q) ||
-        r.section_name.toLowerCase().includes(q) ||
-        (r.district || "").toLowerCase().includes(q) ||
-        (r.subdistrict || "").toLowerCase().includes(q) ||
-        r.km_start.includes(q)
-      );
-    }
-    return true;
-  });
+  const filteredIncidents = React.useMemo(() => {
+    const verifiedSubdivisionNames = new Set(subdivisionOptions);
+    return (systemData.floodRoutes || []).filter((r) => {
+      if (incidentFilter === "ACTIVE" && !r.is_active) return false;
+      if (incidentFilter === "RESOLVED" && r.is_active) return false;
+      if (routeNoFilter !== "ALL" && r.route_no !== routeNoFilter) return false;
+      if (trafficStatusFilter !== "ALL" && r.traffic_status !== trafficStatusFilter) return false;
+      if (subdivisionFilter !== "ALL") {
+        // The schema parser prefers structured subdivisionName; its legacy reporter fallback
+        // is accepted only if it is the exact verified name of a configured subdivision.
+        const stored = normalizeOfficeName(parseFloodDirectionMeta(r.direction_meta, r).subdivisionName);
+        const matched = verifiedSubdivisionNames.has(stored) ? `office:${stored}` : "UNASSIGNED";
+        if (matched !== subdivisionFilter) return false;
+      }
+      if (incidentSearch.trim()) {
+        const q = incidentSearch.toLowerCase().trim();
+        return (
+          r.route_no.toLowerCase().includes(q) ||
+          r.section_name.toLowerCase().includes(q) ||
+          (r.district || "").toLowerCase().includes(q) ||
+          (r.subdistrict || "").toLowerCase().includes(q) ||
+          r.km_start.includes(q)
+        );
+      }
+      return true;
+    });
+  }, [systemData.floodRoutes, incidentFilter, routeNoFilter, trafficStatusFilter, subdivisionFilter, subdivisionOptions, incidentSearch]);
 
   // Group filtered incidents by Parent Flood Event
   const parentEvents = React.useMemo(() => {

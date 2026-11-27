@@ -16,6 +16,7 @@ import { DetourViewModal } from "./DetourViewModal";
 
 interface DetourManagementTabProps {
   systemData: SystemDataPayload;
+  onMapRouteIdsChange?: (ids: ReadonlySet<string> | null) => void;
   onDataRefresh: (data?: any) => Promise<any> | void;
   onToast: (msg: string) => void;
   showConfirmModal: (title: string, message: string, onConfirm: () => void) => void;
@@ -28,6 +29,7 @@ interface DetourManagementTabProps {
 
 export function DetourManagementTab({
   systemData,
+  onMapRouteIdsChange,
   onDataRefresh,
   onToast,
   showConfirmModal,
@@ -114,6 +116,13 @@ export function DetourManagementTab({
     showSuccessModal,
     showErrorModal,
   });
+
+  React.useEffect(() => {
+    if (!onMapRouteIdsChange) return;
+    onMapRouteIdsChange(new Set(filteredDetours.map((route) => route.id)));
+    return () => onMapRouteIdsChange(null);
+  }, [filteredDetours, onMapRouteIdsChange]);
+
 
   return (
     <div>

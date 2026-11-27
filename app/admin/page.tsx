@@ -63,6 +63,8 @@ import { useSystemFavicon } from "@/lib/use-system-favicon";
 
 export default function AdminPage() {
   const [mapSearch, setMapSearch] = useState("");
+  const [registryFloodIds, setRegistryFloodIds] = useState<ReadonlySet<string> | null>(null);
+  const [registryDetourIds, setRegistryDetourIds] = useState<ReadonlySet<string> | null>(null);
   const isPollingActive = usePollingActivity();
   const [selectedFloodId, setSelectedFloodId] = useState<string>("");
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
@@ -271,6 +273,10 @@ export default function AdminPage() {
     statusFilter: "ALL",
     includeInactive: true,
   }), [systemData, mapSearch]);
+  const mapRegistryRoutes = useMemo(() => ({
+    floodRoutes: registryFloodIds === null ? systemData.floodRoutes : systemData.floodRoutes.filter((route) => registryFloodIds.has(route.id)),
+    detourRoutes: registryDetourIds === null ? systemData.detourRoutes : systemData.detourRoutes.filter((route) => registryDetourIds.has(route.id)),
+  }), [registryFloodIds, registryDetourIds, systemData.floodRoutes, systemData.detourRoutes]);
 
   const isFetching = bootstrapQuery.isFetching || operationalQuery.isFetching || staticGisQuery.isFetching;
   const isError = bootstrapQuery.isError || operationalQuery.isError || staticGisQuery.isError;
@@ -589,6 +595,8 @@ export default function AdminPage() {
           >
             <AdminConsole
               systemData={systemData}
+              onFloodMapIdsChange={setRegistryFloodIds}
+              onDetourMapIdsChange={setRegistryDetourIds}
               onDataRefresh={async (scope?: "operational" | "static" | "all") => {
                 return await refreshAdminData(scope === "static" || scope === "all" ? scope : "operational");
               }}
@@ -658,6 +666,7 @@ export default function AdminPage() {
             <div className="relative min-h-0 flex-1">
             <LongdoGisMap
               systemData={systemData}
+              registryRoutes={isEditingBlocked ? undefined : mapRegistryRoutes}
               isSidebarCollapsed={isSidebarCollapsed}
               sidePaneControl={{
                 controlsId: "admin-map-workspace-pane",

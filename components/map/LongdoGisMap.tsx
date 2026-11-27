@@ -107,6 +107,7 @@ interface LongdoGisMapProps {
   publicMode?: boolean;
   publicStatusSummary?: React.ReactNode;
   suspendRouteFiltering?: boolean;
+  registryRoutes?: Pick<SystemDataPayload, "floodRoutes" | "detourRoutes">;
   isSidebarCollapsed?: boolean;
   sidePaneControl?: MapSidePaneControl;
   /** Public-list filter: keep non-matching safety routes visible but de-emphasized. */
@@ -158,6 +159,7 @@ export function LongdoGisMap({
   publicMode = false,
   publicStatusSummary,
   suspendRouteFiltering,
+  registryRoutes,
   isSidebarCollapsed = false,
   sidePaneControl,
   highlightFloodIds = EMPTY_IDS,
@@ -903,6 +905,11 @@ export function LongdoGisMap({
   }, [mapReady, shieldCandidates, effectiveShowHighwayShields, effectiveShowMainHwy, effectiveShowSecHwy, forceShowAllHighways, criticalHighwayRouteNos, isFilterActive, searchQuery, activeCardFocus, highlightHighwayRouteNos, publicMode]);
 
   // 4c & 4d. Detour routes + Flood routes & markers Hook
+  // Restrict the admin overlays to the active registry without trimming linked popup data.
+  const drawnFloodRoutes = registryRoutes?.floodRoutes ?? systemData.floodRoutes;
+  const drawnDetourRoutes = registryRoutes?.detourRoutes ?? systemData.detourRoutes;
+  const legendSystemData = useMemo(() => registryRoutes ? { ...systemData, ...registryRoutes } : systemData, [registryRoutes, systemData]);
+
   useLongdoRouteLayers({
     publicMode,
     leafletMapRef,
@@ -910,6 +917,8 @@ export function LongdoGisMap({
     onActivateMapEntity: setActivePopupEntity,
     mapReady,
     systemData,
+    drawnFloodRoutes,
+    drawnDetourRoutes,
     mapStyles,
     effectiveShowDetourLayer,
     effectiveShowFloodLayer,
@@ -959,7 +968,7 @@ export function LongdoGisMap({
       highwayGroup("primary"), highwayGroup("secondary"),
     ], animationsEnabled);
   }, [mapReady, animationsEnabled, isFocusMode, vertexEditable, mapStyles,
-    systemData.floodRoutes, systemData.detourRoutes, systemData.highwayLayers, effectiveShowMainHwy, effectiveShowSecHwy,
+    drawnFloodRoutes, drawnDetourRoutes, systemData.highwayLayers, effectiveShowMainHwy, effectiveShowSecHwy,
     showRoadLabels, showSecondaryAtCurrentZoom, currentZoom, effectiveShowFloodLayer, effectiveShowDetourLayer,
     floodDisplayMode, detourDisplayMode, activeCardFocus, activePopupEntity, isFilterActive, searchQuery,
     highlightFloodIds, highlightDetourIds, routeFilteringEnabled]);
@@ -971,7 +980,7 @@ export function LongdoGisMap({
       entry.line.setStyle({ weight: entry.baseWeight + selectedDelta });
       entry.casing?.setStyle({ weight: entry.baseWeight + selectedDelta + (entry.baseBorderWidth || 0) * 2 });
     });
-  }, [selectedFloodId, mapReady, systemData.floodRoutes, showFloodLayer, mapStyles]);
+  }, [selectedFloodId, mapReady, drawnFloodRoutes, showFloodLayer, mapStyles]);
 
   // Public filters reuse the existing Canvas paths. Non-matching routes remain
   // visible at 25% opacity so a traveler can still notice nearby safety data.
@@ -1081,7 +1090,7 @@ export function LongdoGisMap({
         },
       });
     }
-  }, [publicMode, suspendRouteFiltering, routeFilteringEnabled, highlightFloodIds, highlightDetourIds, isFilterActive, searchQuery, highlightHighwayRouteNos, activeCardFocus, activePopupEntity, mapReady, systemData.floodRoutes, systemData.detourRoutes, systemData.highwayLayers, mapStyles, showMainHwy, showSecHwy, showRoadLabels, showSecondaryAtCurrentZoom, criticalHighwayRouteNos, currentZoom, showFloodLayer, showDetourLayer]);
+  }, [publicMode, suspendRouteFiltering, routeFilteringEnabled, highlightFloodIds, highlightDetourIds, isFilterActive, searchQuery, highlightHighwayRouteNos, activeCardFocus, activePopupEntity, mapReady, systemData.floodRoutes, drawnFloodRoutes, drawnDetourRoutes, systemData.highwayLayers, mapStyles, showMainHwy, showSecHwy, showRoadLabels, showSecondaryAtCurrentZoom, criticalHighwayRouteNos, currentZoom, showFloodLayer, showDetourLayer]);
 
   // 4f. Admin draft route (A->B and B->A), conflict alerts, imported-GIS preview and draggable markers.
   useEffect(() => {
@@ -1146,9 +1155,9 @@ export function LongdoGisMap({
         group,
         mapStyles,
         highwayLayers: systemData.highwayLayers,
-        detourRoutes: systemData.detourRoutes,
+        detourRoutes: drawnDetourRoutes,
         detourDisplayMode,
-        floodRoutes: systemData.floodRoutes,
+        floodRoutes: drawnFloodRoutes,
         visibleFloodIds,
         showMainHwy: effectiveShowMainHwy,
         showSecHwy: effectiveShowSecHwy,
@@ -1177,7 +1186,7 @@ export function LongdoGisMap({
       map.off("moveend zoomend", schedule);
       group.clearLayers();
     };
-  }, [mapReady, systemData.highwayLayers, systemData.detourRoutes, systemData.floodRoutes, detourDisplayMode, mapStyles, effectiveShowMainHwy, effectiveShowSecHwy, effectiveShowDetourLayer, effectiveShowFloodLayer, showSecondaryAtCurrentZoom, currentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode, vertexEditable, routeFilteringEnabled, isFilterActive, searchQuery, activeCardFocus, activePopupEntity, highlightDetourIds, highlightHighwayRouteNos]);
+  }, [mapReady, systemData.highwayLayers, drawnDetourRoutes, drawnFloodRoutes, detourDisplayMode, mapStyles, effectiveShowMainHwy, effectiveShowSecHwy, effectiveShowDetourLayer, effectiveShowFloodLayer, showSecondaryAtCurrentZoom, currentZoom, draftCoordinates, draftReverseCoordinates, draftDirectionMeta, draftMode, vertexEditable, routeFilteringEnabled, isFilterActive, searchQuery, activeCardFocus, activePopupEntity, highlightDetourIds, highlightHighwayRouteNos]);
 
   // 4h. Freeform vertex editor: draggable handle on every vertex + "+" handle on every segment middle.
   // Only vertices inside the viewport are drawn (at most MAX_VERTEX_HANDLES), so long lines stay fast.
@@ -1560,7 +1569,7 @@ export function LongdoGisMap({
         publicStatusSummary={publicStatusSummary}
         isSidebarCollapsed={isSidebarCollapsed}
         sidePaneControl={sidePaneControl}
-        systemData={systemData}
+        systemData={legendSystemData}
         mapStyles={mapStyles}
         mapReady={mapReady}
         isMapPopupOpen={isMapPopupOpen}
